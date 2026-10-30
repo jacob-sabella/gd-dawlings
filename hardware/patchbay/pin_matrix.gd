@@ -53,7 +53,7 @@ extends Node3D
 ## pin with a level stands up out of the board as a column of light as tall as what it carries
 ## (SignalGraph.thickness, FLOOR_DB at the board to TOP_DB at `tower_max`), and each column's
 ## arrival as a tower on its header. Tops go amber from HOT_DB and red past 0 dBFS, each with its
-## figure on a tag ("+1.8 dB" past 0). Pointing lights a row and a column as ever. A tower's top is
+## figure on a tag on the board at its foot ("+1.8 dB" past 0). Pointing lights a row and a column as ever. A tower's top is
 ## a control (`Tower`): drag it up or down, or pull it out of the board or push it in, for the send's
 ## level (`level_db` and `set_level_db`); the wheel steps it as a pin's does. One undo step a
 ## drag (`edits_as_one`); a guest's is an intent its host carries out, as every DAW write is. At
@@ -427,8 +427,10 @@ func _build(shape: Vector2i) -> void:
 		tag.font_size = 40
 		tag.outline_size = 8
 		tag.outline_modulate = Color(0.02, 0.02, 0.03, 0.9)
-		tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		tag.no_depth_test = true
+		# Flat on the board, as the rest of its lettering is: a tag turned to the eye and drawn over
+		# everything stood in the air in front of the matrix and was too much of it.
+		tag.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+		tag.double_sided = false
 		tag.render_priority = 3
 		tag.outline_render_priority = 2
 		tag.visible = false
@@ -1167,7 +1169,8 @@ func _tower_tall(db: float, small: float) -> float:
 
 
 ## One tower at `at` on the board, a cell `small` across: its body, glowing in its colour, and its
-## top; amber and red tops get a tag. Answers how many tags are in use after it.
+## top; amber and red tops get a tag, flat on the board at the top of the tower's cell. Answers how
+## many tags are in use after it.
 func _stand_tower(k: int, at: Vector3, small: float, db: float, tint: Color, dim: bool, motion: float, now: int, tags: int, estimated: bool) -> int:
 	var tall := _tower_tall(db, small)
 	var wide := small * 0.34
@@ -1200,7 +1203,7 @@ func _stand_tower(k: int, at: Vector3, small: float, db: float, tint: Color, dim
 		tag.font_size = 40
 		tag.pixel_size = size / 40.0 * 1.4
 		tag.modulate = RED.lightened(0.3) if health == &"clip" else AMBER.lightened(0.2)
-		tag.position = at + Vector3(0, small * 0.4, base + tall + size * 0.8)
+		tag.position = at + Vector3(0, small * 0.4, small * 0.05)
 		tags += 1
 	return tags
 

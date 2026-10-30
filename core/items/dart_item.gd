@@ -5,7 +5,7 @@ extends Item
 ##
 ## It flies point first and sticks where it goes into the board, or the cabinet round it
 ## (Flight.fly's `boards`): every machine flies the same launch, so every one sees it go in at the
-## same place and scores it the same (`score`), shown for a moment over where it went in. Off the
+## same place and scores it the same (`score`), shown for a moment on the board by where it went in. Off the
 ## board it is a thrown thing like any other, and clatters to the floor. Its home is in the board:
 ## a dart is put away by being left in it.
 ##
@@ -18,6 +18,10 @@ const MODEL := "res://assets/models/dart.glb"
 const LENGTH := 0.15
 ## How far the point goes in.
 const POINT_IN := 0.012
+## Where what it scored is lit: this far proud of the board's face, and this far up it from the
+## dart, clear of its flights (m).
+const SCORE_OFF_BOARD := 0.005
+const SCORE_OVER := 0.06
 ## Half the barrel and flights' own width (measured off `tools/blender/darts.py`'s model): stuck
 ## in the board the point is the origin and right where it is, but lying loose it is on its
 ## side, and without this its flights are drawn half into the floor they are lying on.
@@ -119,7 +123,8 @@ func _on_landed() -> void:
 	_will_score = {}
 
 
-## What it scored, over where it went in, for a couple of seconds.
+## What it scored, for a couple of seconds, lit flat on the board just over where it went in: on
+## the board, as a scorer chalks it, and not hung in the air in front of it and over everything.
 func _show_score(s: Dictionary) -> void:
 	if _popup != null and is_instance_valid(_popup):
 		_popup.queue_free()
@@ -130,13 +135,19 @@ func _show_score(s: Dictionary) -> void:
 	label.font_size = 72
 	label.outline_size = 14
 	label.pixel_size = 0.0011
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
+	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	label.double_sided = false
 	label.modulate = Color(1.0, 0.85, 0.4) if points > 0 else Color(0.75, 0.75, 0.75)
 	label.outline_modulate = Color(0.05, 0.04, 0.03)
 	label.top_level = true
 	add_child(label)
-	label.global_position = global_position + Vector3.UP * 0.07 + global_basis.z * 0.12
+	# Stuck, its +Z is back out along the way it flew in, out of the board; the point is POINT_IN
+	# behind the face. Its face looks that way, upright on the board, SCORE_OFF_BOARD proud of it.
+	var out := global_basis.z.normalized()
+	var up := (Vector3.UP - out * out.dot(Vector3.UP))
+	up = up.normalized() if up.length() > 0.01 else Vector3.FORWARD
+	label.global_transform = Transform3D(Basis(up.cross(out), up, out),
+			global_position + out * (POINT_IN + SCORE_OFF_BOARD) + up * SCORE_OVER)
 	_popup = label
 	var fade := label.create_tween()
 	fade.tween_interval(1.6)

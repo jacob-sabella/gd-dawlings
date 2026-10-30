@@ -2,7 +2,7 @@ class_name StageVoice
 extends ControlAffordance
 
 ## One track on the stage table (StageTable; docs/spatial_loop.md slice 18, idea #1): a lit
-## sphere lettered with the track's number, standing where the track sits in the mix. Across the
+## sphere, the track's number on the table at its foot, standing where the track sits in the mix. Across the
 ## table is its pan, its distance back from the front edge its level, and the ring round its foot
 ## its width.
 ##
@@ -38,6 +38,10 @@ extends ControlAffordance
 ## handle of its own, shows between the ball and the ring.
 const LIFT := 0.06
 const RADIUS := 0.016
+## Where the track's number lies on the table: this far toward the front edge from the stalk's
+## foot, clear of it, and this far over the table top, so it is on it and not in it (m).
+const NUMBER_OUT := 0.016
+const NUMBER_OVER := 0.0015
 ## How far the stalk lifts it off the table, at most (m): the room send's top (StageTable.ROOM_TOP_DB).
 const STALK_MOST := 0.3
 ## How far a stalk's rod stands off the table at its foot (m), so it lies in no plane of the top.
@@ -124,13 +128,17 @@ func _ready() -> void:
 	add_child(_sphere)
 	_number = Label3D.new()
 	_number.name = "Number"
-	_number.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	# Flat on the table at the stalk's foot, read from the front edge: as this frame's +Z is the
+	# table's up and its -Y toward the player, a label left unturned lies face up and the right way
+	# round for them. Turned to the eye over the ball, it was one more word in the air.
+	_number.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	_number.double_sided = false
 	_number.pixel_size = 0.0002
 	_number.font_size = 110
 	_number.modulate = Color(0.97, 0.95, 0.9)
 	_number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# Over the ball, up the table's up (this frame's +Z).
-	_number.position = Vector3(0, 0, RADIUS + 0.018)
+	# Just in front of the stalk's foot, toward the player; how far down the table is, `_stand`.
+	_number.position = Vector3(0, -NUMBER_OUT, -LIFT + NUMBER_OVER)
 	Lettering.range_to_legibility(_number)
 	add_child(_number)
 	# Struck through when muted: a bar across the ball as the player sees it (this frame's X and Z).
@@ -268,8 +276,8 @@ func _height() -> float:
 	return LIFT + lift() + (RAISE if picked else 0.0)
 
 
-## Stood at its height: the ball over its stalk, the ring and the stalk's foot on the table, and
-## the mist as much as it sends.
+## Stood at its height: the ball over its stalk, the ring, the stalk's foot and the number on the
+## table, and the mist as much as it sends.
 func _stand() -> void:
 	if _sphere == null:
 		return
@@ -277,6 +285,7 @@ func _stand() -> void:
 	position.y = h
 	if ring != null:
 		ring.position.z = -h
+	_number.position.z = -h + NUMBER_OVER
 	stalk.stand(h)
 	var db := StageTable.send_db_of_lift(lift()) if _lift_held >= 0.0 else StageTable.room_send_db(track)
 	_mist.visible = db != -INF

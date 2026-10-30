@@ -22,6 +22,11 @@ cd "$(dirname "$0")/../.."
 HOST="${DEPLOY_HOST:-ubuntu@15.204.11.205}"
 DIR="${DEPLOY_DIR:-dawlings-noray}"
 NAME="${PUBLIC_NAME:-dawlings.jacobsabella.com}"
+# The VPS takes the homelab key, as the other sites' deploys do; DEPLOY_KEY overrides it.
+KEY="${DEPLOY_KEY:-$HOME/.ssh/homelab}"
+SSH=(ssh -o BatchMode=yes)
+if [ -f "$KEY" ]; then SSH+=(-i "$KEY"); fi
+export RSYNC_RSH="${SSH[*]}"
 CADDYFILE=/home/ubuntu/aa-web/Caddyfile
 CADDY=aa-caddy
 DRY=0; DO_CADDY=0; ONLY_VERIFY=0; ROLLBACK=""; STOP=0
@@ -42,7 +47,7 @@ say() { printf '\n== %s\n' "$*"; }
 run() { if [ "$DRY" -eq 1 ]; then printf '  would run: %s\n' "$*"; else "$@"; fi; }
 # A step on the VPS: the script goes over ssh's stdin, never into a file there.
 remote() {
-  if [ "$DRY" -eq 1 ]; then printf '  would run on %s:\n' "$HOST"; sed 's/^/    | /'; else ssh -o BatchMode=yes "$HOST" bash -s; fi
+  if [ "$DRY" -eq 1 ]; then printf '  would run on %s:\n' "$HOST"; sed 's/^/    | /'; else "${SSH[@]}" "$HOST" bash -s; fi
 }
 
 verify() {
@@ -107,7 +112,7 @@ fi
 run cp deploy/noray/noray.env deploy/noray/dawlings-noray.service "$STAGE/"
 
 say "copying to $HOST:~/$DIR"
-run ssh -o BatchMode=yes "$HOST" "mkdir -p ~/$DIR ~/.config/systemd/user"
+run "${SSH[@]}" "$HOST" "mkdir -p ~/$DIR ~/.config/systemd/user"
 run rsync -a --delete "$STAGE/noray/" "$HOST:$DIR/noray/"
 run rsync -a "$STAGE/bin/" "$HOST:$DIR/bin/"
 run rsync -a "$STAGE/noray.env" "$HOST:$DIR/noray.env"

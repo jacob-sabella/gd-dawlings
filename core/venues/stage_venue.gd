@@ -231,6 +231,11 @@ func lamp_energy(_index: int, authored: float) -> float:
 	return authored * (0.7 if variant == SOUNDCHECK else 0.85)
 
 
+## No walls: a stage deck, open to the audience.
+func has_walls() -> bool:
+	return false
+
+
 ## The stage is one open deck: the strips beside the desk join the back of house.
 func rooms() -> Array[Rect2]:
 	var out: Array[Rect2] = [back_of_house()]

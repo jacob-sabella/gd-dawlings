@@ -246,6 +246,11 @@ func _process(delta: float) -> void:
 
 # --- the floor plan ----------------------------------------------------------------------------
 
+## No walls: a canopy on poles, open to the sand.
+func has_walls() -> bool:
+	return false
+
+
 ## One floor: the tent's, either side of the desk to the poles, and back to the zones.
 func rooms() -> Array[Rect2]:
 	var out: Array[Rect2] = [back_of_house()]

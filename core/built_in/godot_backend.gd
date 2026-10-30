@@ -176,6 +176,24 @@ var lanes: LaneEngine = null
 var lanes_wanted := true
 
 
+## Tracks' inputs heard through them, live (InputMonitor).
+var monitors: InputMonitor
+
+
+func _start_monitors() -> void:
+	if monitors != null or AudioServer.get_driver_name() == "Dummy":
+		return
+	monitors = InputMonitor.new()
+	monitors.name = "Monitors"
+	add_child(monitors)
+
+
+func _drive_monitors() -> void:
+	_start_monitors()
+	if monitors != null:
+		monitors.drive(state, monitor_outlets)
+
+
 func _start_lanes() -> void:
 	if lanes != null:
 		lanes.build()
@@ -372,6 +390,8 @@ func open(options: Dictionary = {}) -> bool:
 
 func close() -> void:
 	_finish_renders()
+	if monitors != null:
+		monitors.stop_all()
 	super()
 	hosted.clear()
 	for list in _players.values():
@@ -1499,6 +1519,20 @@ func monitor_bus(track_index: int) -> StringName:
 	return AudioServer.get_bus_name(_bus[track_index]) if _bus.has(track_index) else &""
 
 
+## Every bus a track's own sound plays into, [bus, gain dB] each: its own bus, then each send's and
+## cue's, at the level its player there plays at (the send's level, post-fader or not). So a
+## monitored input goes where the track's items go -- into its reverb send, its cue -- and not
+## only to the track.
+func monitor_outlets(track_index: int) -> Array:
+	if not _bus.has(track_index):
+		return []
+	var out: Array = [[monitor_bus(track_index), 0.0]]
+	for p in _players.get(track_index, []):
+		if p.has_meta(&"send") or p.has_meta(&"cue"):
+			out.append([StringName((p as AudioStreamPlayer).bus), float(p.get_meta(&"gain", (p as AudioStreamPlayer).volume_db))])
+	return out
+
+
 ## Seconds of sound the card has mixed since the clock started, to the sample, or NAN where
 ## nothing is mixed (a headless run).
 func audio_time() -> float:
@@ -1716,6 +1750,7 @@ func looped_stream(source: String, from: float, to: float) -> AudioStreamWAV:
 ## moves it, as it did.
 func _drive_meters(delta: float) -> void:
 	_drive_plugins()
+	_drive_monitors()
 	if lanes != null:
 		lanes.drive(delta)
 		state.position_string = state.bar_beat(state.position_seconds)

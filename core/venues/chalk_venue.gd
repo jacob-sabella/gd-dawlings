@@ -242,6 +242,11 @@ func prop_shelf_solid() -> bool:
 	return false
 
 
+## No walls: a blackboard the size of the world, its edge drawn in the dark.
+func has_walls() -> bool:
+	return false
+
+
 ## The board is the whole world, and the floor is wherever you walk on it. Under the open sky it
 ## runs past the room every way, round the zones and in front of the desk; the sketched room is
 ## drawn round the zones' width, so there it is the desk, the floor either side of it out to the

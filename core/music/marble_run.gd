@@ -1089,8 +1089,6 @@ func _build_ghost() -> void:
 	_ghost_letter.name = "GhostLetter"
 	_ghost_letter.pixel_size = 0.0004
 	_ghost_letter.font_size = 64
-	_ghost_letter.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_ghost_letter.no_depth_test = true
 	_ghost_letter.modulate = Color(0.97, 0.93, 0.82)
 	_ghost_letter.visible = false
 	Lettering.range_to_legibility(_ghost_letter)
@@ -1117,15 +1115,16 @@ func _build_ghost() -> void:
 
 
 ## Where the carried block would go, drawn: a pale copy of it turned its way in the cell, the cell's
-## edges, and lettered with what it is, which way it faces and the layer; the working layer's grid
-## while the ray comes down on it. Nothing while nothing is carried.
+## edges, and the working layer's grid while the ray comes down on it. What it is, which way it faces
+## and the layer are lettered for its tray key's card (`ghost_text`), never floated over the lattice:
+## words in the air were too much of the room (2026-10-29). Nothing while nothing is carried.
 func _show_ghost() -> void:
 	if _ghost == null:
 		return
 	if not carrying():
 		_ghost.visible = false
 		_ghost_cell.visible = false
-		_ghost_letter.visible = false
+		_ghost_letter.text = ""
 		_layer_grid.visible = false
 		return
 	target = target_for(hand)
@@ -1135,7 +1134,6 @@ func _show_ghost() -> void:
 	_ghost_cell.visible = ok
 	_layer_grid.visible = not target.get("hand", false)
 	_layer_grid.position = Vector3(0, float(layer) * CELL + 0.002, 0)
-	_ghost_letter.visible = true
 	if ok:
 		_ghost.mesh = mesh_of(carry_kind)
 		_ghost.transform = Transform3D(facing_basis(carry_facing), cell_centre(cell))
@@ -1162,9 +1160,10 @@ func carry_words(cell: Vector3i) -> String:
 	return "%s%s%s · LAYER %d" % [str(TITLES[carry_kind]), way, note, cell.y + 1]
 
 
-## The ghost's lettering now, for the suite.
+## What the ghost says now, "" while nothing is carried: for the carried kind's tray key's card,
+## and the suite.
 func ghost_text() -> String:
-	return _ghost_letter.text if _ghost_letter != null and _ghost_letter.visible else ""
+	return _ghost_letter.text if _ghost_letter != null and carrying() else ""
 
 
 ## What a block says on its card: its kind, the way it faces, a bell's note now, and where it is.
@@ -1183,7 +1182,8 @@ func block_words(cell: Vector3i) -> String:
 
 
 ## A placed block: its kind's slab turned the way it rolls the marble, a bell's arch and bell (it
-## swings when rung) and its note lettered, a splitter's vane. A click picks it up to put somewhere
+## swings when rung) with its note on its card (the letter that said it over the bell kept, never
+## shown), a splitter's vane. A click picks it up to put somewhere
 ## else (a hand takes it), the wheel or a stick turns it, Backspace takes it out (the studio's key).
 class Block extends ControlAffordance:
 	var run: MarbleRun
@@ -1226,10 +1226,11 @@ class Block extends ControlAffordance:
 			letter.name = "Note"
 			letter.pixel_size = 0.0004
 			letter.font_size = 70
-			letter.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 			letter.modulate = Color(0.96, 0.92, 0.82)
 			letter.outline_size = 6
 			letter.position = Vector3(0, 0.13, 0)
+			# Lettered for its card's title, never shown.
+			letter.visible = false
 			Lettering.range_to_legibility(letter)
 			add_child(letter)
 		elif kind == SPLIT:
@@ -1353,6 +1354,9 @@ class TrayKey extends ControlAffordance:
 			return ""
 		if kind == &"":
 			return "%d block%s · a marble rolls from the top each bar, a cell a sixteenth" % [run.block_count(), "" if run.block_count() == 1 else "s"]
+		# Carrying one of these: where it would go, as the ghost would have said over it.
+		if run.carrying() and run.carry_kind == kind and run.ghost_text() != "":
+			return run.ghost_text()
 		return str(DOES[kind])
 
 	func hint() -> String:

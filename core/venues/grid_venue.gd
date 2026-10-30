@@ -283,6 +283,11 @@ func _dress_zones() -> void:
 	_neon_edges(synth, slab, at, pink, 0.012)
 
 
+## No walls: a floor ruled out to the horizon.
+func has_walls() -> bool:
+	return false
+
+
 ## Out on the plain nothing stands round the room but more plain: you walk out beside the desk
 ## and in front of it, and round the zones, as well as between them.
 func rooms() -> Array[Rect2]:

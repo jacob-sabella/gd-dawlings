@@ -16,8 +16,9 @@ extends ControlAffordance
 ## presses it, as a track jack: a finger, a ray, a controller, a cursor, and a dwell. It only asks
 ## (`step_asked`): the studio asks the room, and the room's patch comes back through `show_into`.
 ##
-## Patched, it says so twice, neither by colour: a tag over it in words (`-> MODULAR VCF CV IN`), and
-## a long cable from its plug down to the floor and along it, up into the input on the wall
+## Patched, it says so twice, neither by colour: its card in words (`into VCF CV IN on the modular
+## wall`; its tag keeps `-> MODULAR VCF CV IN` but is never shown, since words floating over every
+## socket were too much of the room), and a long cable from its plug down to the floor and along it, up into the input on the wall
 ## (`wall_jack`, the input's plug as the studio finds it), swept by CableSweep and built again when
 ## either end moves (a trolley pushed), at most CABLE_HZ. Its front is +Z, out into the room.
 
@@ -118,7 +119,6 @@ func _ready() -> void:
 	_tag.outline_size = 8
 	_tag.modulate = Color(0.97, 0.94, 0.86)
 	_tag.outline_modulate = Color(0.05, 0.04, 0.03)
-	_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_tag.position = Vector3(0, TAG_LIFT, 0.01)
 	_tag.visible = false
 	Lettering.range_to_legibility(_tag)
@@ -147,13 +147,13 @@ static func short_name(id: StringName) -> String:
 	return name.to_upper()
 
 
-## Where its cable goes now (`to`, an input on the wall, or &""), shown: the tag in words, and the
-## cable built again at once.
+## Where its cable goes now (`to`, an input on the wall, or &""), shown: the cable built again at
+## once, and the tag lettered with it, never shown.
 func show_into(to: StringName) -> void:
 	into = to
 	if _tag == null:
 		return
-	_tag.visible = to != &""
+	_tag.visible = false
 	_tag.text = tag_text(to)
 	_near_boot.visible = to != &""
 	_cable_ends = [Vector3.INF, Vector3.INF]

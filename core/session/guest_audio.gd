@@ -49,7 +49,10 @@ var target_track := 0:
 	set(v):
 		target_track = v
 		changed.emit()
-## Record when the host records. Off by default: a microphone is opt-in.
+## Record when the host records. Off by default: a microphone is opt-in. On the host, a track
+## armed with an audio input named for it (`audio:...`, chosen with INPUT) is that opt-in already --
+## pointing a track at the interface and arming it is asking for it -- so this is only wanted for
+## a track with no input chosen, which records from the panel's microphone.
 var record_with_host := false:
 	set(v):
 		record_with_host = v
@@ -111,7 +114,8 @@ var _drift := 0.0
 
 func armed() -> bool:
 	if for_host:
-		return Session.is_authority() and take_track() > 0 and record_with_host \
+		return Session.is_authority() and take_track() > 0 \
+				and (record_with_host or DAW.state.input_of(take_track()).begins_with("audio:")) \
 				and DAW.backend != null and not DAW.can(DAWBackend.Capability.RECORDS_OWN_INPUTS) \
 				and not DAW.state.input_of(take_track()).begins_with("midi")
 	return Session.role == Session.Role.GUEST and target_track > 0 and record_with_host

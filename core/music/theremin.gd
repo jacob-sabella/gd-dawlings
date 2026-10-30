@@ -28,12 +28,14 @@ extends Node3D
 ## glide hands on to a tone it snaps to, the one inside the bend nearest where it is going, bent
 ## back to where the glide is (`_note_for`), so a snapped take is the scale's notes and not those
 ## the glide passes between. The switch is this player's own: what it changes is what their notes
-## are, and those are what crosses the wire.
+## are, and those are what crosses the wire. It starts FREE, as the real instrument is: snapped, it
+## steps from tone to tone, which reads as gaps in what should be one fluid sweep.
 ##
 ## THE GUIDE. Rings round the rod at each step it can land on (the scale's tones, or the chord's),
-## each lettered on a rule running out from the rod at GUIDE_Y, the octave on the key's tonic. The
-## ring nearest the pitch hand is lit (brighter and thicker, its letter larger), drawn at the hand's
-## height, and a bar from it to the hand shows how far off the hand is, its card in cents. So a
+## each lettered (`letters`, never shown: its card says the lit one) on a rule running out from the
+## rod at GUIDE_Y, the octave on the key's tonic. The ring nearest the pitch hand is lit (brighter
+## and thicker), drawn at the hand's height, and a bar from it to the hand shows how far off the
+## hand is, its card naming it, in cents. So a
 ## player sees where the next note is before they get there.
 ##
 ## WOBBLE (slice 15). The pitch hand's tilt bends and its shake wobbles, through a Wobble that only
@@ -165,7 +167,7 @@ var hands: Callable = Callable()
 ## playing, else the playhead.
 var clock: Callable = Callable()
 ## Its SCALE switch.
-var snap := Snap.SCALE:
+var snap := Snap.FREE:
 	set(v):
 		snap = posmod(v, Snap.size()) as Snap
 		_show_key()
@@ -667,9 +669,11 @@ func _show_guide(h: Harmony) -> void:
 		l.pixel_size = 0.0002
 		l.font_size = roundi(LETTER_CAP / 0.7 / l.pixel_size)
 		l.outline_size = 6
-		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.modulate = Color(0.95, 0.88, 0.7)
+		# Lettered and sized as ever, never shown: notes floating round the rod were too much of the
+		# room (2026-10-29: "i don't like the floating text"). The field's card says the lit one.
+		l.visible = false
 		l.text = letter_for(p, h, i == 0)
 		# Alternately over and under the rule, so the crowded top end's letters do not overlap.
 		l.position = Vector3(ROD.x + r, GUIDE_Y + (LETTER_OFF if i % 2 == 0 else -LETTER_OFF), ROD.y)
@@ -704,7 +708,7 @@ func _size_letters(want: PackedInt32Array) -> void:
 		_letters[i].set_meta(&"size", size)
 		_letters[i].set_meta(&"y", _letters[i].position.y)
 		_letters[i].scale = Vector3.ONE * maxf(size, 0.01)
-		_letters[i].visible = size > 0.0
+		_letters[i].visible = false
 
 
 ## The guide ring nearest raw pitch `p` (an index into the rings), -1 with none.
@@ -758,7 +762,7 @@ func _process(_delta: float) -> void:
 		var size := float(l.get_meta(&"size", 1.0))
 		var y := float(l.get_meta(&"y", l.position.y))
 		l.scale = Vector3.ONE * (LIT_SCALE if on else maxf(size, 0.01))
-		l.visible = on or size > 0.0
+		l.visible = false
 		# The lit letter a row further out from the rule, larger, so it covers none of its row.
 		l.position.y = y + signf(y - GUIDE_Y) * LETTER_CAP * LIT_LIFT if on else y
 		l.modulate = Color(1.0, 1.0, 0.92) if on else Color(0.95, 0.88, 0.7)

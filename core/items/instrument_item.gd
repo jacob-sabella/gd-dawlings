@@ -16,7 +16,7 @@ extends Item
 ## docs/spatial_loop.md part two, slice 39) it is played there, a few milliseconds after the hand,
 ## panned a little to the hand's side (HAND_PAN); where it does not, or has not loaded that sound
 ## yet, on their own keys' bus through Godot (AudioPorts.MONITOR, "MY KEYS" in a personal mix),
-## tens of milliseconds late. Its hover card and its tag say which, and how late (`path_tag`).
+## tens of milliseconds late. Its hover card says which, and how late (`path_words`).
 ## Anyone else's hit is heard in the room, from their hand or where it stands (`heard`), always
 ## through Godot: a sound placed in the room is Godot's to place.
 ##
@@ -30,8 +30,8 @@ extends Item
 ## Hand percussion (`held_in_fist`: the shaker, the tambourine) is held in a closed bare hand as
 ## well as a pinch or a controller (XRInteractor.step_hold, docs/spatial_loop.md slice 17), round
 ## its `grip_point`, and its strokes are read off the palm then. Its recorded hits are snapped
-## gently to the beat (HitRecorder.snapped_at): the take's note moves, never the sound. A tag over it
-## on the shelf says SNAP while this player snaps, and in a headset how it is held.
+## gently to the beat (HitRecorder.snapped_at): the take's note moves, never the sound. Its card
+## says so while this player snaps, and in a headset how it is held (`tag_text`).
 ##
 ## Every instrument has an output jack (`jack`, a JackSocket at `jack_point`, docs/spatial_loop.md
 ## slice 5). Unplugged, a hit does all of the above and nothing else; plugged into a track, the
@@ -114,7 +114,7 @@ var jack: JackSocket = null
 ## second copy of a kind is a different job, not a decoy, only because it sounds (and is
 ## recorded) a fifth lower -- see `pitch_scale`, and each subclass's own `pitch()`.
 var voice := 0
-## Its shelf tag (`tag_text`), for hand percussion only.
+## Its shelf tag (`tag_text`), for hand percussion only: kept lettered, never shown (`_retag`).
 var _tag: Label3D = null
 ## Whether the bandmate whose hand it is in snaps their hits, as their last hit said (`heard`).
 var holder_snaps := false
@@ -148,7 +148,6 @@ func _ready() -> void:
 		_tag.outline_size = 8
 		_tag.modulate = Color(0.97, 0.94, 0.86)
 		_tag.outline_modulate = Color(0.05, 0.04, 0.03)
-		_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_tag.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 		_tag.position = Vector3(0, centre_height() * 2.0 + 0.05, 0)
@@ -177,10 +176,10 @@ func grip_point() -> Vector3:
 	return global_transform * held_pose().affine_inverse().origin
 
 
-## What its shelf tag says: SNAP while this player snaps (or, in a bandmate's hand, while they do),
-## and in a headset how a hand holds it and which way its hits are heard (`path_tag`), since a
-## headset has no hover card; "" for nothing to say. Only hand percussion and the instruments that
-## stand still have one.
+## What its shelf tag would say: SNAP while this player snaps (or, in a bandmate's hand, while they
+## do), and in a headset how a hand holds it and which way its hits are heard (`path_tag`); "" for
+## nothing to say. Only hand percussion and the instruments that stand still have one. The card
+## says the same (`readout`, `hint`), and the tag itself is never shown (`_retag`).
 func tag_text() -> String:
 	if not held_in_fist() and not fixed:
 		return ""
@@ -199,8 +198,9 @@ func _retag() -> void:
 	if _tag == null:
 		return
 	var said := tag_text()
-	# Not over it in your own hand, where it would sit in front of everything you look at.
-	_tag.visible = said != "" and not in_hand()
+	# Never shown: words floating over the shelf were too much of the room (2026-10-29: "i don't
+	# like the floating text. its too present"). Its card, on the strip, says what it said.
+	_tag.visible = false
 	if _tag.text != said:
 		_tag.text = said
 
@@ -377,11 +377,14 @@ static func side_of(hand: Interactor) -> int:
 	return 0
 
 
-## What its card says it is doing, and which way its hits are heard (`path_tag`).
+## What its card says it is doing, whether its hits are snapped to the beat (hand percussion,
+## while they are), and which way its hits are heard (`path_words`): what its shelf tag said.
 func readout() -> String:
 	var said := super()
 	if fixed:
 		said = zone_words() if zone_words() != "" else "it stands here"
+	if held_in_fist() and tag_text().begins_with("SNAP"):
+		said += "  ·  snapped to the beat"
 	return "%s  ·  %s" % [said, path_words()]
 
 
@@ -413,6 +416,16 @@ func hint() -> String:
 	if fixed:
 		return STRIKE_HANDS if hands_hint else STRIKE_DESK
 	return super()
+
+
+## Item's, and in a headset, for hand percussion not in a hand, how a hand holds it: what its
+## shelf tag said.
+func _hint(loose: String) -> String:
+	var said := super(loose)
+	if not (held_in_fist() and hands_hint and state != State.HELD):
+		return said
+	var how := HANDS_HINT.replace("\n", " · ")
+	return how if said == "" else "%s · %s" % [said, how]
 
 
 ## Override: which of Foley's sounds (Foley.take_of) a hit rings, shaken or `struck`.

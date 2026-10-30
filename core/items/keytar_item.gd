@@ -14,9 +14,10 @@ extends Item
 ## The hand holding it bends what it plays (docs/spatial_loop.md part two, slice 15): tipped from
 ## where a note began, its roll bends the note, and its shake wobbles it (`wobble`, a Wobble on
 ## that hand, for the keytar's keys and the plain keys it plays as). On a desktop the hand is the
-## mouse: its wiggle is the tilt, and Alt with the mouse moving up or down bends. A tag on the neck
-## says BEND and by how much while it is bent, mine or a bandmate's (`bend_text`), so a bend is
-## seen and not only heard.
+## mouse: its wiggle is the tilt, and Alt with the mouse moving up or down bends. Its card says
+## BEND and by how much while it is bent, mine or a bandmate's (`bend_text`), so a bend is seen and
+## not only heard. The tag on the neck that said it too keeps the words and is never shown: words
+## floating by the neck were too much (2026-10-29: "i don't like the floating text").
 
 ## Pressed from the studio, for the computer keyboard to be the keytar's again after it was let
 ## go (Esc, a click elsewhere): a click with the keytar in hand.
@@ -63,7 +64,7 @@ var _down: Dictionary = {}
 ## Somebody else's playing, out of the keytar: made the first time they play.
 var _room: MonitorSynth = null
 var _lit: StandardMaterial3D = null
-## The neck's tag, and a bandmate's bend on it as they sent it (semitones).
+## The neck's tag (never shown, `_show_bend`), and a bandmate's bend as they sent it (semitones).
 var _bend_tag: Label3D = null
 var _their_bend := 0.0
 
@@ -113,7 +114,7 @@ func is_down(pitch: int) -> bool:
 	return _down.has(key_of(pitch))
 
 
-## The bend its tag says now, in words: `BEND +1.3`, or "" for none to see. Mine while it is in my
+## The bend its card says now, in words: `BEND +1.3`, or "" for none to see. Mine while it is in my
 ## hand, a bandmate's while it is in theirs.
 func bend_text() -> String:
 	var st := _their_bend
@@ -153,15 +154,20 @@ func _show_bend() -> void:
 		_bend_tag.name = "BendTag"
 		_bend_tag.font_size = 56
 		_bend_tag.pixel_size = 0.0004
-		_bend_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		_bend_tag.no_depth_test = true
 		_bend_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_bend_tag.modulate = Color(0.98, 0.95, 0.88)
 		_bend_tag.position = BEND_TAG_AT
 		Lettering.range_to_legibility(_bend_tag)
 		add_child(_bend_tag)
-	_bend_tag.visible = said != ""
+	# Lettered, never shown: the card says it (`readout`).
+	_bend_tag.visible = false
 	_bend_tag.text = said
+
+
+## Item's, and the bend while it is bent (`bend_text`): what the neck's tag said.
+func readout() -> String:
+	var bent := bend_text()
+	return super() if bent == "" else "%s  ·  %s" % [super(), bent]
 
 
 ## Somebody else's control on the keys this keytar plays for them (Presence, as `heard`): out of

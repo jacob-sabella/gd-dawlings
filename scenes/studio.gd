@@ -2023,8 +2023,9 @@ func _carry_live(id: StringName) -> void:
 	_place_hood_signs()
 
 
-## The neighbourhoods' banners (Neighbourhoods), the venue's children, one over each neighbourhood
-## that stands here: built with the venue, and moved with what they name (`_place_hood_signs`).
+## The neighbourhoods' banners (Neighbourhoods), the venue's children, one on the wall by each
+## neighbourhood that stands here: built with the venue, and moved with what they name
+## (`_place_hood_signs`).
 func _hang_hood_signs() -> void:
 	if venue == null or medium == Presentation.Medium.AR:
 		return
@@ -2035,8 +2036,9 @@ func _hang_hood_signs() -> void:
 	_place_hood_signs()
 
 
-## Each banner over its neighbourhood's middle as it stands now: a piece wheeled across the room
-## takes its neighbourhood's middle, and so its banner, some of the way with it.
+## Each banner on its wall by its neighbourhood's middle as it stands now: a piece wheeled across
+## the room takes its neighbourhood's middle, and so its banner, some of the way along the wall with
+## it, or round to another wall.
 func _place_hood_signs() -> void:
 	if venue == null or not is_instance_valid(venue):
 		return
@@ -2047,7 +2049,7 @@ func _place_hood_signs() -> void:
 		var at: Variant = Neighbourhoods.sign_spot(venue, r["id"])
 		sign.visible = at != null
 		if at != null:
-			sign.position = at
+			sign.transform = at
 
 
 ## The items' homes from where the shelf, the hoop and the bells' stand now are: one at home goes

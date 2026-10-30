@@ -1,100 +1,152 @@
 class_name HoverCard
-extends CanvasLayer
+extends Node
 
-## The small panel beside the cursor that says what is under it: name, value, what you can do.
+## What is under the pointer -- name, value, what you can do -- printed flat on the panel it is
+## mounted on, just under it, in that panel's own plane: lettering on the gear, never a card in
+## the air beside the cursor.
 ##
 ## Everything here is already somewhere on the desk -- the track name on the scribble strip,
 ## the dB under the fader -- but at a monitor's distance most of it is three pixels tall, and
 ## reading a value off a scribble strip is not how anyone checks a setting while their hand is
-## on it. The card is where the eye already is.
+## on it. The words are where the eye already is, and lie on the face like the rest of its
+## markings, so a desk laid back sixty degrees carries them laid back with it.
 ##
-## It also teaches. The hint line is the manual, delivered at the moment the question arises
-## and to nobody who has not asked it by pointing.
+## It also teaches. The hint is the manual, delivered at the moment the question arises and to
+## nobody who has not asked it by pointing. A control that is not part of a surface (a held item,
+## a thing in the room) gets none: it says what it is by its own shape and markings.
 
-const OFFSET := Vector2(22, 18)
+## Its lettering's cap height and how wide it may run, in metres.
+const CAP := 0.017
+const WIDEST := 0.7
+const PIXEL := 0.0002
+## Under the control's footprint, and out from its face, in metres.
+const DROP := 0.01
+const LIFT := 0.003
+const INK := Color(0.95, 0.97, 1.0)
+const DIM := Color(0.78, 0.83, 0.9)
 
-var _panel: PanelContainer
-var _title: Label
-var _value: Label
-var _hint: Label
+## The lettering, in world space (top_level), put under whichever control it describes.
+var _strip: Node3D = null
+var _on: Surface = null
 var _shown: ControlAffordance = null
+var _line: Label3D
+var _hint: Label3D
 
 
-func _ready() -> void:
-	layer = 20
-	_panel = PanelContainer.new()
-	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.07, 0.09, 0.90)
-	style.border_color = Color(0.62, 0.82, 1.0, 0.85)
-	style.border_width_left = 2
-	style.corner_radius_top_left = 5
-	style.corner_radius_top_right = 5
-	style.corner_radius_bottom_left = 5
-	style.corner_radius_bottom_right = 5
-	style.content_margin_left = 10
-	style.content_margin_right = 12
-	style.content_margin_top = 6
-	style.content_margin_bottom = 7
-	_panel.add_theme_stylebox_override("panel", style)
-	add_child(_panel)
-
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 1)
-	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_panel.add_child(column)
-	_title = _line(column, Color(0.66, 0.72, 0.80))
-	_value = _line(column, Color(0.95, 0.97, 1.0))
-	_hint = _line(column, Color(0.50, 0.55, 0.62))
-	_restyle()
-	_panel.visible = false
+## The surface a control is part of, or null.
+static func surface_of(control: Node) -> Surface:
+	var n := control.get_parent() if control != null else null
+	while n != null:
+		if n is Surface:
+			return n
+		n = n.get_parent()
+	return null
 
 
-func _line(parent: Control, colour: Color) -> Label:
-	var l := Label.new()
-	l.add_theme_color_override("font_color", colour)
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(l)
-	return l
-
-
-## Sized off the same text scale as the lettering on the gear, so one +/- press is one answer
-## to "can you read it" across the whole room, card included.
-func _restyle() -> void:
-	var k := clampf(Ergonomics.current.text_scale, 0.6, 3.0)
-	_title.add_theme_font_size_override("font_size", roundi(11 * k))
-	_value.add_theme_font_size_override("font_size", roundi(17 * k))
-	_hint.add_theme_font_size_override("font_size", roundi(10 * k))
-
-
-func show_for(control: ControlAffordance, at: Vector2) -> void:
-	if control == null or not is_instance_valid(control):
-		_panel.visible = false
-		_shown = null
-		return
-	if control != _shown:
-		_shown = control
-		_restyle()
-	_title.text = control.title()
+## The strip's words: the name and value on one line, the hint under them.
+static func words(control: ControlAffordance) -> Array:
+	var title := control.title()
 	var reading := control.readout()
-	_value.text = reading
-	_value.visible = reading != ""
-	_hint.text = control.card_hint()
-	_hint.visible = _hint.text != "" and not control.is_held()
-	_panel.visible = true
-	# Shrink to the text every time, or a card that once showed a long name keeps its width.
-	_panel.reset_size()
-	var view := _panel.get_viewport_rect().size
-	var pos := at + OFFSET
-	# Flipped to the other side of the cursor rather than clamped, so the card never ends up
-	# under the pointer it is describing.
-	if pos.x + _panel.size.x > view.x - 4:
-		pos.x = at.x - OFFSET.x - _panel.size.x
-	if pos.y + _panel.size.y > view.y - 4:
-		pos.y = at.y - OFFSET.y - _panel.size.y
-	_panel.position = pos.floor()
+	var line := title if reading == "" else "%s   %s" % [title, reading]
+	var hint := "" if control.is_held() else control.card_hint()
+	return [line, hint]
+
+
+func show_for(control: ControlAffordance, _at := Vector2.ZERO) -> void:
+	if control == null or not is_instance_valid(control) or not control.is_inside_tree():
+		hide_card()
+		return
+	var surface := surface_of(control)
+	if surface == null:
+		hide_card()
+		return
+	if _strip == null or not is_instance_valid(_strip):
+		_build()
+	_on = surface
+	var said := words(control)
+	_shown = control
+	_line.text = said[0]
+	_hint.text = said[1]
+	_hint.visible = said[1] != ""
+	Lettering.fit(_line, WIDEST, _line.get_meta(&"largest"), 24)
+	# The hint wraps rather than shrinks: it is the longest thing said and the one read last.
+	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_hint.width = WIDEST / PIXEL
+	var box := HoverRim.footprint(control)
+	var face := control.global_transform.orthonormalized()
+	var tall := CAP * (3.4 if _hint.visible else 1.4)
+	var under := control.global_transform * Vector3(box.get_center().x, box.position.y - DROP, box.end.z + LIFT)
+	var over := control.global_transform * Vector3(box.get_center().x, box.end.y + DROP + tall, box.end.z + LIFT)
+	# Under the control, unless that is off the view -- a fader's travel ends at the desk's front
+	# lip, at the bottom of the frame -- and then over it.
+	var at := under if _in_view(under - face.basis.y.normalized() * tall) or not _in_view(over) else over
+	_strip.global_transform = Transform3D(face.basis, at)
+	_strip.visible = true
+
+
+func _in_view(point: Vector3) -> bool:
+	var vp := get_viewport()
+	var cam := vp.get_camera_3d() if vp != null else null
+	if cam == null or cam.is_position_behind(point):
+		return cam == null
+	var p := cam.unproject_position(point)
+	var size := vp.get_visible_rect().size
+	return p.x >= 0.0 and p.y >= 0.0 and p.x <= size.x and p.y <= size.y
 
 
 func hide_card() -> void:
-	_panel.visible = false
 	_shown = null
+	if _strip != null and is_instance_valid(_strip):
+		_strip.visible = false
+
+
+## Whether a strip is up, and on which surface: for the suite.
+func showing() -> Surface:
+	return _on if _strip != null and is_instance_valid(_strip) and _strip.visible else null
+
+
+func line_text() -> String:
+	return _line.text if _line != null and is_instance_valid(_line) else ""
+
+
+func hint_text() -> String:
+	return _hint.text if _hint != null and is_instance_valid(_hint) and _hint.visible else ""
+
+
+func _exit_tree() -> void:
+	_drop()
+
+
+func _drop() -> void:
+	if _strip != null and is_instance_valid(_strip):
+		_strip.queue_free()
+	_strip = null
+	_on = null
+
+
+func _build() -> void:
+	_strip = Node3D.new()
+	_strip.name = "HoverStrip"
+	_strip.top_level = true
+	add_child(_strip)
+	_line = _label(CAP, INK)
+	_hint = _label(CAP * 0.72, DIM)
+	_hint.position.y = -CAP * 1.6
+	# A heavier outline than the gear's own: the hint can lie over keys and lanes, not bare panel.
+	_hint.outline_size = maxi(_hint.outline_size, roundi(_hint.font_size * 0.3))
+	_strip.visible = false
+
+
+func _label(cap: float, colour: Color) -> Label3D:
+	var l := Label3D.new()
+	l.pixel_size = PIXEL
+	l.font_size = roundi(cap / PIXEL)
+	l.set_meta(&"largest", l.font_size)
+	l.modulate = colour
+	l.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	l.no_depth_test = false
+	l.double_sided = false
+	Lettering.dress(l)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_strip.add_child(l)
+	return l

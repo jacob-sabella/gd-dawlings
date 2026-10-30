@@ -1386,6 +1386,13 @@ func back_of_house() -> Rect2:
 	return Rect2(-half, front, half * 2.0, LIVE_ROOM_BACK - 0.05 - front)
 
 
+## Whether the venue's floor ends at walls: false for one in the open (a plaza, a roof, a stage),
+## where a sign has nothing to hang on. Text goes on walls or nowhere, never in the air, so the
+## neighbourhoods' banners are not hung where this is false.
+func has_walls() -> bool:
+	return true
+
+
 ## Every room past the working footprint that a person can walk in, in studio space, each
 ## meeting the footprint or another along a shared line (see Walker.outline). By default the
 ## one back_of_house; an arrangement with a room off to the side has more.

@@ -213,6 +213,11 @@ func lamp_energy(_index: int, authored: float) -> float:
 	return authored * (0.95 if variant == WINTER else 0.8)
 
 
+## No walls: a pavilion open on every side.
+func has_walls() -> bool:
+	return false
+
+
 ## One open floor: the deck either side of the desk joins the far end.
 func rooms() -> Array[Rect2]:
 	var out: Array[Rect2] = [back_of_house()]

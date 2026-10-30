@@ -13,8 +13,10 @@ extends ControlAffordance
 ## a desktop P and Shift+P (MouseInteractor), steps it while it is carried. On the shelf anyone
 ## may press it.
 ##
-## Plugged, it says so twice, neither of them by colour: a tag over it in words (`-> 3 BASS`),
-## and a short lead out of it ending in a plug. Only a short one into a track: a cable across the
+## Plugged, it says so twice, neither of them by colour: its card in words (`-> 3 BASS`), and a
+## short lead out of it ending in a plug. Its tag keeps those words but is never shown: words
+## floating over every plugged instrument were too much of the room (2026-10-29: "i don't like the
+## floating text. its too present"). Only a short one into a track: a cable across the
 ## room to the patchbay would say it was a send, and it is not one. Into a bandmate (slice 6) the
 ## cable is real and long: slack, from this socket to the nearer glove of their ghost
 ## (`Jacks.far_end`), rebuilt at most CABLE_HZ while either end moves. Where they have no ghost to
@@ -32,7 +34,7 @@ extends ControlAffordance
 ##
 ## Beside a player's own keys' socket on the wrist they wear one more (`into_me`): not a source's
 ## but theirs as a sink, for a headset's hand to do what Shift+P with an empty hand does on a
-## desktop. It is there only while something goes into them, its tag says what (`<- GRACE'S KEYS,
+## desktop. It is there only while something goes into them, its card says what (`<- GRACE'S KEYS,
 ## SHAKER`), and a press takes all of it out (Jacks.unplug_mine). It is how a bandmate's keys,
 ## whose own socket is on the bandmate's wrist and not here, come out of this player.
 
@@ -168,7 +170,6 @@ func _ready() -> void:
 	_tag.outline_size = 8
 	_tag.modulate = Color(0.97, 0.94, 0.86)
 	_tag.outline_modulate = Color(0.05, 0.04, 0.03)
-	_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_tag.position = Vector3(0, TAG_LIFT, -NUT_DEPTH)
 	_tag.visible = false
 	Lettering.range_to_legibility(_tag)
@@ -185,14 +186,14 @@ func _ready() -> void:
 	show_sink(jacks.sink_of(source_id()) if jacks != null else &"")
 
 
-## Where it goes now, shown: the tag's words and the lead (or into a bandmate, the cable to
-## them), or neither, unplugged.
+## Where it goes now, shown: the lead (or into a bandmate, the cable to them), or none, unplugged;
+## the tag lettered with it for the card, never shown.
 func show_sink(to: StringName) -> void:
 	sink = to
 	if _tag == null:
 		return
 	var plugged := to != &""
-	_tag.visible = plugged
+	_tag.visible = false
 	_lead.visible = plugged
 	if plugged:
 		_tag.text = tag_text(to)
@@ -205,14 +206,14 @@ func show_sink(to: StringName) -> void:
 	_follow_cable(0.0)
 
 
-## On an `into_me` socket, what goes into this player, shown: the nut and a tag naming each of
-## them while there is any, nothing while there is none.
+## On an `into_me` socket, what goes into this player, shown: the nut while there is any, nothing
+## while there is none, and the tag lettered with each of them for the card, never shown.
 func show_ins(sources: Array[StringName]) -> void:
 	ins = sources.duplicate()
 	if _look == null:
 		return
 	_look.visible = not ins.is_empty()
-	_tag.visible = not ins.is_empty()
+	_tag.visible = false
 	_tag.text = ins_text(ins)
 
 

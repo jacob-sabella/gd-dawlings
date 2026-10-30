@@ -9,8 +9,10 @@ extends ControlAffordance
 ## 76 - 48 * log2(length / 0.3) / log2(40), so SHORTEST (0.3 m) is E5, a metre is about middle C
 ## and LONGEST (12 m) is E1 (41 Hz), the bottom of a bass. Played, it is snapped to the song's
 ## scale where the song is (Harmony.snap, `pitch_in`), and never under E1, so no string is
-## subsonic, whatever the key. Its note is lettered at its middle, and retuned there as the key
-## changes; one still ringing keeps the pitch it was plucked at.
+## subsonic, whatever the key. Its card says its note (`note_name`), retuned as the key changes;
+## one still ringing keeps the pitch it was plucked at. The letter at its middle that said it too
+## keeps the words and is never shown: a note floating over every string was too much of the room
+## (2026-10-29: "i don't like the floating text. its too present").
 ##
 ## THE ROOM'S. Strings are the room's row `strings` {id: [a, b, maker]} (its two ends in the venue's
 ## frame, and the peer who tied it), at most MOST, asked with the room verb `string` [id, a, b], a
@@ -30,7 +32,7 @@ extends ControlAffordance
 ## notes and are heard from the string that plays that pitch here (`heard`), which shakes.
 ##
 ## CUT. Grab it and pull hard, CUT_PULL off its line (`cut_asked`), or press a knot at either end
-## (`Knot`, with its X).
+## (`Knot`).
 ##
 ## MADE at the spool (`Spool`, station `strings`): its reel gives an end, and the hand that took it
 ## ties the first end where it next presses and the second where it lets go, or, a press and a
@@ -346,9 +348,10 @@ func _ready() -> void:
 	_letter.name = "Letter"
 	_letter.pixel_size = 0.0004
 	_letter.font_size = roundi(LETTER_CAP / 0.7 / _letter.pixel_size)
-	_letter.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_letter.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_letter.modulate = Color(0.97, 0.93, 0.82)
+	# Lettered for its card (`note_name`), never shown: see the class comment.
+	_letter.visible = false
 	Lettering.range_to_legibility(_letter)
 	add_child(_letter)
 	for end in 2:
@@ -655,7 +658,7 @@ func glow_now() -> float:
 	return float(_gut.get_shader_parameter(&"glow")) if _gut != null else 0.0
 
 
-## Its letter: the note it plays now, retuned as the key changes.
+## Its letter, never shown, for its card: the note it plays now, retuned as the key changes.
 func _show_note(force := false) -> void:
 	if _letter == null:
 		return
@@ -667,7 +670,7 @@ func _show_note(force := false) -> void:
 	_letter.text = harmony_at(seconds).note_name(p)
 
 
-## The note in words, as its letter says it.
+## The note in words, as its card says it.
 func note_name() -> String:
 	return _letter.text if _letter != null else ""
 
@@ -772,9 +775,10 @@ class Knot extends ControlAffordance:
 		x.text = "X"
 		x.pixel_size = 0.0004
 		x.font_size = 96
-		x.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		x.modulate = Color(0.97, 0.93, 0.82)
 		x.position = Vector3(0, RoomString.KNOT * 2.4, 0)
+		# Never shown: its card says what pressing it does, and a brass knot is a thing to press.
+		x.visible = false
 		Lettering.range_to_legibility(x)
 		add_child(x)
 
@@ -800,8 +804,8 @@ class Knot extends ControlAffordance:
 ## hand's button is then the end's (Interactor.tool), not the controls'. Its next press ties the
 ## first end where its ray meets something (`surface_hit`), and its let-go, somewhere else, ties the
 ## second there; a press and let-go in one place (a desk's click) waits for a second press for the
-## second end. Between them the string is drawn as it would be, lettered with its note and length, or
-## why not. Then `string_asked` (the venue's frame), and the end is gone from the hand. Esc, a press
+## second end. Between them the string is drawn as it would be, and the reel's card says its note
+## and length, or why not (`preview_text`); the words are not floated by the ray. Then `string_asked` (the venue's frame), and the end is gone from the hand. Esc, a press
 ## on the reel again, or the hand taking an end from somewhere else, drops it.
 class Spool extends Node3D:
 	## Both ends tied, in the venue's frame: the studio asks the room for the string.
@@ -871,8 +875,6 @@ class Spool extends Node3D:
 		_preview_letter.name = "PreviewLetter"
 		_preview_letter.pixel_size = 0.0004
 		_preview_letter.font_size = roundi(RoomString.LETTER_CAP / 0.7 / _preview_letter.pixel_size)
-		_preview_letter.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		_preview_letter.no_depth_test = true
 		_preview_letter.modulate = Color(0.97, 0.93, 0.82)
 		_preview_letter.top_level = true
 		_preview_letter.visible = false
@@ -936,7 +938,7 @@ class Spool extends Node3D:
 		_down = false
 		if _preview != null:
 			_preview.visible = false
-			_preview_letter.visible = false
+			_preview_letter.text = ""
 		if words != "":
 			told.emit(words)
 
@@ -994,9 +996,9 @@ class Spool extends Node3D:
 		var to_world := venue.global_transform if venue != null else Transform3D.IDENTITY
 		if not p.is_finite():
 			_preview.visible = false
-			_preview_letter.visible = false
+			_preview_letter.text = ""
 			return
-		_preview_letter.visible = true
+		# Lettered, never shown: the reel's card says it (`preview_text`).
 		if not first.is_finite():
 			# Where the first end would go: a dot, lettered.
 			_preview.visible = false
@@ -1029,9 +1031,10 @@ class Spool extends Node3D:
 				else Harmony.at(DAW.state, DAW.state.position_seconds if DAW.state != null else 0.0)
 		return "%s  %.1f m" % [h.note_name(RoomString.pitch_in(length, h)), length]
 
-	## The preview's lettering now, for the suite.
+	## What the preview says now: where the first end would go, or the string's note and length, or
+	## why it cannot be; "" while there is no preview. The reel's card says it.
 	func preview_text() -> String:
-		return _preview_letter.text if _preview_letter != null and _preview_letter.visible else ""
+		return _preview_letter.text if _preview_letter != null and carrying() else ""
 
 
 ## The spool's reel: pressed, an end of string to the hand that pressed it (Spool.take_end).
@@ -1054,7 +1057,9 @@ class Reel extends ControlAffordance:
 	func _default_readout() -> String:
 		var n: int = spool.count.call() if spool != null and spool.count.is_valid() else 0
 		if spool != null and spool.carrying():
-			return "an end in hand · %d of %d strings in the room" % [n, RoomString.MOST]
+			var preview := spool.preview_text()
+			return "an end in hand%s · %d of %d strings in the room" % [
+					"" if preview == "" else " · " + preview, n, RoomString.MOST]
 		return "%d of %d strings in the room" % [n, RoomString.MOST]
 
 	func hint() -> String:

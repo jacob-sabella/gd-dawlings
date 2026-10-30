@@ -8,8 +8,8 @@ extends Node3D
 ##
 ## Its origin is on the floor under its pole, its board facing +Z into the room. What it does is
 ## what a hoop does: its rim clangs and its board smacks when they are hit (`struck`), and a ball
-## through it swishes the net and says so for a moment over the rim (`sink`), "SWISH" when it
-## touched nothing on the way.
+## through it swishes the net and says so for a moment on the board over the rim (`sink`), "SWISH"
+## when it touched nothing on the way.
 
 const MODEL := "res://assets/models/hoop.glb"
 ## tools/blender/hoop.py's sizes.
@@ -29,6 +29,8 @@ const BASE_HALF := Vector2(0.23, 0.21)
 const BASE_Z := POLE_Z + 0.06
 const BASE_TOP := 0.07
 const ORANGE := Color(0.95, 0.38, 0.08)
+## How far out from the board's face what it says is lit (m): on it, not in it.
+const SAID_OFF_BOARD := 0.004
 
 ## Baskets made in it since it was built, swishes and all.
 var made := 0
@@ -145,7 +147,7 @@ func struck(on_rim: bool, speed: float) -> void:
 
 
 ## A ball has dropped through it (`clean`: touching nothing): the net swishes and swings, and it
-## says so over the rim.
+## says so on its board.
 func sink(clean: bool, _item: Node3D = null) -> void:
 	made += 1
 	Foley.play(self, Foley.net_swish(made), -3.0 if clean else -6.0, randf_range(0.95, 1.05))
@@ -160,6 +162,8 @@ func _kick(sway: float, speed: float) -> void:
 	set_process(true)
 
 
+## `what`, lit on the board's face over the rim for a moment, and fading: flat on the board, so it
+## is the hoop's own scoreboard rather than words floating up in front of whoever threw.
 func _say(what: String) -> void:
 	if _popup != null and is_instance_valid(_popup):
 		_popup.queue_free()
@@ -169,16 +173,16 @@ func _say(what: String) -> void:
 	label.font_size = 72
 	label.outline_size = 14
 	label.pixel_size = 0.0014
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
+	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	label.double_sided = false
 	label.modulate = Color(1.0, 0.72, 0.35)
 	label.outline_modulate = Color(0.05, 0.04, 0.03)
-	label.position = Vector3(0, BOARD_Y + BOARD_HALF.y + 0.1, RIM_Z)
+	# The board faces +Z: a label left unturned lies on it, the right way round from the room.
+	label.position = Vector3(0, BOARD_Y + BOARD_HALF.y * 0.4, BOARD_FRONT + SAID_OFF_BOARD)
 	add_child(label)
 	_popup = label
 	var fade := label.create_tween()
-	fade.tween_property(label, "position:y", label.position.y + 0.08, 1.6)
-	fade.parallel().tween_interval(1.2)
+	fade.tween_interval(1.4)
 	fade.tween_property(label, "modulate:a", 0.0, 0.5)
 	fade.tween_callback(label.queue_free)
 

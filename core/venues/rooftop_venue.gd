@@ -193,6 +193,11 @@ func lamp_energy(_index: int, authored: float) -> float:
 	return authored * 0.85
 
 
+## No walls: a terrace under the sky, a parapet and a railing round it.
+func has_walls() -> bool:
+	return false
+
+
 ## The terrace is one open floor, parapet to parapet and the railing to the back: the deck
 ## either side of the desk, the live room, and the margin of boards round both.
 func rooms() -> Array[Rect2]:

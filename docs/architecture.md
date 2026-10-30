@@ -485,9 +485,10 @@ its walls, floor and scenery from these, so all fourteen grew together; scenery 
 number scales by the room over `Venue.DRAWN_HALF` / `DRAWN_BACK`, the old room's size.
 
 **Named neighbourhoods.** `Neighbourhoods` (core/room/neighbourhoods.gd) says which stations
-belong together, where their middle is, and hangs a banner over it with the name in words (a
-billboard `Label3D`, so it reads from the seat, the far wall and the next cluster alike; text, not
-colour, says which is which). Where each station stands is still the venue's, in its
+belong together, where their middle is, and hangs a banner with the name in words flat on the
+room's wall nearest that middle, facing back into the room (a `Label3D` that never turns to the
+viewer, hidden by what stands in front of it; words floating in the air were too present; text,
+not colour, says which is which). Where each station stands is still the venue's, in its
 `default_*_spot`, derived from the zone boxes, so a venue that moves a zone carries its cluster:
 
 | Neighbourhood | Where | What |

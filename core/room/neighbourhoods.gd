@@ -2,7 +2,7 @@ class_name Neighbourhoods
 extends RefCounted
 
 ## The room in named neighbourhoods: each a cluster of stations round a middle of its own, with
-## walkways between them and a banner over the middle saying what it is.
+## walkways between them and a banner on the wall behind it saying what it is.
 ##
 ## The room grew twenty stations one at a time, each put in whatever gap was left, until they
 ## stood nose to tail along one strip of the live room's back wall and a person could not walk to
@@ -19,9 +19,9 @@ extends RefCounted
 ## In the order a person meets them coming out of the control room. `stations` are the Stations
 ## ids that make up the neighbourhood (those of them that stand in a venue); `pieces`, what else of
 ## the room's furniture belongs there (Venue.WHEELED ids), which helps place the middle; `lift` (m),
-## how much higher than SIGN_HEIGHT its own banner hangs: from the desk the harmony and synth banners
-## stand one behind the other along the right of the room, and their long titles at one height ran
-## into each other, so the near one hangs lower and the far one higher.
+## how much higher than SIGN_HEIGHT its own banner hangs: the harmony and synth banners can both be
+## on the right-hand wall, one along from the other, and their long titles at one height ran into
+## each other, so the near one hangs lower and the far one higher.
 const ALL := [
 	{"id": &"mixing", "title": "MIXING", "colour": Color(0.95, 0.86, 0.62),
 			"stations": [&"stage_table", &"platter", &"eq_wall", &"levels"], "pieces": []},
@@ -37,7 +37,7 @@ const ALL := [
 	{"id": &"tape", "title": "TAPE & TOYS", "colour": Color(0.7, 1.0, 0.72),
 			"stations": [&"cassette_rack"], "pieces": [&"prop_shelf", &"tour_case", &"hoop"]},
 ]
-## How high a banner hangs over its middle, by default (Venue.sign_height): over the lattice's
+## How high a banner hangs on its wall, by default (Venue.sign_height): over the lattice's
 ## shoulders and the booth's lid, under any ceiling a live room has.
 const SIGN_HEIGHT := 2.9
 ## How far a station may stand from its neighbourhood's middle (m) and still be part of it: a
@@ -100,10 +100,28 @@ const MIXING_ABOVE := 0.45
 const MIXING_OUT := 0.12
 
 
-## Where neighbourhood `id`'s banner hangs in `venue` (studio space): over its middle at the
-## venue's sign height; the mixing one over the control room's open rear, facing the live room, where
-## anyone coming back from it looks for the desk. Null where the neighbourhood does not stand.
+## How far in from a wall's face a banner is (m): proud of what is on the wall, as the studio's
+## back-wall slats are (12 cm), so they do not cut through its letters.
+const OFF_WALL := 0.15
+## How far a banner's ends keep from the corners of its wall (m).
+const CORNER_CLEAR := 0.3
+
+
+## Where neighbourhood `id`'s banner hangs in `venue` (studio space), as a frame whose +Z is the way
+## its face looks: flat on the wall nearest its middle, at the venue's sign height, as far along it
+## as the middle is, and facing back into the room; the mixing one on the live room's side of the
+## header over the control room's open rear, where anyone coming back from it looks for the desk.
+## Null where the neighbourhood does not stand.
+##
+## Words in the air were too much (2026-10-29: "i don't like the floating text. its too present.
+## put it on walls when you can"): a banner that turned to whoever looked hung in the middle of
+## every view of the room. On a wall it is where a room's signs are, and the wall hides it from
+## the other side. The walls are the edges of the floor (Walker.outline of the footprint and the
+## venue's rooms), so a doorway is not one. A venue without walls (Venue.has_walls) has no banners:
+## standing at the edge of an open floor they were words in the air again.
 static func sign_spot(venue: Venue, id: StringName) -> Variant:
+	if not venue.has_walls():
+		return null
 	var m: Variant = middle(venue, id)
 	if m == null:
 		return null
@@ -111,13 +129,71 @@ static func sign_spot(venue: Venue, id: StringName) -> Variant:
 	if id == &"mixing":
 		# On the live room's side of the header over the opening, read from the live room only: from
 		# the seat a banner overhead was the biggest thing in the view of the room behind.
-		return Vector3(0, Studio.WALL_HEIGHT + MIXING_ABOVE, Studio.ROOM_BACK + MIXING_OUT)
-	return Vector3(at.x, venue.sign_height() + float(row(id).get("lift", 0.0)), at.z)
+		return Transform3D(Basis.IDENTITY, Vector3(0, Studio.WALL_HEIGHT + MIXING_ABOVE, Studio.ROOM_BACK + MIXING_OUT))
+	var high := venue.sign_height() + float(row(id).get("lift", 0.0))
+	var mid := Vector2(at.x, at.z)
+	var wall := _nearest_wall(venue, mid, sign_width(id))
+	if wall.is_empty():
+		return Transform3D(Basis.IDENTITY, Vector3(at.x, high, at.z))
+	var normal: Vector2 = wall["normal"]
+	var on: Vector2 = wall["at"] - normal * OFF_WALL
+	# Its face looks back into the room, against the wall's outward normal.
+	return Transform3D(Basis(Vector3.UP, atan2(-normal.x, -normal.y)), Vector3(on.x, high, on.y))
 
 
-## A banner: the neighbourhood's name in capitals, turned to whoever looks at it (so it reads from
-## the seat, from the far wall and from the next neighbourhood alike), lit, and outlined dark so it
-## reads against a lit wall or a night sky. Named "Sign_<id>"; its text is the title.
+## How wide neighbourhood `id`'s banner is (m), as make_sign letters it.
+static func sign_width(id: StringName) -> float:
+	var font := ThemeDB.fallback_font
+	var words := String(row(id).get("title", id))
+	if font == null:
+		return words.length() * LETTER
+	return font.get_string_size(words, HORIZONTAL_ALIGNMENT_LEFT, -1, 128).x * LETTER / 128.0 * 1.35
+
+
+## The wall of the room `mid` is in (or the nearest room to it) that is nearest `mid`, as {"at": the
+## point on it a banner `wide` across is centred on, "normal": its outward normal}; empty where the
+## venue has no rooms past the footprint. A banner is slid along its wall to clear the corners, if
+## the wall is long enough to.
+static func _nearest_wall(venue: Venue, mid: Vector2, wide: float) -> Dictionary:
+	var rooms := venue.rooms()
+	if rooms.is_empty():
+		return {}
+	var home: Rect2 = rooms[0]
+	var best_gap := INF
+	for r in rooms:
+		var gap := 0.0 if r.has_point(mid) else r.get_center().distance_to(mid) - r.size.length() * 0.5
+		if gap < best_gap:
+			best_gap = gap
+			home = r
+	var cr := venue.room_width * 0.5
+	var floor_rects: Array[Rect2] = [Rect2(-cr + 0.05, Studio.ROOM_FRONT + 0.05, venue.room_width - 0.10, Studio.ROOM_DEPTH - 0.05)]
+	floor_rects.append_array(rooms)
+	var out := {}
+	var nearest := INF
+	var grown := home.grow(0.02)
+	for e: Array in Walker.outline(floor_rects):
+		var a: Vector2 = e[0]
+		var b: Vector2 = e[1]
+		# Only the walls of its own room.
+		if not grown.has_point(a) or not grown.has_point(b):
+			continue
+		var length := a.distance_to(b)
+		if length < 0.01:
+			continue
+		var along := (b - a) / length
+		var t := clampf((mid - a).dot(along), 0.0, length)
+		var gap := mid.distance_to(a + along * t)
+		if gap >= nearest:
+			continue
+		var half := wide * 0.5 + CORNER_CLEAR
+		t = clampf(t, half, length - half) if length > half * 2.0 else length * 0.5
+		nearest = gap
+		out = {"at": a + along * t, "normal": e[2]}
+	return out
+
+
+## A banner: the neighbourhood's name in capitals, flat on its wall (sign_spot), lit, and outlined
+## dark so it reads against a lit wall or a night sky. Named "Sign_<id>"; its text is the title.
 static func make_sign(id: StringName) -> Label3D:
 	var r := row(id)
 	var label := Label3D.new()
@@ -128,12 +204,10 @@ static func make_sign(id: StringName) -> Label3D:
 	label.pixel_size = LETTER / 128.0 * 1.35
 	label.modulate = r.get("colour", Color.WHITE)
 	label.outline_modulate = Color(0.02, 0.02, 0.025, 0.85)
-	# The mixing one faces the live room (+Z) from over the opening and is not seen from the seat;
-	# every other turns to whoever looks.
-	var facing_out := id == &"mixing"
-	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED if facing_out else BaseMaterial3D.BILLBOARD_FIXED_Y
+	# Flat on its wall, read from the room's side only, and hidden by whatever stands between.
+	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	label.shaded = false
-	label.double_sided = not facing_out
+	label.double_sided = false
 	label.no_depth_test = false
 	label.fixed_size = false
 	label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

@@ -11944,8 +11944,13 @@ func _test_the_host_records_its_own_microphone_on_the_built_in_engine() -> void:
 	ha.record_with_host = false
 	ha.target_track = 0
 	check("the host's microphone is off until asked", not ha.armed())
-	ha.record_with_host = true
 	var armed := HitRecorder.armed_track()
+	var was := DAW.state.track(armed).input
+	DAW.state.track(armed).input = "audio:scarlett#2"
+	check("an armed track pointed at an input records it, with no switch to find", ha.armed())
+	DAW.state.track(armed).input = was
+	check("but one with no input chosen waits for the switch", was.begins_with("audio:") or not ha.armed())
+	ha.record_with_host = true
 	check("asked, it goes on the armed track with none chosen (%d)" % armed, armed > 0 and ha.take_track() == armed)
 	check("and is armed, as the stand-in does not record its own inputs", ha.armed())
 	DAW.state.track(armed).items.clear()
@@ -13194,6 +13199,126 @@ func _test_the_demo_song_follows_the_meter() -> void:
 			(16.0 + 24.0) * 0.5 - 6.0, 0.001)
 	off = steps.call(made[0], made[1], [14.5, 15.5, 16.0, 19.0, 22.0, 25.0, 27.5, 28.0, 31.0, 34.0, 37.0, 39.5])
 	check("the 4/4 bar before it plays as 4/4, and each 6/8 bar as 6/8 (off at %s)" % [off], off.is_empty())
+
+
+## The hover card is lettering on the gear: flat on the panel a control is mounted on, in that
+## panel's plane, beside the control, and nowhere for a control that is on no surface.
+func _test_the_hover_card_is_printed_on_the_panel_and_not_in_the_air() -> void:
+	var surface := Surface.new()
+	add_child(surface)
+	var panel := Node3D.new()
+	# A panel laid back, as a desk's is.
+	panel.rotation.x = -deg_to_rad(60.0)
+	surface.add_child(panel)
+	var knob := ControlAffordance.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.04, 0.04, 0.02)
+	shape.shape = box
+	knob.add_child(shape)
+	knob.position = Vector3(0.3, 0.1, 0)
+	panel.add_child(knob)
+	var card := HoverCard.new()
+	add_child(card)
+	card.show_for(knob)
+	check("pointing at a control on a surface puts its words up on that surface", card.showing() == surface)
+	check("saying what it is", card.line_text() == knob.title() or card.line_text().begins_with(knob.title()))
+	var strip: Node3D = card.get_node("HoverStrip")
+	var label: Label3D = strip.get_child(0)
+	check("flat, never turned to the viewer", label.billboard == BaseMaterial3D.BILLBOARD_DISABLED)
+	check("in the panel's own plane, laid back with it",
+			strip.global_basis.z.dot(knob.global_basis.z.normalized()) > 0.999)
+	var local := knob.global_transform.affine_inverse() * strip.global_position
+	check("beside the control, not over it (%s)" % local, absf(local.x) < 0.001
+			and (local.y < -0.02 or local.y > 0.02) and absf(local.z) < 0.02)
+	check("and the old card beside the cursor is gone", card.find_children("*", "CanvasLayer", true, false).is_empty())
+	var loose := ControlAffordance.new()
+	add_child(loose)
+	card.show_for(loose)
+	check("a control on no surface gets no words in the air", card.showing() == null and not strip.visible)
+	card.show_for(knob)
+	card.hide_card()
+	check("and pointing away takes them down", card.showing() == null)
+	card.free()
+	loose.free()
+	surface.free()
+
+
+## A source that hands over what it was given, for InputMonitor in the suite.
+class HeldSource extends MixSource:
+	var frames := PackedVector2Array()
+	var started := false
+	func start() -> bool:
+		started = true
+		return true
+	func stop() -> void:
+		started = false
+	func read() -> PackedVector2Array:
+		var out := frames
+		frames = PackedVector2Array()
+		return out
+
+
+func _test_the_built_in_engine_monitors_a_track_through_its_bus() -> void:
+	var s := MixState.new()
+	for i in [1, 2, 3, 4]:
+		s.track(i).name = "T%d" % i
+	s.track(1).input = "audio:scarlett#2"
+	s.track(1).monitor = DAW.MONITOR_ON
+	s.track(2).input = "audio:scarlett"
+	s.track(2).monitor = DAW.MONITOR_AUTO
+	s.track(3).monitor = DAW.MONITOR_ON
+	s.track(4).input = "midi"
+	s.track(4).monitor = DAW.MONITOR_ON
+	check("a track monitoring on is heard", InputMonitor.heard(s, 1))
+	check("one on auto, unarmed, is not", not InputMonitor.heard(s, 2))
+	s.track(2).rec_arm = true
+	check("armed and stopped, it is", InputMonitor.heard(s, 2))
+	s.playing = true
+	check("armed and playing back, it is not, as in Reaper", not InputMonitor.heard(s, 2))
+	s.recording = true
+	check("armed and recording, it is", InputMonitor.heard(s, 2))
+	check("a track with no input chosen never opens a microphone", not InputMonitor.heard(s, 3))
+	check("and one on the keys is the keys' to monitor, not this", not InputMonitor.heard(s, 4))
+	check("the plan is every heard track by its input",
+			InputMonitor.plan(s) == {1: "audio:scarlett#2", 2: "audio:scarlett"})
+
+	var stereo := PackedVector2Array([Vector2(0.1, 0.7), Vector2(0.2, 0.8)])
+	check("input 2 alone is its right side, on both", InputMonitor.side(stereo, 2)
+			== PackedVector2Array([Vector2(0.7, 0.7), Vector2(0.8, 0.8)]))
+	check("input 1 alone its left", InputMonitor.side(stereo, 1)[0] == Vector2(0.1, 0.1))
+	check("and both, as they came", InputMonitor.side(stereo, 0) == stereo)
+
+	var monitor := InputMonitor.new()
+	var made := {}
+	monitor.make_source = func(device: String) -> MixSource:
+		made[device] = HeldSource.new()
+		return made[device]
+	add_child(monitor)
+	# Track 1 has a send: its input goes to its own bus and the send's, at the send's level.
+	var outlets := func(index: int) -> Array:
+		return [[&"Master", 0.0], [&"MonitorSend", -6.0]] if index == 1 else [[&"Master", 0.0]]
+	var made_bus := AudioServer.get_bus_index(&"MonitorSend") < 0
+	if made_bus:
+		AudioServer.add_bus()
+		AudioServer.set_bus_name(AudioServer.bus_count - 1, "MonitorSend")
+	monitor.drive(s, outlets)
+	check("two tracks on one device share one stream", made.keys() == ["scarlett"] and monitor.open_devices() == ["scarlett"])
+	check("and each heard track has its own players", monitor.monitoring() == [1, 2])
+	check("on its track's bus and down its sends (%s)" % [monitor.buses_of(1)],
+			monitor.buses_of(1).size() == 2 and &"MonitorSend" in monitor.buses_of(1) and monitor.buses_of(2) == [&"Master"])
+	var sent: Array = monitor.get_children().filter(func(p: Node) -> bool: return (p as AudioStreamPlayer).bus == &"MonitorSend")
+	check("at the send's level", sent.size() == 1 and is_equal_approx((sent[0] as AudioStreamPlayer).volume_db, -6.0))
+	monitor.drive(s, func(_index: int) -> Array: return [[&"Master", 0.0]])
+	check("a send taken away stops carrying it", monitor.buses_of(1) == [&"Master"])
+	if made_bus:
+		AudioServer.remove_bus(AudioServer.get_bus_index(&"MonitorSend"))
+	s.recording = false
+	s.track(1).monitor = DAW.MONITOR_OFF
+	monitor.drive(s, func(_index: int) -> Array: return [[&"Master", 0.0]])
+	check("turned off, or out of auto's reach, a track's player goes", monitor.monitoring() == [])
+	check("and its device's stream is closed", monitor.open_devices() == [] and not made["scarlett"].started)
+	monitor.free()
 
 
 func _test_input_monitoring_is_set_from_the_strip() -> void:
@@ -17926,6 +18051,10 @@ func _test_a_ball_goes_through_the_hoop() -> void:
 	var said := hoop.get_node_or_null("Said") as Label3D
 	check("through it, the hoop counts it and says so (%s)" % [said.text if said else "nothing"],
 			hoop.made == 1 and said != null and said.text == "SWISH")
+	check("on its board, flat on the face and over the rim, not turned to the eye nor drawn through walls",
+			said != null and said.billboard == BaseMaterial3D.BILLBOARD_DISABLED and not said.no_depth_test
+			and said.basis.z.is_equal_approx(Vector3.BACK) and absf(said.position.z - Hoop.BOARD_FRONT) < 0.01
+			and absf(said.position.y - Hoop.BOARD_Y) < Hoop.BOARD_HALF.y and said.position.y > Hoop.RIM_Y)
 	check("and its net swings", hoop.is_processing())
 	for step in 400:
 		hoop._process(1.0 / 60.0)
@@ -18035,6 +18164,11 @@ func _test_darts_stick_in_the_board_and_score() -> void:
 			and absf(on_face.z + DartItem.POINT_IN) < 0.004)
 	check("and what it scored is shown over it (%s)" % [popup.text if popup else "none"],
 			popup != null and popup.text.begins_with("T20") and popup.text.ends_with("60"))
+	var popup_on := face.affine_inverse() * popup.global_position if popup else Vector3.INF
+	var popup_faces := (face.basis.inverse() * popup.global_basis.z).normalized() if popup else Vector3.ZERO
+	check("on the board, flat on its face just over the dart, not turned to the eye (%s, faces %s)" % [popup_on, popup_faces],
+			popup != null and popup.billboard == BaseMaterial3D.BILLBOARD_DISABLED and not popup.no_depth_test
+			and absf(popup_on.z - DartItem.SCORE_OFF_BOARD) < 0.01 and popup_on.y > on_face.y and popup_faces.z > 0.95)
 	check("it reads as in the board, with its score, not on the floor (%s)" % darts[0].readout(),
 			darts[0].is_stuck() and darts[0].readout() == "in the board: T20")
 	var entry: Array = studio.items.state().get(&"dart1", [])
@@ -25342,7 +25476,8 @@ func _walked_to(grid: Dictionary, seen: PackedByteArray, p: Vector2, slack: floa
 
 ## The room's neighbourhoods (Neighbourhoods, docs/architecture.md "Room layout"): in every venue
 ## and arrangement each one's stations stand together -- every one in reach of its middle and nearer
-## its own middle than any other neighbourhood's -- and a banner over the middle says its name in words.
+## its own middle than any other neighbourhood's -- and a banner flat on the wall by the middle says
+## its name in words.
 func _check_neighbourhood(hood: StringName) -> void:
 	var saved_layout := Session.layout
 	Session.layout = LayoutProfile.new()
@@ -25381,22 +25516,39 @@ func _check_neighbourhood(hood: StringName) -> void:
 			check("%s: its stations stand together round its middle %s (%s)" % [tag, mid, strays], strays.is_empty())
 			var sign := venue.get_node_or_null("Sign_%s" % hood) as Label3D
 			var spot: Variant = Neighbourhoods.sign_spot(venue, hood)
-			check("%s: a banner over its middle says %s in words, big enough to read across the room" % [tag, r["title"]],
+			if not venue.has_walls():
+				# Words on walls or nowhere: an open floor has none to hang them on.
+				check("%s: open to the sky, so no banner stands in the air" % tag, sign == null and spot == null)
+				continue
+			check("%s: a banner by its middle says %s in words, big enough to read across the room" % [tag, r["title"]],
 					sign != null and sign.visible and sign.text == r["title"] and spot != null
-					and sign.position.is_equal_approx(spot)
+					and sign.transform.is_equal_approx(spot)
 					and sign.font_size * sign.pixel_size * 0.7 >= 0.25)
+			check("%s: flat, never turned to whoever looks, and hidden by what is in front of it" % tag,
+					sign != null and sign.billboard == BaseMaterial3D.BILLBOARD_DISABLED and not sign.no_depth_test
+					and not sign.double_sided)
 			if hood != &"mixing" and sign != null:
-				check("%s: the banner hangs over the floor, above head height and clear of the walls" % tag,
-						sign.position.y >= 2.4 and studio._walkable().any(func(w: Rect2) -> bool:
-							return w.has_point(Vector2(sign.position.x, sign.position.z))))
-	# Pushed across the room, a piece takes its neighbourhood's banner some of the way with it.
+				# On a wall: just in from one of the floor's edges, its face looking back over the floor.
+				var faces := Vector2(sign.basis.z.x, sign.basis.z.z)
+				var foot := Vector2(sign.position.x, sign.position.z)
+				var on_wall := Walker.outline(studio._walkable()).any(func(e: Array) -> bool:
+					var a: Vector2 = e[0]
+					var b: Vector2 = e[1]
+					var t := clampf((foot - a).dot((b - a).normalized()), 0.0, a.distance_to(b))
+					var off := absf(foot.distance_to(a + (b - a).normalized() * t) - Neighbourhoods.OFF_WALL)
+					return off < 0.02 and faces.dot(-(e[2] as Vector2)) > 0.99)
+				check("%s: the banner is on a wall, above head height, facing into the room (%s)" % [tag, sign.position],
+						sign.position.y >= 2.4 and on_wall and studio._walkable().any(func(w: Rect2) -> bool:
+							return w.has_point(foot)))
+	# Pushed along the room, a piece takes its neighbourhood's banner some of the way along its wall.
 	studio.set_venue(&"studio", false, 0)
 	if hood == &"harmony":
 		var harp: Trolley = studio.live_pieces[&"harp"]
 		var before: Vector3 = studio.venue.get_node("Sign_harmony").position
-		harp.place(Vector2(harp.position.x - 1.0, harp.position.z), harp.rotation.y)
+		# Past the bells at the neighbourhood's far end, so its middle moves along the wall.
+		harp.place(Vector2(harp.position.x, harp.position.z + 3.0), harp.rotation.y)
 		studio._carry_live(&"harp")
-		check("wheeling the harp a metre over moves the HARMONY & STRINGS banner with the neighbourhood's middle",
+		check("wheeling the harp three metres back, past the bells, slides the HARMONY & STRINGS banner along its wall with the neighbourhood's middle",
 				not (studio.venue.get_node("Sign_harmony") as Node3D).position.is_equal_approx(before))
 	await get_tree().process_frame
 	studio.queue_free()
@@ -26143,8 +26295,8 @@ func _test_a_track_jack_records_onto_its_track() -> void:
 			jacks.sink_of(&"shaker") == &"track_6" and studio.room_state()["jacks"] == {"shaker": "track_6"})
 	check("and the player is told, in words (%s)" % [notices], notices.size() == 1
 			and notices[0] == "The shaker's jack is in %s: its hits are recorded there, armed or not." % six)
-	check("its tag says where, and its lead hangs out of it (%s)" % shaker.jack._tag.text,
-			shaker.jack._tag.visible and shaker.jack._tag.text == "-> %s" % six and six.begins_with("6 ")
+	check("its card says where, and its lead hangs out of it; no tag floats over it (%s)" % shaker.jack.readout(),
+			not shaker.jack._tag.visible and shaker.jack._tag.text == "-> %s" % six and six.begins_with("6 ")
 			and shaker.jack._lead.visible and shaker.jack.readout() == "-> %s" % six)
 	now[0] = 20.5
 	shaker.play(100)
@@ -26407,7 +26559,7 @@ func _test_a_guests_plug_is_predicted_and_rolled_back() -> void:
 		out["acks"] = {5: acks}
 		return out
 	studio._on_plug_asked(&"shaker", &"track_3")
-	check("a guest's plug is in at once", jacks.sink_of(&"shaker") == &"track_3" and shaker.jack._tag.visible)
+	check("a guest's plug is in at once", jacks.sink_of(&"shaker") == &"track_3" and shaker.jack._lead.visible)
 	check("and asked of the host", studio._predictions.size() == 1 and studio._predictions[0]["verb"] == &"plug"
 			and studio._predictions[0]["args"] == [&"shaker", &"track_3"])
 	studio.apply_room(room_with.call({}, 0))
@@ -26416,7 +26568,7 @@ func _test_a_guests_plug_is_predicted_and_rolled_back() -> void:
 	check("with the host's own plugs beside it", jacks.sink_of(&"bell1") == &"track_2" and jacks.sink_of(&"shaker") == &"track_3")
 	studio.apply_room(room_with.call({"bell1": "track_2"}, Session.room_seq))
 	check("the host's answer without it takes it out: refused", jacks.sink_of(&"shaker") == &""
-			and not shaker.jack._tag.visible and studio._predictions.is_empty())
+			and not shaker.jack._lead.visible and studio._predictions.is_empty())
 	studio._on_plug_asked(&"shaker", &"track_3")
 	studio.apply_room(room_with.call({"bell1": "track_2", "shaker": "track_3"}, Session.room_seq))
 	check("an answer that took it keeps it", jacks.sink_of(&"shaker") == &"track_3" and studio._predictions.is_empty())
@@ -27013,8 +27165,8 @@ func _test_the_wrist_unplugs_what_goes_into_me() -> void:
 	skeleton.wrist.add_child(ins)
 	check("with nothing going into me it is not there", not ins._look.visible and ins.hint() == "")
 	jacks.set_patch({"keys:7": "player_5", "harp": "player_5", "bell1": "player_9"})
-	check("something going into me: it is, and its tag says what (%s)" % ins._tag.text,
-			ins._look.visible and ins._tag.visible and ins._tag.text.begins_with("<- ")
+	check("something going into me: it is, and its card says what, with no tag floating over it (%s)" % ins.readout(),
+			ins._look.visible and not ins._tag.visible and ins.readout() == ins._tag.text and ins._tag.text.begins_with("<- ")
 			and ins._tag.text.contains("'S KEYS") and ins._tag.text.contains("CHORD HARP")
 			and not ins._tag.text.contains("BELL"))
 	check("a press says it unplugs all of it (%s)" % ins.hint(), ins.hint() == "press to unplug everything going into you"
@@ -30466,15 +30618,17 @@ func _test_a_bend_is_shown_and_kept_in_the_take() -> void:
 	keytar._bend_by_hand(1.0 / 60.0)
 	keytar._show_bend()
 	check("the hand holding the keytar bends it (%s)" % [spy.controls], spy.controls.get(bend) == Wobble.value_of(1.3))
-	check("and its neck tag says BEND +1.3 (%s)" % keytar.bend_text(), keytar.bend_text() == "BEND +1.3"
-			and keytar._bend_tag != null and keytar._bend_tag.visible and keytar._bend_tag.text == "BEND +1.3")
+	check("and its card says BEND +1.3, with no tag floating by the neck (%s)" % keytar.readout(), keytar.bend_text() == "BEND +1.3"
+			and keytar.readout().ends_with("BEND +1.3")
+			and keytar._bend_tag != null and not keytar._bend_tag.visible and keytar._bend_tag.text == "BEND +1.3")
 	gm.note_off(64, 0, 0.0, false, &"keytar")
 	mouse.alt_override = 0
 	for i in 30:
 		mouse._spring_bend(1.0 / 60.0)
 		keytar._bend_by_hand(1.0 / 60.0)
 	keytar._show_bend()
-	check("let go, the tag goes", keytar.bend_text() == "" and not keytar._bend_tag.visible)
+	check("let go, the card stops saying it", keytar.bend_text() == "" and not keytar.readout().contains("BEND")
+			and not keytar._bend_tag.visible)
 	# A bandmate's keytar bend shows on it too, and rests at their last note-off.
 	keytar.carried_by = null
 	keytar.heard(Session.Note.ON, 67, 100)
@@ -31087,9 +31241,12 @@ func _test_hand_percussion_is_snapped_gently_as_it_is_recorded() -> void:
 				ItemVoices.drum(82)[0] == &"shaker" and ItemVoices.drum(54)[0] == &"jingle" and loud > 0.01
 				and (split[0] as PackedFloat64Array).is_empty())
 
-	# The shelf tag: SNAP while on; in a headset, how a hand holds it too; nothing in your hand.
+	# The shelf tag's words: SNAP while on; in a headset, how a hand holds it too. Never shown over
+	# it: the card says it.
 	check("the shelf tag says SNAP while snapping (%s)" % shaker.tag_text(), shaker.tag_text() == "SNAP"
 			and tambourine.tag_text() == "SNAP" and bell.tag_text() == "")
+	check("and its card says so (%s)" % shaker.readout(), shaker.readout().contains("snapped to the beat")
+			and not bell.readout().contains("snapped"))
 	gm.snap_hits = false
 	check("and nothing at a desk with it off", shaker.tag_text() == "")
 	InstrumentItem.hands_hint = true
@@ -31099,10 +31256,12 @@ func _test_hand_percussion_is_snapped_gently_as_it_is_recorded() -> void:
 			and InstrumentItem.HANDS_HINT.contains("controllers are steadier for fast parts"))
 	shaker._retag()
 	var tag := shaker.get_node("ShelfTag") as Label3D
-	check("and shows it over it on the shelf", tag.visible and tag.text == shaker.tag_text())
+	check("but never floats it over the shelf: its card's hint says how a hand holds it (%s)" % shaker.hint(),
+			not tag.visible and tag.text == shaker.tag_text()
+			and shaker.hint().contains("close your hand round it and shake"))
 	hand.pick_up(shaker)
 	shaker._retag()
-	check("but not in your own hand", not tag.visible)
+	check("nor in your own hand", not tag.visible)
 	hand.lose_carrying()
 	shaker.snap_home()
 	InstrumentItem.hands_hint = false
@@ -31269,6 +31428,11 @@ func _test_a_placing_on_the_stage_table_is_one_step() -> void:
 	var spot := StageTable.spot_of(t.pan, StageTable.db_of_volume(t.volume)) + Vector3(0, voice.lift(), 0)
 	check("a voice stands where the mix has its track (%s at %s)" % [voice.position, spot], voice.position.is_equal_approx(spot))
 	check("and wears its ring and its number", voice.ring != null and voice._number.text == "3")
+	var number_on := table.to_local(voice._number.global_position)
+	var number_up := table.global_basis.inverse() * voice._number.global_basis.z
+	check("its number lies flat on the table in front of its foot, face up, not turned to the eye (%s)" % number_on,
+			voice._number.billboard == BaseMaterial3D.BILLBOARD_DISABLED and number_up.normalized().y > 0.99
+			and absf(number_on.y - StageVoice.NUMBER_OVER) < 0.001 and number_on.z > voice.position.z)
 	close_to("the front edge is +6 dB", StageTable.db_of_z(StageTable.SIZE.y * 0.5), 6.0)
 	close_to("the back edge -40", StageTable.db_of_z(-StageTable.SIZE.y * 0.5), -40.0)
 	check("past it, -inf", StageTable.db_of_z(-StageTable.SIZE.y * 0.5 - 0.01) == -INF)
@@ -40670,7 +40834,7 @@ func _test_a_hit_here_takes_the_fast_path_and_a_bandmates_never() -> void:
 	check("the tag names the fast path and its figure (%s)" % InstrumentItem.path_tag(),
 			InstrumentItem.path_tag() == "FAST PATH · 5 ms")
 	check("and so does the card (%s; %s)" % [shaker.readout(), drum.readout()],
-			shaker.readout() == "on the shelf  ·  heard on the fast path, 5 ms"
+			shaker.readout().begins_with("on the shelf  ·  ") and shaker.readout().ends_with("heard on the fast path, 5 ms")
 			and drum.readout().contains("rim slap") and drum.readout().ends_with("heard on the fast path, 5 ms"))
 	InstrumentItem.fast_latency = func() -> float: return -1.0
 	var monitor_ms := roundi(AudioServer.get_output_latency() * 1000.0)
@@ -40683,8 +40847,9 @@ func _test_a_hit_here_takes_the_fast_path_and_a_bandmates_never() -> void:
 	InstrumentItem.fast_latency = func() -> float: return 0.0046
 	drum._retag()
 	var tag := drum.get_node_or_null("ShelfTag") as Label3D
-	check("in a headset, with no card, a drum's tag says it (%s)" % drum.tag_text(), drum.tag_text() == "FAST PATH · 5 ms"
-			and tag != null and tag.visible and tag.text == "FAST PATH · 5 ms")
+	check("in a headset its tag's words say it, but the tag is never shown: the card says it (%s; %s)" % [drum.tag_text(), drum.readout()],
+			drum.tag_text() == "FAST PATH · 5 ms" and tag != null and not tag.visible and tag.text == "FAST PATH · 5 ms"
+			and drum.readout().ends_with("heard on the fast path, 5 ms"))
 	InstrumentItem.hands_hint = false
 	drum._retag()
 	check("and at a desk, where the card does, it says nothing", drum.tag_text() == "" and not tag.visible)
@@ -44046,9 +44211,9 @@ func _test_a_plucked_string_plays_on_the_keys_with_its_source() -> void:
 			downs.append(pitch)
 	gm.key.connect(shown)
 	string._process(0.016)
-	check("6 m in A minor is lettered C2 above its middle, and its card says its note, length and key (%s, %s)"
+	check("6 m in A minor is C2, and its card says its note, length and key, with no letter floating over it (%s, %s)"
 			% [string.title(), string.readout()],
-			string.note_name() == "C2" and string._letter.position.y > 0.0 and is_equal_approx(string.position.x, 0.0)
+			string.note_name() == "C2" and not string._letter.visible and is_equal_approx(string.position.x, 0.0)
 			and string.title() == "STRING  C2" and string.readout() == "C2, 6.0 m (A minor)")
 	var hand := Node.new()
 	string.grab_begin(hand, Vector3(0, 1.2, 0))
@@ -44197,8 +44362,9 @@ func _test_a_string_is_tied_from_the_spool_to_anything_the_ray_meets() -> void:
 			near.call(spool.first, Vector3(-0.6, 0, 5.0)))
 	hand.at = _down_from(Vector3(-0.6, 1.5, 3.0))
 	spool._process(0.016)
-	check("carried, the string is drawn from it, with the note and length it would be (%s)" % spool.preview_text(),
-			spool.preview_text() == "D3  2.0 m" and spool._preview.visible)
+	check("carried, the string is drawn from it, and the reel's card says the note and length it would be (%s)" % spool.reel.readout(),
+			spool.preview_text() == "D3  2.0 m" and spool._preview.visible and spool.reel.readout().contains("D3  2.0 m")
+			and not spool._preview_letter.visible)
 	hand._use_tool(false)
 	var row: Array = studio.strings_row.values()[0] if studio.strings_row.size() == 1 else []
 	check("let go, the second end is tied there: the room's row (%s)" % [studio.strings_row],
@@ -44287,8 +44453,9 @@ func _test_a_string_is_cut_by_a_pull_or_its_knot() -> void:
 		_offline()
 		return
 	var knot: ControlAffordance = s._knots[1]
-	check("each end has a knot with an X to press (%s)" % knot.title(),
-			s._knots.size() == 2 and knot.get_node("X").text == "X" and knot.title().ends_with("KNOT") and knot.personal())
+	check("each end has a knot to press, its card saying so, with no X floating over it (%s)" % knot.title(),
+			s._knots.size() == 2 and not (knot.get_node("X") as Label3D).visible and knot.title().ends_with("KNOT")
+			and knot.readout() == "press to cut it" and knot.personal())
 	knot.call("_on_grab_begin", Vector3.ZERO)
 	check("its knot pressed, the string is cut, and says so (%s)" % [notices],
 			not studio.strings_row.has(&"k") and not studio.room_strings.has(&"k") and notices == ["The string is cut."])
@@ -44811,12 +44978,18 @@ func _test_a_desk_builds_a_marble_run_from_the_tray() -> void:
 	mouse._use_tool(false)
 	check("the click that took it puts nothing in", run.rows.is_empty() and run.carrying())
 	run._show_ghost()
-	check("its ghost shows where it would go and what it is (%s)" % run.ghost_text(),
-			run.ghost_text() == "BELL  AWAY  A4 · LAYER 1" and run._ghost.visible and run._layer_grid.visible)
+	check("its ghost shows where it would go, and the BELL key's card what it is (%s)" % bell_key.readout(),
+			run.ghost_text() == "BELL  AWAY  A4 · LAYER 1" and run._ghost.visible and run._layer_grid.visible
+			and bell_key.readout() == run.ghost_text() and not run._ghost_letter.visible)
 	mouse._use_tool(true)
 	mouse._use_tool(false)
 	check("a click on the lattice's floor puts it there, facing away, and the mouse keeps a bell for the next",
 			studio.marbles_row.get(Vector3i(3, 0, 2)) == [&"bell", 0] and run.block_at(Vector3i(3, 0, 2)) != null and run.carrying())
+	var placed_bell: MarbleRun.Block = run.block_at(Vector3i(3, 0, 2))
+	if placed_bell != null:
+		placed_bell._process(0.0)
+	check("the bell's card names its note, and no letter floats over it (%s)" % [placed_bell.title() if placed_bell else "none"],
+			placed_bell != null and placed_bell.title() == "BELL  A4" and not placed_bell.letter.visible)
 	run.turn_carried(1)
 	mouse._use_tool(true)
 	mouse._use_tool(false)
@@ -45254,10 +45427,12 @@ func _test_a_theremins_guide_letters_its_scale_and_lights_the_nearest_ring() -> 
 			% [letter.position.y if letter != null else 0.0, row], letter != null and absf(letter.position.y - row
 			- signf(row - Theremin.GUIDE_Y) * Theremin.LETTER_CAP * Theremin.LIT_LIFT) < 0.0005)
 	var shown: Array = t._letters.filter(func(l: Label3D) -> bool: return l.visible and l != letter)
+	# Where they would stand if shown: each kept by its size (`_size_letters`).
+	var kept: Array = t._letters.filter(func(l: Label3D) -> bool: return float(l.get_meta(&"size", 0.0)) > 0.0 and l != letter)
 	var apart := true
 	var crowded := ""
-	for a: Label3D in shown:
-		for b: Label3D in shown:
+	for a: Label3D in kept:
+		for b: Label3D in kept:
 			if a == b or signf(a.position.y - Theremin.GUIDE_Y) != signf(b.position.y - Theremin.GUIDE_Y) \
 					or a.position.x >= b.position.x:
 				continue
@@ -45265,8 +45440,10 @@ func _test_a_theremins_guide_letters_its_scale_and_lights_the_nearest_ring() -> 
 			if b.position.x - a.position.x < half:
 				apart = false
 				crowded = "%s|%s" % [a.text, b.text]
-	check("no two letters on a side of the rule run together where the rings crowd the rod (%d shown of %d; %s)"
-			% [shown.size(), t._letters.size(), crowded], apart and shown.size() >= 15)
+	check("no two letters on a side of the rule would run together where the rings crowd the rod (%s)" % crowded, apart)
+	check("but none is shown, lit or not: the field's card names the lit note (%d shown of %d)"
+			% [shown.size() + (1 if letter != null and letter.visible else 0), t._letters.size()],
+			shown.is_empty() and letter != null and not letter.visible and t._letters.size() == 22)
 	readings[0]["at"] = _theremin_at(71.2)
 	t.step(1.0 / 60.0)
 	var first := t.pitch
@@ -46874,6 +47051,8 @@ func _test_the_weathers_track_jack_and_its_modular_cable_work_together() -> void
 	check("a click steps its cable into the wall's first free input, the VCF's CV, and says so (%s)" % [said],
 			Modular.source_of(studio.modular_row, &"vcf.cv") == &"world:weather" and socket.into == &"vcf.cv"
 			and said.size() == 1 and said[0].contains("VCF CV IN"))
+	check("its card says where, and no tag floats over it (%s)" % socket.readout(),
+			socket.readout() == "into VCF CV IN on the modular wall" and not socket._tag.visible)
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	var spine := socket.spine()

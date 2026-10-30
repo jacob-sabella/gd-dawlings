@@ -814,6 +814,15 @@ func bay_skyline() -> void:
 	for i in 4:
 		m._read_meters(0.5, 1.0)
 	check("past 0 dBFS red, '+x dB' (%s)" % [m.tags_shown], m.tags_shown.any(func(w: String) -> bool: return w == "≈ +3.0 dB"))
+	var flat := 0
+	var shown_tags := 0
+	for tag: Label3D in m._tags:
+		if tag.visible:
+			shown_tags += 1
+			if tag.billboard == BaseMaterial3D.BILLBOARD_DISABLED and not tag.no_depth_test and tag.position.z < 0.01:
+				flat += 1
+	check("a tag lies flat on the board, not turned to the eye nor drawn over what is nearer (%d of %d)" % [flat, shown_tags],
+			shown_tags > 0 and flat == shown_tags)
 	var sum_k := (m.pins().size() + m._col_lines.find(m.line_for(13, false))) * 2
 	check("the column's arrival is a tower on its header", m._towers.transform_of(sum_k).basis.get_scale().z > 0.05)
 	s.track(into[0]).vu_l = FaderLaw.to_taper(9.0)
