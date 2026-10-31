@@ -287,6 +287,7 @@ func _ready() -> void:
 	_test_channel_strip_name_opens_plugin_search()
 	await _test_arrow_keys_pick_in_the_plugin_search()
 	await _test_tube_reads_links_searches_and_fetches()
+	await _test_a_click_on_the_gear_moves_nobody()
 	await _test_tube_frames_follow_the_sound()
 	_test_the_pads_chop_a_sample_and_spread_one_across_a_scale()
 	await _test_the_station_samples_the_tv_and_plays_its_pads()
@@ -514,6 +515,7 @@ func _ready() -> void:
 	_test_harmony_names_a_keys_chords_and_what_follows()
 	_test_the_fifths_wheel_raises_the_key_and_what_follows()
 	_test_the_fifths_wheel_sets_the_harmony_at_a_bar()
+	_test_the_song_key_is_set_for_the_room_and_locks_the_keys()
 	await _test_a_guests_set_is_asked_with_its_bar()
 	await _test_every_venue_puts_the_wheel_on_the_bricks_table()
 	_test_every_station_says_how_to_play_it()
@@ -4754,6 +4756,23 @@ func _test_plugins_are_added_and_removed_from_the_rack() -> void:
 	comp_unit._bypass.grab_begin(finger, comp_unit._bypass.global_position)
 	comp_unit._bypass.grab_end(finger)
 	check("and a plain press still bypasses", not s.fx(6, 0).enabled and s.track(6).plugins().size() == 1)
+	DAW.add_fx(6, "reverb")
+	rack._rebuild()
+	units = rack.find_children("*", "RackUnit", true, false)
+	var verb_unit: RackUnit = units.filter(func(u): return u.fx_index == 1).front() if units.size() > 1 else null
+	var said: Array = []
+	var listen := func(w: String): said.append(w)
+	Session.notice.connect(listen)
+	check("every unit has a ✕ to remove it, lettered", verb_unit != null and verb_unit._remove != null
+			and verb_unit.find_child("RemoveCross", false, false) != null
+			and verb_unit._remove.title().contains("REMOVE"))
+	verb_unit._remove.grab_begin(finger, verb_unit._remove.global_position)
+	verb_unit._remove.grab_end(finger)
+	check("a plain press on ✕ takes it out of the chain, and says Ctrl-Z puts it back (%s)" % [said],
+			s.track(6).plugins().size() == 1 and said.size() == 1 and said[0].contains("REVERB") and said[0].contains("Ctrl-Z"))
+	DAW.undo()
+	check("and undo does", s.track(6).plugins().size() == 2 and s.fx(6, 1).name == "Reverb")
+	Session.notice.disconnect(listen)
 	finger.queue_free()
 	rack.queue_free()
 
@@ -7340,6 +7359,46 @@ func _test_the_station_samples_the_tv_and_plays_its_pads() -> void:
 	await get_tree().process_frame
 
 
+## 2026-10-30, "i dont like how clicking things moves me to other things in almost all scenarios":
+## at a desk, what a click does to gear moves the gear, not the player. Only going somewhere (F, I,
+## Escape, a station board row) walks.
+func _test_a_click_on_the_gear_moves_nobody() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	studio.focus.focus(&"rack")
+	for i in 3:
+		await get_tree().process_frame
+	# Walked to the rack, then a step back and a look round, as WASD and a right-drag do.
+	studio.body.global_position += Vector3(0.6, 0, 0.8)
+	studio.walker.global_position += Vector3(0.6, 0, 0.8)
+	var stood := studio.body.global_transform
+	var walked := studio.walker.global_position
+	var placed: Array = []
+	studio.focus.placed.connect(func(): placed.append(true))
+	DAW.add_fx(studio.rack.track_index if studio.rack.get("track_index") != null else 1, DAW.state.fx_choices[0][0])
+	studio.rack.mark_dirty()
+	for i in 4:
+		await get_tree().process_frame
+	check("an effect picked rebuilds the focused rack and walks nobody back to it",
+			placed.is_empty() and studio.body.global_transform.is_equal_approx(stood)
+			and studio.walker.global_position.is_equal_approx(walked))
+	var racked := studio.rack.find_children("*", "RackUnit", true, false)
+	if not racked.is_empty():
+		var unit: RackUnit = racked[0]
+		studio._on_tear_requested(unit.track_index, unit.fx_index, unit.global_position)
+		for i in 3:
+			await get_tree().process_frame
+	check("a plugin pulled off onto a tablet: the tablet comes out, nobody walks to it (%s)" % studio.focus.focused_id,
+			not studio.tablets.is_empty() and studio.focus.focused_id == &"rack"
+			and studio.body.global_transform.is_equal_approx(stood))
+	studio.focus.release()
+	await get_tree().process_frame
+	check("released by something else: nobody walks home, and the monitor's panels come back",
+			studio.body.global_transform.is_equal_approx(stood)
+			and (studio.screen_stage == null or studio.screen_stage.visible))
+	_drop_floor_studio(rig)
+
+
 func _test_arrow_keys_pick_in_the_plugin_search() -> void:
 	await get_tree().process_frame
 	var picker := PluginPicker.ask(self, "Add", [["a", "Alpha"], ["b", "Bravo"], ["c", "Charlie"]])
@@ -8319,9 +8378,10 @@ func _test_a_monitor_goes_to_the_gear_and_leaves_the_room_alone() -> void:
 			not lamp.is_empty() and reach < 0.75)
 
 	# Rearrange the room and go back: the seat is wherever the rack now is.
+	var at_the_rack := studio.body.global_transform
 	studio.focus.release()
-	check("released, you are back at the mix position",
-			studio.body.global_transform.is_equal_approx(home_seat))
+	check("released by something else, you stay where you are (Escape takes you back)",
+			studio.body.global_transform.is_equal_approx(at_the_rack))
 	check("and the monitor's panels are back", studio.screen_stage.visible
 			and studio.screen_stage.process_mode == Node.PROCESS_MODE_INHERIT)
 	var piece := studio.rack_trolley
@@ -29564,6 +29624,52 @@ func _test_the_fifths_wheel_raises_the_key_and_what_follows() -> void:
 ## harmony before that bar as they were; stopped, it writes onto the section marker at the
 ## playhead's bar; onto a bracket already there it replaces it; each is one undo step; and the harp
 ## plays the new chord from that bar and the old one up to it.
+## 2026-10-30: "make something where I can set the global scale for the project/scene that affects
+## the notes on all the toys and synth": SONG KEY writes the key at bar 1 (FifthsWheel.set_song_key),
+## which the room's instruments read, and the keys locked to it play only its notes.
+func _test_the_song_key_is_set_for_the_room_and_locks_the_keys() -> void:
+	_offline()
+	_as_session(Session.Role.SOLO, 1)
+	var s := DAW.state
+	s.markers.clear()
+	var backend := DAW.backend as OfflineBackend
+	var depth := backend._undo.size()
+	FifthsWheel.set_song_key(9, "dorian")
+	check("SONG KEY writes the key at the song's start (%s)" % [s.markers], s.markers.get(0.0, "") == "[A dorian]")
+	check("as one undo step", backend._undo.size() == depth + 1)
+	var later := Harmony.at(s, s.bar_to_seconds(40.0))
+	check("the whole song is in it (%s)" % later.key_name, later.named and later.root == 9 and later.mode == "dorian")
+	var harp := _harp_for_test()
+	check("the harp plays its tonic chord, A minor (%s)" % harp.tuning_at(1.0),
+			Array(harp.tuning_at(1.0)).all(func(p: int) -> bool: return posmod(p, 12) in [9, 0, 4]))
+	s.markers[0.0] = "Intro [C major: C F G]"
+	FifthsWheel.set_song_key(2, "minor")
+	check("a section and chords already there are kept (%s)" % s.markers[0.0], s.markers[0.0] == "Intro [D minor: C F G]")
+	var gm := Session.guest_midi
+	var spy := _spy_on_keys()
+	gm.scale_lock = true
+	gm.note_on(61, 100)
+	gm.note_on(60, 100)
+	check("locked, C# plays C in D minor, and C held too sounds it once (%s)" % [spy.on.keys()],
+			spy.on.keys() == [60] and gm.held.keys() == [60])
+	gm.note_off(61)
+	check("one key let go, the note sounds on", spy.on.has(60) and gm.held.has(60))
+	gm.note_off(60)
+	check("the last let go, it stops", not spy.on.has(60) and gm.held.is_empty())
+	gm.note_on(63, 100)
+	gm.note_on(66, 100)
+	check("Eb and F# play D and F (%s)" % [spy.on.keys()], spy.on.has(62) and spy.on.has(65) and spy.on.size() == 2)
+	gm.scale_lock = false
+	gm._release_all()
+	check("let go all at once, nothing is left sounding (%s)" % [spy.on.keys()], spy.on.is_empty() and gm.held.is_empty())
+	gm.note_on(61, 100)
+	check("unlocked, C# is C# (%s)" % [spy.on.keys()], spy.on.keys() == [61])
+	gm.note_off(61)
+	_put_back_synth(spy)
+	harp.queue_free()
+	s.markers.clear()
+
+
 func _test_the_fifths_wheel_sets_the_harmony_at_a_bar() -> void:
 	_offline()
 	_as_session(Session.Role.SOLO, 1)
@@ -40108,8 +40214,8 @@ func _test_a_press_on_the_miniature_seeks_and_brings_its_gear() -> void:
 		mini.face.grab_end(hand)
 	press.call(mini.global_point_of(track, empty))
 	close_to("a press on the strip seeks there", s.position_seconds, empty, 0.01)
-	check("and brings the console (%s)" % studio.focus.focused_id, studio.focus.focused_id == &"console")
-	check("the desk walked to, a desk's way (FocusRig.visits)", studio.focus.visits)
+	check("and at a desk walks nobody to the console: the player stays where they are (%s)" % studio.focus.focused_id,
+			studio.focus.visits and studio.focus.focused_id == &"")
 	for index in tracks:
 		var other := s.track(index)
 		for i in other.items.size():
@@ -40130,7 +40236,8 @@ func _test_a_press_on_the_miniature_seeks_and_brings_its_gear() -> void:
 			studio.mount.mode_of(&"timeline") != Presentation.Mode.SCREEN or studio.focus.focused_id == &"")
 	studio.mount.set_mode(&"timeline", Presentation.Mode.STUDIO)
 	press.call(mini.global_point_of(track, it.start + 0.01))
-	check("standing in the room, the timeline is brought (%s)" % studio.focus.focused_id, studio.focus.focused_id == &"timeline")
+	check("standing in the room, the timeline is shown where it stands, nobody walked to it (%s)" % studio.focus.focused_id,
+			studio.focus.focused_id == &"")
 	studio.mount.set_mode(&"timeline", studio.mount.default_mode_of(&"timeline", studio.medium))
 	remove_child(studio)
 	studio.free()

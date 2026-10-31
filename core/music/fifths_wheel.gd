@@ -566,6 +566,27 @@ static func answer(bar: int, inside: String) -> String:
 	return write(bar, inside)
 
 
+## The song's own key, from its first bar (the session panel's SONG KEY): `root` (a pitch class) in
+## `mode` (one of Harmony.SCALES), written at bar 1 as SET writes, keeping any chords the bracket
+## there already had. Everything that plays to the song's key (the bells, the harp, the marble run,
+## the music box, the strings, the pads in scale mode, locked keys) plays in it, up to the next key
+## change on the timeline. Here on the host (or alone); asked of the host from a guest.
+static func set_song_key(root: int, mode: String) -> void:
+	var inside := "%s %s" % [RigRoll.KEY_NAMES[posmod(root, 12)], mode]
+	var s := DAW.state
+	if s != null:
+		var first := Harmony.at(s, 0.0)
+		var colon := first.text.find(":")
+		if first.named and first.bar == 0 and colon >= 0:
+			inside += first.text.substr(colon)
+	if Session.is_authority():
+		if write(0, inside) != "":
+			Session.notice.emit("The song is in %s %s." % [RigRoll.KEY_NAMES[posmod(root, 12)], mode])
+		return
+	Session.ask_room(VERB, [0, inside])
+	Session.notice.emit("Asked the host to put the song in %s %s." % [RigRoll.KEY_NAMES[posmod(root, 12)], mode])
+
+
 ## `[inside]` written into the markers at the start of `bar`: onto a marker already there
 ## (Harmony.written, so its section stays and any brackets it had are replaced), or as a marker
 ## that is only brackets. A sticky note on the bar line is never renamed (its words would be lost):

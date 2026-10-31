@@ -95,6 +95,11 @@ var _item_latency: Label
 var _through_track: CheckButton
 var _record_with: CheckButton
 var _computer_keys: CheckButton
+## "Lock my keys to the song's key" (GuestMidi.scale_lock).
+var _scale_lock: CheckButton
+## SONG KEY: the song's key from bar 1, its root and its mode (FifthsWheel.set_song_key).
+var _key_root: OptionButton
+var _key_mode: OptionButton
 ## Whether a playing hand's tilt bends and its shake wobbles (GuestMidi.tilt_bends).
 var _tilt_bends: CheckButton
 ## Whether this player's hand percussion is snapped gently to the beat as it is recorded
@@ -710,6 +715,12 @@ func _build_midi(box: VBoxContainer) -> void:
 	_computer_keys.tooltip_text = "A to ' play from C, the row above plays the black keys, Z and X change octave. Esc gives the keys back."
 	_computer_keys.toggled.connect(func(on: bool): _keys.set_active(on))
 	box.add_child(_computer_keys)
+	_scale_lock = _toggle("Lock my keys to the song's key")
+	_scale_lock.name = "ScaleLock"
+	_scale_lock.tooltip_text = ("A key out of the song's key plays the nearest note in it: your MIDI keyboard and the computer keys, "
+			+ "heard, sent and recorded so. The key is set under PROJECT, and follows key changes on the timeline.")
+	_scale_lock.toggled.connect(func(on: bool): Session.guest_midi.scale_lock = on)
+	box.add_child(_scale_lock)
 	_tilt_bends = _toggle("Tilt bends")
 	_tilt_bends.tooltip_text = TILT_BENDS_TIP
 	_tilt_bends.toggled.connect(func(on: bool): Session.guest_midi.tilt_bends = on)
@@ -1022,6 +1033,8 @@ func _refresh_midi() -> void:
 		_record_with.set_pressed_no_signal(gm.record_with_host)
 	if _tilt_bends.button_pressed != gm.tilt_bends:
 		_tilt_bends.set_pressed_no_signal(gm.tilt_bends)
+	if _scale_lock.button_pressed != gm.scale_lock:
+		_scale_lock.set_pressed_no_signal(gm.scale_lock)
 	_refresh_keys()
 	_refresh_take()
 	_refresh_mic()
@@ -1491,6 +1504,7 @@ func _build_project(column: VBoxContainer) -> void:
 	save.pressed.connect(func(): DAW.save_project())
 	row.add_child(save)
 	_project_save = save
+	_build_song_key(column)
 	_project_host_row = HFlowContainer.new()
 	_project_host_row.add_theme_constant_override("h_separation", 8)
 	_project_host_row.add_theme_constant_override("v_separation", 8)
@@ -1645,9 +1659,49 @@ func edit_lyrics() -> void:
 	_scroll.ensure_control_visible.call_deferred(_lyrics_edit)
 
 
+## SONG KEY: the song's key from its first bar, a root and a mode, which every instrument that
+## plays to the song's key follows (FifthsWheel.set_song_key); a key change later on the timeline
+## still changes it from there.
+func _build_song_key(column: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.name = "SongKey"
+	row.add_theme_constant_override("separation", 8)
+	column.add_child(row)
+	var said := _label("Song key", 14, INK)
+	said.mouse_filter = Control.MOUSE_FILTER_PASS
+	said.tooltip_text = ("The key the room plays in: the bells, the harp, the marble run, the music box, the strings, "
+			+ "the pads in scale mode, and your keys when they are locked. From bar 1; a key change on the timeline changes it from there.")
+	row.add_child(said)
+	_key_root = _choice()
+	_key_root.name = "SongKeyRoot"
+	for i in 12:
+		_key_root.add_item(RigRoll.KEY_NAMES[i], i)
+	row.add_child(_key_root)
+	_key_mode = _choice()
+	_key_mode.name = "SongKeyMode"
+	for i in RigRoll.MODES.size():
+		_key_mode.add_item(RigRoll.MODES[i], i)
+	row.add_child(_key_mode)
+	var chosen := func(_i: int) -> void:
+		FifthsWheel.set_song_key(_key_root.get_selected_id(), RigRoll.MODES[_key_mode.get_selected_id()])
+	_key_root.item_selected.connect(chosen)
+	_key_mode.item_selected.connect(chosen)
+	_refresh_song_key()
+
+
+## The song key's choices as the song has it at its start: C major until something sets it.
+func _refresh_song_key() -> void:
+	if _key_root == null:
+		return
+	var h := Harmony.at(DAW.state, 0.0)
+	_key_root.select(_key_root.get_item_index(h.root))
+	_key_mode.select(maxi(RigRoll.MODES.find(h.mode), 0))
+
+
 func _refresh_project() -> void:
 	if _project_name == null:
 		return
+	_refresh_song_key()
 	var file := DAW.project_file()
 	_project_name.text = DAW.project_title()
 	if not Session.is_authority():

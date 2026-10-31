@@ -106,6 +106,19 @@ var snap_hits := true:
 	set(v):
 		snap_hits = v
 		changed.emit()
+## Whether the plain keys (a MIDI keyboard, the computer keys) are held to the song's key ("Lock my
+## keys to the song's key" in the session panel's keys box): a key out of it plays the nearest note
+## in it (Harmony.snap, the lower of two as near), heard, sent and taken as that note. The key at the
+## song position it is played to, so a key change on the timeline changes what the keys play. Off
+## by default; the instruments in the room follow the key whatever this says.
+var scale_lock := false:
+	set(v):
+		scale_lock = v
+		changed.emit()
+## A locked key down and the note it sounds; and how many keys down sound each note, so two keys
+## folded onto one note let it go only with the last of them.
+var _locked := {}
+var _locked_down := {}
 ## Hear my own keys, locally.
 var monitor := true:
 	set(v):
@@ -375,6 +388,14 @@ func _input(event: InputEvent) -> void:
 ## the sent note both take it.
 func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := false,
 		source := &"", at := NAN) -> void:
+	if source == &"" and scale_lock:
+		var now := at if not is_nan(at) else (DAW.state.position_seconds if DAW.state != null else 0.0)
+		var to := Harmony.at(DAW.state, now).snap(pitch)
+		_locked[pitch] = to
+		_locked_down[to] = int(_locked_down.get(to, 0)) + 1
+		if _locked_down[to] > 1:
+			return
+		pitch = to
 	_hear_host_keys()
 	var plugin = _track_plugin()
 	if plugin != null:
@@ -417,6 +438,14 @@ func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := fal
 ## never had down a pitch another source holds touches nothing.
 func note_off(pitch: int, channel := 0, age := 0.0, sounded := false, source := &"",
 		at := NAN) -> void:
+	if source == &"" and _locked.has(pitch):
+		var to: int = _locked[pitch]
+		_locked.erase(pitch)
+		_locked_down[to] = int(_locked_down.get(to, 1)) - 1
+		if _locked_down[to] > 0:
+			return
+		_locked_down.erase(to)
+		pitch = to
 	if not _down.holds(pitch, source) and _down.is_down(pitch):
 		return
 	var timed := not is_nan(at)
@@ -814,6 +843,9 @@ static func take_name(played: Array) -> String:
 
 ## Every key down let go, by whatever holds it: heard, sent and shown, as if each were.
 func _release_all() -> void:
+	# What sounds is let go as it sounds, not as the keys that were folded onto it.
+	_locked.clear()
+	_locked_down.clear()
 	for pitch in held.keys():
 		var sources := _down.sources_of(pitch)
 		if sources.is_empty():
