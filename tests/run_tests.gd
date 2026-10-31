@@ -55,6 +55,7 @@ func _ready() -> void:
 	_test_a_bare_hands_ray_is_steadied()
 	_test_a_hand_counts_its_twist()
 	_test_a_headset_screen_panel_sits_in_the_middle_of_the_view()
+	await _test_bare_hands_teleport_and_open_the_session_menu()
 	_test_ar_studio_draws_no_room()
 	_test_handle_is_chrome_not_gear()
 	_test_handle_cycle_skips_missing_anchors()
@@ -1548,6 +1549,64 @@ func _test_a_headset_screen_panel_sits_in_the_middle_of_the_view() -> void:
 	studio.rig.escape_requested.emit()
 	check("the headset's escape sends it back where it belongs",
 			studio.mount.mode_of(id) == studio.mount.default_mode_of(id, studio.medium))
+	remove_child(studio)
+	studio.free()
+	Session.layout = saved_layout
+
+
+## 2026-10-30: "I dont have a way to move in VR mode when i dont have controllers" and "i also need
+## a way to interact with the session menu": a pinch at the floor goes there (Teleport), and MENU on
+## the left wrist puts the session panel up on glass in the room.
+func _test_bare_hands_teleport_and_open_the_session_menu() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.VR
+	studio.xr_bootstrap = XRBootstrap.new()
+	studio.xr_bootstrap.simulated = true
+	add_child(studio)
+	var tp := studio.teleport
+	check("a headset has a way to go about the floor", tp != null and tp.rig == studio.rig)
+	var eye := studio.rig.head.global_transform
+	var level := Transform3D(Basis.IDENTITY, eye.origin)
+	check("a ray held level aims at no floor", not tp.floor_point(level).is_finite())
+	var down := Transform3D(Basis(Vector3.RIGHT, deg_to_rad(-35.0)), eye.origin)
+	var at := tp.floor_point(down)
+	check("pointed down, it meets the floor ahead (%s)" % at, at.is_finite() and at.z < eye.origin.z - 1.0
+			and absf(at.y - studio.venue.global_position.y) < 0.5)
+	# The desk's front, a footprint of the floor plan's.
+	var inside_desk := studio.studio_set.global_transform * Vector3(0, 0, -1.06)
+	check("a person fits on the open floor there, not inside the desk",
+			bool(tp.fits.call(tp._plan(at))) and not bool(tp.fits.call(tp._plan(inside_desk))))
+	var head_was := studio.rig.head.global_position
+	check("letting go there goes", tp.go(at))
+	await get_tree().create_timer(XRRig.FADE * 2.0 + 0.2).timeout
+	var head_now := studio.rig.head.global_position
+	check("the head stands over the ring, facing as it did (%s)" % head_now,
+			Vector2(head_now.x, head_now.z).distance_to(Vector2(at.x, at.z)) < 0.05
+			and absf((head_now.y - at.y) - (head_was.y - studio.rig.global_position.y + 0.0)) < 0.5
+			and studio.rig.away)
+	# The wrist: hidden until the left hand is looked at, its keys out of every ray's way.
+	var wrist := studio.rig.wrist
+	check("the left wrist carries MENU and 2D, hidden and untouchable while not looked at",
+			wrist != null and not wrist.visible and wrist.get_node_or_null("WristMENU") != null
+			and (wrist.get_node("WristMENU") as ControlAffordance).collision_layer == 0)
+	var panel := SessionPanel.new()
+	add_child(panel)
+	panel.in_room(studio)
+	check("in a headset the session panel is glass in the room, put away", panel.glass != null
+			and panel.glass.is_inside_tree() and not panel.glass.visible)
+	studio.rig.session_requested.connect(panel.toggle)
+	(wrist.get_node("WristMENU") as PanelButton).pressed.emit()
+	check("MENU on the wrist puts it up in front of the eyes", panel.is_open() and panel.glass.visible
+			and (studio.rig.head.global_transform.affine_inverse() * panel.glass.global_position).z < -0.4)
+	var key := panel.glass.viewport.find_child("SongKeyRoot", true, false)
+	check("its controls are on the glass, there to press", key != null and key.is_visible_in_tree())
+	studio.rig.session_requested.emit()
+	check("and MENU again puts it away", not panel.is_open() and not panel.glass.visible)
+	panel.glass.queue_free()
+	panel.queue_free()
 	remove_child(studio)
 	studio.free()
 	Session.layout = saved_layout
@@ -4762,7 +4821,8 @@ func _test_plugins_are_added_and_removed_from_the_rack() -> void:
 	var verb_unit: RackUnit = units.filter(func(u): return u.fx_index == 1).front() if units.size() > 1 else null
 	var said: Array = []
 	var listen := func(w: String): said.append(w)
-	Session.notice.connect(listen)
+	var saying := RackUnit.say
+	RackUnit.say = listen
 	check("every unit has a ✕ to remove it, lettered", verb_unit != null and verb_unit._remove != null
 			and verb_unit.find_child("RemoveCross", false, false) != null
 			and verb_unit._remove.title().contains("REMOVE"))
@@ -4772,7 +4832,7 @@ func _test_plugins_are_added_and_removed_from_the_rack() -> void:
 			s.track(6).plugins().size() == 1 and said.size() == 1 and said[0].contains("REVERB") and said[0].contains("Ctrl-Z"))
 	DAW.undo()
 	check("and undo does", s.track(6).plugins().size() == 2 and s.fx(6, 1).name == "Reverb")
-	Session.notice.disconnect(listen)
+	RackUnit.say = saying
 	finger.queue_free()
 	rack.queue_free()
 
@@ -7286,6 +7346,8 @@ func _test_the_pads_chop_a_sample_and_spread_one_across_a_scale() -> void:
 
 
 func _test_the_station_samples_the_tv_and_plays_its_pads() -> void:
+	# SCALE takes the song's key: none set, C major, whatever an earlier test left in the markers.
+	DAW.state.markers.clear()
 	var tv := TvSurface.new()
 	add_child(tv)
 	await get_tree().process_frame

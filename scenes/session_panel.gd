@@ -45,6 +45,12 @@ const WELL := Color(0.10, 0.11, 0.135)
 const EDGE := Color(1, 1, 1, 0.07)
 
 var _root: PanelContainer
+## In a headset, the glass in the room the panel is drawn on (`in_room`), where there is no screen
+## to lay it over; null on a screen.
+var glass: FlatPanel
+## The glass's width in metres, and how many pixels tall it is: as tall as a long panel scrolls.
+const GLASS_WIDE := 0.45
+const GLASS_PIXELS_TALL := 620
 var _scroll: ScrollContainer
 ## Room for the scroll bar, only while there is one.
 var _gutter: MarginContainer
@@ -183,8 +189,29 @@ func is_open() -> bool:
 	return _root.visible
 
 
+## In a headset: the panel drawn on glass in `room` instead of over the screen, which nobody in it
+## sees. Put up in front of the eyes when it opens (the wrist's MENU key, XRRig.session_requested),
+## pressed with the pinch's ray or a fingertip as the 2D view's panel is, and away when it closes.
+func in_room(room: Node3D) -> void:
+	if glass != null:
+		return
+	var px := Vector2i(int(WIDTH) + 36, GLASS_PIXELS_TALL)
+	remove_child(_root)
+	glass = FlatPanel.new(null, _root, Vector2(GLASS_WIDE, GLASS_WIDE * px.y / px.x), px)
+	glass.name = "SessionGlass"
+	glass.called = "SESSION"
+	_root.offset_top = 18
+	room.add_child(glass)
+	glass.set_shown(_root.visible)
+
+
 func open() -> void:
 	_root.visible = true
+	if glass != null:
+		var eyes := glass.get_viewport().get_camera_3d()
+		if eyes != null:
+			glass.face(eyes.global_transform, 0.7)
+		glass.set_shown(true)
 	_name_edit.text = Session.local_name
 	_refresh()
 	refresh_comfort()
@@ -258,6 +285,8 @@ func refresh_comfort() -> void:
 
 func close() -> void:
 	_root.visible = false
+	if glass != null:
+		glass.set_shown(false)
 	_stop_listening()
 	var focused := _root.get_viewport().gui_get_focus_owner()
 	if focused != null and _root.is_ancestor_of(focused):
@@ -312,7 +341,7 @@ func _process(delta: float) -> void:
 
 ## As tall as what is in it, unless that is taller than the window, which then scrolls.
 func _fit_height() -> void:
-	var room := get_viewport().get_visible_rect().size.y - _root.offset_top - 18.0 - 36.0
+	var room := _root.get_viewport().get_visible_rect().size.y - _root.offset_top - 18.0 - 36.0
 	var need := _gutter.get_combined_minimum_size().y
 	var want := minf(need, maxf(room, 120.0))
 	if not is_equal_approx(_scroll.custom_minimum_size.y, want):

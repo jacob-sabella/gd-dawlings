@@ -139,6 +139,8 @@ var key_light: DirectionalLight3D
 
 var camera: Camera3D
 var rig: XRRig
+## A bare hand's way about the floor in a headset (Teleport); null on a screen.
+var teleport: Teleport
 var screen_stage: Node3D
 var room_anchor: RoomAnchor
 var studio_set: Node3D
@@ -495,6 +497,8 @@ var _orbit_target := Vector3(0, 0.92, 0)
 
 
 func _ready() -> void:
+	# A rack unit's words (✕ REMOVE's) are the room's notices.
+	RackUnit.say = func(words: String) -> void: Session.notice.emit(words)
 	_build_environment()
 	# In AR the room is already there -- it is the one the participant is standing in. Drawing a
 	# virtual floor over a real one is not a smaller version of the VR experience, it is a worse
@@ -3612,6 +3616,23 @@ func _build_anchors() -> void:
 		rig.travelled.connect(func(_home: bool) -> void:
 			if body != null:
 				body.recentre())
+		# A bare hand pinched at the floor goes there (Teleport).
+		teleport = Teleport.new()
+		teleport.name = "Teleport"
+		teleport.rig = rig
+		# The floor plan's frame, which the walker's footprints and floor are measured in.
+		teleport.frame = func() -> Transform3D:
+			return studio_set.global_transform if studio_set != null and studio_set.is_inside_tree() else Transform3D.IDENTITY
+		teleport.fits = func(p: Vector2) -> bool:
+			var fit := _station_fits()
+			return fit.is_valid() and bool(fit.call(p))
+		teleport.ground = func(p: Vector2) -> float:
+			return Walker.ground_of(venue.solids(), p) if venue != null else 0.0
+		teleport.refusal = travel_refusal
+		teleport.went.connect(func(_to: Vector3) -> void:
+			_put_away_beside()
+			station = &"")
+		add_child(teleport)
 		# A VR player's play space is centred on the mix position, in front of the desk, where a
 		# desktop's body stands: not at the room's origin, which is inside the console's carcass.
 		# From here the desk is at arm's length and the station board is in view, ahead and to

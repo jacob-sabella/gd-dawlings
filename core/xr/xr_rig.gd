@@ -33,6 +33,9 @@ signal escape_requested
 ## is still the way out (above), and comes first, so whatever is in the way is gone before the
 ## panel arrives.
 signal flat_requested
+## MENU on the wrist pressed (`wrist`): the session panel, up in front of you or put away. A bare
+## hand has no menu button, so the left wrist carries one, as a watch does.
+signal session_requested
 ## The play space has just been put somewhere else (`travel`), or back `home`: the moment of the
 ## cut, under the veil, so whatever follows the head (the body frame) can take the new place
 ## whole rather than chase it.
@@ -100,6 +103,12 @@ var skeletons: Dictionary = {}
 ## Per hand (the controller node): its pinch ray (XRInteractor) and its readings (HandGestures).
 var interactors: Dictionary = {}
 var gestures: Dictionary = {}
+## The keys on the back of the left wrist (`_build_wrist`): MENU (the session panel) and 2D (the
+## 2D view), shown while that hand is tracked and its back is turned to the eyes, as a watch is
+## looked at, and pressed with the other hand's fingertip or its pinch.
+var wrist: Node3D
+## How far round to the eyes the back of the wrist must face for its keys to show (a dot product).
+const WRIST_FACING := 0.55
 
 
 func _ready() -> void:
@@ -118,6 +127,65 @@ func _ready() -> void:
 
 	left = _build_hand(&"left_hand", "LeftHand")
 	right = _build_hand(&"right_hand", "RightHand")
+	_build_wrist()
+
+
+func _build_wrist() -> void:
+	wrist = Node3D.new()
+	wrist.name = "Wrist"
+	add_child(wrist)
+	for spec in [["MENU", -0.021, session_requested, Color(0.42, 0.78, 0.98), "SESSION MENU"],
+			["2D", 0.021, flat_requested, Color(0.95, 0.80, 0.42), "2D VIEW"]]:
+		var key := PanelButton.new()
+		key.name = "Wrist" + String(spec[0])
+		key.led_colour = spec[3]
+		key.lamp_scale = Vector2(0.8, 0.5)
+		key.position = Vector3(spec[1], 0.0, 0.0)
+		key.scale = Vector3.ONE * 1.6
+		var asked: Signal = spec[2]
+		key.pressed.connect(func() -> void: asked.emit())
+		var title: String = spec[4]
+		key.describe_title = func() -> String: return "WRIST  " + title
+		key.describe_value = func(_v: float) -> String: return "up in front of you, or away"
+		wrist.add_child(key)
+		var caption := Label3D.new()
+		caption.text = spec[0]
+		caption.font_size = 40
+		caption.pixel_size = 0.0003
+		caption.position = Vector3(spec[1], 0.017, 0.001)
+		caption.modulate = Color(0.85, 0.87, 0.9)
+		caption.outline_size = 8
+		caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		wrist.add_child(caption)
+	wrist.visible = false
+	_set_wrist_keys(false)
+
+
+## The wrist's keys over the back of the left wrist while it is turned to the eyes, else hidden and
+## out of every ray's and fingertip's way.
+func _tend_wrist() -> void:
+	var g: HandGestures = gestures.get(left)
+	var show := false
+	if g != null and g.tracked and g.joints.size() > HandPose.MIDDLE_PROXIMAL and head != null:
+		var basis := HandPose.frame(g.joints, -1)
+		var back := basis.y
+		var along := -basis.z
+		var at := g.joints[HandPose.WRIST] - along * 0.035 + back * 0.03
+		var to_eyes := (head.global_position - at).normalized()
+		show = back.dot(to_eyes) > WRIST_FACING
+		if show:
+			# Read upright: the keys' up is along the forearm, their face out of its back.
+			var x := along.cross(back).normalized()
+			wrist.global_transform = Transform3D(Basis(x, along, back), at)
+	if show != wrist.visible:
+		wrist.visible = show
+		_set_wrist_keys(show)
+
+
+func _set_wrist_keys(on: bool) -> void:
+	for key in wrist.get_children():
+		if key is ControlAffordance:
+			(key as ControlAffordance).collision_layer = 2 if on else 0
 
 
 func _build_hand(tracker: StringName, node_name: String) -> XRController3D:
@@ -209,6 +277,7 @@ func tip_of(controller: XRController3D) -> Vector3:
 
 func _process(delta: float) -> void:
 	_show_hands()
+	_tend_wrist()
 	_watch_escape(delta)
 	if left == null or room_anchor == null:
 		return

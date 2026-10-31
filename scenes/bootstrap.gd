@@ -171,6 +171,13 @@ func _ready() -> void:
 	studio.lyrics_edit_asked.connect(session_panel.edit_lyrics)
 	# The join code typed on keys in the room, in a headset: over the note pad, as a note's words are.
 	session_panel.pad_parent = func() -> Node3D: return studio.note_pad
+	# In a headset it is glass in the room, put up by MENU on the wrist, away by the escape.
+	if studio.rig != null:
+		session_panel.in_room(studio)
+		studio.rig.session_requested.connect(session_panel.toggle)
+		studio.rig.escape_requested.connect(func() -> void:
+			if session_panel.is_open():
+				session_panel.close())
 	if args["session_panel"]:
 		session_panel.open()
 	var tour_hud := TourHud.new()

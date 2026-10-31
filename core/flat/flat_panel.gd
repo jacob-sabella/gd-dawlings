@@ -24,7 +24,13 @@ const STILL_PIXELS := 8.0
 
 var host: DawKitHost
 var viewport: SubViewport
+## The 2D view on it; null on a panel that holds something else (`content`, the session panel).
 var view: DawKitStudio
+## The glass's size in metres and the pixels drawn on it: SIZE and PIXELS for the 2D view.
+var glass_size := SIZE
+var pixels := PIXELS
+## What its hover card calls it.
+var called := "2D VIEW"
 var screen: MeshInstance3D
 ## Where the hand points on the glass: the glass is drawn over the room, the ray under it, so
 ## this is the only pointer there is.
@@ -38,28 +44,35 @@ var _pressed_for := 0.0
 var _held_still := false
 
 
-## Built when made, not when it enters the room, so whoever made it has its view at once.
-func _init(with_host: DawKitHost) -> void:
+## Built when made, not when it enters the room, so whoever made it has its view at once. With
+## `content`, that is what is drawn on it instead of the 2D view, on glass `metres` across
+## and `px` pixels (the session panel in a headset).
+func _init(with_host: DawKitHost, content: Control = null, metres := SIZE, px := PIXELS) -> void:
 	host = with_host
+	glass_size = metres
+	pixels = px
 	name = "FlatPanel"
 	collision_layer = 2
 	viewport = SubViewport.new()
 	viewport.name = "Viewport"
-	viewport.size = PIXELS
+	viewport.size = pixels
 	viewport.disable_3d = true
 	viewport.transparent_bg = false
 	viewport.handle_input_locally = true
 	viewport.gui_embed_subwindows = true
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(viewport)
-	view = DawKitStudio.new(host)
-	view.name = "DawKitStudio"
-	viewport.add_child(view)
-	view.size = Vector2(PIXELS)
+	if content != null:
+		viewport.add_child(content)
+	else:
+		view = DawKitStudio.new(host)
+		view.name = "DawKitStudio"
+		viewport.add_child(view)
+		view.size = Vector2(pixels)
 	screen = MeshInstance3D.new()
 	screen.name = "Screen"
 	var quad := QuadMesh.new()
-	quad.size = SIZE
+	quad.size = glass_size
 	screen.mesh = quad
 	var glass := StandardMaterial3D.new()
 	glass.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -89,7 +102,7 @@ func _init(with_host: DawKitHost) -> void:
 	var back := MeshInstance3D.new()
 	back.name = "Back"
 	var box := BoxMesh.new()
-	box.size = Vector3(SIZE.x + 0.03, SIZE.y + 0.03, 0.02)
+	box.size = Vector3(glass_size.x + 0.03, glass_size.y + 0.03, 0.02)
 	back.mesh = box
 	back.position = Vector3(0, 0, -0.0105)
 	var shell := StandardMaterial3D.new()
@@ -100,7 +113,7 @@ func _init(with_host: DawKitHost) -> void:
 	add_child(back)
 	var shape := CollisionShape3D.new()
 	var slab := BoxShape3D.new()
-	slab.size = Vector3(SIZE.x, SIZE.y, 0.02)
+	slab.size = Vector3(glass_size.x, glass_size.y, 0.02)
 	shape.shape = slab
 	shape.position = Vector3(0, 0, -0.01)
 	add_child(shape)
@@ -109,7 +122,8 @@ func _init(with_host: DawKitHost) -> void:
 ## Up in the room, or put away: put away, it is neither drawn, nor drawn into, nor in a ray's way.
 func set_shown(on: bool) -> void:
 	visible = on
-	view.visible = on
+	if view != null:
+		view.visible = on
 	collision_layer = 2 if on else 0
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
 	if not on:
@@ -120,12 +134,12 @@ func set_shown(on: bool) -> void:
 ## A point on the glass, in the room, as a pixel of the 2D view.
 func pixel_of(world: Vector3) -> Vector2:
 	var local := to_local(world)
-	return Vector2((local.x / SIZE.x + 0.5) * PIXELS.x, (0.5 - local.y / SIZE.y) * PIXELS.y)
+	return Vector2((local.x / glass_size.x + 0.5) * pixels.x, (0.5 - local.y / glass_size.y) * pixels.y)
 
 
 ## A pixel of the 2D view as a point on the glass, in the room.
 func world_of(pixel: Vector2) -> Vector3:
-	return to_global(Vector3((pixel.x / PIXELS.x - 0.5) * SIZE.x, (0.5 - pixel.y / PIXELS.y) * SIZE.y, 0.0))
+	return to_global(Vector3((pixel.x / pixels.x - 0.5) * glass_size.x, (0.5 - pixel.y / pixels.y) * glass_size.y, 0.0))
 
 
 func personal() -> bool:
@@ -133,7 +147,7 @@ func personal() -> bool:
 
 
 func title() -> String:
-	return "2D VIEW"
+	return called
 
 
 func readout() -> String:
