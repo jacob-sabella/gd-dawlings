@@ -66,6 +66,8 @@ const RULE_Y := U * UNITS_TALL * 0.5 - 0.027
 ## screenshot, lands on the header icons rather than a caption a full row below, but the cause
 ## and the fix are the same one a name-sizing miss always is here).
 const NAME_SPAN := 0.24
+## The ✕'s middle: past the name's end, short of the page readout.
+const REMOVE_X := 0.05
 const NAME_SIZE := 64
 const NAME_SIZE_MIN := 32
 
@@ -88,6 +90,9 @@ var lamp_bank: MeshBank
 
 var _knobs: Array[Knob] = []
 var _bypass: PanelButton
+## ✕: takes the plugin out of the chain (2026-10-30, "i cant remove fx out of the rack?": the fine
+## press on POWER was the only way, and nothing on the rack said so).
+var _remove: PanelButton
 ## The unit's OUT: a probe at this point in the chain, the track as it leaves this plugin
 ## (PersonalMix.tap_socket). The studio puts the plugs in it.
 var out_socket: SendSocket
@@ -220,9 +225,31 @@ func _ready() -> void:
 	_bypass.position = Vector3(RACK_WIDTH * 0.5 - 0.035, h * 0.5 - 0.016, 0.004)
 	_bypass.describe_title = func() -> String: return "%s  POWER" % _unit_caption()
 	_bypass.describe_value = func(_v: float) -> String:
-		return ("ACTIVE" if _bypass.lit else "BYPASSED") + "  ·  fine press removes it"
+		return ("ACTIVE" if _bypass.lit else "BYPASSED") + "  ·  ✕ removes it"
 	_bypass.pressed.connect(_power)
 	add_child(_bypass)
+
+	# Between the name and the page readout, lettered so it is plainly the one that takes it away.
+	if DAW.can(DAWBackend.Capability.FX_CHAIN):
+		_remove = PanelButton.new()
+		_remove.name = "Remove"
+		_remove.hit_pad = RACK_HIT_PAD
+		_remove.led_colour = Color(0.95, 0.3, 0.25)
+		_remove.lit = true
+		_remove.position = Vector3(REMOVE_X, h * 0.5 - 0.016, 0.004)
+		_remove.describe_title = func() -> String: return "%s  REMOVE" % _unit_caption()
+		_remove.describe_value = func(_v: float) -> String: return "takes it out of the chain · Ctrl-Z puts it back"
+		_remove.pressed.connect(remove)
+		add_child(_remove)
+		var cross := Label3D.new()
+		cross.name = "RemoveCross"
+		cross.text = "✕"
+		cross.font_size = 48
+		cross.pixel_size = 0.00019
+		cross.modulate = Color(0.95, 0.45, 0.4)
+		cross.position = Vector3(REMOVE_X - PanelButton.SIZE.x * 0.5 - 0.006, h * 0.5 - 0.016, 0.002)
+		Lettering.range_to_legibility(cross)
+		add_child(cross)
 
 	# Right of the name, left of the bypass: the readout is about the knobs, so it sits with
 	# them rather than with the on/off at the far end.
@@ -341,6 +368,15 @@ static func chain_aim(track: int, fx: int, direction: int) -> Array:
 	else:
 		aim = order[to + 1] if to + 1 < order.size() else int(order[-1]) + 1
 	return [aim, int(order[to])]
+
+
+## Out of the chain: the DAW's own removal, one undo step.
+func remove() -> void:
+	if not DAW.can(DAWBackend.Capability.FX_CHAIN) or DAW.state.fx(track_index, fx_index, false) == null:
+		return
+	var what := _unit_caption()
+	DAW.remove_fx(track_index, fx_index)
+	Session.notice.emit("Removed %s. Ctrl-Z puts it back." % what)
 
 
 ## One place earlier or later in the chain.
