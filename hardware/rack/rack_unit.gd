@@ -371,12 +371,18 @@ static func chain_aim(track: int, fx: int, direction: int) -> Array:
 
 
 ## Out of the chain: the DAW's own removal, one undo step.
+## Where a unit's words go: the room's notices, put here by the studio, since a surface never asks
+## who it is speaking to.
+static var say: Callable
+
+
 func remove() -> void:
 	if not DAW.can(DAWBackend.Capability.FX_CHAIN) or DAW.state.fx(track_index, fx_index, false) == null:
 		return
 	var what := _unit_caption()
 	DAW.remove_fx(track_index, fx_index)
-	Session.notice.emit("Removed %s. Ctrl-Z puts it back." % what)
+	if say.is_valid():
+		say.call("Removed %s. Ctrl-Z puts it back." % what)
 
 
 ## One place earlier or later in the chain.
