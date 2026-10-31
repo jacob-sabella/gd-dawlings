@@ -2328,11 +2328,7 @@ func _on_tear_requested(track: int, fx: int, at: Vector3, from: Node3D = null) -
 		id = _predicted_tablet(track, fx, f.name, Vector2(landing.x, landing.z))
 		if id == StringName():
 			return
-	# On a monitor, pulling it off is asking to use it: walk up to it. In a headset you are
-	# already standing where you pulled it.
-	if focus != null and focus.visits:
-		focus.focus(id)
-		_sit_down()
+	# It lands in front of the rack; nobody is walked to it (F does, as for any gear).
 
 
 ## Put a plugin on a stand at `where` on the floor, facing the mix position. One stand per
@@ -2407,10 +2403,6 @@ func _build_tablet(id: StringName, track: int, fx: int, plugin_name: String) -> 
 	stand.add_child(tablet)
 	tablet.dock_requested.connect(_dock_tablet.bind(id))
 	tablet.grows_with_window = true
-	tablet.window_shown.connect(func(on: bool) -> void:
-		if on and focus != null and focus.visits:
-			focus.focus(id)
-			_sit_down())
 	# Gear like the rest: F walks to it, and it comes up close to be worked.
 	if focus != null:
 		focus.surfaces.append(tablet)
@@ -2435,7 +2427,6 @@ func _take_down_tablet(id: StringName) -> void:
 	if focus != null:
 		if focus.focused_id == id:
 			focus.release()
-			_sit_down()
 		focus.surfaces.erase(tablet)
 	tablets.erase(id)
 	floor_plan.pieces.erase(stand)
@@ -2518,9 +2509,6 @@ func _on_track_tear_requested(track: int, at: Vector3, from: Node3D) -> void:
 		id = _predicted_track_rack(track, where)
 		if id == StringName():
 			return
-	if focus != null and focus.visits:
-		focus.focus(id)
-		_sit_down()
 
 
 ## Pull track `track` out on its own rack at `where` on the floor, facing the mix position. One
@@ -2626,7 +2614,6 @@ func _take_down_track_rack(id: StringName) -> void:
 	if focus != null:
 		if focus.focused_id == id:
 			focus.release()
-			_sit_down()
 		focus.surfaces.erase(pulled)
 	track_racks.erase(id)
 	floor_plan.pieces.erase(stand)
@@ -3929,11 +3916,14 @@ func _build_surfaces() -> void:
 	# down facing where the gear had been a moment before the rig moved it, and nothing fired
 	# again to correct it. `--focus rack` came back as a photograph of the floor.
 	focus.placed.connect(_sit_down)
-	# Release too, whoever releases: a key, a hand, a remote participant handing focus back.
-	# Only the keyboard path used to re-seat, so anything else left you standing at the rack.
+	# A release walks nobody anywhere on its own: what releases to go home (Escape, F off the end,
+	# G, BACK) sits down itself, and one that happens to something else -- a tablet closed, a rack
+	# folded, a guest handing focus back -- leaves the player where they are (2026-10-30, "i dont
+	# like how clicking things moves me to other things in almost all scenarios"). The monitor's
+	# panels, put away while gear is visited, come back all the same.
 	focus.focus_changed.connect(func(id: StringName) -> void:
 		if id == &"" and focus.visits:
-			_sit_down())
+			_stand_down_screen(false))
 	focus.room = studio_set
 	focus.move = _glide
 	add_child(focus)
@@ -8671,6 +8661,10 @@ func _bring(id: StringName) -> void:
 	if mount != null and mount.mode_of(id) == Presentation.Mode.SCREEN:
 		if focus.visits and focus.is_focused():
 			focus.release()
+		return
+	# At a desk that would walk the player to it: a press on the miniature only shows the track or
+	# the item, from where they are. A headset's is brought to them.
+	if focus.visits:
 		return
 	focus.focus(id)
 

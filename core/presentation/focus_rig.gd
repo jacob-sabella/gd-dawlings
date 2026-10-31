@@ -143,12 +143,20 @@ func _on_surface_rebuilt(surface: Surface) -> void:
 		return
 	# Visiting moves nothing, so there is nothing to redo -- except that whoever walked to the
 	# gear walked to its box, and a surface focused before it had built had no box at all.
-	# `--focus console` sat at the home seat staring over the desk at an empty stand.
+	# `--focus console` sat at the home seat staring over the desk at an empty stand. Only then:
+	# placed on every rebuild, an effect picked or a page turned walked the player back to the
+	# gear from wherever they had looked or walked to (2026-10-30, "i dont like how clicking
+	# things moves me to other things in almost all scenarios").
 	if visits:
-		if surface.surface_id == focused_id:
+		if surface.surface_id == focused_id and _awaiting_box:
+			_awaiting_box = false
 			placed.emit()
 		return
 	_apply()
+
+
+## Visiting, a surface focused before it had a box: its first build places it once more.
+var _awaiting_box := false
 
 
 ## Pull one surface to the working place and arc the rest out around it.
@@ -160,6 +168,8 @@ func focus(surface_id: StringName) -> void:
 	focused_id = surface_id
 	if visits:
 		_mark_all()
+		var it := surface(surface_id)
+		_awaiting_box = it != null and it.content_aabb().size.x <= 0.0
 		placed.emit()
 	else:
 		_apply()
