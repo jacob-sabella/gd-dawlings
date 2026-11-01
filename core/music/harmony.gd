@@ -256,6 +256,24 @@ func snap(pitch: int) -> int:
 	return pitch
 
 
+## Whether `pitch` is in the key's scale.
+func in_key(pitch: int) -> bool:
+	return scale.has(posmod(pitch, 12))
+
+
+## The nearest pitch among the chord sounding's tones, the lower of two as near; the key's nearest
+## note (`snap`) while the chord is empty.
+func snap_chord(pitch: int) -> int:
+	if chord.is_empty():
+		return snap(pitch)
+	for d in 7:
+		if chord.has(posmod(pitch - d, 12)):
+			return pitch - d
+		if chord.has(posmod(pitch + d, 12)):
+			return pitch + d
+	return pitch
+
+
 ## The chord's tones from `from_pitch` up, the first `count` of them at or above it.
 func tones(from_pitch: int, count: int) -> PackedInt32Array:
 	var out := PackedInt32Array()
