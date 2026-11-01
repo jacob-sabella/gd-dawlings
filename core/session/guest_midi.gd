@@ -741,7 +741,7 @@ func _process(_delta: float) -> void:
 		if through != synth.bus:
 			synth.set_bus(through)
 	if not midi_open and not _midi_declined and DisplayServer.get_name() != "headless" \
-			and host_records() and play_track() > 0:
+			and Engine.get_write_movie_path() == "" and host_records() and play_track() > 0:
 		# A built-in host with an instrument to play: its keyboard just works, as a DAW's does.
 		open_midi()
 	if midi_open:

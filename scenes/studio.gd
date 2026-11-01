@@ -6109,6 +6109,8 @@ func _build_tour_case() -> void:
 ## The panel on the control room wall: works against whichever DAW backend is open, not gated to
 ## the built-in engine the way Tour is, so it is built unconditionally alongside the case.
 func _build_rig_roulette_station() -> void:
+	if not roulette_enabled:
+		return
 	_build_roll_board()
 	_stand_the_setup_wall()
 	Session.roll_changed.connect(_on_session_roll_changed)

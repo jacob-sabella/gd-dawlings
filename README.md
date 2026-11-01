@@ -37,11 +37,11 @@ see the same result.
 
 ## See it
 
-<p align="center"><img src="docs/media/venue-studio.jpg" alt="The studio: the audio-devices wall, a rack, the arrange timeline on its stand, a console and a tape deck, with the stage table and the instruments board behind the seat" width="100%"></p>
+<p align="center"><img src="docs/media/venue-studio.jpg" alt="The studio: the audio-devices wall, the levels wall, a rack, the arrange timeline on its stand, a console, a tape deck and turntable, the EQ wall and the instruments board, with the stage table in front" width="100%"></p>
 
-The audio-devices wall, a rack, the arrange timeline on its stand, a console and a tape deck, with
-the stage table and the instruments board behind the seat: the room as a person standing in it
-sees it. Everything that stands on the floor is on wheels, to push where you want it.
+The audio-devices wall, the levels wall, a rack, the arrange timeline on its stand, a console, a
+tape deck and turntable, the EQ wall and the instruments board, with the stage table in front: the
+room as a person standing in it sees it. Everything that stands on the floor is on wheels, to push where you want it.
 
 <video src="https://github.com/jacob-sabella/gd-dawlings/raw/master/docs/media/studio-playing.mp4" controls muted loop playsinline width="100%"></video>
 
