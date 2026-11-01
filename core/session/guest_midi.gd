@@ -111,10 +111,23 @@ var snap_hits := true:
 ## in it (Harmony.snap, the lower of two as near), heard, sent and taken as that note. The key at the
 ## song position it is played to, so a key change on the timeline changes what the keys play. Off
 ## by default; the instruments in the room follow the key whatever this says.
-var scale_lock := false:
+enum Fit { OFF, SNAP, FILTER, CHORD }
+## How the plain keys follow the song, one of Fit: SNAP is the nearest note of the key, FILTER
+## plays only keys that are in it (the rest are dropped: not heard, sent or taken), CHORD the
+## nearest tone of the chord sounding at the song position (the key's nearest note with no chord).
+var fit := Fit.OFF:
 	set(v):
-		scale_lock = v
+		fit = v
 		changed.emit()
+## The old on/off: on is SNAP.
+var scale_lock: bool:
+	get:
+		return fit != Fit.OFF
+	set(v):
+		if v != (fit != Fit.OFF):
+			fit = Fit.SNAP if v else Fit.OFF
+## Keys dropped by FILTER and still down: their note-off is dropped too.
+var _dropped := {}
 ## A locked key down and the note it sounds; and how many keys down sound each note, so two keys
 ## folded onto one note let it go only with the last of them.
 var _locked := {}
@@ -135,6 +148,10 @@ var synth: MonitorSynth
 var devices := PackedStringArray()
 ## Whether MIDI is wanted: asked for from the panel.
 var midi_open := false
+## Closed by the player: the host's keys are not then opened again on their own.
+var _midi_declined := false
+## The track the host was last told this guest's keys play into.
+var _told_track := 0
 ## Whether Godot's own MIDI input is what is open, rather than the helper's.
 var _os_midi := false
 ## What the last take did, for the panel: {notes, track, start, end} or empty.
@@ -227,11 +244,13 @@ func _exit_tree() -> void:
 ## systems opening the inputs takes the devices away from other applications.
 func open_midi() -> void:
 	midi_open = true
+	_midi_declined = false
 	_route_midi()
 
 
 func close_midi() -> void:
 	midi_open = false
+	_midi_declined = true
 	_route_midi()
 
 
@@ -313,6 +332,20 @@ func take_track() -> int:
 	return 0
 
 
+## The track the host's keys SOUND on: the take's track when it carries an instrument plugin, else
+## the first track that does, so a keyboard plays an instrument without arming anything. Only for
+## sound: a take still needs a track chosen or armed (`take_track`). A guest has no plugins of
+## its own to look at, so its track is the one it chose.
+func play_track() -> int:
+	var index := take_track()
+	if not host_records() or DAW.state == null or (index > 0 and DAW.track_instrument(index) != null):
+		return index
+	for i in DAW.state.track_indices():
+		if DAW.track_instrument(i) != null:
+			return i
+	return index
+
+
 ## Every track a take goes onto: its own, and as such a host with none chosen, every other armed
 ## track whose input is the keys.
 func take_tracks() -> Array:
@@ -388,9 +421,13 @@ func _input(event: InputEvent) -> void:
 ## the sent note both take it.
 func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := false,
 		source := &"", at := NAN) -> void:
-	if source == &"" and scale_lock:
+	if source == &"" and fit != Fit.OFF:
 		var now := at if not is_nan(at) else (DAW.state.position_seconds if DAW.state != null else 0.0)
-		var to := Harmony.at(DAW.state, now).snap(pitch)
+		var harmony := Harmony.at(DAW.state, now)
+		if fit == Fit.FILTER and not harmony.in_key(pitch):
+			_dropped[pitch] = true
+			return
+		var to := harmony.snap_chord(pitch) if fit == Fit.CHORD else harmony.snap(pitch)
 		_locked[pitch] = to
 		_locked_down[to] = int(_locked_down.get(to, 0)) + 1
 		if _locked_down[to] > 1:
@@ -438,6 +475,8 @@ func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := fal
 ## never had down a pitch another source holds touches nothing.
 func note_off(pitch: int, channel := 0, age := 0.0, sounded := false, source := &"",
 		at := NAN) -> void:
+	if source == &"" and _dropped.erase(pitch):
+		return
 	if source == &"" and _locked.has(pitch):
 		var to: int = _locked[pitch]
 		_locked.erase(pitch)
@@ -604,7 +643,7 @@ var _plugin_notes := {}
 func _track_plugin() -> Object:
 	if has_instruments() or not through_track or not host_records():
 		return null
-	return DAW.track_instrument(take_track())
+	return DAW.track_instrument(play_track())
 
 
 ## What the helper heard and played since the last frame, into the take.
@@ -698,11 +737,16 @@ func _process(_delta: float) -> void:
 		return
 	if _host_synth and through_track:
 		# The keys follow the track they go onto, as the armed track or the choice changes.
-		var through := DAW.monitor_bus(take_track())
+		var through := DAW.monitor_bus(play_track())
 		if through != synth.bus:
 			synth.set_bus(through)
+	if not midi_open and not _midi_declined and DisplayServer.get_name() != "headless" \
+			and host_records() and play_track() > 0:
+		# A built-in host with an instrument to play: its keyboard just works, as a DAW's does.
+		open_midi()
 	if midi_open:
 		_hear_host_keys()
+	_tell_play_track()
 	_take_native_midi()
 	follow(heard())
 
@@ -722,7 +766,7 @@ func _hear_host_keys() -> void:
 	if through_track:
 		# Through the track, so through Godot: the helper's sound would not pass the track's fader.
 		synth.allow_native = false
-		synth.set_bus(DAW.monitor_bus(take_track()))
+		synth.set_bus(DAW.monitor_bus(play_track()))
 	else:
 		synth.allow_native = OS.get_environment("R3D_GODOT_KEYS") != "1"
 		synth.set_bus(&"")
@@ -730,6 +774,18 @@ func _hear_host_keys() -> void:
 		synth.start()
 	# MIDI comes through whichever path plays it.
 	_route_midi()
+
+
+## A guest tells the host where its keys play, so the host's instrument there sounds them live
+## (GuestPlay). Said again only when it changes.
+func _tell_play_track() -> void:
+	if Session.role != Session.Role.GUEST:
+		_told_track = 0
+		return
+	var track := play_track()
+	if track != _told_track:
+		_told_track = track
+		Session.send_play_track(track)
 
 
 ## The take, following what the guest hears of the host's transport: begun when recording is
@@ -846,6 +902,7 @@ func _release_all() -> void:
 	# What sounds is let go as it sounds, not as the keys that were folded onto it.
 	_locked.clear()
 	_locked_down.clear()
+	_dropped.clear()
 	for pitch in held.keys():
 		var sources := _down.sources_of(pitch)
 		if sources.is_empty():

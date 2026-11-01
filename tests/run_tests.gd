@@ -229,6 +229,7 @@ func _ready() -> void:
 	_test_one_recording_goes_onto_every_armed_track_of_its_input()
 	_test_the_host_records_its_own_microphone_on_the_built_in_engine()
 	_test_the_host_records_its_own_keys_on_the_built_in_engine()
+	_test_keys_play_an_instrument_plugin_without_arming_and_a_guest_plays_it_live()
 	_test_a_keytar_reaches_its_track_choice_even_where_reaper_records_its_own_midi()
 	_test_hit_recorder_rolls_takes_every_bar()
 	_test_a_looped_item_survives_the_wire_and_a_split()
@@ -25156,6 +25157,65 @@ func _test_an_instrument_plugin_plays_a_tracks_notes() -> void:
 	PluginCatalogue.use_only([])
 
 
+## "I want to use my keyboard as generic input for any instrument plugin", the host's with nothing
+## armed, and a guest's live, through the host's plugin on the track they say they play into.
+func _test_keys_play_an_instrument_plugin_without_arming_and_a_guest_plays_it_live() -> void:
+	var backend := _hosting_engine()
+	if backend == null:
+		return
+	_as_session(Session.Role.HOST, 1)
+	var gm := Session.guest_midi
+	gm.target_track = 0
+	check("with no instrument, the keys follow the take's track", gm.play_track() == gm.take_track())
+	DAW.add_fx(6, "plugin:CLAP:dawkit.test.sine", DAW.state.track(6).plugins()[0])
+	check("the first track with an instrument is the one the host's keys sound on, nothing armed (%d)" % gm.play_track(),
+			gm.play_track() == 6 and gm.take_track() != 6)
+	check("so the track's plugin is the one they play", gm._track_plugin() == DAW.track_instrument(6))
+	var other := 0
+	for i in DAW.state.track_indices():
+		if i != 6 and not DAW.state.track(i).plugins().is_empty():
+			other = i
+			break
+	if other > 0:
+		DAW.add_fx(other, "plugin:CLAP:dawkit.test.sine", DAW.state.track(other).plugins()[0])
+		gm.target_track = other
+		check("a chosen track with an instrument still wins", gm.play_track() == other)
+		gm.target_track = 0
+
+	# A guest says where it plays; the host's plugin sounds its notes, and lets them go.
+	var play := GuestPlay.new()
+	add_child(play)
+	Session.play_tracks[7] = 6
+	Session.note_played.emit(Session.Note.ON, 60, 100, 7, -1.0, &"")
+	check("a guest's key sounds on the track's plugin", play.held_count(7) == 1)
+	Session.note_played.emit(Session.Note.ON, 64, 90, 7, -1.0, &"harp")
+	check("an instrument of theirs with a voice of its own is not played here", play.held_count(7) == 1)
+	Session.note_played.emit(Session.Note.OFF, 60, 0, 7, -1.0, &"")
+	check("and is let go", play.held_count(7) == 0)
+	Session.note_played.emit(Session.Note.ON, 62, 100, 7, -1.0, &"")
+	Session.control_played.emit(DawKitClip.PITCH_BEND, 4000, 7, -1.0, &"")
+	Session.control_played.emit(1, 90, 7, -1.0, &"")
+	Session.control_played.emit(1, 20, 7, -1.0, &"harp")
+	check("a guest's pitch wheel and mod wheel move on the plugin (%d)" % play.moved_count(7), play.moved_count(7) == 2)
+	Session.note_played.emit(Session.Note.OFF, 62, 0, 7, -1.0, &"")
+	check("and rest at their last note-off", play.moved_count(7) == 0)
+	Session.note_played.emit(Session.Note.ON, 62, 100, 7, -1.0, &"")
+	Session.control_played.emit(1, 90, 7, -1.0, &"")
+	Session.play_tracks.erase(7)
+	Session.play_track_changed.emit(7, 0)
+	check("a guest who moves off the track or leaves holds nothing there", play.held_count(7) == 0)
+	Session.note_played.emit(Session.Note.ON, 62, 100, 7, -1.0, &"")
+	check("and with no track, plays nothing", play.held_count(7) == 0)
+	play.queue_free()
+	gm._host_synth = false
+	gm.synth.set_bus(&"")
+	gm.synth.stop()
+	backend.close()
+	PluginCatalogue.use_only([])
+	Session.start_solo()
+	_offline()
+
+
 ## 2026-10-30, "loading in certain heavy plugins causes the game to freeze. I would rather that
 ## work happen on a background thread and the main ui waits for it to complete": the slot is in
 ## the chain at once, named and loading, and fills in -- parameters, effect on the bus -- when
@@ -29724,6 +29784,20 @@ func _test_the_song_key_is_set_for_the_room_and_locks_the_keys() -> void:
 	gm.scale_lock = false
 	gm._release_all()
 	check("let go all at once, nothing is left sounding (%s)" % [spy.on.keys()], spy.on.is_empty() and gm.held.is_empty())
+	gm.fit = GuestMidi.Fit.FILTER
+	gm.note_on(61, 100)
+	gm.note_on(62, 100)
+	check("filtered, C# is dropped and D plays (%s)" % [spy.on.keys()], spy.on.keys() == [62] and gm.held.keys() == [62])
+	gm.fit = GuestMidi.Fit.OFF
+	gm.note_off(61)
+	check("a dropped key's release touches nothing", spy.on.keys() == [62])
+	gm.note_off(62)
+	gm.fit = GuestMidi.Fit.CHORD
+	gm.note_on(61, 100)
+	check("on the chord, C# plays a chord tone of it (%s)" % [spy.on.keys()],
+			spy.on.size() == 1 and Harmony.at(s, 0.0).chord.has(posmod(spy.on.keys()[0], 12)))
+	gm.fit = GuestMidi.Fit.OFF
+	gm._release_all()
 	gm.note_on(61, 100)
 	check("unlocked, C# is C# (%s)" % [spy.on.keys()], spy.on.keys() == [61])
 	gm.note_off(61)

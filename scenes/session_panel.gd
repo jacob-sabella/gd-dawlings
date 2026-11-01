@@ -102,7 +102,7 @@ var _through_track: CheckButton
 var _record_with: CheckButton
 var _computer_keys: CheckButton
 ## "Lock my keys to the song's key" (GuestMidi.scale_lock).
-var _scale_lock: CheckButton
+var _fit: OptionButton
 ## SONG KEY: the song's key from bar 1, its root and its mode (FifthsWheel.set_song_key).
 var _key_root: OptionButton
 var _key_mode: OptionButton
@@ -744,12 +744,19 @@ func _build_midi(box: VBoxContainer) -> void:
 	_computer_keys.tooltip_text = "A to ' play from C, the row above plays the black keys, Z and X change octave. Esc gives the keys back."
 	_computer_keys.toggled.connect(func(on: bool): _keys.set_active(on))
 	box.add_child(_computer_keys)
-	_scale_lock = _toggle("Lock my keys to the song's key")
-	_scale_lock.name = "ScaleLock"
-	_scale_lock.tooltip_text = ("A key out of the song's key plays the nearest note in it: your MIDI keyboard and the computer keys, "
-			+ "heard, sent and recorded so. The key is set under PROJECT, and follows key changes on the timeline.")
-	_scale_lock.toggled.connect(func(on: bool): Session.guest_midi.scale_lock = on)
-	box.add_child(_scale_lock)
+	var fit_row := HBoxContainer.new()
+	fit_row.add_theme_constant_override("separation", 10)
+	box.add_child(fit_row)
+	fit_row.add_child(_label("Keys follow the song", 14, INK))
+	_fit = _choice()
+	_fit.name = "KeysFollow"
+	for word in ["Off", "Snap to the key", "Only the key's notes", "Snap to the chord"]:
+		_fit.add_item(word)
+	_fit.tooltip_text = ("Your MIDI keyboard and the computer keys. Snap: a key out of the song's key plays the nearest note in it. "
+			+ "Only the key's notes: keys out of it are dropped. Snap to the chord: the nearest chord tone. "
+			+ "Heard, sent and recorded so. The key is set under PROJECT, and follows key changes on the timeline.")
+	_fit.item_selected.connect(func(i: int): Session.guest_midi.fit = i)
+	fit_row.add_child(_fit)
 	_tilt_bends = _toggle("Tilt bends")
 	_tilt_bends.tooltip_text = TILT_BENDS_TIP
 	_tilt_bends.toggled.connect(func(on: bool): Session.guest_midi.tilt_bends = on)
@@ -1014,6 +1021,10 @@ func play_with_computer_keys(on: bool) -> void:
 	_keys.set_active(on)
 
 
+func toggle_computer_keys() -> void:
+	_keys.set_active(not _keys.is_active())
+
+
 func _refresh_keys() -> void:
 	var on := _keys.is_active()
 	if _computer_keys != null and _computer_keys.button_pressed != on:
@@ -1062,8 +1073,8 @@ func _refresh_midi() -> void:
 		_record_with.set_pressed_no_signal(gm.record_with_host)
 	if _tilt_bends.button_pressed != gm.tilt_bends:
 		_tilt_bends.set_pressed_no_signal(gm.tilt_bends)
-	if _scale_lock.button_pressed != gm.scale_lock:
-		_scale_lock.set_pressed_no_signal(gm.scale_lock)
+	if _fit.selected != gm.fit:
+		_fit.select(gm.fit)
 	_refresh_keys()
 	_refresh_take()
 	_refresh_mic()

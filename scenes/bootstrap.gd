@@ -178,6 +178,7 @@ func _ready() -> void:
 		studio.rig.escape_requested.connect(func() -> void:
 			if session_panel.is_open():
 				session_panel.close())
+	studio.computer_keys_toggled.connect(session_panel.toggle_computer_keys)
 	if args["session_panel"]:
 		session_panel.open()
 	var tour_hud := TourHud.new()

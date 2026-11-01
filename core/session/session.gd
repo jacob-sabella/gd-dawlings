@@ -159,6 +159,10 @@ var role: int = Role.SOLO
 ## On a guest, the host's track spectra as last heard (Spectra): track -> its bands in dB; and when
 ## (msec, -1 for never). Empty on a host or alone, which measure their own.
 var spectra: Dictionary = {}
+## Host: the track each guest's keys play into, live (`send_play_track`): peer id -> track. Read
+## by GuestPlay, which sounds their notes on that track's instrument plugin.
+var play_tracks: Dictionary = {}
+signal play_track_changed(peer: int, track: int)
 var spectra_heard_msec := -1
 ## {peer_id: Participant}
 var participants: Dictionary = {}
@@ -1063,6 +1067,8 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if role != Role.HOST:
 		return
 	_pending.erase(peer_id)
+	if play_tracks.erase(peer_id):
+		play_track_changed.emit(peer_id, 0)
 	if mix_feed != null:
 		mix_feed.revoke(peer_id)
 	if not participants.has(peer_id):
@@ -1990,6 +1996,28 @@ func send_note(kind: int, pitch: int, velocity: int, song := -1.0, source := &""
 			_note.rpc_id(id, kind, pitch, velocity, local_peer_id, song, source)
 	else:
 		_note_up.rpc_id(1, kind, pitch, velocity, song, source)
+
+
+## The track my keys play into, told to the host (0 for none), so it sounds my notes on that
+## track's instrument plugin as I play them. A guest's; on a host there is no one to tell.
+func send_play_track(track: int) -> void:
+	if _connected() and role == Role.GUEST:
+		_play_track_up.rpc_id(1, track)
+
+
+@rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
+func _play_track_up(track: int) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from):
+		return
+	track = maxi(track, 0)
+	if int(play_tracks.get(from, 0)) == track:
+		return
+	if track > 0:
+		play_tracks[from] = track
+	else:
+		play_tracks.erase(from)
+	play_track_changed.emit(from, track)
 
 
 @rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)

@@ -129,6 +129,8 @@ signal venue_changed(id: StringName)
 ## EDIT on the lyric board at a desk: the session panel's LYRICS box, which is not the studio's, is
 ## asked to open (LyricBoard, docs/spatial_loop.md part two, slice 56).
 signal lyrics_edit_asked()
+## P: the computer keyboard as a piano, on or off (the session panel's KeyCatcher).
+signal computer_keys_toggled()
 
 ## The world the studio stands in. See core/venues/venue.gd.
 var venue: Venue
@@ -4310,6 +4312,10 @@ func _build_items() -> void:
 	their_keys.name = "TheirKeys"
 	add_child(their_keys)
 	Session.note_played.connect(their_keys.play)
+	# A guest's keys, live on the instrument plugin of the track they play into.
+	var guest_play := GuestPlay.new()
+	guest_play.name = "GuestPlay"
+	add_child(guest_play)
 	Session.control_played.connect(their_keys.control)
 	their_monitor = TheirMonitor.new()
 	their_monitor.name = "TheirMonitor"
@@ -7765,6 +7771,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Your fingertips as notes, on J K L ;: T, beside the home row they play on.
 			KEY_T:
 				toggle_fingertips()
+			# The computer keyboard as a piano, to play whatever instrument is on the track: P.
+			KEY_P when not event.ctrl_pressed and not event.meta_pressed:
+				computer_keys_toggled.emit()
 			# The chord layer: C for chords. 1 to 7 then pick them in the keys that play.
 			KEY_C when not event.ctrl_pressed and not event.meta_pressed:
 				toggle_chords()
