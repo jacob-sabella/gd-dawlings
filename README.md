@@ -80,6 +80,22 @@ the stage manager.
 
 ![The console and tape deck up close](docs/media/tape-deck.jpg)
 
+### Playing an instrument
+
+Your keyboard plays whatever instrument plugin is on a track, with nothing to set up. On the
+built-in engine the keys sound on the armed or chosen track, or else the first track that carries
+an instrument; a MIDI keyboard opens by itself once there is one to play, and **P** turns the
+computer keyboard into a piano (`A` to `'` from C, `Z` and `X` for the octave, Esc to stop). A
+guest does the same through the host's plugin: their notes, sustain pedal, pitch wheel, mod wheel
+and expression sound live on the track they play into, and are recorded as a take placed by song
+position.
+
+<p align="center"><img src="docs/media/keys-panel.jpg" alt="The session panel's Your Keys section: the MIDI keyboard found, which track to play into, hearing the keys through the track, and the Keys follow the song choice" width="40%"></p>
+
+**Keys follow the song** keeps a keyboard in the key: *Snap to the key* plays the nearest note of
+it, *Only the key's notes* drops the rest, and *Snap to the chord* plays the nearest tone of the
+chord sounding. They follow key and chord changes on the timeline.
+
 The screenshots and clips are made by the project's own tools: `tools/shot.sh` for a still,
 `tools/movie.sh` for a clip (Godot's movie writer, so the frame rate holds however slowly the
 machine draws).
