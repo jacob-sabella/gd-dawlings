@@ -18,6 +18,9 @@ var _checks := 0
 
 func _ready() -> void:
 	OfflineBackend.autosave_every = 0.0
+	# Rig Roulette is off in the game for now; its tests run with it on.
+	check("Rig Roulette is off unless asked for", not Studio.roulette_enabled)
+	Studio.roulette_enabled = true
 	# Only the plugins a check puts there: none of this machine's.
 	PluginCatalogue.use_only([])
 	# Never this machine's Workshop (its dev flag may be on): the rooms the suite checks are everyone's.

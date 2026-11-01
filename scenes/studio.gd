@@ -755,10 +755,17 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_publish_room()
 
 
+## Rig Roulette is switched off for now (the door, the room and the roll): the code is all here,
+## and DAWLINGS_ROULETTE=1 turns it back on for working on it.
+static var roulette_enabled := OS.get_environment("DAWLINGS_ROULETTE") == "1"
+
+
 ## The door to (or, in the room itself, out of) Rig Roulette, in the venue's own frame. It is a
 ## child of the venue, so it goes with it; the venue's own `solids` keep people out of it and the
 ## floor plan keeps furniture out of it (`_door_footprint`).
 func _hang_the_roulette_door() -> void:
+	if not roulette_enabled:
+		return
 	var door := RouletteDoor.new()
 	door.name = "RouletteDoor"
 	door.leaving = in_roulette_room_venue(venue)
@@ -1159,7 +1166,7 @@ func _on_roulette_door_used() -> void:
 
 ## What furniture keeps clear of: the door's footprint, as the floor plan's rectangles.
 func _door_footprint() -> Array:
-	if venue == null:
+	if venue == null or not roulette_enabled:
 		return []
 	var door := venue.door_solid()
 	return [FloorPlan.footprint(door["c"], door["h"], door["a"])]
@@ -1351,6 +1358,8 @@ func in_roulette_room() -> bool:
 ## guests the way a venue does, through the room the host publishes. Remembers the venue and its
 ## arrangement for `leave_roulette_room`.
 func enter_roulette_room() -> bool:
+	if not roulette_enabled:
+		return false
 	if not Session.is_authority():
 		Session.notice.emit("Only %s can take the band into the roulette room." % Session.name_of(1))
 		return false
@@ -6347,6 +6356,8 @@ func _on_session_roll_changed() -> void:
 ## RigRouletteStation.roll_requested: told so only the host can roll, the same pattern
 ## `choose_venue` and `_on_tour_case_struck` both use.
 func _on_rig_roulette_roll_requested() -> void:
+	if not roulette_enabled:
+		return
 	if not Session.is_authority():
 		Session.notice.emit("Only %s can roll the rig." % Session.name_of(1))
 		return
