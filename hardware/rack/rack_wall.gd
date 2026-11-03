@@ -31,15 +31,15 @@ const COLS := RackLayout.COLS
 const ROWS := RackLayout.ROWS
 const MODULE_WIDE := 0.11
 const WIDE := MODULE_WIDE * COLS
-const ROW_TALL := 0.62
+const ROW_TALL := 0.55
 const ROW_GAP := 0.02
-const PALETTE_TALL := 0.17
+const PALETTE_TALL := 0.15
 const TALL := ROW_TALL * ROWS + ROW_GAP * (ROWS - 1) + PALETTE_TALL
 const BORDER := 0.025
 const CASE_DEEP := 0.05
 const KNOB_PITCH := 0.055
-const KNOB_ROW := 0.07
-const JACK_ROW := 0.068
+const KNOB_ROW := 0.062
+const JACK_ROW := 0.06
 const TITLE_CAP := 0.02
 const LETTER_CAP := 0.0105
 const TOUCH_COUNT := 13
@@ -333,10 +333,23 @@ func _key(legend: String, size: Vector2, at: Vector3, says: String, press: Calla
 	return k
 
 
+## A node out of the tree at once and freed at the frame's end: what replaces it never stands over it.
+func _drop(n: Node) -> void:
+	if n.get_parent() != null:
+		n.get_parent().remove_child(n)
+	n.queue_free()
+
+
+## A jack's key in `jacks`: a module can have an input and an output of one name (a reverb's `l`), so an
+## output's carries a mark.
+static func _jack_key(path: String, is_output: bool) -> String:
+	return path + ">" if is_output else path
+
+
 func _clear_modules() -> void:
 	for n in module_nodes.values():
 		if is_instance_valid(n):
-			n.queue_free()
+			_drop(n)
 	module_nodes.clear()
 	jacks.clear()
 	knobs.clear()
@@ -423,7 +436,7 @@ func _build_module(id: String) -> void:
 		j.drag_moved.connect(_on_drag_moved)
 		j.drag_finished.connect(_on_drag_finished)
 		holder.add_child(j)
-		jacks[path] = j
+		jacks[_jack_key(path, paths[n][1])] = j
 	_put(holder)
 	module_nodes[id] = holder
 
@@ -455,7 +468,7 @@ func _tint_of(type: String) -> Color:
 func _build_palette() -> void:
 	for n in _palette_nodes:
 		if is_instance_valid(n):
-			n.queue_free()
+			_drop(n)
 	_palette_nodes.clear()
 	var groups: Array = RackCatalogue.GROUPS.duplicate()
 	groups.append(GROUP_PRESETS)
@@ -554,8 +567,9 @@ func show_patch(to: Dictionary) -> void:
 		var k: Knob = knobs[key]
 		if not k.is_held() and not _settle_at.has(key):
 			k.apply_remote(RackPatch.knob_of(patch, key.get_slice(".", 0), key.get_slice(".", 1)))
-	for path: String in jacks:
-		var j: RackJack = jacks[path]
+	for key: String in jacks:
+		var j: RackJack = jacks[key]
+		var path := String(j.jack)
 		j.plugged_to.clear()
 		for c in patch["cables"]:
 			if j.output and c[0] == path:
@@ -602,17 +616,26 @@ func turning() -> Dictionary:
 func _lay_cables() -> void:
 	for c in cables:
 		if is_instance_valid(c):
+			# Out of the tree at once, so a laid-again cable never stands over its predecessor.
+			if c.get_parent() != null:
+				c.get_parent().remove_child(c)
 			c.queue_free()
 	cables.clear()
 	if not is_inside_tree():
 		return
+	var fanned := {}
 	for c: Array in patch["cables"]:
-		var a: RackJack = jacks.get(c[0])
-		var b: RackJack = jacks.get(c[1])
+		var a: RackJack = jacks.get(_jack_key(c[0], true))
+		var b: RackJack = jacks.get(_jack_key(c[1], false))
 		if a == null or b == null:
 			continue
 		var tint := _tint_of(RackPatch.type_of(patch, String(c[0]).get_slice(".", 0)))
-		var cable := PatchCable.create(a.plug_transform(), b.plug_transform(), tint, hash(c))
+		# A second cable from one output stands its plug further out, so the plugs never share a face.
+		var from_plug := a.plug_transform()
+		var fan: int = fanned.get(c[0], 0)
+		fanned[c[0]] = fan + 1
+		from_plug.origin += from_plug.basis.z.normalized() * 0.014 * fan
+		var cable := PatchCable.create(from_plug, b.plug_transform(), tint, hash(c))
 		cable.name = "Cable_%s_%s" % [c[0], c[1]]
 		var span := a.plug_transform().origin.distance_to(b.plug_transform().origin)
 		cable.sag_ratio = CABLE_SAG if absf(a.global_position.x - b.global_position.x) < MODULE_WIDE * 2.0 \
@@ -688,8 +711,8 @@ func _on_drag_began(from: ModularJack, at: Vector3) -> void:
 			if patch["cables"][i][1] == path:
 				lifted_from = patch["cables"][i][0]
 				break
-		if lifted_from != "" and jacks.has(lifted_from):
-			fixed = (jacks[lifted_from] as RackJack).plug_transform()
+		if lifted_from != "" and jacks.has(_jack_key(lifted_from, true)):
+			fixed = (jacks[_jack_key(lifted_from, true)] as RackJack).plug_transform()
 			tint = _tint_of(RackPatch.type_of(patch, lifted_from.get_slice(".", 0)))
 			hidden = _cable_between(lifted_from, path)
 			if hidden != null:

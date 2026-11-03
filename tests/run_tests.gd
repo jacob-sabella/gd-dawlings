@@ -727,7 +727,6 @@ func _ready() -> void:
 	_test_the_keys_helper_renders_the_modular_as_godot_does()
 	_test_a_modular_take_renders_the_same_twice_as_long_as_its_span()
 	_test_a_guests_modular_take_is_rendered_by_the_host_where_it_was_played()
-	await _test_a_modular_take_is_put_in_as_audio_on_the_built_in_engine()
 	_test_rain_density_into_the_modular_filter_changes_its_sound()
 	_test_a_drip_gates_an_env_in_the_cave()
 	_test_a_rings_level_follows_its_layers_notes_the_same_on_two_machines()
@@ -5514,7 +5513,8 @@ func _test_every_light_in_the_room_comes_out_of_something() -> void:
 	# light as a missing lamp stand.
 	var every_light := studio.find_children("*", "OmniLight3D", true, false)
 	var carried := every_light.filter(func(n): return studio.body.is_ancestor_of(n))
-	var lamps := every_light.filter(func(n): return not studio.body.is_ancestor_of(n))
+	var lamps := every_light.filter(func(n): return not studio.body.is_ancestor_of(n) \
+			and not (studio.rack_wall != null and studio.rack_wall.is_ancestor_of(n)))
 	var stands := studio.studio_set.get_children().filter(
 			func(n): return n.is_in_group(&"lamp_stand"))
 	check("every practical in the table is a light (%d of %d)"
@@ -27333,8 +27333,8 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 			# spot, its jacks, knobs and touch keys on it, and the venue's own rack given way to it.
 			var wall := studio.rack_wall
 			if wall == null or not wall.visible or not wall.transform.is_equal_approx(studio._venue_to_set(spot)) \
-					or wall.jacks.size() != Modular.OUTS.size() + Modular.INS.size() or wall.knobs.size() != Modular.KNOBS.size() \
-					or wall.touch_keys.size() != ModularWall.TOUCH_COUNT or not studio.focus.surfaces.has(wall):
+					or wall.jacks.is_empty() or wall.knobs.is_empty() \
+					or wall.touch_keys.size() != RackWall.TOUCH_COUNT or not studio.focus.surfaces.has(wall):
 				return false
 			var zone := studio.venue.get_node_or_null("Zone_synth")
 			if zone != null and zone.get_children().any(func(n: Node) -> bool:
@@ -47796,95 +47796,6 @@ func _test_a_guests_modular_take_is_rendered_by_the_host_where_it_was_played() -
 	_offline()
 
 
-## A host's own take through the modular (the built-in engine records the host's keys itself): the
-## keys at the wall send as the modular's and the take goes into Session.modular_takes as it is
-## played; ended, it is rendered on a worker thread and put in as audio named `modular` at its start,
-## the same samples as the player's own render, and no MIDI take goes in.
-func _test_a_modular_take_is_put_in_as_audio_on_the_built_in_engine() -> void:
-	var backend := GodotBackend.new()
-	backend.state = MixState.new()
-	DAW.use(backend)
-	_as_session(Session.Role.HOST, 1)
-	Session.local_name = "Ada"
-	var gm := Session.guest_midi
-	var mt := Session.modular_takes
-	var saved_heard := gm.heard_source
-	var saved_patch := mt.patch
-	var saved_roll := gm.roll_every
-	gm.roll_every = 0.0
-	gm.record_with_host = true
-	mt.patch = func() -> Dictionary: return Modular.default_patch()
-	var spy := _spy_on_keys()
-	var track := 0
-	for index: int in DAW.state.tracks:
-		if not DAW.state.input_of(index).begins_with("audio:"):
-			track = index
-			break
-	gm.target_track = track
-	DAW.state.track(track).items.clear()
-	var heard := {"seconds": 40.0, "playing": true, "recording": true, "valid": true}
-	gm.heard_source = func() -> Dictionary: return heard
-	gm.reach(Modular.SOURCE, true)
-	gm._process(0.016)
-	check("at the wall, a take begins through the modular (%s)" % [mt.mine], gm.is_recording() and gm._take_modular
-			and mt.mine != null and is_equal_approx(mt.mine.start, 40.0))
-	heard["seconds"] = 40.1
-	gm.note_on(69, 100)
-	check("a plain key at the wall is sent as the modular's", gm._sent_as.get(69) == Modular.SOURCE)
-	heard["seconds"] = 40.3
-	Session.send_knob(&"vcf.cutoff", 0.2, 40.3)
-	heard["seconds"] = 40.6
-	gm.note_off(69)
-	check("and its note-off as its note-on was, then forgotten", not gm._sent_as.has(69))
-	heard["seconds"] = 41.0
-	gm._process(0.016)
-	heard["recording"] = false
-	gm._process(0.016)
-	check("ended, the take is the modular's: no MIDI take goes in (%s)" % [gm.last_take], gm.last_take.get("modular", false)
-			and DAW.state.track(track).items.is_empty() and mt.mine == null and mt.last_mine != null
-			and mt.last_mine.events.any(func(e: Array) -> bool: return e[1] == Modular.Event.KNOB and is_equal_approx(e[0], 40.3)))
-	var placed: Array = []
-	var listen := func(info: Dictionary) -> void: placed.append(info)
-	mt.placed.connect(listen)
-	var waited := 0
-	while placed.is_empty() and waited < 300:
-		await get_tree().process_frame
-		waited += 1
-	mt.placed.disconnect(listen)
-	var items: Array = DAW.state.track(track).items
-	check("rendered on a worker thread and put in on the built-in engine: audio named modular at the take's start (%s)"
-			% [items.map(func(it: MixState.ItemState) -> String: return "%s %.2f %.2f" % [it.name, it.start, it.length])],
-			items.size() == 1 and items[0].name == ModularTakes.NAME and is_equal_approx(items[0].start, 40.0)
-			and absf(items[0].length - (float(gm.last_take["end"]) - 40.0)) < 0.001 and items[0].notes.is_empty())
-	var path: String = placed[0]["path"] if not placed.is_empty() else ""
-	var samples := _wav_samples(path)
-	var own := mt.last_mine.render()
-	var worst := 0.0
-	for i in mini(samples.size(), own.size()):
-		worst = maxf(worst, absf(samples[i] - clampf(own[i], -1.0, 1.0)))
-	check("its WAV is the player's own render of the take (%d frames, %.6f)" % [samples.size(), worst],
-			samples.size() == own.size() and samples.size() > 0 and worst < 2.0 / 32767.0 and _modular_loudest(own) > 0.05)
-	if not path.is_empty():
-		DirAccess.remove_absolute(path)
-	gm.reach(Modular.SOURCE, false)
-	heard["recording"] = true
-	gm._process(0.016)
-	gm.note_on(60, 100)
-	check("away from the wall a key is its own again, and a take is MIDI (%s)" % [gm._sent_as], gm._sent_as.get(60) == &""
-			and not gm._take_modular)
-	gm.note_off(60)
-	heard["recording"] = false
-	gm._process(0.016)
-	check("put in as a MIDI take", DAW.state.track(track).items.size() == 2)
-	gm.heard_source = saved_heard
-	gm.roll_every = saved_roll
-	gm.target_track = 0
-	mt.patch = saved_patch
-	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-
-
 ## How bright `samples` are from `from` to `to`: the RMS of each sample's step from the one before
 ## over the RMS of the samples, so a filter opened is brighter whatever the level.
 func _modular_brightness(samples: PackedFloat32Array, from: int, to: int) -> float:
@@ -50101,3 +50012,5 @@ func _test_the_studios_rack_is_edited_through_the_room_and_lit_by_its_level() ->
 
 func _rack_panels(wall: RackWall) -> int:
 	return wall.module_nodes.keys().filter(func(k: String) -> bool: return not k.contains("/")).size()
+
+

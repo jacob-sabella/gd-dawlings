@@ -5379,7 +5379,7 @@ func _on_marble_rang(r: Dictionary) -> void:
 ## only from here (and only where no other station's seat is nearer, `at_modular`), or while it is
 ## visited or brought.
 const MODULAR_NEAR := 0.3
-const MODULAR_FAR := 1.7
+const MODULAR_FAR := 2.5
 const MODULAR_SIDE := 1.1
 ## How often the stations' seats are worked out again for `at_modular` (s): a trolley pushed
 ## moves its seat, but not every frame's worth.
