@@ -790,6 +790,14 @@ func _ready() -> void:
 	_test_signal_look_solo_puts_everything_back()
 	await _test_signal_look_solo_in_the_studio()
 	_test_signal_patch_wall_meters_its_own_streams()
+	_test_a_rack_catalogue_is_the_engines_own_description()
+	_test_a_rack_patch_checks_every_verb()
+	_test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input()
+	_test_a_rack_engine_makes_the_sound_the_patch_says()
+	await _test_a_rack_voice_plays_live_through_a_track()
+	_test_a_rack_layout_keeps_modules_apart_and_answers_in_words()
+	await _test_the_studios_rack_is_edited_through_the_room_and_lit_by_its_level()
+	await _test_a_key_played_in_the_studio_is_heard_and_lights_the_room()
 	_report()
 
 
@@ -50071,3 +50079,51 @@ func _rack_panels(wall: RackWall) -> int:
 	return wall.module_nodes.keys().filter(func(k: String) -> bool: return not k.contains("/")).size()
 
 
+## The rack played live from the keyboard, start to finish, in a studio: a computer key pressed with the
+## keys on goes into the engine, is heard through the track the rack plays through, lights the room's
+## annex and the wall's meters, and a bandmate's note comes in the same way for the host.
+func _test_a_key_played_in_the_studio_is_heard_and_lights_the_room() -> void:
+	if not RackEngine.available():
+		print("  (no engine here: no sound to check)")
+		return
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var voice: RackVoice = studio.rack_voice
+	check("the studio has a rack voice", voice != null)
+	if voice == null:
+		studio.queue_free()
+		return
+	studio._modular_play(true)
+	check("the keys are on", studio.modular_keys.is_active())
+	for i in 5:
+		await get_tree().process_frame
+	studio.modular_keys.handle(KEY_A, true)
+	for i in 70:
+		await get_tree().physics_frame
+	check("a key pressed wakes the engine", voice.running())
+	var track := int(studio.rack_row["track"])
+	check("it plays through a track of the song (%d)" % track, track > 0 and InputMonitor.feeds.get(track) == voice.source)
+	var heard := PackedVector2Array()
+	for i in 10:
+		heard.append_array(voice.source.read())
+		await get_tree().create_timer(0.03).timeout
+	var peak := 0.0
+	for f in heard:
+		peak = maxf(peak, absf(f.x))
+	check("and it is heard (%.3f)" % peak, peak > 0.005)
+	var out_peak := 0.0
+	for id in voice.meters:
+		out_peak = maxf(out_peak, float(voice.meters[id]))
+	check("its meters move (%.3f)" % out_peak, out_peak > 0.0 and voice.level > 0.0)
+	check("and the annex's lights follow them", studio.modular_annex == null or studio.modular_annex._level > 0.0)
+	studio.modular_keys.handle(KEY_A, false)
+	studio._on_rack_heard(7, Session.Note.ON, 60, 100)
+	check("a bandmate's note is held in the host's rack", voice._held.has(60))
+	studio._on_rack_heard(7, Session.Note.OFF, 60, 0)
+	check("and let go", not voice._held.has(60))
+	studio._modular_play(false)
+	studio.queue_free()
+	await get_tree().process_frame
