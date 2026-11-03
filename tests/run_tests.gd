@@ -798,6 +798,7 @@ func _ready() -> void:
 	_test_a_rack_layout_keeps_modules_apart_and_answers_in_words()
 	await _test_the_studios_rack_is_edited_through_the_room_and_lit_by_its_level()
 	await _test_a_key_played_in_the_studio_is_heard_and_lights_the_room()
+	await _test_a_bandmates_first_note_wakes_the_rack_and_is_heard()
 	_report()
 
 
@@ -50126,5 +50127,31 @@ func _test_a_key_played_in_the_studio_is_heard_and_lights_the_room() -> void:
 	studio._on_rack_heard(7, Session.Note.OFF, 60, 0)
 	check("and let go", not voice._held.has(60))
 	studio._modular_play(false)
+	studio.queue_free()
+	await get_tree().process_frame
+
+
+## A bandmate's first note into a rack that is asleep wakes it and is heard: the note is not lost to the
+## engine's start.
+func _test_a_bandmates_first_note_wakes_the_rack_and_is_heard() -> void:
+	if not RackEngine.available():
+		print("  (no engine here: no sound to check)")
+		return
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var voice: RackVoice = studio.rack_voice
+	check("the rack is asleep", voice != null and not voice.running())
+	studio._on_rack_heard(7, Session.Note.ON, 60, 100)
+	check("a bandmate's note wakes it", voice.running())
+	var peak := 0.0
+	for i in 40:
+		await get_tree().create_timer(0.05).timeout
+		for f in voice.source.read():
+			peak = maxf(peak, absf(f.x))
+	check("and is heard (%.3f)" % peak, peak > 0.005)
+	studio._on_rack_heard(7, Session.Note.OFF, 60, 0)
 	studio.queue_free()
 	await get_tree().process_frame
