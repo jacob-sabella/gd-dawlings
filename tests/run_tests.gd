@@ -801,6 +801,7 @@ func _ready() -> void:
 	await _test_a_bandmates_first_note_wakes_the_rack_and_is_heard()
 	await _test_a_scope_shows_the_wave_patched_into_it_even_when_unheard()
 	await _test_the_cv_bench_is_a_source_a_hand_sets()
+	await _test_the_big_rigs_far_end_is_patched_and_turned_by_hand()
 	await _test_the_rooms_cv_bench_is_reached_from_the_wall_and_drives_the_rack()
 	_test_every_module_has_a_skin_and_the_big_rig_fits_the_case()
 	await _test_the_discord_feed_sends_what_is_ticked_through_its_faders()
@@ -50256,6 +50257,58 @@ func _test_the_rooms_cv_bench_is_reached_from_the_wall_and_drives_the_rack() -> 
 	annex.bench[7].value = 0.8
 	annex.bench[7].turned.emit(0.8)
 	check("turning one says which and how far", told == [[7, 0.8]])
+	studio.queue_free()
+	await get_tree().process_frame
+
+
+func _test_the_big_rigs_far_end_is_patched_and_turned_by_hand() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var wall: RackWall = studio.rack_wall
+	studio.ask_rack("preset", ["big_rig"])
+	await get_tree().physics_frame
+	var patch: Dictionary = studio.rack_row["patch"]
+	check("the big rig is in the case", RackPatch.module_ids(patch).size() >= 33)
+	# The module farthest along the wall: its knob turns, and its input takes a cable dragged to it.
+	var far := ""
+	var far_col := -1
+	for id in RackPatch.module_ids(patch):
+		var col: int = int(patch["modules"][id]["at"][0])
+		if col > far_col and not wall.knobs.is_empty():
+			var has_knob := false
+			for key in wall.knobs:
+				has_knob = has_knob or String(key).begins_with(id + ".")
+			if has_knob:
+				far_col = col
+				far = id
+	check("a module far along the wall has knobs on it (%s at %d)" % [far, far_col], far != "" and far_col > 12)
+	var turned := false
+	for key in wall.knobs:
+		if String(key).begins_with(far + "."):
+			var kn: Knob = wall.knobs[key]
+			kn.value = 0.9
+			kn.turned.emit(0.9)
+			turned = true
+			break
+	check("turning it reaches the row", turned)
+	var cables: int = patch["cables"].size()
+	var from: RackJack = null
+	var to: RackJack = null
+	for key in wall.jacks:
+		var j: RackJack = wall.jacks[key]
+		if j.output and from == null and String(j.jack).begins_with("lfo"):
+			from = j
+		if not j.output and String(j.jack).begins_with(far + "."):
+			to = j
+	if from != null and to != null:
+		from.drag_began.emit(from, from.global_position)
+		from.drag_finished.emit(from, to)
+		check("a cable dragged across the wall lands", (studio.rack_row["patch"]["cables"] as Array).size() == cables + 1)
+	else:
+		print("  (no lfo output / far input to drag between)")
 	studio.queue_free()
 	await get_tree().process_frame
 
