@@ -327,7 +327,9 @@ func _ready() -> void:
 	if args["modular"] and studio.rack_wall != null:
 		studio._rack_wake()
 		print("RACKRUN ", studio.rack_voice.running(), " ", RackEngine.available())
-		studio.ask_rack("preset", ["acid_line"])
+		studio.ask_rack("preset", [args["rack_preset"]])
+		if args["rack_preset"] == "big_rig":
+			studio.rack_voice.engine.say("play 0")
 		studio.rack_wall.touch_keys[9].grab_begin(studio, studio.rack_wall.touch_keys[9].global_position)
 	var view: Vector2 = args["view"]
 	if view.y > 0.0 and studio.timeline != null:
@@ -404,7 +406,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "public": false, "join": "", "online": false, "join_code": "", "noray_server": "", "relay": false, "xr": OS.has_feature("android"), "xr_sim": false, "ar": OS.has_feature("android"),
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
-		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "play": false, "slap": false, "rings": 0, "pegs": false, "strings": false, "marbles": false, "theremin": false, "grains": false, "grains_band": false, "lyrics": false, "modular": false, "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
+		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "play": false, "slap": false, "rings": 0, "pegs": false, "strings": false, "marbles": false, "theremin": false, "grains": false, "grains_band": false, "lyrics": false, "modular": false, "rack_preset": "acid_line", "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 		"ghost": {}, "tablets": [], "plugins": [], "welcome": false,
@@ -419,6 +421,11 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				i += 1
 				if i < argv.size():
 					out["tracks"] = int(argv[i])
+			"--rack-preset":
+				# `--rack-preset big_rig`: with --modular, the preset the wall is put in (default acid_line).
+				i += 1
+				if i < argv.size():
+					out["rack_preset"] = argv[i]
 			"--focus":
 				# `--focus rack`. Same reason as --place: the summoned arrangement is the
 				# whole claim this feature makes and it cannot be photographed by hand.

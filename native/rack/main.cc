@@ -172,6 +172,18 @@ static int live(int chunk) {
       m += t;
       if (write(2, m.data(), m.size()) < 0) {}
     }
+    if (tick % 3 == 0) {
+      std::vector<float> pts(96);
+      std::string m;
+      char t[16];
+      for (auto& kv : r.modules()) {
+        if (!kv.second->scope(pts)) continue;
+        m += "scope " + kv.first;
+        for (float v : pts) { snprintf(t, sizeof t, " %.2f", v); m += t; }
+        m += "\n";
+      }
+      if (!m.empty() && write(2, m.data(), m.size()) < 0) {}
+    }
   }
 }
 

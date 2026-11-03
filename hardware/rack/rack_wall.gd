@@ -94,6 +94,8 @@ var mood := RackMood.palette(&"")
 var _built := false
 var _shape_key := ""
 var _lamps := {}
+## The screens of the SCOPE modules, by module id.
+var _scopes := {}
 var _track := 0
 var _track_name := ""
 var _recording := false
@@ -500,6 +502,7 @@ func _clear_modules() -> void:
 	jacks.clear()
 	knobs.clear()
 	_lamps.clear()
+	_scopes.clear()
 	_bands.clear()
 	_settle_at.clear()
 	_stream_due.clear()
@@ -563,13 +566,21 @@ func _build_module(id: String) -> void:
 	plate.mesh = face
 	plate.position = Vector3(0, ROW_TALL * 0.5, -0.002)
 	var paint := StandardMaterial3D.new()
-	paint.albedo_color = Color(0.16, 0.16, 0.17) if (col + row) % 2 == 0 else Color(0.21, 0.205, 0.2)
+	paint.albedo_color = RackSkin.face(type, (col + row) % 2 == 1)
 	paint.roughness = 0.6
 	plate.material_override = paint
 	holder.add_child(plate)
 	var title: String = spec["title"]
 	holder.add_child(_letter(title, TITLE_CAP, Vector3(0, ROW_TALL - 0.026, 0.001), Color(0.95, 0.9, 0.78)))
 	var tint := _tint_of(type)
+	var print_strip := RackSkin.print_pattern(type, wide - 0.016, 0.012)
+	if print_strip != null:
+		print_strip.position = Vector3(0, ROW_TALL - 0.064, 0.0006)
+		holder.add_child(print_strip)
+	var tag := RackSkin.tagline(type)
+	if tag != "":
+		var tag_label := _letter(tag, LETTER_CAP * 0.62, Vector3(0, 0.015, 0.001), tint.lerp(Color(1, 1, 1), 0.35))
+		holder.add_child(tag_label)
 	var band := MeshInstance3D.new()
 	band.name = "Band"
 	var strip := BoxMesh.new()
@@ -608,6 +619,13 @@ func _build_module(id: String) -> void:
 		var c := n % per
 		var at := Vector3((c - (inrow - 1) * 0.5) * KNOB_PITCH, ROW_TALL - 0.1 - r * KNOB_ROW, 0.0)
 		_build_knob(holder, id, ks[n], at)
+	if type == "scope":
+		var screen := ScopeScreen.new()
+		screen.size = Vector2(wide - 0.03, 0.2)
+		screen.tint = _tint_of(type)
+		screen.position = Vector3(0, 0.24, 0.003)
+		holder.add_child(screen)
+		_scopes[id] = screen
 	# Jacks, up from the foot: inputs, then outputs (pale), per rows of 2*w.
 	var paths: Array = []
 	for port in spec["ins"]:
@@ -648,8 +666,7 @@ func _build_knob(holder: Node3D, id: String, k: Dictionary, at: Vector3) -> void
 
 
 func _tint_of(type: String) -> Color:
-	var types := RackCatalogue.types()
-	return CABLE_COLOURS[maxi(types.find(type), 0) % CABLE_COLOURS.size()]
+	return RackSkin.accent(type)
 
 
 # --- the palette ------------------------------------------------------------------------------
@@ -791,6 +808,13 @@ func module_levels(meters: Dictionary) -> Array:
 	for id in _pillar_for:
 		out.append(float(meters.get(id, 0.0)) if id != "" else 0.0)
 	return out
+
+
+## The traces of the SCOPE modules' screens: module id -> points.
+func show_scopes(waves: Dictionary) -> void:
+	for id: String in _scopes:
+		if is_instance_valid(_scopes[id]):
+			(_scopes[id] as ScopeScreen).set_wave(waves.get(id, PackedFloat32Array()))
 
 
 func show_meters(meters: Dictionary) -> void:

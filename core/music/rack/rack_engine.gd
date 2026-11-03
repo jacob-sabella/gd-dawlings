@@ -103,6 +103,11 @@ var _err: FileAccess
 var _spare := PackedByteArray()
 ## {module id: peak 0..1+} as last told, and the song's beat the engine thinks it is at.
 var meters := {}
+## What each SCOPE module saw lately: id -> PackedFloat32Array of points, -1..1.
+var scopes := {}
+## When something last took the sound (msec): the engine stalls on a full pipe, so a rack nobody is
+## listening to is drained by its voice to keep its meters and scopes alive.
+var last_read := 0
 var running_beat := 0.0
 var _err_buf := ""
 
@@ -133,6 +138,7 @@ func stop() -> void:
 	_pid = -1
 	_spare.clear()
 	meters = {}
+	scopes = {}
 
 
 func running() -> bool:
@@ -151,6 +157,7 @@ func say_all(lines: PackedStringArray) -> void:
 
 ## Everything the engine has played since last asked. Safe off the main thread (read only).
 func read() -> PackedVector2Array:
+	last_read = Time.get_ticks_msec()
 	var out := PackedVector2Array()
 	if _io == null:
 		return out
@@ -168,14 +175,26 @@ func read() -> PackedVector2Array:
 func poll() -> void:
 	if _err == null:
 		return
-	_err_buf += _err.get_buffer(4096).get_string_from_utf8()
+	_err_buf += _err.get_buffer(1 << 15).get_string_from_utf8()
 	var nl := _err_buf.rfind("\n")
 	if nl < 0:
 		return
-	var last := _err_buf.substr(0, nl).get_slice("\n", _err_buf.substr(0, nl).count("\n"))
+	var lines := _err_buf.substr(0, nl).split("\n", false)
 	_err_buf = _err_buf.substr(nl + 1)
-	var parts := last.split(" ", false)
-	if parts.size() < 2 or parts[0] != "meter":
+	var last_meter := ""
+	for line in lines:
+		if line.begins_with("scope "):
+			var q := line.split(" ", false)
+			if q.size() > 2:
+				var w := PackedFloat32Array()
+				w.resize(q.size() - 2)
+				for k in w.size():
+					w[k] = float(q[k + 2])
+				scopes[q[1]] = w
+		elif line.begins_with("meter "):
+			last_meter = line
+	var parts := last_meter.split(" ", false)
+	if parts.size() < 2:
 		return
 	var m := {}
 	var i := 1
@@ -186,6 +205,9 @@ func poll() -> void:
 			m[parts[i]] = float(parts[i + 1])
 		i += 2
 	meters = m
+	for id in scopes.keys():
+		if not m.has(id):
+			scopes.erase(id)
 
 
 ## The engine's sound as a source a track can monitor (InputMonitor.feeds), with a tape that can be

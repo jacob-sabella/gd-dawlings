@@ -482,6 +482,43 @@ static Registrar r_crush({"crush", "CRUSH", "Shape", "Sample-rate and bit reduct
      {"mix", "MIX", 0, 1, 1, K::LIN, ""}},
     []() -> Module* { return new Crush_; }});
 
+// ---- SCOPE (a window on whatever is patched in; passes it through) --------------------------------
+struct Scope_ : Module {
+  static const int HIST = 16384;
+  std::vector<float> h_;
+  int head_ = 0;
+  void init() override { h_.assign(HIST, 0.0f); }
+  void process() override {
+    for (int s = 0; s < BLOCK; ++s) {
+      float v = in[0][s];
+      o(0)[s] = v;
+      h_[head_] = v;
+      head_ = (head_ + 1) % HIST;
+    }
+  }
+  bool scope(std::vector<float>& pts) override {
+    const int N = (int)pts.size();
+    int span = (int)(real(0) * 0.001f * RATE);
+    if (span > HIST / 2) span = HIST / 2;
+    if (span < N) span = N;
+    // Latest rising zero crossing far enough back to show a whole window after it.
+    int start = -1;
+    auto at = [&](int back) { return h_[((head_ - 1 - back) % HIST + HIST) % HIST]; };
+    for (int back = span; back < HIST - 2; ++back) {
+      if (at(back) <= 0.0f && at(back - 1) > 0.0f) { start = back; break; }
+    }
+    if (start < 0) start = span;
+    for (int i = 0; i < N; ++i) {
+      int back = start - (int)((long long)i * span / N);
+      pts[i] = clampf(at(back) * real(1), -1.0f, 1.0f);
+    }
+    return true;
+  }
+};
+static Registrar r_scope({"scope", "SCOPE", "Mix", "A screen on the wall: the wave of whatever is patched in, passed on.", {"in"}, {"out"},
+    {{"time", "TIME", 1, 100, 12, K::EXP, "ms"}, {"gain", "GAIN", 0.25f, 4, 1, K::EXP, ""}},
+    []() -> Module* { return new Scope_; }});
+
 // ---- DELAY (stereo, synced or free) -----------------------------------------------------------
 struct Delay_ : Module {
   daisysp::DelayLine<float, 96000> dl_, dr_;

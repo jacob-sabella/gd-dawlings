@@ -271,7 +271,7 @@ const ALL := [
 		"id": &"modular", "title": "MODULAR", "area": LIVE, "zone": &"", "air": 0.5,
 		"spot": &"modular_spot", "at": RackWall.LOOK,
 		"frame": [RackWall.FRAME_TOP, RackWall.FRAME_FOOT],
-		"seat": 2.0, "reach": 0.8, "surface": &"modular",
+		"seat": 3.0, "reach": 0.8, "surface": &"modular",
 		"desk": "F walks to it, G brings it · the palette under the case puts a module in the next free place (groups, then a module) or replaces the case with a preset · x on a module takes it out · drag from a jack to another to patch a cable: an output (pale) into an input · drag a cable's plug out of an input to move it, off the jacks to pull it · drag a knob up or down, or wheel it, to turn it · standing at it your keys play it: the touch keys under it, a MIDI keyboard, or PLAY for A to ' · TRK picks the track it sounds through, so its fader, FX and sends are the rack's · REC catches it as audio on that track (it also records with the song) · the light in the room follows what it plays",
 		"hands": "pinch a jack and carry the cable to another: an output (pale) into an input · pull a plug out to move it, or let it go off the jacks · twist a knob · the palette puts modules and presets in the case · standing at it your keys play it, or touch the keys under it · TRK picks its track, REC catches it as audio",
 	},

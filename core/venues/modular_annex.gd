@@ -15,7 +15,7 @@ extends Node3D
 const DEEP := 8.0
 const Z_FROM := 6.0
 const Z_TO := 13.0
-const HEIGHT := 4.0
+const HEIGHT := 4.4
 const WALL := 0.2
 ## The outer face of the room's near wall stands this far outside the live room's wall.
 const GAP := 0.63
@@ -28,18 +28,20 @@ const FLOOR_TOP := 0.02
 ## Where the rack hangs along z, and the case's own height over the floor (RackWall on its legs).
 const RACK_Z := 9.2
 ## The rack is hung large, a wall of it (RackWall is 1.8 m of case at 1:1).
-const RACK_SCALE := 2.0
+const RACK_SCALE := 1.2
 const RACK_Y := 1.0
 const COLUMNS := 14
 const GANTRY_Y := 1.85
 const GANTRY_DEEP := 1.3
-const TRUSS_Y := 3.65
+const TRUSS_Y := 4.0
 const TILES := Vector2i(5, 3)
 
 var half := 8.8
 var mood := RackMood.FALLBACK
 var _tile_material := StandardMaterial3D.new()
 var _line_material := StandardMaterial3D.new()
+## The TV on the side wall: the wave at the first SCOPE patched in.
+var tv: ScopeScreen
 var _sign_material := StandardMaterial3D.new()
 var _columns: Array[MeshInstance3D] = []
 ## Bars hung from the ceiling truss, each as long as a module is loud (the skyline, seen from above).
@@ -269,7 +271,40 @@ func set_mood(m: Dictionary) -> void:
 	_shine()
 
 
+## The TV shows the wave of the SCOPE module that is showing the most (ties by id), or a flat line.
+func show_scope(waves: Dictionary) -> void:
+	if tv == null:
+		return
+	var ids := waves.keys()
+	ids.sort()
+	var best := PackedFloat32Array()
+	var best_peak := -1.0
+	for id in ids:
+		var peak := 0.0
+		for v in (waves[id] as PackedFloat32Array):
+			peak = maxf(peak, absf(v))
+		if peak > best_peak + 0.02:
+			best = waves[id]
+			best_peak = peak
+	tv.set_wave(best)
+
+
+func _build_tv(x0: float, metal: Material) -> void:
+	tv = ScopeScreen.new()
+	tv.size = Vector2(2.8, 1.5)
+	tv.name = "ScopeTV"
+	tv.position = Vector3(x0 + DEEP * 0.5, 2.55, Z_TO - 0.1)
+	tv.basis = Basis(Vector3.UP, PI)
+	tv.tint = (mood["base"] as Color).lerp(Color(0.3, 1.0, 0.65), 0.7)
+	add_child(tv)
+	ZoneKit.block(self, Vector3(3.1, 1.75, 0.1), Vector3(x0 + DEEP * 0.5, 2.55, Z_TO - 0.04), metal, "TvBack")
+	ZoneKit.block(self, Vector3(0.1, 0.1, 0.1), Vector3(x0 + DEEP * 0.5, 3.45, Z_TO - 0.05), metal, "TvMount")
+	ZoneKit.block(self, Vector3(1.2, 0.04, 0.3), Vector3(x0 + DEEP * 0.5, 1.65, Z_TO - 0.2), metal, "TvShelf")
+
+
 func _apply_mood() -> void:
+	if tv != null:
+		tv.tint = (mood["base"] as Color).lerp(Color(0.3, 1.0, 0.65), 0.7)
 	_sign_material.albedo_color = mood["base"]
 	_line_material.albedo_color = (mood["base"] as Color) * 0.8
 	for col in _columns + _hangs:
@@ -392,6 +427,7 @@ func _furnish(room: Rect2, metal: Material, case_paint: Material, wood: Material
 	for dz in [-1.4, 1.4]:
 		ZoneKit.block(self, Vector3(1.76, 0.014, 0.03), Vector3(spot_x - 0.2, FLOOR_TOP + 0.0095, zc + dz * 0.96), null, "RugEdge%d" % int(dz * 10.0)).material_override = _line_material
 	_shelves(x0, case_paint, metal)
+	_build_tv(x0, metal)
 	# Cables swagged overhead: from the truss down to the towers and the monitors, and along it to the rack.
 	var swags := [
 		[Vector3(x0 + 1.0, TRUSS_Y, zc + 2.0), Vector3(x0 + 0.9, 2.0, Z_TO - 0.5), 0.5],

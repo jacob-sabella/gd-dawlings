@@ -799,6 +799,8 @@ func _ready() -> void:
 	await _test_the_studios_rack_is_edited_through_the_room_and_lit_by_its_level()
 	await _test_a_key_played_in_the_studio_is_heard_and_lights_the_room()
 	await _test_a_bandmates_first_note_wakes_the_rack_and_is_heard()
+	await _test_a_scope_shows_the_wave_patched_into_it_even_when_unheard()
+	_test_every_module_has_a_skin_and_the_big_rig_fits_the_case()
 	await _test_the_discord_feed_sends_what_is_ticked_through_its_faders()
 	await _test_a_tracks_input_can_be_set_aside()
 	await _test_the_input_panel_chooses_hears_and_sets_aside()
@@ -50141,6 +50143,64 @@ func _test_a_key_played_in_the_studio_is_heard_and_lights_the_room() -> void:
 
 ## A bandmate's first note into a rack that is asleep wakes it and is heard: the note is not lost to the
 ## engine's start.
+func _test_every_module_has_a_skin_and_the_big_rig_fits_the_case() -> void:
+	var seen := {}
+	var ok := true
+	var dark := true
+	for t in RackCatalogue.types():
+		ok = ok and RackSkin.SKINS.has(t)
+		var face := RackSkin.face(t)
+		dark = dark and face.get_luminance() < 0.3
+		seen["%s/%s" % [face.to_html(), RackSkin.accent(t).to_html()]] = true
+	check("every module type has a skin of its own", ok and seen.size() == RackCatalogue.types().size())
+	check("faces are dark enough for the lettering", dark)
+	check("every skin has a tagline and a printed pattern", RackCatalogue.types().all(
+			func(t: String) -> bool: return RackSkin.tagline(t) != "" and RackSkin.pattern(t) != RackSkin.PATTERN_NONE))
+	var rig := RackPatch.preset(&"big_rig")
+	check("the big rig keeps all of its modules (%d)" % rig["modules"].size(), rig["modules"].size() >= 35)
+	check("the case is a wall of 40 columns by 4 rows", RackLayout.COLS == 40 and RackLayout.ROWS == 4)
+	check("a scope is wide, with a screen", RackLayout.width_of("scope") == RackLayout.SCOPE_WIDE)
+	var strip := RackSkin.print_pattern("clock", 0.1, 0.012)
+	check("a pattern is printed as one batch", strip != null and strip.multimesh.instance_count >= 3)
+	strip.free()
+	var screen := ScopeScreen.new()
+	add_child(screen)
+	var wave := PackedFloat32Array()
+	wave.resize(ScopeScreen.POINTS)
+	for i in wave.size():
+		wave[i] = sin(float(i) * 0.3)
+	screen.set_wave(wave)
+	check("a screen draws its trace", (screen._trace[0].mesh as ImmediateMesh).get_surface_count() == 1)
+	screen.queue_free()
+
+
+func _test_a_scope_shows_the_wave_patched_into_it_even_when_unheard() -> void:
+	if not RackEngine.available():
+		return
+	var voice := RackVoice.new()
+	add_child(voice)
+	var p := RackPatch.empty()
+	RackPatch.add(p, "vco", Vector2i(0, 0))
+	RackPatch.add(p, "scope", Vector2i(2, 0))
+	RackPatch.add(p, "out", Vector2i(8, 0))
+	RackPatch.connect_cable(p, "vco.out", "scope.in")
+	voice.set_patch(p)
+	check("the voice starts", voice.start())
+	var peak := 0.0
+	for i in 60:
+		await get_tree().create_timer(0.05).timeout
+		voice._process(0.05)
+		for id in voice.scopes:
+			for v in (voice.scopes[id] as PackedFloat32Array):
+				peak = maxf(peak, absf(v))
+		if peak > 0.05:
+			break
+	check("the scope sees a wave with nothing patched to OUT, and nobody reading the stream (%.2f)" % peak, peak > 0.05)
+	check("its screen has the points of a window", voice.scopes.has("scope") and (voice.scopes["scope"] as PackedFloat32Array).size() == 96)
+	voice.shutdown()
+	voice.queue_free()
+
+
 func _test_a_bandmates_first_note_wakes_the_rack_and_is_heard() -> void:
 	if not RackEngine.available():
 		print("  (no engine here: no sound to check)")

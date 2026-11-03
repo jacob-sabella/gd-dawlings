@@ -5746,10 +5746,12 @@ func _follow_modular() -> void:
 		_rack_wake()
 	if rack_voice.running():
 		rack_wall.show_meters(rack_voice.meters)
+		rack_wall.show_scopes(rack_voice.scopes)
 		rack_wall.glow_with(rack_voice.level, rack_voice.hit)
 		if modular_annex != null and is_instance_valid(modular_annex):
 			modular_annex.glow_with(rack_voice.level, rack_voice.hit)
 			modular_annex.show_levels(rack_wall.module_levels(rack_voice.meters))
+			modular_annex.show_scope(rack_voice.scopes)
 		rack_wall.set_recording(rack_voice.recording())
 		# The song recording catches the rack: begun at the take's start, kept where it ends.
 		if DAW.state != null and int(rack_row["track"]) > 0:

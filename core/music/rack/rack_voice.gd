@@ -29,6 +29,8 @@ var _since_sync := 0.0
 var _take_from := -1.0
 var _take_track := 0
 var meters := {}
+## What the SCOPE modules saw (RackEngine.scopes).
+var scopes := {}
 ## A smoothed loudness of the whole rack, 0..1, and a hit pulse (set on a rise), for lights.
 var level := 0.0
 var hit := 0.0
@@ -190,8 +192,11 @@ func _transport() -> Dictionary:
 func _process(delta: float) -> void:
 	if not engine.running():
 		return
+	if Time.get_ticks_msec() - engine.last_read > 60:
+		engine.read()
 	engine.poll()
 	meters = engine.meters
+	scopes = engine.scopes
 	var peak := 0.0
 	for id in patch["modules"]:
 		if patch["modules"][id]["type"] == "out":

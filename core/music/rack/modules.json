@@ -1,1463 +1,1495 @@
 {
- "rate": 48000,
- "block": 24,
- "modules": [
-  {
-   "type": "keys",
-   "title": "KEYS",
-   "group": "Source",
-   "blurb": "Your notes: pitch, gate, velocity, the mod wheel and the bend.",
-   "ins": [],
-   "outs": [
-    "pitch",
-    "gate",
-    "vel",
-    "mod",
-    "bend"
-   ],
-   "knobs": [
-    {
-     "id": "oct",
-     "label": "OCT",
-     "lo": -3,
-     "hi": 3,
-     "def": 0,
-     "curve": "step",
-     "names": "-3|-2|-1|0|+1|+2|+3"
-    },
-    {
-     "id": "glide",
-     "label": "GLIDE",
-     "lo": 0,
-     "hi": 1,
-     "def": 0,
-     "curve": "lin",
-     "names": "s"
-    }
-   ]
-  },
-  {
-   "type": "clock",
-   "title": "CLOCK",
-   "group": "Control",
-   "blurb": "Tempo as pulses: 16ths, 8ths, beats and bars; locked to the song or free.",
-   "ins": [],
-   "outs": [
-    "16th",
-    "8th",
-    "beat",
-    "bar",
-    "reset"
-   ],
-   "knobs": [
-    {
-     "id": "bpm",
-     "label": "TEMPO",
-     "lo": 40,
-     "hi": 240,
-     "def": 120,
-     "curve": "lin",
-     "names": "bpm"
-    },
-    {
-     "id": "sync",
-     "label": "SYNC",
-     "lo": 0,
-     "hi": 1,
-     "def": 1,
-     "curve": "step",
-     "names": "FREE|SONG"
-    },
-    {
-     "id": "swing",
-     "label": "SWING",
-     "lo": 0,
-     "hi": 0.6,
-     "def": 0,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "seq",
-   "title": "SEQ",
-   "group": "Control",
-   "blurb": "Sixteen steps of pitch (or rest) advanced by a clock.",
-   "ins": [
-    "clk",
-    "rst"
-   ],
-   "outs": [
-    "pitch",
-    "gate",
-    "step"
-   ],
-   "knobs": [
-    {
-     "id": "s1",
-     "label": "1",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s2",
-     "label": "2",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s3",
-     "label": "3",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s4",
-     "label": "4",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s5",
-     "label": "5",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s6",
-     "label": "6",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s7",
-     "label": "7",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s8",
-     "label": "8",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s9",
-     "label": "9",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s10",
-     "label": "10",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s11",
-     "label": "11",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s12",
-     "label": "12",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s13",
-     "label": "13",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s14",
-     "label": "14",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s15",
-     "label": "15",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "s16",
-     "label": "16",
-     "lo": 0,
-     "hi": 37,
-     "def": 0,
-     "curve": "step",
-     "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
-    },
-    {
-     "id": "len",
-     "label": "LENGTH",
-     "lo": 1,
-     "hi": 16,
-     "def": 16,
-     "curve": "step",
-     "names": "1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16"
-    },
-    {
-     "id": "gate",
-     "label": "GATE",
-     "lo": 0.05,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "lfo",
-   "title": "LFO",
-   "group": "Control",
-   "blurb": "A slow oscillator for movement.",
-   "ins": [
-    "rate",
-    "sync"
-   ],
-   "outs": [
-    "out",
-    "uni"
-   ],
-   "knobs": [
-    {
-     "id": "rate",
-     "label": "RATE",
-     "lo": 0.02,
-     "hi": 40,
-     "def": 2,
-     "curve": "exp",
-     "names": "Hz"
-    },
-    {
-     "id": "shape",
-     "label": "SHAPE",
-     "lo": 0,
-     "hi": 4,
-     "def": 0,
-     "curve": "step",
-     "names": "SINE|TRI|SAW|SQR|S&H"
-    },
-    {
-     "id": "depth",
-     "label": "DEPTH",
-     "lo": 0,
-     "hi": 1,
-     "def": 1,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "noise",
-   "title": "NOISE",
-   "group": "Source",
-   "blurb": "White and pink noise.",
-   "ins": [],
-   "outs": [
-    "white",
-    "pink"
-   ],
-   "knobs": []
-  },
-  {
-   "type": "sh",
-   "title": "S&H",
-   "group": "Control",
-   "blurb": "Samples its input on each trigger (noise when unpatched).",
-   "ins": [
-    "in",
-    "trig"
-   ],
-   "outs": [
-    "out"
-   ],
-   "knobs": []
-  },
-  {
-   "type": "slew",
-   "title": "SLEW",
-   "group": "Control",
-   "blurb": "Smooths a signal: glide, lag and portamento.",
-   "ins": [
-    "in"
-   ],
-   "outs": [
-    "out"
-   ],
-   "knobs": [
-    {
-     "id": "rise",
-     "label": "RISE",
-     "lo": 0,
-     "hi": 2,
-     "def": 0.05,
-     "curve": "lin",
-     "names": "s"
-    },
-    {
-     "id": "fall",
-     "label": "FALL",
-     "lo": 0,
-     "hi": 2,
-     "def": 0.05,
-     "curve": "lin",
-     "names": "s"
-    }
-   ]
-  },
-  {
-   "type": "att",
-   "title": "ATT",
-   "group": "Control",
-   "blurb": "Scales, flips and offsets a signal.",
-   "ins": [
-    "in"
-   ],
-   "outs": [
-    "out",
-    "inv"
-   ],
-   "knobs": [
-    {
-     "id": "gain",
-     "label": "GAIN",
-     "lo": -2,
-     "hi": 2,
-     "def": 1,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "offset",
-     "label": "OFFSET",
-     "lo": -1,
-     "hi": 1,
-     "def": 0,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "quant",
-   "title": "QUANT",
-   "group": "Control",
-   "blurb": "Snaps a pitch to a scale.",
-   "ins": [
-    "in"
-   ],
-   "outs": [
-    "out"
-   ],
-   "knobs": [
-    {
-     "id": "scale",
-     "label": "SCALE",
-     "lo": 0,
-     "hi": 11,
-     "def": 1,
-     "curve": "step",
-     "names": "CHROM|MAJOR|MINOR|DORIAN|PHRYG|LYDIAN|MIXO|PENT+|PENT-|BLUES|WHOLE|HARM-"
-    },
-    {
-     "id": "root",
-     "label": "ROOT",
-     "lo": 0,
-     "hi": 11,
-     "def": 0,
-     "curve": "step",
-     "names": "C|C#|D|D#|E|F|F#|G|G#|A|A#|B"
-    }
-   ]
-  },
-  {
-   "type": "env",
-   "title": "ENV",
-   "group": "Control",
-   "blurb": "An ADSR envelope opened by a gate.",
-   "ins": [
-    "gate"
-   ],
-   "outs": [
-    "out",
-    "inv"
-   ],
-   "knobs": [
-    {
-     "id": "a",
-     "label": "A",
-     "lo": 0.001,
-     "hi": 4,
-     "def": 0.01,
-     "curve": "exp",
-     "names": "s"
-    },
-    {
-     "id": "d",
-     "label": "D",
-     "lo": 0.001,
-     "hi": 4,
-     "def": 0.3,
-     "curve": "exp",
-     "names": "s"
-    },
-    {
-     "id": "s",
-     "label": "S",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.6,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "r",
-     "label": "R",
-     "lo": 0.001,
-     "hi": 8,
-     "def": 0.3,
-     "curve": "exp",
-     "names": "s"
-    }
-   ]
-  },
-  {
-   "type": "vco",
-   "title": "VCO",
-   "group": "Source",
-   "blurb": "A band-limited oscillator: sine, triangle, saw, pulse.",
-   "ins": [
-    "pitch",
-    "fm",
-    "pwm",
-    "sync"
-   ],
-   "outs": [
-    "out",
-    "sub"
-   ],
-   "knobs": [
-    {
-     "id": "wave",
-     "label": "WAVE",
-     "lo": 0,
-     "hi": 3,
-     "def": 2,
-     "curve": "step",
-     "names": "SINE|TRI|SAW|PULSE"
-    },
-    {
-     "id": "tune",
-     "label": "TUNE",
-     "lo": -24,
-     "hi": 24,
-     "def": 0,
-     "curve": "lin",
-     "names": "st"
-    },
-    {
-     "id": "fine",
-     "label": "FINE",
-     "lo": -100,
-     "hi": 100,
-     "def": 0,
-     "curve": "lin",
-     "names": "ct"
-    },
-    {
-     "id": "fm",
-     "label": "FM",
-     "lo": 0,
-     "hi": 2,
-     "def": 0,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "pw",
-     "label": "PW",
-     "lo": 0.05,
-     "hi": 0.95,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "drum",
-   "title": "DRUM",
-   "group": "Source",
-   "blurb": "A kick, snare or hat voice, struck by a trigger.",
-   "ins": [
-    "trig"
-   ],
-   "outs": [
-    "out"
-   ],
-   "knobs": [
-    {
-     "id": "kind",
-     "label": "KIND",
-     "lo": 0,
-     "hi": 2,
-     "def": 0,
-     "curve": "step",
-     "names": "KICK|SNARE|HAT"
-    },
-    {
-     "id": "freq",
-     "label": "FREQ",
-     "lo": 0.05,
-     "hi": 0.6,
-     "def": 0.2,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "tone",
-     "label": "TONE",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "decay",
-     "label": "DECAY",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "accent",
-     "label": "ACCENT",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.8,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "svf",
-   "title": "SVF",
-   "group": "Filter",
-   "blurb": "A state-variable filter: low, band, high and notch together.",
-   "ins": [
-    "in",
-    "cutoff",
-    "res"
-   ],
-   "outs": [
-    "lp",
-    "bp",
-    "hp",
-    "notch"
-   ],
-   "knobs": [
-    {
-     "id": "cutoff",
-     "label": "CUTOFF",
-     "lo": 20,
-     "hi": 18000,
-     "def": 1200,
-     "curve": "exp",
-     "names": "Hz"
-    },
-    {
-     "id": "res",
-     "label": "RES",
-     "lo": 0,
-     "hi": 0.98,
-     "def": 0.3,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "drive",
-     "label": "DRIVE",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.1,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "cv",
-     "label": "CV",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "ladder",
-   "title": "LADDER",
-   "group": "Filter",
-   "blurb": "A Moog-style ladder filter that sings when pushed.",
-   "ins": [
-    "in",
-    "cutoff"
-   ],
-   "outs": [
-    "out"
-   ],
-   "knobs": [
-    {
-     "id": "cutoff",
-     "label": "CUTOFF",
-     "lo": 20,
-     "hi": 18000,
-     "def": 900,
-     "curve": "exp",
-     "names": "Hz"
-    },
-    {
-     "id": "res",
-     "label": "RES",
-     "lo": 0,
-     "hi": 1.8,
-     "def": 0.4,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "drive",
-     "label": "DRIVE",
-     "lo": 1,
-     "hi": 4,
-     "def": 1.2,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "mode",
-     "label": "MODE",
-     "lo": 0,
-     "hi": 5,
-     "def": 0,
-     "curve": "step",
-     "names": "LP24|LP12|BP24|BP12|HP24|HP12"
-    },
-    {
-     "id": "cv",
-     "label": "CV",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "vca",
-   "title": "VCA",
-   "group": "Shape",
-   "blurb": "Amplifier: its level set by a control signal.",
-   "ins": [
-    "in",
-    "cv"
-   ],
-   "outs": [
-    "out"
-   ],
-   "knobs": [
-    {
-     "id": "level",
-     "label": "LEVEL",
-     "lo": 0,
-     "hi": 2,
-     "def": 1,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "curve",
-     "label": "CURVE",
-     "lo": 0,
-     "hi": 1,
-     "def": 1,
-     "curve": "step",
-     "names": "LIN|EXP"
-    }
-   ]
-  },
-  {
-   "type": "mix",
-   "title": "MIX",
-   "group": "Mix",
-   "blurb": "Four inputs to one.",
-   "ins": [
-    "in1",
-    "in2",
-    "in3",
-    "in4"
-   ],
-   "outs": [
-    "out"
-   ],
-   "knobs": [
-    {
-     "id": "l1",
-     "label": "1",
-     "lo": 0,
-     "hi": 1.5,
-     "def": 0.7,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "l2",
-     "label": "2",
-     "lo": 0,
-     "hi": 1.5,
-     "def": 0.7,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "l3",
-     "label": "3",
-     "lo": 0,
-     "hi": 1.5,
-     "def": 0.7,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "l4",
-     "label": "4",
-     "lo": 0,
-     "hi": 1.5,
-     "def": 0.7,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "master",
-     "label": "OUT",
-     "lo": 0,
-     "hi": 1.5,
-     "def": 1,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "fold",
-   "title": "FOLD",
-   "group": "Shape",
-   "blurb": "A wavefolder: harmonics from folding the wave back on itself.",
-   "ins": [
-    "in",
-    "fold"
-   ],
-   "outs": [
-    "out"
-   ],
-   "knobs": [
-    {
-     "id": "gain",
-     "label": "FOLD",
-     "lo": 1,
-     "hi": 12,
-     "def": 2,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "offset",
-     "label": "SYM",
-     "lo": -1,
-     "hi": 1,
-     "def": 0,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "drive",
-   "title": "DRIVE",
-   "group": "Shape",
-   "blurb": "Soft overdrive.",
-   "ins": [
-    "in"
-   ],
-   "outs": [
-    "out"
-   ],
-   "knobs": [
-    {
-     "id": "drive",
-     "label": "DRIVE",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "level",
-     "label": "LEVEL",
-     "lo": 0,
-     "hi": 1.5,
-     "def": 0.8,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "crush",
-   "title": "CRUSH",
-   "group": "Shape",
-   "blurb": "Sample-rate and bit reduction.",
-   "ins": [
-    "in"
-   ],
-   "outs": [
-    "out"
-   ],
-   "knobs": [
-    {
-     "id": "rate",
-     "label": "RATE",
-     "lo": 0,
-     "hi": 0.95,
-     "def": 0.3,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "bits",
-     "label": "BITS",
-     "lo": 2,
-     "hi": 16,
-     "def": 8,
-     "curve": "step",
-     "names": "2|3|4|5|6|7|8|9|10|11|12|13|14|15|16"
-    },
-    {
-     "id": "mix",
-     "label": "MIX",
-     "lo": 0,
-     "hi": 1,
-     "def": 1,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "delay",
-   "title": "DELAY",
-   "group": "Time",
-   "blurb": "A stereo echo: free or tied to the song's tempo, with a ping-pong.",
-   "ins": [
-    "in"
-   ],
-   "outs": [
-    "l",
-    "r"
-   ],
-   "knobs": [
-    {
-     "id": "time",
-     "label": "TIME",
-     "lo": 0.01,
-     "hi": 1.9,
-     "def": 0.35,
-     "curve": "exp",
-     "names": "s"
-    },
-    {
-     "id": "sync",
-     "label": "SYNC",
-     "lo": 0,
-     "hi": 6,
-     "def": 0,
-     "curve": "step",
-     "names": "FREE|1/16|1/8|1/8.|1/4|1/4.|1/2"
-    },
-    {
-     "id": "fb",
-     "label": "FEEDBACK",
-     "lo": 0,
-     "hi": 0.95,
-     "def": 0.4,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "tone",
-     "label": "TONE",
-     "lo": 200,
-     "hi": 12000,
-     "def": 5000,
-     "curve": "exp",
-     "names": "Hz"
-    },
-    {
-     "id": "mix",
-     "label": "MIX",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.35,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "pp",
-     "label": "MODE",
-     "lo": 0,
-     "hi": 1,
-     "def": 0,
-     "curve": "step",
-     "names": "STEREO|PING-PONG"
-    }
-   ]
-  },
-  {
-   "type": "chorus",
-   "title": "CHORUS",
-   "group": "Time",
-   "blurb": "Thickens a sound with a slow, swimming copy of itself.",
-   "ins": [
-    "in"
-   ],
-   "outs": [
-    "l",
-    "r"
-   ],
-   "knobs": [
-    {
-     "id": "rate",
-     "label": "RATE",
-     "lo": 0.05,
-     "hi": 6,
-     "def": 0.4,
-     "curve": "exp",
-     "names": "Hz"
-    },
-    {
-     "id": "depth",
-     "label": "DEPTH",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.6,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "delay",
-     "label": "DELAY",
-     "lo": 1,
-     "hi": 30,
-     "def": 8,
-     "curve": "lin",
-     "names": "ms"
-    },
-    {
-     "id": "fb",
-     "label": "FEEDBACK",
-     "lo": 0,
-     "hi": 0.9,
-     "def": 0.2,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "mix",
-     "label": "MIX",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "out",
-   "title": "OUT",
-   "group": "Mix",
-   "blurb": "The output: to the speakers, and out of the room to a track.",
-   "ins": [
-    "l",
-    "r"
-   ],
-   "outs": [
-    "l",
-    "r"
-   ],
-   "knobs": [
-    {
-     "id": "level",
-     "label": "LEVEL",
-     "lo": 0,
-     "hi": 2,
-     "def": 0.7,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "world",
-   "title": "WORLD",
-   "group": "Source",
-   "blurb": "The room itself as a source: the weather, the venue's instrument, the looper's rings and the marble run, each a level and a gate.",
-   "ins": [],
-   "outs": [
-    "weather",
-    "drips",
-    "venue",
-    "ring1",
-    "ring2",
-    "ring3",
-    "ring4",
-    "ring5",
-    "ring6",
-    "ring7",
-    "ring8",
-    "marbles",
-    "weather_g",
-    "drips_g",
-    "venue_g",
-    "ring1_g",
-    "ring2_g",
-    "ring3_g",
-    "ring4_g",
-    "ring5_g",
-    "ring6_g",
-    "ring7_g",
-    "ring8_g",
-    "marbles_g"
-   ],
-   "knobs": []
-  },
-  {
-   "type": "plaits",
-   "title": "PLAITS",
-   "group": "Voice",
-   "blurb": "Mutable Instruments' macro oscillator: 24 engines from virtual analogue to modal, granular, drums and speech.",
-   "ins": [
-    "pitch",
-    "fm",
-    "timbre",
-    "morph",
-    "trig",
-    "level"
-   ],
-   "outs": [
-    "out",
-    "aux"
-   ],
-   "knobs": [
-    {
-     "id": "engine",
-     "label": "ENGINE",
-     "lo": 0,
-     "hi": 23,
-     "def": 8,
-     "curve": "step",
-     "names": "VA+VCF|PHASE DIST|SIX-OP A|SIX-OP B|SIX-OP C|TERRAIN|STRING MACH|CHIPTUNE|VA|WAVESHAPE|FM|GRAIN|ADDITIVE|WAVETABLE|CHORD|SPEECH|SWARM|NOISE|PARTICLE|STRING|MODAL|KICK|SNARE|HAT"
-    },
-    {
-     "id": "note",
-     "label": "NOTE",
-     "lo": -24,
-     "hi": 24,
-     "def": 0,
-     "curve": "lin",
-     "names": "st"
-    },
-    {
-     "id": "fine",
-     "label": "FINE",
-     "lo": -100,
-     "hi": 100,
-     "def": 0,
-     "curve": "lin",
-     "names": "ct"
-    },
-    {
-     "id": "harm",
-     "label": "HARMONICS",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "timbre",
-     "label": "TIMBRE",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "morph",
-     "label": "MORPH",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "decay",
-     "label": "DECAY",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "lpg",
-     "label": "LPG",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "fma",
-     "label": "FM AMT",
-     "lo": -1,
-     "hi": 1,
-     "def": 0,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "tma",
-     "label": "TIMB AMT",
-     "lo": -1,
-     "hi": 1,
-     "def": 0,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "mma",
-     "label": "MORPH AMT",
-     "lo": -1,
-     "hi": 1,
-     "def": 0,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "rings",
-   "title": "RINGS",
-   "group": "Voice",
-   "blurb": "Mutable Instruments' resonator: strike it with a trigger and hear modal bodies, strings and bells.",
-   "ins": [
-    "in",
-    "pitch",
-    "strum"
-   ],
-   "outs": [
-    "odd",
-    "even"
-   ],
-   "knobs": [
-    {
-     "id": "model",
-     "label": "MODEL",
-     "lo": 0,
-     "hi": 5,
-     "def": 0,
-     "curve": "step",
-     "names": "MODAL|SYMPATH|STRING|FM|SYMP-Q|STR+REV"
-    },
-    {
-     "id": "poly",
-     "label": "VOICES",
-     "lo": 0,
-     "hi": 2,
-     "def": 0,
-     "curve": "step",
-     "names": "1|2|4"
-    },
-    {
-     "id": "structure",
-     "label": "STRUCTURE",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.4,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "bright",
-     "label": "BRIGHT",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.6,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "damping",
-     "label": "DAMPING",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.6,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "position",
-     "label": "POSITION",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.4,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "note",
-     "label": "NOTE",
-     "lo": -12,
-     "hi": 36,
-     "def": 0,
-     "curve": "lin",
-     "names": "st"
-    }
-   ]
-  },
-  {
-   "type": "reverb",
-   "title": "REVERB",
-   "group": "Time",
-   "blurb": "A lush plate-like reverb from Mutable Instruments' Clouds.",
-   "ins": [
-    "l",
-    "r"
-   ],
-   "outs": [
-    "l",
-    "r"
-   ],
-   "knobs": [
-    {
-     "id": "time",
-     "label": "TIME",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.6,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "damp",
-     "label": "DAMP",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.7,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "diff",
-     "label": "DIFFUSE",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.7,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "mix",
-     "label": "MIX",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.35,
-     "curve": "lin",
-     "names": ""
-    }
-   ]
-  },
-  {
-   "type": "clouds",
-   "title": "CLOUDS",
-   "group": "Time",
-   "blurb": "Mutable Instruments' granular processor: listens to what comes in and plays it back as a cloud of grains.",
-   "ins": [
-    "l",
-    "r",
-    "freeze"
-   ],
-   "outs": [
-    "l",
-    "r"
-   ],
-   "knobs": [
-    {
-     "id": "position",
-     "label": "POSITION",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "size",
-     "label": "SIZE",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "pitch",
-     "label": "PITCH",
-     "lo": -24,
-     "hi": 24,
-     "def": 0,
-     "curve": "lin",
-     "names": "st"
-    },
-    {
-     "id": "density",
-     "label": "DENSITY",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.8,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "texture",
-     "label": "TEXTURE",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "mix",
-     "label": "MIX",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "spread",
-     "label": "SPREAD",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.5,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "feedback",
-     "label": "FEEDBACK",
-     "lo": 0,
-     "hi": 1,
-     "def": 0,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "reverb",
-     "label": "REVERB",
-     "lo": 0,
-     "hi": 1,
-     "def": 0.2,
-     "curve": "lin",
-     "names": ""
-    },
-    {
-     "id": "freeze",
-     "label": "FREEZE",
-     "lo": 0,
-     "hi": 1,
-     "def": 0,
-     "curve": "step",
-     "names": "OFF|ON"
-    }
-   ]
-  }
- ]
+    "rate": 48000,
+    "block": 24,
+    "modules": [
+        {
+            "type": "keys",
+            "title": "KEYS",
+            "group": "Source",
+            "blurb": "Your notes: pitch, gate, velocity, the mod wheel and the bend.",
+            "ins": [],
+            "outs": [
+                "pitch",
+                "gate",
+                "vel",
+                "mod",
+                "bend"
+            ],
+            "knobs": [
+                {
+                    "id": "oct",
+                    "label": "OCT",
+                    "lo": -3,
+                    "hi": 3,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "-3|-2|-1|0|+1|+2|+3"
+                },
+                {
+                    "id": "glide",
+                    "label": "GLIDE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "s"
+                }
+            ]
+        },
+        {
+            "type": "clock",
+            "title": "CLOCK",
+            "group": "Control",
+            "blurb": "Tempo as pulses: 16ths, 8ths, beats and bars; locked to the song or free.",
+            "ins": [],
+            "outs": [
+                "16th",
+                "8th",
+                "beat",
+                "bar",
+                "reset"
+            ],
+            "knobs": [
+                {
+                    "id": "bpm",
+                    "label": "TEMPO",
+                    "lo": 40,
+                    "hi": 240,
+                    "def": 120,
+                    "curve": "lin",
+                    "names": "bpm"
+                },
+                {
+                    "id": "sync",
+                    "label": "SYNC",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 1,
+                    "curve": "step",
+                    "names": "FREE|SONG"
+                },
+                {
+                    "id": "swing",
+                    "label": "SWING",
+                    "lo": 0,
+                    "hi": 0.6,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "seq",
+            "title": "SEQ",
+            "group": "Control",
+            "blurb": "Sixteen steps of pitch (or rest) advanced by a clock.",
+            "ins": [
+                "clk",
+                "rst"
+            ],
+            "outs": [
+                "pitch",
+                "gate",
+                "step"
+            ],
+            "knobs": [
+                {
+                    "id": "s1",
+                    "label": "1",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s2",
+                    "label": "2",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s3",
+                    "label": "3",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s4",
+                    "label": "4",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s5",
+                    "label": "5",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s6",
+                    "label": "6",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s7",
+                    "label": "7",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s8",
+                    "label": "8",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s9",
+                    "label": "9",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s10",
+                    "label": "10",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s11",
+                    "label": "11",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s12",
+                    "label": "12",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s13",
+                    "label": "13",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s14",
+                    "label": "14",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s15",
+                    "label": "15",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "s16",
+                    "label": "16",
+                    "lo": 0,
+                    "hi": 37,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "REST|-12|-11|-10|-9|-8|-7|-6|-5|-4|-3|-2|-1|0|+1|+2|+3|+4|+5|+6|+7|+8|+9|+10|+11|+12|+13|+14|+15|+16|+17|+18|+19|+20|+21|+22|+23|+24"
+                },
+                {
+                    "id": "len",
+                    "label": "LENGTH",
+                    "lo": 1,
+                    "hi": 16,
+                    "def": 16,
+                    "curve": "step",
+                    "names": "1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16"
+                },
+                {
+                    "id": "gate",
+                    "label": "GATE",
+                    "lo": 0.05,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "lfo",
+            "title": "LFO",
+            "group": "Control",
+            "blurb": "A slow oscillator for movement.",
+            "ins": [
+                "rate",
+                "sync"
+            ],
+            "outs": [
+                "out",
+                "uni"
+            ],
+            "knobs": [
+                {
+                    "id": "rate",
+                    "label": "RATE",
+                    "lo": 0.02,
+                    "hi": 40,
+                    "def": 2,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "shape",
+                    "label": "SHAPE",
+                    "lo": 0,
+                    "hi": 4,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "SINE|TRI|SAW|SQR|S&H"
+                },
+                {
+                    "id": "depth",
+                    "label": "DEPTH",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 1,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "noise",
+            "title": "NOISE",
+            "group": "Source",
+            "blurb": "White and pink noise.",
+            "ins": [],
+            "outs": [
+                "white",
+                "pink"
+            ],
+            "knobs": []
+        },
+        {
+            "type": "sh",
+            "title": "S&H",
+            "group": "Control",
+            "blurb": "Samples its input on each trigger (noise when unpatched).",
+            "ins": [
+                "in",
+                "trig"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": []
+        },
+        {
+            "type": "slew",
+            "title": "SLEW",
+            "group": "Control",
+            "blurb": "Smooths a signal: glide, lag and portamento.",
+            "ins": [
+                "in"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "rise",
+                    "label": "RISE",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 0.05,
+                    "curve": "lin",
+                    "names": "s"
+                },
+                {
+                    "id": "fall",
+                    "label": "FALL",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 0.05,
+                    "curve": "lin",
+                    "names": "s"
+                }
+            ]
+        },
+        {
+            "type": "att",
+            "title": "ATT",
+            "group": "Control",
+            "blurb": "Scales, flips and offsets a signal.",
+            "ins": [
+                "in"
+            ],
+            "outs": [
+                "out",
+                "inv"
+            ],
+            "knobs": [
+                {
+                    "id": "gain",
+                    "label": "GAIN",
+                    "lo": -2,
+                    "hi": 2,
+                    "def": 1,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "offset",
+                    "label": "OFFSET",
+                    "lo": -1,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "quant",
+            "title": "QUANT",
+            "group": "Control",
+            "blurb": "Snaps a pitch to a scale.",
+            "ins": [
+                "in"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "scale",
+                    "label": "SCALE",
+                    "lo": 0,
+                    "hi": 11,
+                    "def": 1,
+                    "curve": "step",
+                    "names": "CHROM|MAJOR|MINOR|DORIAN|PHRYG|LYDIAN|MIXO|PENT+|PENT-|BLUES|WHOLE|HARM-"
+                },
+                {
+                    "id": "root",
+                    "label": "ROOT",
+                    "lo": 0,
+                    "hi": 11,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "C|C#|D|D#|E|F|F#|G|G#|A|A#|B"
+                }
+            ]
+        },
+        {
+            "type": "env",
+            "title": "ENV",
+            "group": "Control",
+            "blurb": "An ADSR envelope opened by a gate.",
+            "ins": [
+                "gate"
+            ],
+            "outs": [
+                "out",
+                "inv"
+            ],
+            "knobs": [
+                {
+                    "id": "a",
+                    "label": "A",
+                    "lo": 0.001,
+                    "hi": 4,
+                    "def": 0.01,
+                    "curve": "exp",
+                    "names": "s"
+                },
+                {
+                    "id": "d",
+                    "label": "D",
+                    "lo": 0.001,
+                    "hi": 4,
+                    "def": 0.3,
+                    "curve": "exp",
+                    "names": "s"
+                },
+                {
+                    "id": "s",
+                    "label": "S",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.6,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "r",
+                    "label": "R",
+                    "lo": 0.001,
+                    "hi": 8,
+                    "def": 0.3,
+                    "curve": "exp",
+                    "names": "s"
+                }
+            ]
+        },
+        {
+            "type": "vco",
+            "title": "VCO",
+            "group": "Source",
+            "blurb": "A band-limited oscillator: sine, triangle, saw, pulse.",
+            "ins": [
+                "pitch",
+                "fm",
+                "pwm",
+                "sync"
+            ],
+            "outs": [
+                "out",
+                "sub"
+            ],
+            "knobs": [
+                {
+                    "id": "wave",
+                    "label": "WAVE",
+                    "lo": 0,
+                    "hi": 3,
+                    "def": 2,
+                    "curve": "step",
+                    "names": "SINE|TRI|SAW|PULSE"
+                },
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "fine",
+                    "label": "FINE",
+                    "lo": -100,
+                    "hi": 100,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "ct"
+                },
+                {
+                    "id": "fm",
+                    "label": "FM",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "pw",
+                    "label": "PW",
+                    "lo": 0.05,
+                    "hi": 0.95,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "drum",
+            "title": "DRUM",
+            "group": "Source",
+            "blurb": "A kick, snare or hat voice, struck by a trigger.",
+            "ins": [
+                "trig"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "kind",
+                    "label": "KIND",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "KICK|SNARE|HAT"
+                },
+                {
+                    "id": "freq",
+                    "label": "FREQ",
+                    "lo": 0.05,
+                    "hi": 0.6,
+                    "def": 0.2,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "tone",
+                    "label": "TONE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "decay",
+                    "label": "DECAY",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "accent",
+                    "label": "ACCENT",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.8,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "svf",
+            "title": "SVF",
+            "group": "Filter",
+            "blurb": "A state-variable filter: low, band, high and notch together.",
+            "ins": [
+                "in",
+                "cutoff",
+                "res"
+            ],
+            "outs": [
+                "lp",
+                "bp",
+                "hp",
+                "notch"
+            ],
+            "knobs": [
+                {
+                    "id": "cutoff",
+                    "label": "CUTOFF",
+                    "lo": 20,
+                    "hi": 18000,
+                    "def": 1200,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "res",
+                    "label": "RES",
+                    "lo": 0,
+                    "hi": 0.98,
+                    "def": 0.3,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "drive",
+                    "label": "DRIVE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.1,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "cv",
+                    "label": "CV",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "ladder",
+            "title": "LADDER",
+            "group": "Filter",
+            "blurb": "A Moog-style ladder filter that sings when pushed.",
+            "ins": [
+                "in",
+                "cutoff"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "cutoff",
+                    "label": "CUTOFF",
+                    "lo": 20,
+                    "hi": 18000,
+                    "def": 900,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "res",
+                    "label": "RES",
+                    "lo": 0,
+                    "hi": 1.8,
+                    "def": 0.4,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "drive",
+                    "label": "DRIVE",
+                    "lo": 1,
+                    "hi": 4,
+                    "def": 1.2,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "mode",
+                    "label": "MODE",
+                    "lo": 0,
+                    "hi": 5,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "LP24|LP12|BP24|BP12|HP24|HP12"
+                },
+                {
+                    "id": "cv",
+                    "label": "CV",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "vca",
+            "title": "VCA",
+            "group": "Shape",
+            "blurb": "Amplifier: its level set by a control signal.",
+            "ins": [
+                "in",
+                "cv"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "level",
+                    "label": "LEVEL",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 1,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "curve",
+                    "label": "CURVE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 1,
+                    "curve": "step",
+                    "names": "LIN|EXP"
+                }
+            ]
+        },
+        {
+            "type": "mix",
+            "title": "MIX",
+            "group": "Mix",
+            "blurb": "Four inputs to one.",
+            "ins": [
+                "in1",
+                "in2",
+                "in3",
+                "in4"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "l1",
+                    "label": "1",
+                    "lo": 0,
+                    "hi": 1.5,
+                    "def": 0.7,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "l2",
+                    "label": "2",
+                    "lo": 0,
+                    "hi": 1.5,
+                    "def": 0.7,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "l3",
+                    "label": "3",
+                    "lo": 0,
+                    "hi": 1.5,
+                    "def": 0.7,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "l4",
+                    "label": "4",
+                    "lo": 0,
+                    "hi": 1.5,
+                    "def": 0.7,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "master",
+                    "label": "OUT",
+                    "lo": 0,
+                    "hi": 1.5,
+                    "def": 1,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "fold",
+            "title": "FOLD",
+            "group": "Shape",
+            "blurb": "A wavefolder: harmonics from folding the wave back on itself.",
+            "ins": [
+                "in",
+                "fold"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "gain",
+                    "label": "FOLD",
+                    "lo": 1,
+                    "hi": 12,
+                    "def": 2,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "offset",
+                    "label": "SYM",
+                    "lo": -1,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "drive",
+            "title": "DRIVE",
+            "group": "Shape",
+            "blurb": "Soft overdrive.",
+            "ins": [
+                "in"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "drive",
+                    "label": "DRIVE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "level",
+                    "label": "LEVEL",
+                    "lo": 0,
+                    "hi": 1.5,
+                    "def": 0.8,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "crush",
+            "title": "CRUSH",
+            "group": "Shape",
+            "blurb": "Sample-rate and bit reduction.",
+            "ins": [
+                "in"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "rate",
+                    "label": "RATE",
+                    "lo": 0,
+                    "hi": 0.95,
+                    "def": 0.3,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "bits",
+                    "label": "BITS",
+                    "lo": 2,
+                    "hi": 16,
+                    "def": 8,
+                    "curve": "step",
+                    "names": "2|3|4|5|6|7|8|9|10|11|12|13|14|15|16"
+                },
+                {
+                    "id": "mix",
+                    "label": "MIX",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 1,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "scope",
+            "title": "SCOPE",
+            "group": "Mix",
+            "blurb": "A screen on the wall: the wave of whatever is patched in, passed on.",
+            "ins": [
+                "in"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "time",
+                    "label": "TIME",
+                    "lo": 1,
+                    "hi": 100,
+                    "def": 12,
+                    "curve": "exp",
+                    "names": "ms"
+                },
+                {
+                    "id": "gain",
+                    "label": "GAIN",
+                    "lo": 0.25,
+                    "hi": 4,
+                    "def": 1,
+                    "curve": "exp",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "delay",
+            "title": "DELAY",
+            "group": "Time",
+            "blurb": "A stereo echo: free or tied to the song's tempo, with a ping-pong.",
+            "ins": [
+                "in"
+            ],
+            "outs": [
+                "l",
+                "r"
+            ],
+            "knobs": [
+                {
+                    "id": "time",
+                    "label": "TIME",
+                    "lo": 0.01,
+                    "hi": 1.9,
+                    "def": 0.35,
+                    "curve": "exp",
+                    "names": "s"
+                },
+                {
+                    "id": "sync",
+                    "label": "SYNC",
+                    "lo": 0,
+                    "hi": 6,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "FREE|1/16|1/8|1/8.|1/4|1/4.|1/2"
+                },
+                {
+                    "id": "fb",
+                    "label": "FEEDBACK",
+                    "lo": 0,
+                    "hi": 0.95,
+                    "def": 0.4,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "tone",
+                    "label": "TONE",
+                    "lo": 200,
+                    "hi": 12000,
+                    "def": 5000,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "mix",
+                    "label": "MIX",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.35,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "pp",
+                    "label": "MODE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "STEREO|PING-PONG"
+                }
+            ]
+        },
+        {
+            "type": "chorus",
+            "title": "CHORUS",
+            "group": "Time",
+            "blurb": "Thickens a sound with a slow, swimming copy of itself.",
+            "ins": [
+                "in"
+            ],
+            "outs": [
+                "l",
+                "r"
+            ],
+            "knobs": [
+                {
+                    "id": "rate",
+                    "label": "RATE",
+                    "lo": 0.05,
+                    "hi": 6,
+                    "def": 0.4,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "depth",
+                    "label": "DEPTH",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.6,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "delay",
+                    "label": "DELAY",
+                    "lo": 1,
+                    "hi": 30,
+                    "def": 8,
+                    "curve": "lin",
+                    "names": "ms"
+                },
+                {
+                    "id": "fb",
+                    "label": "FEEDBACK",
+                    "lo": 0,
+                    "hi": 0.9,
+                    "def": 0.2,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "mix",
+                    "label": "MIX",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "out",
+            "title": "OUT",
+            "group": "Mix",
+            "blurb": "The output: to the speakers, and out of the room to a track.",
+            "ins": [
+                "l",
+                "r"
+            ],
+            "outs": [
+                "l",
+                "r"
+            ],
+            "knobs": [
+                {
+                    "id": "level",
+                    "label": "LEVEL",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 0.7,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "world",
+            "title": "WORLD",
+            "group": "Source",
+            "blurb": "The room itself as a source: the weather, the venue's instrument, the looper's rings and the marble run, each a level and a gate.",
+            "ins": [],
+            "outs": [
+                "weather",
+                "drips",
+                "venue",
+                "ring1",
+                "ring2",
+                "ring3",
+                "ring4",
+                "ring5",
+                "ring6",
+                "ring7",
+                "ring8",
+                "marbles",
+                "weather_g",
+                "drips_g",
+                "venue_g",
+                "ring1_g",
+                "ring2_g",
+                "ring3_g",
+                "ring4_g",
+                "ring5_g",
+                "ring6_g",
+                "ring7_g",
+                "ring8_g",
+                "marbles_g"
+            ],
+            "knobs": []
+        },
+        {
+            "type": "plaits",
+            "title": "PLAITS",
+            "group": "Voice",
+            "blurb": "Mutable Instruments' macro oscillator: 24 engines from virtual analogue to modal, granular, drums and speech.",
+            "ins": [
+                "pitch",
+                "fm",
+                "timbre",
+                "morph",
+                "trig",
+                "level"
+            ],
+            "outs": [
+                "out",
+                "aux"
+            ],
+            "knobs": [
+                {
+                    "id": "engine",
+                    "label": "ENGINE",
+                    "lo": 0,
+                    "hi": 23,
+                    "def": 8,
+                    "curve": "step",
+                    "names": "VA+VCF|PHASE DIST|SIX-OP A|SIX-OP B|SIX-OP C|TERRAIN|STRING MACH|CHIPTUNE|VA|WAVESHAPE|FM|GRAIN|ADDITIVE|WAVETABLE|CHORD|SPEECH|SWARM|NOISE|PARTICLE|STRING|MODAL|KICK|SNARE|HAT"
+                },
+                {
+                    "id": "note",
+                    "label": "NOTE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "fine",
+                    "label": "FINE",
+                    "lo": -100,
+                    "hi": 100,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "ct"
+                },
+                {
+                    "id": "harm",
+                    "label": "HARMONICS",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "timbre",
+                    "label": "TIMBRE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "morph",
+                    "label": "MORPH",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "decay",
+                    "label": "DECAY",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "lpg",
+                    "label": "LPG",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "fma",
+                    "label": "FM AMT",
+                    "lo": -1,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "tma",
+                    "label": "TIMB AMT",
+                    "lo": -1,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "mma",
+                    "label": "MORPH AMT",
+                    "lo": -1,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "rings",
+            "title": "RINGS",
+            "group": "Voice",
+            "blurb": "Mutable Instruments' resonator: strike it with a trigger and hear modal bodies, strings and bells.",
+            "ins": [
+                "in",
+                "pitch",
+                "strum"
+            ],
+            "outs": [
+                "odd",
+                "even"
+            ],
+            "knobs": [
+                {
+                    "id": "model",
+                    "label": "MODEL",
+                    "lo": 0,
+                    "hi": 5,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "MODAL|SYMPATH|STRING|FM|SYMP-Q|STR+REV"
+                },
+                {
+                    "id": "poly",
+                    "label": "VOICES",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "1|2|4"
+                },
+                {
+                    "id": "structure",
+                    "label": "STRUCTURE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.4,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "bright",
+                    "label": "BRIGHT",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.6,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "damping",
+                    "label": "DAMPING",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.6,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "position",
+                    "label": "POSITION",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.4,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "note",
+                    "label": "NOTE",
+                    "lo": -12,
+                    "hi": 36,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                }
+            ]
+        },
+        {
+            "type": "reverb",
+            "title": "REVERB",
+            "group": "Time",
+            "blurb": "A lush plate-like reverb from Mutable Instruments' Clouds.",
+            "ins": [
+                "l",
+                "r"
+            ],
+            "outs": [
+                "l",
+                "r"
+            ],
+            "knobs": [
+                {
+                    "id": "time",
+                    "label": "TIME",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.6,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "damp",
+                    "label": "DAMP",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.7,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "diff",
+                    "label": "DIFFUSE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.7,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "mix",
+                    "label": "MIX",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.35,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "clouds",
+            "title": "CLOUDS",
+            "group": "Time",
+            "blurb": "Mutable Instruments' granular processor: listens to what comes in and plays it back as a cloud of grains.",
+            "ins": [
+                "l",
+                "r",
+                "freeze"
+            ],
+            "outs": [
+                "l",
+                "r"
+            ],
+            "knobs": [
+                {
+                    "id": "position",
+                    "label": "POSITION",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "size",
+                    "label": "SIZE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "pitch",
+                    "label": "PITCH",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "density",
+                    "label": "DENSITY",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.8,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "texture",
+                    "label": "TEXTURE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "mix",
+                    "label": "MIX",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "spread",
+                    "label": "SPREAD",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "feedback",
+                    "label": "FEEDBACK",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "reverb",
+                    "label": "REVERB",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.2,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "freeze",
+                    "label": "FREEZE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "OFF|ON"
+                }
+            ]
+        }
+    ]
 }

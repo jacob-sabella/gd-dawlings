@@ -78,6 +78,8 @@ struct Module {
   virtual ~Module() {}
   virtual void init() {}
   virtual void process() = 0;
+  // A module that shows a waveform fills `pts` (what it saw, triggered, -1..1) and says so.
+  virtual bool scope(std::vector<float>& pts) { return false; }
   // A knob's real value.
   float real(int k) const;
   int choice(int k) const { return (int)real(k); }

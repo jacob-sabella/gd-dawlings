@@ -5,15 +5,19 @@ extends RefCounted
 ## one or more columns wide by what it has to hold. Pure arithmetic, shared by the wall that draws it
 ## and the room that answers an ask to put a module somewhere.
 
-const COLS := 16
-const ROWS := 2
+const COLS := 40
+const ROWS := 4
 ## A column holds this many knobs, or this many jacks, before the module needs another.
 const KNOBS_PER_COLUMN := 8
 const JACKS_PER_COLUMN := 6
+## A SCOPE has a screen to hold.
+const SCOPE_WIDE := 4
 
 
 ## How many columns a type's panel takes.
 static func width_of(type: String) -> int:
+	if type == "scope":
+		return SCOPE_WIDE
 	var s := RackCatalogue.spec(type)
 	if s.is_empty():
 		return 1

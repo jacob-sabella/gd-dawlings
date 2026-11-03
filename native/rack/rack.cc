@@ -150,6 +150,8 @@ void Rack::rebuild() {
     for (auto& e : edges_) if (e.to == m) reach(e.from);
   };
   if (sink_) reach(sink_);
+  // A SCOPE watches whatever feeds it, heard or not.
+  for (auto& kv : mods_) if (std::string(kv.second->spec->type) == "scope") reach(kv.second.get());
   order_.clear();
   std::set<Module*> done, onstack;
   std::function<void(Module*)> visit = [&](Module* m) {

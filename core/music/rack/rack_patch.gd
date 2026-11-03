@@ -20,7 +20,7 @@ static func default_patch() -> Dictionary:
 
 
 static func presets() -> Array[StringName]:
-	return [&"keys_voice", &"acid_line", &"drum_machine", &"ambient_bells", &"fm_bass", &"empty"]
+	return [&"keys_voice", &"acid_line", &"drum_machine", &"ambient_bells", &"fm_bass", &"big_rig", &"empty"]
 
 
 static func preset_title(name: StringName) -> String:
@@ -30,6 +30,7 @@ static func preset_title(name: StringName) -> String:
 		&"drum_machine": return "Drum machine"
 		&"ambient_bells": return "Ambient bells"
 		&"fm_bass": return "Wobble bass"
+		&"big_rig": return "Big rig (33 modules)"
 	return "Empty"
 
 
@@ -88,6 +89,82 @@ static func preset(name: StringName) -> Dictionary:
 			_put(p, "out", "out", 5, 0)
 			_wire(p, [["keys.pitch", "vco.pitch"], ["keys.gate", "env.gate"], ["lfo.out", "svf.cutoff"], ["vco.out", "fold.in"],
 					["env.out", "fold.fold"], ["fold.out", "svf.in"], ["svf.lp", "vca.in"], ["env.out", "vca.cv"], ["vca.out", "out.l"]])
+		&"big_rig":
+			var col0 := 0
+			_put(p, "clk", "clock", col0, 0, {"sync": 0.0, "bpm": 0.43})
+			col0 += RackLayout.width_of("clock")
+			_put(p, "seq1", "seq", col0, 0, {"s1": 0.0132, "s2": 0.0132, "s3": 0.1974, "s4": 0.3290, "s5": 0.2763, "s6": 0.1974, "s7": 0.0921, "s8": 0.1974, "s9": 0.0132, "s10": 0.0132, "s11": 0.1974, "s12": 0.3290, "s13": 0.4079, "s14": 0.3816, "s15": 0.3290, "s16": 0.2763, "len": 0.9688, "gate": 0.4737})
+			col0 += RackLayout.width_of("seq")
+			_put(p, "seq2", "seq", col0, 0, {"s1": 0.0132, "s2": 0.0132, "s3": 0.0132, "s4": 0.3290, "s5": 0.0132, "s6": 0.0132, "s7": 0.2763, "s8": 0.1974, "s9": 0.0132, "s10": 0.0132, "s11": 0.0132, "s12": 0.3290, "s13": 0.0132, "s14": 0.0132, "s15": 0.2763, "s16": 0.1974, "len": 0.4688, "gate": 0.4210})
+			col0 += RackLayout.width_of("seq")
+			_put(p, "seq3", "seq", col0, 0, {"s1": 0.0132, "s2": 0.0132, "s3": 0.0921, "s4": 0.0921, "s5": 0.1974, "s6": 0.1974, "s7": 0.1447, "s8": 0.1447, "s9": 0.0132, "s10": 0.0132, "s11": 0.0921, "s12": 0.0921, "s13": 0.1974, "s14": 0.1974, "s15": 0.1447, "s16": 0.1447, "len": 0.4688, "gate": 0.8947})
+			col0 += RackLayout.width_of("seq")
+			_put(p, "lfo1", "lfo", col0, 0, {"rate": 0.2357, "depth": 0.8000, "shape": 0.1000})
+			col0 += RackLayout.width_of("lfo")
+			_put(p, "lfo2", "lfo", col0, 0, {"rate": 0.4475, "depth": 0.9000, "shape": 0.3000})
+			col0 += RackLayout.width_of("lfo")
+			_put(p, "noise", "noise", col0, 0, {})
+			col0 += RackLayout.width_of("noise")
+			_put(p, "sh1", "sh", col0, 0, {})
+			col0 += RackLayout.width_of("sh")
+			_put(p, "env1", "env", col0, 0, {"a": 0.1671, "d": 0.6794, "s": 0.1000, "r": 0.5895})
+			col0 += RackLayout.width_of("env")
+			_put(p, "env2", "env", col0, 0, {"a": 0.1325, "d": 0.6657, "s": 0.5000, "r": 0.5895})
+			col0 += RackLayout.width_of("env")
+			_put(p, "env3", "env", col0, 0, {"a": 0.0836, "d": 0.6503, "s": 0.2000, "r": 0.5124})
+			col0 += RackLayout.width_of("env")
+			var col1 := 0
+			_put(p, "v1", "vco", col1, 1, {"wave": 0.6250, "tune": 0.4375, "fm": 0.0000})
+			col1 += RackLayout.width_of("vco")
+			_put(p, "v2", "vco", col1, 1, {"wave": 0.3750, "tune": 0.4375, "fine": 0.5550})
+			col1 += RackLayout.width_of("vco")
+			_put(p, "v3", "vco", col1, 1, {"wave": 0.3750, "tune": 0.1875})
+			col1 += RackLayout.width_of("vco")
+			_put(p, "svf", "svf", col1, 1, {"cutoff": 0.3713, "res": 0.4592, "cv": 0.5500})
+			col1 += RackLayout.width_of("svf")
+			_put(p, "mixL", "mix", col1, 1, {"l1": 0.5333, "l2": 0.4667, "l3": 0.4000})
+			col1 += RackLayout.width_of("mix")
+			_put(p, "fold", "fold", col1, 1, {"gain": 0.0454})
+			col1 += RackLayout.width_of("fold")
+			_put(p, "lad", "ladder", col1, 1, {"cutoff": 0.5000, "res": 0.6111, "drive": 0.2000, "cv": 0.6500})
+			col1 += RackLayout.width_of("ladder")
+			_put(p, "vca1", "vca", col1, 1, {})
+			col1 += RackLayout.width_of("vca")
+			_put(p, "vca3", "vca", col1, 1, {})
+			col1 += RackLayout.width_of("vca")
+			var col2 := 0
+			_put(p, "pl", "plaits", col2, 2, {"engine": 0.3542, "note": 0.4375, "harm": 0.4000, "timbre": 0.5000, "morph": 0.5000, "decay": 0.7000, "lpg": 0.6000, "tma": 0.7500, "mma": 0.7500})
+			col2 += RackLayout.width_of("plaits")
+			_put(p, "rg", "rings", col2, 2, {"model": 0.0833, "structure": 0.4500, "bright": 0.6000, "damping": 0.5500, "position": 0.4000, "note": 0.0000})
+			col2 += RackLayout.width_of("rings")
+			_put(p, "kick", "drum", col2, 2, {"kind": 0.1667, "freq": 0.1273, "decay": 0.5500})
+			col2 += RackLayout.width_of("drum")
+			_put(p, "snare", "drum", col2, 2, {"kind": 0.5000, "decay": 0.4000})
+			col2 += RackLayout.width_of("drum")
+			_put(p, "hat", "drum", col2, 2, {"kind": 0.8333, "decay": 0.1200})
+			col2 += RackLayout.width_of("drum")
+			var col3 := 0
+			_put(p, "mixA", "mix", col3, 3, {"l1": 0.5, "l2": 0.6, "l3": 0.55, "l4": 0.4})
+			col3 += RackLayout.width_of("mix")
+			_put(p, "mixB", "mix", col3, 3, {"l1": 0.6, "l2": 0.5, "l3": 0.35})
+			col3 += RackLayout.width_of("mix")
+			_put(p, "mixC", "mix", col3, 3, {"l1": 0.9, "l2": 0.9, "master": 1.0})
+			col3 += RackLayout.width_of("mix")
+			_put(p, "crush", "crush", col3, 3, {"mix": 0.0000})
+			col3 += RackLayout.width_of("crush")
+			_put(p, "dly", "delay", col3, 3, {"time": 0.6830, "fb": 0.4737, "mix": 0.3000, "pp": 0.7500})
+			col3 += RackLayout.width_of("delay")
+			_put(p, "cld", "clouds", col3, 3, {"mix": 0.0000, "size": 0.5000, "density": 0.7000, "reverb": 0.2500})
+			col3 += RackLayout.width_of("clouds")
+			_put(p, "rev", "reverb", col3, 3, {"time": 0.8000, "mix": 0.3000})
+			col3 += RackLayout.width_of("reverb")
+			_put(p, "out", "out", col3, 3, {"level": 0.4500})
+			col3 += RackLayout.width_of("out")
+			_put(p, "scope", "scope", col3, 3, {"gain": 0.85})
+			col3 += RackLayout.width_of("scope")
+			_put(p, "bass_scope", "scope", col2, 2, {"time": 0.45, "gain": 0.8})
+			col2 += RackLayout.width_of("scope")
+			_wire(p, [["clk.16th", "seq1.clk"], ["clk.8th", "seq2.clk"], ["clk.beat", "seq3.clk"], ["seq1.pitch", "v1.pitch"], ["seq1.pitch", "v2.pitch"], ["v2.out", "v1.fm"], ["seq1.gate", "env1.gate"], ["seq1.gate", "env2.gate"], ["v1.out", "mixL.in1"], ["v2.out", "mixL.in2"], ["v1.sub", "mixL.in3"], ["mixL.out", "fold.in"], ["lfo2.uni", "fold.fold"], ["fold.out", "lad.in"], ["env1.out", "lad.cutoff"], ["lfo1.uni", "lad.cutoff"], ["sh1.out", "lad.cutoff"], ["noise.white", "sh1.in"], ["clk.16th", "sh1.trig"], ["lad.out", "vca1.in"], ["env2.out", "vca1.cv"], ["seq2.pitch", "v3.pitch"], ["seq2.gate", "env3.gate"], ["v3.out", "svf.in"], ["env3.out", "svf.cutoff"], ["svf.lp", "vca3.in"], ["env3.out", "vca3.cv"], ["seq3.pitch", "pl.pitch"], ["seq3.gate", "pl.trig"], ["lfo1.uni", "pl.timbre"], ["lfo2.uni", "pl.morph"], ["seq1.pitch", "rg.pitch"], ["seq2.gate", "rg.strum"], ["vca1.out", "mixA.in1"], ["vca3.out", "mixA.in2"], ["pl.out", "mixA.in3"], ["rg.odd", "mixA.in4"], ["clk.beat", "kick.trig"], ["clk.bar", "snare.trig"], ["clk.16th", "hat.trig"], ["kick.out", "mixB.in1"], ["snare.out", "mixB.in2"], ["hat.out", "mixB.in3"], ["mixA.out", "mixC.in1"], ["mixB.out", "mixC.in2"], ["mixC.out", "crush.in"], ["crush.out", "dly.in"], ["dly.l", "cld.l"], ["dly.r", "cld.r"], ["cld.l", "rev.l"], ["cld.r", "rev.r"], ["rev.l", "out.l"], ["rev.r", "out.r"], ["rev.l", "scope.in"], ["vca1.out", "bass_scope.in"]])
 	RackLayout.tidy(p)
 	return p
 
