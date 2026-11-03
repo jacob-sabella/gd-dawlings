@@ -14,6 +14,10 @@ extends Node
 ## at their last note-off every one they moved is put back at rest, as GuestMidi does on their end,
 ## so no reset ever has to arrive.
 ##
+## Only for a guest the host has allowed (Session.answer_share, `midi`): until then their notes
+## are still taken as a take, but sound on nothing here. Taking the permission away lets go of
+## whatever they hold.
+##
 ## Only plain keys (no `source`): the harp, the strings and the modular have their own voices.
 
 ## {peer id: {pitch: the plugin it went on}}: let go on the plugin it began on, though the guest's
@@ -27,14 +31,22 @@ func _ready() -> void:
 	Session.note_played.connect(_on_note)
 	Session.control_played.connect(_on_control)
 	Session.play_track_changed.connect(_on_track)
+	Session.shares_changed.connect(_on_shares)
 
 
 func _exit_tree() -> void:
 	release_all()
 
 
+func _on_shares() -> void:
+	for peer: int in _held.keys() + _moved.keys():
+		if not Session.share_allowed(peer, &"midi"):
+			_release(peer)
+
+
 func _on_note(kind: int, pitch: int, velocity: int, from: int, _song: float, source := &"") -> void:
-	if Session.role != Session.Role.HOST or from == Session.local_peer_id or source != &"":
+	if Session.role != Session.Role.HOST or from == Session.local_peer_id or source != &"" \
+			or not Session.share_allowed(from, &"midi"):
 		return
 	var down: Dictionary = _held.get(from, {})
 	match kind:
@@ -60,7 +72,8 @@ func _on_note(kind: int, pitch: int, velocity: int, from: int, _song: float, sou
 
 
 func _on_control(kind: int, value: int, from: int, _song := -1.0, source := &"") -> void:
-	if Session.role != Session.Role.HOST or from == Session.local_peer_id or source != &"":
+	if Session.role != Session.Role.HOST or from == Session.local_peer_id or source != &"" \
+			or not Session.share_allowed(from, &"midi"):
 		return
 	var plugin = DAW.track_instrument(int(Session.play_tracks.get(from, 0)))
 	if plugin == null:

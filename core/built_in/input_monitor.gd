@@ -39,6 +39,11 @@ const FEED_USEC := 500
 var make_source: Callable = func(device: String) -> MixSource:
 	return MixSource.Piped.new(device, "monitoring " + (device if device != "" else "the default input"),
 			"monitor " + (device.get_slice(".", 1) if device.contains(".") else (device if device != "" else "default")))
+## Sound that is not from a device here but arrives from elsewhere (a guest's live input,
+## GuestLive), heard through a track the same way: {track index: key} and {key: MixSource}. Set from
+## outside every frame; the monitor never opens or closes these, only plays them.
+var live := {}
+var live_sources := {}
 ## {device: MixSource}
 var _sources := {}
 ## {track index: {bus: AudioStreamPlayer}}
@@ -100,17 +105,26 @@ func drive(state: MixState, outlets_of: Callable) -> void:
 	_routes = []
 	_lock.unlock()
 	var now := plan(state)
+	for index in live:
+		if live_sources.has(live[index]):
+			now[index] = "live:" + String(live[index]).trim_prefix("live:")
 	var devices := {}
 	for index in now:
 		devices[GuestAudio.device_of(now[index])] = true
 	for device in _sources.keys():
 		if not devices.has(device):
-			(_sources[device] as MixSource).stop()
+			if not String(device).begins_with("live:"):
+				(_sources[device] as MixSource).stop()
 			_sources.erase(device)
 	for index in _players.keys():
 		if not now.has(index):
 			_drop_player(index)
 	for device in devices:
+		if String(device).begins_with("live:"):
+			# Handed in whole; swapped if the guest's source was made anew.
+			if live_sources.has(device):
+				_sources[device] = live_sources[device]
+			continue
 		if _sources.has(device) or _failed.has(device):
 			continue
 		var source: MixSource = make_source.call(device)

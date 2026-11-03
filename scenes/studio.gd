@@ -4325,6 +4325,10 @@ func _build_items() -> void:
 	var guest_play := GuestPlay.new()
 	guest_play.name = "GuestPlay"
 	add_child(guest_play)
+	# A guest's audio input, offered and allowed, heard live through the track the host put it on.
+	var guest_live := GuestLive.new()
+	guest_live.name = "GuestLive"
+	add_child(guest_live)
 	Session.control_played.connect(their_keys.control)
 	their_monitor = TheirMonitor.new()
 	their_monitor.name = "TheirMonitor"

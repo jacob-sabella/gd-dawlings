@@ -25190,6 +25190,9 @@ func _test_keys_play_an_instrument_plugin_without_arming_and_a_guest_plays_it_li
 	add_child(play)
 	Session.play_tracks[7] = 6
 	Session.note_played.emit(Session.Note.ON, 60, 100, 7, -1.0, &"")
+	check("a guest the host has not allowed plays nothing live", play.held_count(7) == 0)
+	Session.shares[7] = {&"midi": {"track": 0}}
+	Session.note_played.emit(Session.Note.ON, 60, 100, 7, -1.0, &"")
 	check("a guest's key sounds on the track's plugin", play.held_count(7) == 1)
 	Session.note_played.emit(Session.Note.ON, 64, 90, 7, -1.0, &"harp")
 	check("an instrument of theirs with a voice of its own is not played here", play.held_count(7) == 1)
@@ -25204,6 +25207,10 @@ func _test_keys_play_an_instrument_plugin_without_arming_and_a_guest_plays_it_li
 	check("and rest at their last note-off", play.moved_count(7) == 0)
 	Session.note_played.emit(Session.Note.ON, 62, 100, 7, -1.0, &"")
 	Session.control_played.emit(1, 90, 7, -1.0, &"")
+	Session.answer_share(7, &"midi", false)
+	check("taking the permission away lets go of what they hold", play.held_count(7) == 0 and play.moved_count(7) == 0)
+	Session.shares[7] = {&"midi": {"track": 0}}
+	Session.note_played.emit(Session.Note.ON, 62, 100, 7, -1.0, &"")
 	Session.play_tracks.erase(7)
 	Session.play_track_changed.emit(7, 0)
 	check("a guest who moves off the track or leaves holds nothing there", play.held_count(7) == 0)
@@ -25217,6 +25224,86 @@ func _test_keys_play_an_instrument_plugin_without_arming_and_a_guest_plays_it_li
 	PluginCatalogue.use_only([])
 	Session.start_solo()
 	_offline()
+
+
+func _test_a_guests_devices_are_used_only_when_the_host_allows_them() -> void:
+	_as_session(Session.Role.HOST, 1)
+	var changes := [0]
+	var count := func(): changes[0] += 1
+	Session.shares_changed.connect(count)
+	# An offer waits; nothing is allowed by it.
+	Session.share_offers[7] = {&"audio": "Scarlett 2i2"}
+	check("an offer is not permission", not Session.share_allowed(7, &"audio"))
+	Session.answer_share(7, &"audio", true, 3)
+	check("allowed, it is, on the track the host chose", Session.share_allowed(7, &"audio") and Session.share_track(7) == 3)
+	check("and the offer is answered", not (Session.share_offers.get(7, {}) as Dictionary).has(&"audio"))
+	check("the other kind is still not", not Session.share_allowed(7, &"midi"))
+	check("answering is announced", changes[0] >= 1)
+
+	# Live audio is queued only for a guest allowed to send it.
+	var live := GuestLive.new()
+	add_child(live)
+	var pcm := PackedByteArray()
+	pcm.resize(2 * 480)
+	for i in 480:
+		pcm.encode_s16(i * 2, 16384)
+	Session.live_audio_heard.emit(7, pcm)
+	Session.live_audio_heard.emit(8, pcm)
+	var source := live.source_of(7)
+	check("an allowed guest's live audio is queued", source != null and source.received == 480)
+	check("a guest not allowed has none queued", live.source_of(8) == null)
+	check("it reads back as the sound it was (%s)" % [source.queued()], is_equal_approx(source._queue[0].x, 0.5))
+	check("a source holds back until it has its prebuffer", source.read().is_empty())
+	Session.live_audio_heard.emit(7, pcm)
+	Session.live_audio_heard.emit(7, pcm)
+	var got := source.read()
+	check("and then gives it all (%d)" % got.size(), got.size() == 1440 and source.queued() == 0)
+	var big := PackedByteArray()
+	big.resize(2 * GuestLive.LATE_FRAMES * 2)
+	Session.live_audio_heard.emit(7, big)
+	check("sound arriving faster than it is heard is dropped, the oldest first",
+			source.queued() == GuestLive.LATE_FRAMES and source.dropped > 0)
+
+	# The monitor plays it through the chosen track, and lets go when it is taken away.
+	var s := DAW.state
+	var monitor := InputMonitor.new()
+	monitor.threaded = false
+	add_child(monitor)
+	monitor.live = {3: "live:7"}
+	monitor.live_sources = {"live:7": source}
+	monitor.drive(s, func(_index: int) -> Array: return [[&"Master", 0.0]])
+	check("the track the host chose is heard (%s)" % [monitor.monitoring()], monitor.monitoring() == [3])
+	monitor.feed()
+	monitor.live = {}
+	monitor.live_sources = {}
+	monitor.drive(s, func(_index: int) -> Array: return [[&"Master", 0.0]])
+	check("and nothing is when it is not", monitor.monitoring() == [])
+	monitor.free()
+
+	Session.answer_share(7, &"audio", false)
+	check("taking it away stops it", not Session.share_allowed(7, &"audio") and live.source_of(7) == null)
+	# A guest leaving takes their offers with them.
+	Session.share_offers[9] = {&"midi": "keys"}
+	Session.shares[9] = {&"audio": {"track": 2}}
+	Session._on_peer_disconnected(9)
+	check("a guest who leaves leaves no offers or permissions", not Session.share_offers.has(9) and not Session.shares.has(9))
+	# The guest's side: sent only once allowed.
+	_as_session(Session.Role.GUEST, 5)
+	Session.my_shares[&"audio"] = "offered"
+	var ga := GuestAudio.new()
+	add_child(ga)
+	ga._follow_share()
+	check("offered is not live", not ga.sharing_live)
+	Session._share_answer(&"audio", true, 4)
+	ga._follow_share()
+	check("allowed, it is live, on the track the host chose", ga.sharing_live and ga.target_track == 4 and ga.armed())
+	Session._share_answer(&"audio", false, 0)
+	ga._follow_share()
+	check("and declined, it is not", not ga.sharing_live and Session.my_shares[&"audio"] == "declined")
+	ga.free()
+	live.free()
+	Session.shares_changed.disconnect(count)
+	Session.start_solo()
 
 
 ## 2026-10-30, "loading in certain heavy plugins causes the game to freeze. I would rather that

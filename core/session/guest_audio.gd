@@ -44,6 +44,21 @@ const RATIO_LIMIT := 0.002
 ## Further than this from where the take's frames say they are is the song jumping, not drift.
 const JUMP_SECONDS := 0.25
 
+## Hear my own input, through this computer's output as it is played: off by default, because it
+## feeds back through speakers. It is only as quick as this computer's input and output are; an
+## interface's own direct monitoring is quicker still.
+var monitor_self := false:
+	set(v):
+		monitor_self = v
+		if not v:
+			_close_monitor()
+		changed.emit()
+## Sent up live to the host: the host has allowed this guest's audio input (Session.my_shares), onto
+## the track it chose. A shared input records with the host as well, onto that same track.
+var sharing_live := false
+## Packets of live sound sent, for the panel and the suite.
+var live_sent := 0
+
 ## The track a take goes onto; 0 for none chosen.
 var target_track := 0:
 	set(v):
@@ -118,7 +133,7 @@ func armed() -> bool:
 				and (record_with_host or DAW.state.input_of(take_track()).begins_with("audio:")) \
 				and DAW.backend != null and not DAW.can(DAWBackend.Capability.RECORDS_OWN_INPUTS) \
 				and not DAW.state.input_of(take_track()).begins_with("midi")
-	return Session.role == Session.Role.GUEST and target_track > 0 and record_with_host
+	return Session.role == Session.Role.GUEST and target_track > 0 and (record_with_host or sharing_live)
 
 
 ## The device a track input names: "audio:<device>" or "audio:<device>#<channel>", "" the
@@ -211,11 +226,14 @@ func drift_ppm() -> float:
 
 
 func _process(delta: float) -> void:
-	if not armed():
+	_follow_share()
+	var taking := armed()
+	if not taking and not _listening():
 		if _take_open:
 			_end()
 		if _source != null:
 			_close_mic()
+		_close_monitor()
 		return
 	if _source != null and not _take_open and _opened_device != device():
 		# The track to record onto now names another input.
@@ -227,7 +245,14 @@ func _process(delta: float) -> void:
 	for f in got:
 		peak = maxf(peak, absf(f.x))
 	level = maxf(peak, level - delta * 1.5)
-	follow(heard.call(), got)
+	if sharing_live:
+		_send_live(got)
+	if monitor_self:
+		_hear_self(got)
+	if taking:
+		follow(heard.call(), got)
+	elif _take_open:
+		_end()
 
 
 ## The take, following what the guest hears of the host's transport.
@@ -360,6 +385,67 @@ func _read() -> PackedVector2Array:
 
 func _source_rate() -> float:
 	return _source.rate() if _source.has_method(&"rate") else AudioServer.get_input_mix_rate()
+
+
+## Whether the microphone is wanted for anything but a take: heard here, or sent live.
+func _listening() -> bool:
+	return monitor_self or sharing_live
+
+
+## What the host has said of this guest's audio input, followed: allowed puts it live on the track
+## the host chose, anything else takes it down.
+func _follow_share() -> void:
+	if for_host:
+		return
+	var allowed: bool = Session.role == Session.Role.GUEST and Session.my_shares.get(&"audio", "") == "allowed"
+	if allowed == sharing_live:
+		return
+	sharing_live = allowed
+	if allowed:
+		if Session.my_share_track > 0:
+			target_track = Session.my_share_track
+	else:
+		_live_unsent = PackedVector2Array()
+	changed.emit()
+
+
+var _live_unsent := PackedVector2Array()
+## Packets are a few milliseconds of sound: small enough to keep the host close behind, big enough
+## not to be a packet storm.
+const LIVE_FRAMES := 240
+
+
+func _send_live(got: PackedVector2Array) -> void:
+	_live_unsent.append_array(got)
+	while _live_unsent.size() >= LIVE_FRAMES:
+		var n := mini(_live_unsent.size(), Session.LIVE_PACKET_MAX / 2)
+		Session.send_live_audio(AudioTake.encode(_live_unsent.slice(0, n)))
+		_live_unsent = _live_unsent.slice(n)
+		live_sent += 1
+
+
+var _monitor_player: AudioStreamPlayer = null
+
+
+func _hear_self(got: PackedVector2Array) -> void:
+	if _monitor_player == null:
+		_monitor_player = AudioStreamPlayer.new()
+		_monitor_player.name = "HearMyself"
+		var stream := AudioStreamGenerator.new()
+		stream.mix_rate = RATE
+		stream.buffer_length = InputMonitor.BUFFER
+		_monitor_player.stream = stream
+		add_child(_monitor_player)
+		_monitor_player.play()
+	var playback := _monitor_player.get_stream_playback() as AudioStreamGeneratorPlayback
+	if playback != null:
+		InputMonitor._feed(playback, got)
+
+
+func _close_monitor() -> void:
+	if _monitor_player != null:
+		_monitor_player.queue_free()
+		_monitor_player = null
 
 
 func mic_open() -> bool:

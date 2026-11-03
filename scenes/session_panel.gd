@@ -121,6 +121,13 @@ var _mic_status: Label
 ## The microphone's controls: a guest's (in the guest's section) or, on a DAW that does not record
 ## its own inputs, the host's (above the project). See `_recorder`.
 var _mic_box: VBoxContainer
+var _mic_hear: CheckButton
+var _share_box: VBoxContainer
+var _share_audio: CheckButton
+var _share_midi: CheckButton
+var _share_said: Label
+## The host's list of what guests offer and have been allowed.
+var _devices_box: VBoxContainer
 ## The keys' controls, placed the same way as the microphone's.
 var _keys_box: VBoxContainer
 ## Hand percussion's own setting ("Snap hand percussion"), just after the keys and always shown:
@@ -540,6 +547,11 @@ func _build_panel() -> void:
 	_sharing = _label("", 13, DIM)
 	_sharing.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_host_box.add_child(_sharing)
+	_devices_box = VBoxContainer.new()
+	_devices_box.name = "GuestDevices"
+	_devices_box.add_theme_constant_override("separation", 6)
+	_host_box.add_child(_devices_box)
+	Session.shares_changed.connect(_refresh_devices)
 	# The way out stays last.
 	_host_box.move_child(end_button, -1)
 
@@ -569,6 +581,11 @@ func _build_panel() -> void:
 	_hearing = _label("", 13, DIM)
 	_hearing.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_guest_box.add_child(_hearing)
+	_share_box = VBoxContainer.new()
+	_share_box.name = "Share"
+	_share_box.add_theme_constant_override("separation", 8)
+	_build_share(_share_box)
+	_guest_box.add_child(_share_box)
 	_keys_box = VBoxContainer.new()
 	_keys_box.name = "Keys"
 	_keys_box.add_theme_constant_override("separation", 8)
@@ -626,6 +643,8 @@ func _refresh() -> void:
 	_place_mic()
 	_refresh_midi()
 	_refresh_mic()
+	_refresh_share()
+	_refresh_devices()
 	_refresh_project()
 	_solo_box.visible = Session.role == Session.Role.SOLO
 	_host_box.visible = Session.role == Session.Role.HOST
@@ -848,6 +867,13 @@ func _build_mic(box: VBoxContainer) -> void:
 	_mic_record.toggled.connect(func(on: bool): _recorder().record_with_host = on)
 	box.add_child(_mic_record)
 
+	_mic_hear = _toggle("Hear myself")
+	_mic_hear.tooltip_text = "Your input through this computer's headphones as you play. Off by default: through speakers it feeds back. An interface's own direct monitoring is quicker still."
+	_mic_hear.toggled.connect(func(on: bool):
+		var ga := _recorder()
+		if ga != null:
+			ga.monitor_self = on)
+	box.add_child(_mic_hear)
 	_mic_status = _label("", 13, DIM)
 	_mic_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_mic_status)
@@ -855,6 +881,133 @@ func _build_mic(box: VBoxContainer) -> void:
 		Session.guest_audio.changed.connect(_refresh_mic)
 	if Session.host_audio != null:
 		Session.host_audio.changed.connect(_refresh_mic)
+
+
+## What a guest may offer the host: their audio input, live, and their keys and MIDI. Nothing is
+## used until the host says so; the host can take it back, and so can they.
+func _build_share(box: VBoxContainer) -> void:
+	box.add_child(_caption("SHARE WITH THE HOST"))
+	_share_audio = _toggle("My audio input, live")
+	_share_audio.tooltip_text = "Offer the input chosen under YOUR MIC (a guitar, a voice). The host decides, and puts it on a track, where it is heard through the track's chain as you play."
+	_share_audio.toggled.connect(func(on: bool): _offer_share(&"audio", on))
+	box.add_child(_share_audio)
+	_share_midi = _toggle("My keys and MIDI")
+	_share_midi.tooltip_text = "Offer your MIDI keyboard and this keyboard's piano keys. The host decides; allowed, they play the instrument on the track you choose under YOUR KEYS, live."
+	_share_midi.toggled.connect(func(on: bool): _offer_share(&"midi", on))
+	box.add_child(_share_midi)
+	_share_said = _label("", 13, DIM)
+	_share_said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_share_said)
+	Session.shares_changed.connect(_refresh_share)
+
+
+func _offer_share(kind: StringName, on: bool) -> void:
+	if on:
+		var label := ""
+		if kind == &"audio":
+			label = Session.guest_audio.input_device if Session.guest_audio != null else ""
+			if label == "":
+				label = "the default input"
+		else:
+			label = "keys"
+		Session.offer_share(kind, label)
+	else:
+		Session.withdraw_share(kind)
+
+
+func _share_line(kind: StringName, what: String) -> String:
+	match String(Session.my_shares.get(kind, "")):
+		"offered":
+			return "%s: waiting for %s to allow it." % [what, Session.name_of(1)]
+		"allowed":
+			if kind == &"audio" and Session.my_share_track > 0:
+				return "%s: live on %s." % [what, _track_name(Session.my_share_track)]
+			return "%s: allowed." % what
+		"declined":
+			return "%s: %s said no." % [what, Session.name_of(1)]
+	return ""
+
+
+func _refresh_share() -> void:
+	if _share_box == null or Session.role != Session.Role.GUEST:
+		return
+	for pair in [[_share_audio, &"audio"], [_share_midi, &"midi"]]:
+		var b: CheckButton = pair[0]
+		var on: bool = Session.my_shares.get(pair[1], "") in ["offered", "allowed"]
+		if b.button_pressed != on:
+			b.set_pressed_no_signal(on)
+	var lines := PackedStringArray()
+	for pair in [[&"audio", "Audio"], [&"midi", "Keys"]]:
+		var line := _share_line(pair[0], pair[1])
+		if line != "":
+			lines.append(line)
+	_share_said.text = "\n".join(lines) if not lines.is_empty() \
+			else "Nothing is shared. Each one waits for the host to say yes."
+
+
+## The host's say over what guests offer: each pending offer to allow or decline, each allowed
+## device to end.
+func _refresh_devices() -> void:
+	if _devices_box == null or Session.role != Session.Role.HOST:
+		if _devices_box != null:
+			_devices_box.visible = false
+		return
+	var rows: Array = []
+	for peer: int in Session.share_offers:
+		for kind: StringName in Session.share_offers[peer]:
+			rows.append([peer, kind, true, Session.share_offers[peer][kind]])
+	for peer: int in Session.shares:
+		for kind: StringName in Session.shares[peer]:
+			rows.append([peer, kind, false, ""])
+	var signature := str(rows) + str(DAW.state.track_indices() if DAW.state != null else [])
+	_devices_box.visible = not rows.is_empty()
+	if _devices_box.get_meta(&"signature", "") == signature:
+		return
+	_devices_box.set_meta(&"signature", signature)
+	for c in _devices_box.get_children():
+		c.queue_free()
+	if rows.is_empty():
+		return
+	_devices_box.add_child(_caption("GUEST DEVICES"))
+	for row in rows:
+		_add_device_row(row[0], row[1], row[2], row[3])
+
+
+func _add_device_row(peer: int, kind: StringName, pending: bool, label: String) -> void:
+	var who := Session.name_of(peer)
+	var what := "audio input" if kind == &"audio" else "keys and MIDI"
+	var line := _label("", 13, INK)
+	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_devices_box.add_child(line)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	_devices_box.add_child(row)
+	if pending:
+		line.text = "%s offers their %s%s." % [who, what, " (%s)" % label if kind == &"audio" and label != "" else ""]
+		var into: OptionButton = null
+		if kind == &"audio":
+			into = _choice()
+			_fill_tracks(into, int(Session.play_tracks.get(peer, 0)), "Choose a track")
+			row.add_child(into)
+		var allow := _button("Allow", true)
+		allow.pressed.connect(func():
+			var track := int(into.get_selected_id()) if into != null else 0
+			if kind == &"audio" and track <= 0:
+				Session.notice.emit("Choose the track %s's audio goes on first." % who)
+				return
+			Session.answer_share(peer, kind, true, track))
+		row.add_child(allow)
+		var decline := _button("Decline", false)
+		decline.pressed.connect(func(): Session.answer_share(peer, kind, false))
+		row.add_child(decline)
+	else:
+		var where := ""
+		if kind == &"audio":
+			where = ", live on %s" % _track_name(Session.share_track(peer))
+		line.text = "%s's %s: allowed%s." % [who, what, where]
+		var end := _button("End", false)
+		end.pressed.connect(func(): Session.answer_share(peer, kind, false))
+		row.add_child(end)
 
 
 func _refresh_mic() -> void:
@@ -874,6 +1027,10 @@ func _refresh_mic() -> void:
 	if _mic_input.selected != chosen:
 		_mic_input.select(chosen)
 	_fill_tracks(_mic_into, ga.target_track, "The armed track" if ga.for_host else "Nowhere")
+	if _mic_hear != null:
+		_mic_hear.visible = not ga.for_host
+		if _mic_hear.button_pressed != ga.monitor_self:
+			_mic_hear.set_pressed_no_signal(ga.monitor_self)
 	_mic_record.text = "Record my mic when I record" if ga.for_host \
 			else "Record my mic when %s records" % Session.name_of(1)
 	if _mic_record.button_pressed != ga.record_with_host:

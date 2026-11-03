@@ -162,7 +162,30 @@ var spectra: Dictionary = {}
 ## Host: the track each guest's keys play into, live (`send_play_track`): peer id -> track. Read
 ## by GuestPlay, which sounds their notes on that track's instrument plugin.
 var play_tracks: Dictionary = {}
+## The kinds of device a guest may offer the host: their audio input (`audio`), and their keys and
+## MIDI (`midi`). Nothing a guest has is used until the host allows it, one kind at a time.
+const SHARE_KINDS: Array[StringName] = [&"audio", &"midi"]
+## The channel a guest's live audio travels on: unreliable and ordered, its own, so a dropped
+## packet is a click and never a stall, and never queues a note behind it.
+const LIVE_CHANNEL := 10
+## The most a live packet may carry, bytes: a tenth of a second of mono 16-bit at 48 kHz.
+const LIVE_PACKET_MAX := 9600
+## Host: what guests have offered and the host has not answered, {peer: {kind: label}}; and what
+## the host has allowed, {peer: {kind: {"track": int}}}.
+var share_offers: Dictionary = {}
+var shares: Dictionary = {}
+## Guest: where each offer stands, {kind: "offered" | "allowed" | "declined"}, and the track the
+## host put the audio on (0 for none).
+var my_shares: Dictionary = {}
+var my_share_track := 0
+## Host: how many live packets have been refused, for the probe and the suite.
+var live_refused := 0
 signal play_track_changed(peer: int, track: int)
+## A guest's device offers, grants or refusals changed (`share_offers`, `shares`, `my_shares`).
+signal shares_changed()
+## Host: a guest's live audio, mono 16-bit at 48 kHz, as it arrived (`_live_up`), once the host has
+## allowed that guest's audio input.
+signal live_audio_heard(from: int, pcm: PackedByteArray)
 var spectra_heard_msec := -1
 ## {peer_id: Participant}
 var participants: Dictionary = {}
@@ -525,6 +548,13 @@ func start_solo() -> void:
 		_forget_made()
 	role = Role.SOLO
 	room = {}
+	var had_shares := not (share_offers.is_empty() and shares.is_empty() and my_shares.is_empty())
+	share_offers.clear()
+	shares.clear()
+	my_shares.clear()
+	my_share_track = 0
+	if had_shares:
+		shares_changed.emit()
 	_forget_spectra()
 	local_peer_id = 1
 	participants.clear()
@@ -1069,6 +1099,9 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	_pending.erase(peer_id)
 	if play_tracks.erase(peer_id):
 		play_track_changed.emit(peer_id, 0)
+	var had_offers := share_offers.erase(peer_id)
+	if shares.erase(peer_id) or had_offers:
+		shares_changed.emit()
 	if mix_feed != null:
 		mix_feed.revoke(peer_id)
 	if not participants.has(peer_id):
@@ -2018,6 +2051,114 @@ func _play_track_up(track: int) -> void:
 	else:
 		play_tracks.erase(from)
 	play_track_changed.emit(from, track)
+
+
+## ---- A guest's own devices, offered to the host --------------------------------------------
+## The guest offers one kind (`audio` or `midi`), the host allows or declines it, and either may
+## end it at any time. Until it is allowed the host ignores what a guest sends of that kind: no
+## live audio is accepted, and keys are not sounded on the host's instruments (GuestPlay).
+
+## Guest: offer a device to the host. `label` is what the host is shown ("Scarlett 2i2").
+func offer_share(kind: StringName, label := "") -> void:
+	if role != Role.GUEST or not _connected() or not SHARE_KINDS.has(kind):
+		return
+	my_shares[kind] = "offered"
+	shares_changed.emit()
+	_share_offer.rpc_id(1, kind, label)
+
+
+## Guest: take an offer back, or stop what the host allowed.
+func withdraw_share(kind: StringName) -> void:
+	if role != Role.GUEST:
+		return
+	my_shares.erase(kind)
+	if kind == &"audio":
+		my_share_track = 0
+	shares_changed.emit()
+	if _connected():
+		_share_withdraw.rpc_id(1, kind)
+
+
+@rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
+func _share_offer(kind: StringName, label: String) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from) or not SHARE_KINDS.has(kind):
+		return
+	(shares.get(from, {}) as Dictionary).erase(kind)
+	var mine: Dictionary = share_offers.get(from, {})
+	mine[kind] = MidiTake.clean_name(label).left(48)
+	share_offers[from] = mine
+	shares_changed.emit()
+	notice.emit("%s offers %s. Open the session panel (M) to answer." % [name_of(from), "their audio input" if kind == &"audio" else "their keys and MIDI"])
+
+
+@rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
+func _share_withdraw(kind: StringName) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from):
+		return
+	var changed := (share_offers.get(from, {}) as Dictionary).erase(kind)
+	changed = (shares.get(from, {}) as Dictionary).erase(kind) or changed
+	if changed:
+		shares_changed.emit()
+
+
+## Host: allow a guest's offered device (on `track` for audio), or decline it, or end it.
+func answer_share(peer: int, kind: StringName, allow: bool, track := 0) -> void:
+	if role != Role.HOST or not SHARE_KINDS.has(kind):
+		return
+	(share_offers.get(peer, {}) as Dictionary).erase(kind)
+	var mine: Dictionary = shares.get(peer, {})
+	if allow:
+		mine[kind] = {"track": maxi(track, 0)}
+		shares[peer] = mine
+	else:
+		mine.erase(kind)
+	shares_changed.emit()
+	if _is_member(peer) and _connected():
+		_share_answer.rpc_id(peer, kind, allow, maxi(track, 0) if allow else 0)
+
+
+## Host: whether `peer` may use their `kind` of device here.
+func share_allowed(peer: int, kind: StringName) -> bool:
+	return (shares.get(peer, {}) as Dictionary).has(kind)
+
+
+## Host: the track `peer`'s audio was put on, 0 for none.
+func share_track(peer: int, kind: StringName = &"audio") -> int:
+	return int(((shares.get(peer, {}) as Dictionary).get(kind, {}) as Dictionary).get("track", 0))
+
+
+@rpc("authority", "call_remote", "reliable", KEYS_CHANNEL)
+func _share_answer(kind: StringName, allow: bool, track: int) -> void:
+	if not SHARE_KINDS.has(kind):
+		return
+	if allow:
+		my_shares[kind] = "allowed"
+		if kind == &"audio":
+			my_share_track = maxi(track, 0)
+	elif my_shares.has(kind):
+		my_shares[kind] = "declined"
+		if kind == &"audio":
+			my_share_track = 0
+	shares_changed.emit()
+
+
+## Guest: a packet of live audio to the host, mono 16-bit at 48 kHz (AudioTake.encode). Sent only
+## while the host has allowed it.
+func send_live_audio(pcm: PackedByteArray) -> void:
+	if role == Role.GUEST and _connected() and my_shares.get(&"audio", "") == "allowed":
+		_live_up.rpc_id(1, pcm)
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered", LIVE_CHANNEL)
+func _live_up(pcm: PackedByteArray) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from) or not share_allowed(from, &"audio") \
+			or pcm.size() > LIVE_PACKET_MAX or pcm.size() % 2 != 0:
+		live_refused += 1
+		return
+	live_audio_heard.emit(from, pcm)
 
 
 @rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
