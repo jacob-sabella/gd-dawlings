@@ -794,6 +794,7 @@ func _ready() -> void:
 	await _test_a_bandmates_first_note_wakes_the_rack_and_is_heard()
 	await _test_a_scope_shows_the_wave_patched_into_it_even_when_unheard()
 	await _test_the_cv_bench_is_a_source_a_hand_sets()
+	await _test_a_mouse_at_the_modular_seat_turns_knobs_and_patches_jacks_through_the_camera()
 	await _test_a_beat_is_made_in_the_rack_and_recorded_onto_a_track_of_the_song()
 	await _test_the_big_rigs_far_end_is_patched_and_turned_by_hand()
 	await _test_the_rooms_cv_bench_is_reached_from_the_wall_and_drives_the_rack()
@@ -49868,6 +49869,89 @@ func _test_a_beat_is_made_in_the_rack_and_recorded_onto_a_track_of_the_song() ->
 	studio._rack_toggle_record()
 	var items: Array = DAW.state.track(track).items
 	check("the take is an item on that track (%d -> %d)" % [before, items.size()], items.size() == before + 1)
+	studio.queue_free()
+	await get_tree().process_frame
+
+
+## The mouse's whole road at the modular wall: from the station's seat, a control's place on screen
+## (the camera's projection) picks it, a press holds it, and a drag turns the knob or carries a cable.
+func _test_a_mouse_at_the_modular_seat_turns_knobs_and_patches_jacks_through_the_camera() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	studio.ask_rack("preset", ["big_rig"])
+	await get_tree().physics_frame
+	check("the walker goes to the modular station", studio.go_to_station(&"modular"))
+	get_window().size = Vector2i(1280, 720)
+	for i in 240:
+		await get_tree().physics_frame
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var wall: RackWall = studio.rack_wall
+	var view := get_viewport().get_visible_rect()
+	var at := func(n: Node3D) -> Vector2:
+		return studio.camera.unproject_position(n.global_position)
+	# A knob of a module in the wall's far half.
+	var far: Knob = null
+	var far_x := -1.0e9
+	for key in wall.knobs:
+		var kn: Knob = wall.knobs[key]
+		var x := wall.to_local(kn.global_position).x
+		if x > far_x and view.has_point(at.call(kn)) and not studio.camera.is_position_behind(kn.global_position):
+			far_x = x
+			far = kn
+	check("a knob at the wall's far end is in the seat's view", far != null)
+	if far != null:
+		hand.pointer_override = at.call(far)
+		hand._physics_process(1.0 / 60.0)
+		check("the mouse over it picks it (%s)" % [hand.hovered], hand.hovered == far)
+		var was := far.value
+		hand.press_override = 1
+		hand._physics_process(1.0 / 60.0)
+		check("a press holds it", hand.held == far)
+		for step in 8:
+			hand.pointer_override += Vector2(0, -12)
+			hand._physics_process(1.0 / 60.0)
+		hand.press_override = 0
+		hand._physics_process(1.0 / 60.0)
+		check("dragging up turns it (%.2f -> %.2f)" % [was, far.value], far.value > was + 0.05 or far.value >= 0.99)
+	# A cable: from an output jack to an input jack, both in view.
+	var cables: int = (studio.rack_row["patch"]["cables"] as Array).size()
+	var out_j: RackJack = null
+	var in_j: RackJack = null
+	for key in wall.jacks:
+		var j: RackJack = wall.jacks[key]
+		if not view.has_point(at.call(j)) or studio.camera.is_position_behind(j.global_position):
+			continue
+		var taken := false
+		for c in studio.rack_row["patch"]["cables"]:
+			if c[1] == String(j.jack) or c[0] == String(j.jack):
+				taken = true
+		if taken:
+			continue
+		if j.output and out_j == null:
+			out_j = j
+		elif not j.output and in_j == null and out_j != null and String(j.jack).get_slice(".", 0) != String(out_j.jack).get_slice(".", 0):
+			in_j = j
+	check("a free output and input are in view", out_j != null and in_j != null)
+	if out_j != null and in_j != null:
+		hand.pointer_override = at.call(out_j)
+		hand._physics_process(1.0 / 60.0)
+		check("the mouse over a jack picks it", hand.hovered == out_j)
+		hand.press_override = 1
+		hand._physics_process(1.0 / 60.0)
+		for t in [0.25, 0.5, 0.75, 1.0]:
+			hand.pointer_override = (at.call(out_j) as Vector2).lerp(at.call(in_j), t)
+			hand._physics_process(1.0 / 60.0)
+		hand.press_override = 0
+		hand._physics_process(1.0 / 60.0)
+		await get_tree().physics_frame
+		check("carried to an input it patches a cable (%d -> %d)" % [cables, (studio.rack_row["patch"]["cables"] as Array).size()],
+				(studio.rack_row["patch"]["cables"] as Array).size() == cables + 1)
+	hand.pointer_override = Vector2(-1, -1)
 	studio.queue_free()
 	await get_tree().process_frame
 

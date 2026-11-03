@@ -5377,13 +5377,13 @@ func _on_marble_rang(r: Dictionary) -> void:
 # A knob turning is the ask too, at most Session.KNOBS_PER_SECOND, so the room hears a sweep as it is
 # made. The rack is caught as audio on its track while the song records, or with its REC key.
 
-## Where a player stands to play the rack, in its frame (m): in front of the stand, out to a step
-## past the station's seat (1.3), and no wider than the case. Its jacks and knobs take the pointer
+## Where a player stands to play the rack, in its frame (m): in front of the stand, out to the seat and a step
+## past it (3.0), and no wider than the case. Its jacks and knobs take the pointer
 ## only from here (and only where no other station's seat is nearer, `at_modular`), or while it is
 ## visited or brought.
 const MODULAR_NEAR := 0.3
-const MODULAR_FAR := 2.5
-const MODULAR_SIDE := 1.1
+const MODULAR_FAR := 4.4
+const MODULAR_SIDE := 3.6
 ## How often the stations' seats are worked out again for `at_modular` (s): a trolley pushed
 ## moves its seat, but not every frame's worth.
 const MODULAR_SEATS_EVERY := 0.5
