@@ -657,7 +657,6 @@ func _keep_out_of_mirrors(node: Node) -> void:
 
 
 func _exit_tree() -> void:
-	Session.modular_takes.enabled = true
 	if hit_voices != null:
 		hit_voices.stop()
 		hit_voices = null
@@ -5438,7 +5437,6 @@ func _build_rack() -> void:
 		presence.modular_heard = _on_rack_heard
 	if Session.guest_midi != null:
 		Session.guest_midi.key.connect(_on_modular_key)
-		Session.modular_takes.enabled = false
 	_show_rack(rack_row)
 
 

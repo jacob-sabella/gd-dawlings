@@ -20,14 +20,8 @@ extends RefCounted
 ## loaded into its slots once (`load_hits`: Foley.write_hits on a worker thread, then a `load`
 ## line each), and plays this player's own hits by a line each (`play_hit`, `hit`), a few
 ## milliseconds after the hand rather than Godot's tens.
-##
-## And the modular wall (docs/spatial_loop.md part two, slice 51): native/modular.c, built in, plays
-## the wall's patch with this player's keys while they stand at it (`modular_on`), its cables and
-## knobs told by `mod` lines (`modular_patch`, `modular_knob`), so the modular is on the fast path too.
 
 const SOURCE := "res://native/keys.c"
-## The modular's arithmetic, included by SOURCE: the helper is built again when either is newer.
-const MODULAR_SOURCE := "res://native/modular.c"
 const BUILT := "user://bin/keys"
 ## Frames per graph cycle asked for: 2.7ms at 48kHz. The graph runs at the smallest any of its
 ## nodes asks for, so while a guest session is open everything on that card runs at this.
@@ -86,9 +80,7 @@ static func _build() -> String:
 	var built := ProjectSettings.globalize_path(BUILT)
 	if not FileAccess.file_exists(source):
 		return ""
-	var modular := ProjectSettings.globalize_path(MODULAR_SOURCE)
-	var newest := maxi(FileAccess.get_modified_time(source),
-			FileAccess.get_modified_time(modular) if FileAccess.file_exists(modular) else 0)
+	var newest := FileAccess.get_modified_time(source)
 	if FileAccess.file_exists(built) and FileAccess.get_modified_time(built) >= newest:
 		return built
 	var flags: Array = []
@@ -186,57 +178,6 @@ func take_midi(on: bool) -> void:
 	if not on:
 		devices = PackedStringArray()
 	_say("midi %d" % int(on))
-
-
-# --- the modular wall (docs/spatial_loop.md part two, slice 51) ---------------------------------
-
-## The keys play the modular's patch (on) or the tine (off): the app's notes and the sequencer's.
-func modular_on(on: bool) -> void:
-	_say("mod on %d" % int(on))
-
-
-## The whole of `patch` (Modular's {cables, knobs}) told to the helper: its cables cleared and put
-## in again, and every knob.
-func modular_patch(patch: Dictionary) -> void:
-	for line in modular_lines(patch):
-		_say(line)
-
-
-## One knob as it turns.
-func modular_knob(id: StringName, v: float) -> void:
-	_say(modular_knob_line(id, v))
-
-
-## A world socket's level now, and its gate opened (docs/spatial_loop.md part two, slice 53): what
-## the world plays into the patch (ModularWorld), as it happens.
-func modular_world(socket: StringName, level: float) -> void:
-	_say(modular_world_line(socket, level))
-
-
-func modular_trig(socket: StringName) -> void:
-	_say("mod trig %s" % socket)
-
-
-## The helper's line for world socket `socket` at `level`, with every digit, as a knob's.
-static func modular_world_line(socket: StringName, level: float) -> String:
-	return "mod world %s %s" % [socket, String.num(level, 17)]
-
-
-## The helper's lines for the whole of `patch`: `mod clear`, a `mod cable` each, a `mod knob` each.
-static func modular_lines(patch: Dictionary) -> PackedStringArray:
-	var out := PackedStringArray(["mod clear"])
-	for c: Array in patch.get("cables", []):
-		out.append("mod cable %s %s" % [c[0], c[1]])
-	var knobs: Dictionary = patch.get("knobs", {})
-	for id: StringName in Modular.KNOBS:
-		out.append(modular_knob_line(id, float(knobs.get(id, Modular.KNOB_REST[id]))))
-	return out
-
-
-## The helper's line for knob `id` at `v`, with all the digits a double has, so the helper's knob is
-## the app's to the last bit (Modular.render, checked against `--render`).
-static func modular_knob_line(id: StringName, v: float) -> String:
-	return "mod knob %s %s" % [id, String.num(v, 17)]
 
 
 # --- things struck (docs/spatial_loop.md part two, slice 39) ------------------------------------

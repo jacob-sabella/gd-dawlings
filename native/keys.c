@@ -38,15 +38,6 @@
 //                        play slot SLOT once: GAIN linear (0 to 4), PAN -1 (left) to 1 (right),
 //                        both sides whole at 0; SPEED how fast it is read (0.25 to 4, 1 when left
 //                        out), an AudioStreamPlayer's pitch_scale. An empty slot plays nothing
-//   mod on 0|1           the keys play the modular wall's patch (native/modular.c) rather than the
-//                        tine: the app's `on` and `off` and the sequencer's notes alike, and `bend`
-//                        bends both (docs/spatial_loop.md part two, slice 51)
-//   mod clear            every cable of the modular's out (its knobs stay as they are)
-//   mod cable FROM TO    a cable from output FROM (`vco1.out`) into input TO (`vcf.in`)
-//   mod cut JACK         the cable at JACK out: an input's one, or every one from an output
-//   mod knob ID V        knob ID (`vcf.cutoff`) at V, 0 to 1
-//   mod world NAME V     world socket NAME (`world:weather`) at level V (slice 53)
-//   mod trig NAME        world socket NAME's gate opened
 // EOF quits.
 //
 // Lines on stdout:
@@ -64,13 +55,13 @@
 // --render FRAMES: no PipeWire, no MIDI. Reads all of stdin, plays its notes and hits from the
 // first frame, and writes FRAMES of raw stereo float to stdout. For the suite. A line `wait N`
 // writes the next N frames before the lines after it are played, so a knob turned or a note let go
-// partway through lands where it should (on a modular block's edge when N is a multiple of 64).
+// partway through lands where it should.
 //
 // --parse: no PipeWire, no MIDI, no sound. Reads all of stdin and says what each line was taken
-// as, one line each (`on 60 100`, `hit 3 0.500 -0.300 1.000`, `loaded 3 4800`, `mod cable vco1.out
-// vcf.in`, `ignored ...`). For the suite: the line parser, headless.
+// as, one line each (`on 60 100`, `hit 3 0.500 -0.300 1.000`, `loaded 3 4800`, `ignored ...`). For the suite:
+// the line parser, headless.
 //
-// Built on demand by core/audio/native_keys.gd (modular.c, beside it, is included):
+// Built on demand by core/audio/native_keys.gd:
 //   cc -O2 -o keys keys.c $(pkg-config --cflags --libs libpipewire-0.3 alsa) -lm
 #include <alsa/asoundlib.h>
 #include <errno.h>
@@ -257,10 +248,6 @@ static void render_hits(float *out, uint32_t count) {
 	}
 }
 
-// --- The modular wall: native/modular.c. ------------------------------------------------------
-
-#include "modular.c"
-
 static void render(float *out, uint32_t count) {
 	memset(out, 0, count * 2 * sizeof(float));
 	float index_fall = powf(0.12f, 1.0f / (0.25f * RATE));
@@ -304,16 +291,11 @@ static void render(float *out, uint32_t count) {
 		out[i] = f / (1.0f + fabsf(f)) * gain;
 	}
 	render_hits(out, count);
-	// The modular, while the keys play it, at the keys' volume: after the tine's saturation, since
-	// its OUT module has its own.
-	if (mod_on && enabled)
-		mod_render(out, count, gain);
 }
 
 // --- Events: from the main loop (stdin, the sequencer) to the realtime thread. ------------------
 
-enum { EV_ON, EV_OFF, EV_SUS, EV_VOL, EV_ENABLE, EV_PANIC, EV_BEND, EV_CC, EV_LOAD, EV_HIT, EV_MOD_ON,
-	EV_MOD_CLEAR, EV_MOD_CABLE, EV_MOD_CUT, EV_MOD_KNOB, EV_MOD_WORLD, EV_MOD_TRIG };
+enum { EV_ON, EV_OFF, EV_SUS, EV_VOL, EV_ENABLE, EV_PANIC, EV_BEND, EV_CC, EV_LOAD, EV_HIT };
 struct event {
 	uint32_t kind, a, b;
 	float f;
@@ -321,8 +303,6 @@ struct event {
 	// EV_LOAD's samples (b frames), EV_HIT's pan and speed.
 	float *p;
 	float g, h;
-	// EV_MOD_KNOB's value, whole: a float would round the knob the app sends.
-	double d;
 };
 #define EVENTS 1024
 static struct event events[EVENTS];
@@ -381,13 +361,6 @@ static void say_event(const struct event *e) {
 	case EV_CC: printf("cc %u %u\n", e->a, e->b); break;
 	case EV_LOAD: break; // Said as `loaded` where it was read.
 	case EV_HIT: printf("hit %u %.3f %.3f %.3f\n", e->a, e->f, e->g, e->h); break;
-	case EV_MOD_ON: printf("mod on %u\n", e->a); break;
-	case EV_MOD_CLEAR: printf("mod clear\n"); break;
-	case EV_MOD_CABLE: printf("mod cable %s %s\n", mod_out_name(e->a), IN_NAMES[e->b]); break;
-	case EV_MOD_CUT: printf("mod cut %s\n", (int)e->a >= 0 ? IN_NAMES[e->a] : mod_out_name(e->b)); break;
-	case EV_MOD_KNOB: printf("mod knob %s %.6f\n", KNOB_NAMES[e->a], e->d); break;
-	case EV_MOD_WORLD: printf("mod world %s %.6f\n", WORLD_NAMES[e->a], e->d); break;
-	case EV_MOD_TRIG: printf("mod trig %s\n", WORLD_NAMES[e->a]); break;
 	}
 }
 
@@ -421,19 +394,12 @@ static uint64_t apply_events(void) {
 		struct event *e = &events[(at + i) & (EVENTS - 1)];
 		switch (e->kind) {
 		case EV_ON:
-			if (mod_on) {
-				if (enabled)
-					mod_note_on(e->a, e->b);
-			} else {
-				voice_on(e->a, e->b);
-			}
+			voice_on(e->a, e->b);
 			if (!first_on)
 				first_on = e->at_ns;
 			break;
 		case EV_OFF:
-			// Both, so a key held across `mod on` still lets go of whichever it went down on.
 			voice_off(e->a);
-			mod_note_off(e->a);
 			break;
 		case EV_SUS: pedal(e->a); break;
 		case EV_VOL: gain = 0.5f * powf(10.0f, e->f / 20.0f); break;
@@ -444,25 +410,10 @@ static uint64_t apply_events(void) {
 			break;
 		case EV_PANIC:
 			panic();
-			mod_held_n = 0;
 			break;
 		case EV_BEND:
 			wheel((int)e->a - 8192);
-			mod_wheel((int)e->a - 8192);
 			break;
-		case EV_MOD_ON:
-			mod_on = e->a;
-			if (mod_on)
-				panic();
-			else
-				mod_held_n = 0;
-			break;
-		case EV_MOD_CLEAR: mod_clear(); break;
-		case EV_MOD_CABLE: mod_cable(e->a, e->b); break;
-		case EV_MOD_CUT: mod_cut((int)e->a, (int)e->b); break;
-		case EV_MOD_KNOB: mod_knob(e->a, e->d); break;
-		case EV_MOD_WORLD: mod_world(e->a, e->d); break;
-		case EV_MOD_TRIG: mod_trig(e->a); break;
 		case EV_CC: controller(e->a, e->b); break;
 		case EV_LOAD:
 			// Every voice still on the old sound stops before it is let go of.
@@ -754,64 +705,12 @@ static long offline_left = -1;
 
 static void render_offline_frames(long frames);
 
-// A `mod` line (the modular wall's patch, its knobs, and whether the keys play it): an event, or
-// said to be ignored under --parse when a name is not one of its jacks or knobs.
-static void mod_command(const char *s) {
-	char x[32], y[32];
-	int a = 0;
-	double d = 0;
-	if (sscanf(s, "mod on %d", &a) == 1) {
-		push(EV_MOD_ON, a != 0, 0, 0);
-	} else if (strncmp(s, "mod clear", 9) == 0) {
-		push(EV_MOD_CLEAR, 0, 0, 0);
-	} else if (sscanf(s, "mod cable %31s %31s", x, y) == 2) {
-		int from = mod_find_out(x), to = mod_find(IN_NAMES, MOD_INS, y);
-		if (from < 0 || to < 0) {
-			// Carried from an input to an output, the same cable.
-			from = mod_find_out(y);
-			to = mod_find(IN_NAMES, MOD_INS, x);
-		}
-		if (from >= 0 && to >= 0)
-			push(EV_MOD_CABLE, (uint32_t)from, (uint32_t)to, 0);
-		else if (parse_only)
-			printf("ignored %s\n", s);
-	} else if (sscanf(s, "mod cut %31s", x) == 1) {
-		int in = mod_find(IN_NAMES, MOD_INS, x), out = mod_find_out(x);
-		if (in >= 0 || out >= 0)
-			push(EV_MOD_CUT, (uint32_t)in, (uint32_t)out, 0);
-		else if (parse_only)
-			printf("ignored %s\n", s);
-	} else if (sscanf(s, "mod world %31s %lf", x, &d) == 2) {
-		int w = mod_find(WORLD_NAMES, MOD_WORLD, x);
-		if (w >= 0 && isfinite(d))
-			push_full((struct event){.kind = EV_MOD_WORLD, .a = (uint32_t)w, .d = d});
-		else if (parse_only)
-			printf("ignored %s\n", s);
-	} else if (sscanf(s, "mod trig %31s", x) == 1) {
-		int w = mod_find(WORLD_NAMES, MOD_WORLD, x);
-		if (w >= 0)
-			push(EV_MOD_TRIG, (uint32_t)w, 0, 0);
-		else if (parse_only)
-			printf("ignored %s\n", s);
-	} else if (sscanf(s, "mod knob %31s %lf", x, &d) == 2) {
-		int k = mod_find(KNOB_NAMES, MOD_KNOBS, x);
-		if (k >= 0 && isfinite(d))
-			push_full((struct event){.kind = EV_MOD_KNOB, .a = (uint32_t)k, .d = d});
-		else if (parse_only)
-			printf("ignored %s\n", s);
-	} else if (parse_only) {
-		printf("ignored %s\n", s);
-	}
-}
-
 static void command(char *s) {
 	int a = 0, b = 0;
 	float f = 0, g = 0, h = 1;
 	int used = 0;
 	long n = 0;
-	if (strncmp(s, "mod ", 4) == 0)
-		mod_command(s);
-	else if (sscanf(s, "wait %ld", &n) == 1) {
+	if (sscanf(s, "wait %ld", &n) == 1) {
 		if (offline_left >= 0)
 			render_offline_frames(n < offline_left ? n : offline_left);
 	} else if (sscanf(s, "load %d %n", &a, &used) == 1 && used > 0 && s[used] != 0)
@@ -920,7 +819,6 @@ int main(int argc, char **argv) {
 			midi = 0;
 	}
 	synth_init();
-	mod_init();
 	news = stdout;
 	if (parse_only) {
 		setvbuf(stdout, NULL, _IOLBF, 0);

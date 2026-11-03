@@ -721,16 +721,9 @@ func _ready() -> void:
 	await _test_a_desk_plays_the_theremin_across_its_rule_and_its_wheel_is_the_volume()
 	_test_a_snapped_theremin_hands_on_to_the_tone_it_glides_to()
 	await _test_a_desk_theremins_cursor_travel_is_its_pitch_and_not_a_bend()
-	_test_the_modular_default_patch_plays_the_note_it_is_given()
-	_test_a_modular_repatch_changes_the_route()
-	_test_the_modular_renders_the_same_events_the_same_twice()
-	_test_the_keys_helper_renders_the_modular_as_godot_does()
-	_test_a_modular_take_renders_the_same_twice_as_long_as_its_span()
-	_test_a_guests_modular_take_is_rendered_by_the_host_where_it_was_played()
-	_test_rain_density_into_the_modular_filter_changes_its_sound()
+	_test_the_storms_density_and_drops_are_the_weather_sockets_events()
 	_test_a_drip_gates_an_env_in_the_cave()
 	_test_a_rings_level_follows_its_layers_notes_the_same_on_two_machines()
-	_test_a_modular_take_hears_the_world()
 	await _test_a_looper_rings_sockets_stand_clear_of_their_bands()
 	_test_a_hand_in_the_grain_cloud_is_where_how_long_and_how_many()
 	_test_a_grain_clouds_spray_widens_where_its_grains_play_from()
@@ -47458,172 +47451,7 @@ func _test_a_desk_plays_the_theremin_across_its_rule_and_its_wheel_is_the_volume
 	_offline()
 
 
-# --- the modular wall (docs/spatial_loop.md part two, slice 51) ---------------------------------
-
-## How much of `hz` there is in `samples` from `from` to `to` (Goertzel's power over the span, as a
-## share of the span's own), at Modular.RATE.
-func _modular_power(samples: PackedFloat32Array, hz: float, from: int, to: int) -> float:
-	var w := TAU * hz / Modular.RATE
-	var coeff := 2.0 * cos(w)
-	var s1 := 0.0
-	var s2 := 0.0
-	var total := 0.0
-	for i in range(from, mini(to, samples.size())):
-		var s0 := samples[i] + coeff * s1 - s2
-		s2 = s1
-		s1 = s0
-		total += samples[i] * samples[i]
-	var power := s1 * s1 + s2 * s2 - coeff * s1 * s2
-	return power / maxf(total * (to - from), 1e-12)
-
-
-func _modular_loudest(samples: PackedFloat32Array, from := 0, to := -1) -> float:
-	var most := 0.0
-	for i in range(from, samples.size() if to < 0 else mini(to, samples.size())):
-		most = maxf(most, absf(samples[i]))
-	return most
-
-
-## A fresh room's patch (KEYS to VCO 1 to the VCF to the VCA to OUT, KEYS' gate to ENV 1 to the VCA)
-## sounds at once: an A held is 440 Hz above everything near it, a C an octave over middle C is 523 Hz,
-## nothing sounds before the key, and the key let go dies away.
-func _test_the_modular_default_patch_plays_the_note_it_is_given() -> void:
-	var patch := Modular.default_patch()
-	check("a fresh patch is KEYS to VCO 1 to the VCF to the VCA to OUT, KEYS' gate to ENV 1 to the VCA (%s)" % [patch["cables"]],
-			patch["cables"].size() == 6 and Modular.source_of(patch, &"vcf.in") == &"vco1.out"
-			and Modular.source_of(patch, &"out.in") == &"vca.out" and Modular.source_of(patch, &"env1.gate") == &"keys.gate"
-			and Modular.source_of(patch, &"vca.cv") == &"env1.out" and Modular.source_of(patch, &"vco1.pitch") == &"keys.pitch")
-	var a4 := Modular.render(patch, [[0.0, Modular.Event.ON, 69, 100]], 0.0, 24000)
-	var at := _modular_power(a4, 440.0, 4800, 24000)
-	var beside := maxf(_modular_power(a4, 415.3, 4800, 24000), _modular_power(a4, 466.16, 4800, 24000))
-	check("an A held through it is loud (%.3f), and its energy is at 440 Hz (%.4f against %.5f a semitone either side)"
-			% [_modular_loudest(a4), at, beside], _modular_loudest(a4) > 0.1 and at > beside * 20.0)
-	var c5 := Modular.render(patch, [[0.0, Modular.Event.ON, 72, 100]], 0.0, 24000)
-	check("a C an octave over middle C is at 523 Hz (%.4f against %.4f at 440)" % [_modular_power(c5, 523.25, 4800, 24000),
-			_modular_power(c5, 440.0, 4800, 24000)], _modular_power(c5, 523.25, 4800, 24000) > _modular_power(c5, 440.0, 4800, 24000) * 20.0)
-	var later := Modular.render(patch, [[0.1, Modular.Event.ON, 69, 100]], 0.0, 9600)
-	check("nothing sounds before the key (%.6f), and it does after (%.3f)" % [_modular_loudest(later, 0, 4800), _modular_loudest(later, 4864)],
-			_modular_loudest(later, 0, 4800) == 0.0 and _modular_loudest(later, 4864) > 0.1)
-	var let_go := Modular.render(patch, [[0.0, Modular.Event.ON, 69, 100], [0.2, Modular.Event.OFF, 69, 0]], 0.0, 48000)
-	check("and let go it dies away (%.5f a second later)" % _modular_loudest(let_go, 43200), _modular_loudest(let_go, 43200) < 0.001)
-
-
-## A cable moved is another sound: the VCA's input pulled is silence; noise into the VCF in place of the
-## VCO has no 440 in it; a cable into a MIX that reaches nothing changes nothing; and a cable patched
-## while it plays (an LFO onto the VCF's CV) changes it from that block on, and not before.
-func _test_a_modular_repatch_changes_the_route() -> void:
-	var patch := Modular.default_patch()
-	var key := [[0.0, Modular.Event.ON, 69, 100]]
-	var base := Modular.render(patch, key, 0.0, 24000)
-	var pulled := patch.duplicate(true)
-	check("the VCA's input pulled", Modular.answer_patch(pulled, &"vca.in", &"") == "" and Modular.source_of(pulled, &"vca.in") == &"")
-	check("is silence (%.6f)" % _modular_loudest(Modular.render(pulled, key, 0.0, 24000)), _modular_loudest(Modular.render(pulled, key, 0.0, 24000)) == 0.0)
-	var noisy := patch.duplicate(true)
-	Modular.answer_patch(noisy, &"vcf.in", &"")
-	check("noise into the VCF in its place", Modular.answer_patch(noisy, &"noise.out", &"vcf.in") == "")
-	var hiss := Modular.render(noisy, key, 0.0, 24000)
-	var ratio := _modular_power(hiss, 440.0, 4800, 24000) / maxf(_modular_power(hiss, 466.16, 4800, 24000), 1e-12)
-	check("sounds (%.3f) with no 440 Hz standing out of it (%.2f of the semitone above's)" % [_modular_loudest(hiss), ratio],
-			_modular_loudest(hiss) > 0.01 and ratio < 5.0)
-	var aside := patch.duplicate(true)
-	Modular.answer_patch(aside, &"vco2.out", &"mix.in1")
-	check("a VCO into a MIX that goes nowhere changes nothing", Modular.render(aside, key, 0.0, 24000) == base)
-	var swept := Modular.render(patch, key + [[0.1, Modular.Event.PATCH, &"lfo.out", &"vcf.cv"]], 0.0, 24000)
-	var same_until := 0
-	while same_until < swept.size() and swept[same_until] == base[same_until]:
-		same_until += 1
-	check("an LFO patched onto the VCF's CV as it plays changes it from the block it falls in, and not before (%d)" % same_until,
-			same_until >= 4800 and same_until < 4800 + Modular.BLOCK * 2)
-	var refused := patch.duplicate(true)
-	check("an output into an output, or an input into an input, is no cable", Modular.answer_patch(refused, &"vco1.out", &"lfo.out") != ""
-			and Modular.answer_patch(refused, &"vcf.cv", &"vca.cv") != "" and refused == patch)
-	check("and carried from an input to an output it is the same cable", Modular.answer_patch(refused, &"vcf.cv", &"lfo.out") == ""
-			and Modular.source_of(refused, &"vcf.cv") == &"lfo.out")
-
-
-## The same patch and the same events are the same samples, every time and in any order they are
-## listed; and a modular run a block at a time from its own events plays what `render` does.
-func _test_the_modular_renders_the_same_events_the_same_twice() -> void:
-	var patch := Modular.default_patch()
-	Modular.answer_patch(patch, &"lfo.out", &"vcf.cv")
-	Modular.answer_patch(patch, &"keys.gate", &"env2.gate")
-	Modular.answer_patch(patch, &"env2.out", &"vco1.fm")
-	Modular.answer_patch(patch, &"noise.out", &"mix.in1")
-	var events := [[0.0, Modular.Event.ON, 60, 90], [0.05, Modular.Event.KNOB, &"vcf.res", 0.85],
-			[0.1, Modular.Event.BEND, 12000, 0], [0.15, Modular.Event.ON, 64, 120], [0.2, Modular.Event.OFF, 60, 0],
-			[0.25, Modular.Event.KNOB, &"vco1.fm", 0.4], [0.3, Modular.Event.OFF, 64, 0]]
-	var once := Modular.render(patch, events, 0.0, 19200)
-	var twice := Modular.render(patch, events, 0.0, 19200)
-	var shuffled := events.duplicate()
-	shuffled.reverse()
-	check("the same events render the same samples twice (%.3f loud)" % _modular_loudest(once), once == twice and _modular_loudest(once) > 0.05)
-	check("however they are listed", Modular.render(patch, shuffled, 0.0, 19200) == once)
-	var m := Modular.new()
-	m.set_patch(patch)
-	var by_blocks := PackedFloat32Array()
-	var next := 0
-	for b in 19200 / Modular.BLOCK:
-		while next < events.size() and floori(float(events[next][0]) * Modular.RATE / Modular.BLOCK + 1e-6) <= b:
-			m.apply(events[next])
-			next += 1
-		by_blocks.append_array(m.run(Modular.BLOCK))
-	check("and a modular played a block at a time is the same", by_blocks == once)
-	var moved := events.duplicate(true)
-	moved[1][0] = 0.06
-	check("a knob turned a little later is another sound", Modular.render(patch, moved, 0.0, 19200) != once)
-
-
-## The keys' helper (native/keys.c with native/modular.c) is the same modular in C: the patch told it as
-## `mod` lines (NativeKeys.modular_lines), `mod on 1`, and the same keys and knob at the same frames,
-## render (`--render`, at the app's -6 dB) what Modular.render does, to within 1e-4; and its parser
-## reads every `mod` line and ignores a jack or a knob it does not have.
-func _test_the_keys_helper_renders_the_modular_as_godot_does() -> void:
-	var helper := NativeKeys.helper()
-	check("the keys helper builds here, with the modular in it", helper != "")
-	if helper == "":
-		return
-	var patch := Modular.default_patch()
-	Modular.answer_patch(patch, &"lfo.out", &"vcf.cv")
-	Modular.answer_patch(patch, &"keys.gate", &"env2.gate")
-	Modular.answer_patch(patch, &"env2.out", &"vco1.fm")
-	Modular.answer_patch(patch, &"vco2.out", &"mix.in1")
-	Modular.answer_knob(patch, &"vco1.fm", 0.3)
-	Modular.answer_knob(patch, &"vcf.res", 0.7)
-	Modular.answer_knob(patch, &"lfo.rate", 0.62)
-	var lines := NativeKeys.modular_lines(patch)
-	check("the patch as lines: clear, a cable each, a knob each (%d)" % lines.size(),
-			lines.size() == 1 + patch["cables"].size() + Modular.KNOBS.size() and lines[0] == "mod clear"
-			and lines.has("mod cable lfo.out vcf.cv") and lines.has(NativeKeys.modular_knob_line(&"vco1.fm", 0.3)))
-	var told := Array(lines) + ["mod on 1", "on 60 100", "wait 4800", NativeKeys.modular_knob_line(&"vcf.cutoff", 0.8),
-			"on 67 80", "wait 4800", "off 60", "off 67"]
-	var dir := OS.get_cache_dir().path_join("dawlings/tmp/ports")
-	DirAccess.make_dir_recursive_absolute(dir)
-	var lines_file := dir.path_join("modular_in.txt")
-	var f := FileAccess.open(lines_file, FileAccess.WRITE)
-	f.store_string("\n".join(told) + "\n")
-	f.close()
-	var out := dir.path_join("modular.raw")
-	OS.execute("sh", ["-c", "'%s' --render 14400 < '%s' > '%s' 2>/dev/null" % [helper, lines_file, out]])
-	var native := FileAccess.get_file_as_bytes(out).to_float32_array()
-	var ours := Modular.render(patch, [[0.0, Modular.Event.ON, 60, 100], [0.1, Modular.Event.KNOB, &"vcf.cutoff", 0.8],
-			[0.1, Modular.Event.ON, 67, 80], [0.2, Modular.Event.OFF, 60, 0], [0.2, Modular.Event.OFF, 67, 0]], 0.0, 14400)
-	check("it renders what it was asked (%d samples)" % native.size(), native.size() == 14400 * 2)
-	var worst := 0.0
-	var both := 0.0
-	for i in mini(ours.size(), native.size() / 2):
-		worst = maxf(worst, absf(native[i * 2] / 0.5 - ours[i]))
-		both = maxf(both, absf(native[i * 2] - native[i * 2 + 1]))
-	check("and it is Modular.render, to within 1e-4 (worst %.7f of %.3f), the same in both ears" % [worst, _modular_loudest(ours)],
-			_modular_loudest(ours) > 0.05 and worst < 1e-4 and both == 0.0)
-	f = FileAccess.open(lines_file, FileAccess.WRITE)
-	f.store_string("mod on 1\nmod clear\nmod cable vco1.out vcf.in\nmod cable vcf.cv lfo.out\nmod cable vco9.out vcf.in\nmod cut vca.in\nmod knob vcf.res 0.25\nmod knob vcf.nope 1\nmod on 0\n")
-	f.close()
-	OS.execute("sh", ["-c", "'%s' --parse < '%s' > '%s' 2>/dev/null" % [helper, lines_file, out]])
-	var parsed := FileAccess.get_file_as_string(out).split("\n", false)
-	check("its parser reads every mod line, a cable carried from an input the same one, and ignores a jack or knob it has not (%s)" % [parsed],
-			parsed == PackedStringArray(["mod on 1", "mod clear", "mod cable vco1.out vcf.in", "mod cable lfo.out vcf.cv",
-					"ignored mod cable vco9.out vcf.in", "mod cut vca.in", "mod knob vcf.res 0.250000", "ignored mod knob vcf.nope 1", "mod on 0"]))
-
+# --- the world into the rack (docs/spatial_loop.md part two, slice 53) ---------------------------
 
 ## The 16-bit samples of the WAV at `path` (AudioTake's mono), as floats.
 func _wav_samples(path: String) -> PackedFloat32Array:
@@ -47637,215 +47465,9 @@ func _wav_samples(path: String) -> PackedFloat32Array:
 	return out
 
 
-## A take through the modular is what was played, stamped: its render is the same samples twice and
-## as long as its span, its WAV in the media folder is that long too, a note held as it begins sounds
-## from its first moment, the wheel rests at the last note-off, and nothing unstamped is kept.
-func _test_a_modular_take_renders_the_same_twice_as_long_as_its_span() -> void:
-	var take := ModularTake.new().begin(Modular.default_patch(), 20.0, {64: 90})
-	take.note(Session.Note.ON, 69, 100, 20.1)
-	take.bend(4096, 20.2)
-	take.knob(&"vcf.cutoff", 0.3, 20.4)
-	take.cable(&"lfo.out", &"vcf.cv", 20.5)
-	take.note(Session.Note.OFF, 64, 0, 20.6)
-	take.note(Session.Note.OFF, 69, 0, 20.7)
-	take.knob(&"vcf.res", 0.5, -1.0)
-	take.note(Session.Note.ON, 60, 100, -1.0)
-	take.reach(21.25)
-	check("the take holds what was played, the key held as it began at its start (%s)" % [take.events.slice(0, 2)],
-			take.events[0] == [20.0, Modular.Event.ON, 64, 90] and take.events.size() == 8)
-	check("the wheel rests at the last note-off, not the first",
-			take.events[6] == [20.7, Modular.Event.OFF, 69, 0] and take.events[7] == [20.7, Modular.Event.BEND, 0, 0]
-			and not take.events.slice(0, 6).any(func(e: Array) -> bool: return e[1] == Modular.Event.BEND and e[2] == 0))
-	check("and nothing stamped with no song is kept", not take.events.any(func(e: Array) -> bool: return float(e[0]) < 0.0))
-	var once := take.render()
-	var twice := take.render()
-	check("two renders of one take are the same samples (%d)" % once.size(), once == twice)
-	check("as long as its span: 1.25 s at 48 kHz (%d frames)" % once.size(), once.size() == 60000 and take.frames() == 60000)
-	check("and they are the patch's sound of what was played: the E held as it began, at 330 Hz (%.3f)"
-			% _modular_loudest(once, 0, 4800), _modular_loudest(once, 0, 4800) > 0.05
-			and _modular_power(once, 329.63, 0, 4800) > _modular_power(once, 349.23, 0, 4800) * 10.0)
-	var wav := take.write("suite-modular-take.wav", once)
-	check("its WAV is in the project's media folder, as long as the take's span (%d frames, %.3f s)" % [wav.frames, wav.seconds()],
-			wav != null and wav.path == AudioTake.DIR.path_join("suite-modular-take.wav") and wav.frames == 60000
-			and is_equal_approx(wav.seconds(), 1.25))
-	var back := _wav_samples(wav.path)
-	var worst := 0.0
-	for i in mini(back.size(), once.size()):
-		worst = maxf(worst, absf(back[i] - clampf(once[i], -1.0, 1.0)))
-	check("and the render's samples to 16 bits (%.6f)" % worst, back.size() == once.size() and worst < 2.0 / 32767.0)
-	wav.discard()
-	var silent := ModularTake.new().begin(Modular.default_patch(), 5.0)
-	silent.knob(&"vcf.cutoff", 0.2, 5.1)
-	silent.reach(6.0)
-	check("a take of knobs alone has no notes", not silent.has_notes() and take.has_notes())
-
-
-## A guest's take through the modular, as the host holds it from what reached it (ModularTakes):
-## its marks are reliable on each lane's own channel; their notes from the keys' begin, held keys at
-## the start, others' sources not; a cutoff sweep made mid-take and delivered 80 ms late is heard
-## where it was made, and so is a cable pulled mid-take and delivered after the take's end; and the
-## take is put in on the built-in engine as audio named `modular` at its start, no MIDI.
-func _test_a_guests_modular_take_is_rendered_by_the_host_where_it_was_played() -> void:
-	var config: Dictionary = (Session.get_script() as Script).get_rpc_config()
-	var keys_mark: Dictionary = config.get(&"_modular_take_keys", {})
-	var gesture_mark: Dictionary = config.get(&"_modular_take_gestures", {})
-	var take_bend: Dictionary = config.get(&"_modular_bend_up", {})
-	check("a take's marks are reliable, behind the notes and behind the knobs (%s, %s)" % [keys_mark, gesture_mark],
-			keys_mark.get("transfer_mode") == MultiplayerPeer.TRANSFER_MODE_RELIABLE and keys_mark.get("channel") == Session.KEYS_CHANNEL
-			and gesture_mark.get("transfer_mode") == MultiplayerPeer.TRANSFER_MODE_RELIABLE
-			and gesture_mark.get("channel") == Session.GESTURE_CHANNEL)
-	check("and the wheel its render takes is reliable behind the notes, not the controls' lossy channel (%s)" % [take_bend],
-			take_bend.get("transfer_mode") == MultiplayerPeer.TRANSFER_MODE_RELIABLE and take_bend.get("channel") == Session.KEYS_CHANNEL)
-	var backend := GodotBackend.new()
-	backend.state = MixState.new()
-	DAW.use(backend)
-	_as_session(Session.Role.HOST, 1)
-	Session.local_name = "Ada"
-	for spec in [[1, "Ada", 0], [2, "Grace", 1]]:
-		var p := Session.Participant.new()
-		p.peer_id = spec[0]
-		p.display_name = spec[1]
-		p.colour_index = spec[2]
-		Session.participants[spec[0]] = p
-	var mt := Session.modular_takes
-	var saved_patch := mt.patch
-	mt.threaded = false
-	mt.patch = func() -> Dictionary: return Modular.default_patch()
-	var track: int = DAW.state.tracks.keys()[0]
-	DAW.state.track(track).items.clear()
-	var placed: Array = []
-	var listen := func(info: Dictionary) -> void: placed.append(info)
-	mt.placed.connect(listen)
-	const K := ModularTakes.Lane.KEYS
-	const G := ModularTakes.Lane.GESTURES
-
-	# A take with a sweep in it: A3 held, the cutoff swept shut from 10.3 to 10.4.
-	mt.heard_note(2, Session.Note.ON, 45, 100, 9.9, Modular.SOURCE)
-	mt.heard_mark(2, K, 1, true, 10.0, 10.0, [])
-	mt.heard_mark(2, G, 1, true, 10.0, 10.0, [])
-	mt.heard_note(2, Session.Note.ON, 52, 100, 10.05, &"harp")
-	var sweep: Array = []
-	for i in 6:
-		sweep.append([10.3 + i * 0.02, maxf(0.55 - i * 0.11, 0.0)])
-	# Each step of the sweep reaches the host 80 ms after it was made: the notes stamped up to then
-	# have come in first.
-	mt.heard_bend(2, 2048, 10.2)
-	mt.heard_bend(2, 2048, 10.25)
-	for step: Array in sweep:
-		mt.knob(&"vcf.cutoff", maxf(step[1], 0.0), step[0])
-	mt.heard_note(2, Session.Note.OFF, 45, 0, 10.8, Modular.SOURCE)
-	mt.heard_mark(2, K, 1, false, 10.0, 11.0, [track])
-	mt.heard_note(2, Session.Note.ON, 47, 100, 11.2, Modular.SOURCE)
-	mt.heard_mark(2, G, 1, false, 10.0, 11.0, [track])
-	var held: ModularTake = mt._theirs[2]["take"]
-	check("the host holds their take: A2 held as it began, at its start, not the harp's note nor one after its keys' end (%s)"
-			% [held.events.filter(func(e: Array) -> bool: return e[1] == Modular.Event.ON)],
-			held.events.filter(func(e: Array) -> bool: return e[1] == Modular.Event.ON) == [[10.0, Modular.Event.ON, 45, 100]])
-	check("its wheel as it moved, a resend of where it stands not kept again",
-			held.events.filter(func(e: Array) -> bool: return e[1] == Modular.Event.BEND and e[2] == 2048) == [[10.2, Modular.Event.BEND, 2048, 0]])
-	var made := ModularTake.new().begin(Modular.default_patch(), 10.0, {45: 100})
-	made.bend(2048, 10.2)
-	for step: Array in sweep:
-		made.knob(&"vcf.cutoff", maxf(step[1], 0.0), step[0])
-	made.note(Session.Note.OFF, 45, 0, 10.8)
-	made.reach(11.0)
-	var late := ModularTake.new().begin(Modular.default_patch(), 10.0, {45: 100})
-	late.bend(2048, 10.2)
-	for step: Array in sweep:
-		late.knob(&"vcf.cutoff", maxf(step[1], 0.0), step[0] + 0.08)
-	late.note(Session.Note.OFF, 45, 0, 10.8)
-	late.reach(11.0)
-	mt.place(2)
-	check("ended on both lanes it is put in once (%s)" % [placed], placed.size() == 1 and not mt._theirs.has(2))
-	var items: Array = DAW.state.track(track).items
-	check("on the built-in engine: one audio take named modular on the take's track at its start, 1 s long, no MIDI (%s)"
-			% [items.map(func(it: MixState.ItemState) -> String: return "%s %.2f %.2f %s" % [it.name, it.start, it.length, it.source])],
-			items.size() == 1 and items[0].name == ModularTakes.NAME and is_equal_approx(items[0].start, 10.0)
-			and is_equal_approx(items[0].length, 1.0) and items[0].source.ends_with(".wav") and items[0].notes.is_empty())
-	var path: String = placed[0]["path"] if not placed.is_empty() else ""
-	var heard := _wav_samples(path)
-	var want := made.render()
-	var wrong := late.render()
-	var worst := 0.0
-	for i in mini(heard.size(), want.size()):
-		worst = maxf(worst, absf(heard[i] - clampf(want[i], -1.0, 1.0)))
-	var off := 0.0
-	for i in mini(heard.size(), wrong.size()):
-		off = maxf(off, absf(heard[i] - clampf(wrong[i], -1.0, 1.0)))
-	check("its WAV is the take's span (%d frames)" % heard.size(), heard.size() == 48000)
-	check("and the sweep delivered 80 ms late is heard where it was made (%.6f from the take as played, %.3f from it at arrival)"
-			% [worst, off], worst < 2.0 / 32767.0 and off > 0.05)
-	var at := func(s: float) -> int: return roundi((s - 10.0) * Modular.RATE)
-	check("open before the sweep, shut after it (%.3f, %.4f)" % [_modular_loudest(heard, at.call(10.2), at.call(10.29)),
-			_modular_loudest(heard, at.call(10.45), at.call(10.5))],
-			_modular_loudest(heard, at.call(10.45), at.call(10.5)) < _modular_loudest(heard, at.call(10.2), at.call(10.29)) * 0.3)
-	if not path.is_empty():
-		DirAccess.remove_absolute(path)
-
-	# A take with a cable pulled in it, at 20.5, the pull delivered after the take's player ended it.
-	placed.clear()
-	DAW.state.track(track).items.clear()
-	mt.heard_note(2, Session.Note.OFF, 47, 0, 11.3, Modular.SOURCE)
-	mt.heard_mark(2, K, 2, true, 20.0, 20.0, [])
-	mt.heard_mark(2, G, 2, true, 20.0, 20.0, [])
-	mt.heard_note(2, Session.Note.ON, 57, 100, 20.05, Modular.SOURCE)
-	mt.heard_note(2, Session.Note.OFF, 57, 0, 20.9, Modular.SOURCE)
-	mt.heard_mark(2, K, 2, false, 20.0, 21.0, [track])
-	mt.heard_mark(2, G, 2, false, 20.0, 21.0, [track])
-	mt.cable(&"vca.in", &"", 20.5)
-	mt.place(2)
-	heard = _wav_samples(placed[0]["path"] if not placed.is_empty() else "")
-	var pulled := ModularTake.new().begin(Modular.default_patch(), 20.0)
-	pulled.note(Session.Note.ON, 57, 100, 20.05)
-	pulled.cable(&"vca.in", &"", 20.5)
-	pulled.note(Session.Note.OFF, 57, 0, 20.9)
-	pulled.reach(21.0)
-	want = pulled.render()
-	worst = 0.0
-	for i in mini(heard.size(), want.size()):
-		worst = maxf(worst, absf(heard[i] - clampf(want[i], -1.0, 1.0)))
-	var at2 := func(s: float) -> int: return roundi((s - 20.0) * Modular.RATE)
-	check("a cable pulled mid-take and delivered late is heard where it was made: sound before, none after (%.3f, %.5f; %.6f)"
-			% [_modular_loudest(heard, at2.call(20.3), at2.call(20.49)), _modular_loudest(heard, at2.call(20.51), at2.call(20.9)), worst],
-			heard.size() == 48000 and worst < 2.0 / 32767.0 and _modular_loudest(heard, at2.call(20.3), at2.call(20.49)) > 0.05
-			and _modular_loudest(heard, at2.call(20.51), at2.call(20.9)) < 1e-4)
-	if not placed.is_empty():
-		DirAccess.remove_absolute(placed[0]["path"])
-
-	# An abandoned take, and one of knobs alone, put nothing in.
-	placed.clear()
-	mt.heard_mark(2, K, 3, true, 30.0, 30.0, [])
-	mt.heard_mark(2, G, 3, true, 30.0, 30.0, [])
-	mt.knob(&"vcf.res", 0.4, 30.2)
-	mt.heard_mark(2, K, 3, false, 30.0, 31.0, [track])
-	mt.heard_mark(2, G, 3, false, 30.0, 31.0, [track])
-	mt.place(2)
-	check("a take with no notes in it puts nothing in", placed.is_empty())
-	mt.placed.disconnect(listen)
-	mt.patch = saved_patch
-	mt.threaded = true
-	Session.start_solo()
-	_offline()
-
-
-## How bright `samples` are from `from` to `to`: the RMS of each sample's step from the one before
-## over the RMS of the samples, so a filter opened is brighter whatever the level.
-func _modular_brightness(samples: PackedFloat32Array, from: int, to: int) -> float:
-	var steps := 0.0
-	var total := 0.0
-	for i in range(maxi(from, 1), mini(to, samples.size())):
-		steps += (samples[i] - samples[i - 1]) * (samples[i] - samples[i - 1])
-		total += samples[i] * samples[i]
-	return sqrt(steps / maxf(total, 1e-12))
-
-
-## The world's sockets are outputs on the modular's patch: a cable from the weather into the VCF's
-## CV is asked and kept as any cable, and refused into an output or from a socket that is not one.
-## The loft's Thunderstorm plays its density into it at every sixteenth and a gate each drop, the same
-## read whole or in pieces; patched into the cutoff it changes the render, brighter at the top of its
-## gust than at its foot, where the same key through a patch without the cable is as bright at both;
-## and without the cable the world's events change no sample.
-func _test_rain_density_into_the_modular_filter_changes_its_sound() -> void:
+## The loft's Thunderstorm plays its density into the weather's socket at every sixteenth and a gate
+## each drop, the same read whole or in pieces; and the world's sockets are named for what they are.
+func _test_the_storms_density_and_drops_are_the_weather_sockets_events() -> void:
 	_offline()
 	_weather_song()
 	var s := DAW.state
@@ -47853,17 +47475,8 @@ func _test_rain_density_into_the_modular_filter_changes_its_sound() -> void:
 	var spec := Weather.spec_of(loft)
 	var seed := Weather.seed_of(&"loft")
 	loft.free()
-	var patch := Modular.default_patch()
-	check("the weather into the VCF's CV is a cable like any other, kept as the room's row",
-			Modular.answer_patch(patch, &"world:weather", &"vcf.cv") == ""
-			and Modular.source_of(patch, &"vcf.cv") == &"world:weather"
-			and Modular.clean(patch)["cables"].has([&"world:weather", &"vcf.cv"]))
-	var refused := patch.duplicate(true)
-	check("a socket into an output, or one there is not, is no cable; and carried from the input it is the same one",
-			Modular.answer_patch(refused, &"world:weather", &"lfo.out") != "" and Modular.answer_patch(refused, &"world:rain", &"vcf.in") != ""
-			and refused == patch and Modular.answer_patch(refused, &"vcf.in", &"") == ""
-			and Modular.answer_patch(refused, &"vca.cv", &"world:drips") != ""
-			and Modular.jack_title(&"world:ring_3") == "LOOPER RING 3" and Modular.jack_title(&"world:weather") == "THE WEATHER")
+	check("the world's sockets are named for what they are", Modular.jack_title(&"world:ring_3") == "LOOPER RING 3"
+			and Modular.jack_title(&"world:weather") == "THE WEATHER" and Modular.is_world(&"world:marbles"))
 	var from := 0.0
 	var to := s.bar_to_seconds(9.0)
 	var world := ModularWorld.weather_events(spec, seed, s, from, to)
@@ -47877,28 +47490,10 @@ func _test_rain_density_into_the_modular_filter_changes_its_sound() -> void:
 	close_to("and at its top (bar 5), 1", float(levels[4 * 16][3]), 1.0, 0.01)
 	check("the same read whole or in pieces", ModularWorld.weather_events(spec, seed, s, from, to * 0.41)
 			+ ModularWorld.weather_events(spec, seed, s, to * 0.41, to) == world)
-	var key := [[0.0, Modular.Event.ON, 45, 100]]
-	var frames := roundi(to * Modular.RATE)
-	var dry := Modular.render(patch, key, from, frames)
-	var wet := Modular.render(patch, key + world, from, frames)
-	var foot := roundi(s.bar_to_seconds(1.25) * Modular.RATE)
-	var top := roundi(s.bar_to_seconds(5.0) * Modular.RATE)
-	var span := Modular.RATE / 2
-	var wet_foot := _modular_brightness(wet, foot, foot + span)
-	var wet_top := _modular_brightness(wet, top, top + span)
-	var dry_foot := _modular_brightness(dry, foot, foot + span)
-	var dry_top := _modular_brightness(dry, top, top + span)
-	check("rain density into the cutoff changes the render: brighter at the gust's top (%.3f) than its foot (%.3f), where with no rain both are alike (%.3f, %.3f)"
-			% [wet_top, wet_foot, dry_top, dry_foot], wet != dry and wet_top > wet_foot * 1.5
-			and absf(dry_top - dry_foot) < dry_foot * 0.1)
-	var plain := Modular.default_patch()
-	check("into a patch with no cable from it, the world changes no sample",
-			Modular.render(plain, key + world, from, 48000) == Modular.render(plain, key, from, 48000))
 
 
-## In the cave the drips are a gate each drip: patched into ENV 1's gate in KEYS' place, with no key
-## held the patch is silent until the first drip's block, sounds at once, and has died away before
-## the next; a pulse of the drip's velocity as the level while its gate is open, and nothing else.
+## In the cave the drips are a gate each drip: a pulse of the drip's velocity as the level while its
+## gate is open, and nothing else.
 func _test_a_drip_gates_an_env_in_the_cave() -> void:
 	_offline()
 	_weather_song()
@@ -47918,33 +47513,12 @@ func _test_a_drip_gates_an_env_in_the_cave() -> void:
 			drops.size() >= 2 and trigs.size() == drops.size() and on.size() == drops.size() and off.size() == drops.size()
 			and world.size() == drops.size() * 3 and is_equal_approx(float(off[0][0]) - float(on[0][0]), Modular.WORLD_GATE)
 			and is_equal_approx(float(on[0][3]), float(drops[0]["velocity"]) / 127.0))
-	var patch := Modular.default_patch()
-	Modular.answer_patch(patch, &"env1.gate", &"")
-	check("the drips into ENV 1's gate in KEYS' place", Modular.answer_patch(patch, &"world:drips", &"env1.gate") == "")
-	var first := float(drops[0]["song"])
-	var second := float(drops[1]["song"])
-	var out := Modular.render(patch, world, 0.0, roundi((second + 0.2) * Modular.RATE))
-	var at := floori(first * Modular.RATE / Modular.BLOCK) * Modular.BLOCK
-	var next := floori(second * Modular.RATE / Modular.BLOCK) * Modular.BLOCK
-	check("with no key held it is silent until the first drip's block (%.6f), and sounds at once (%.3f)"
-			% [_modular_loudest(out, 0, at), _modular_loudest(out, at, at + 4800)],
-			_modular_loudest(out, 0, at) == 0.0 and _modular_loudest(out, at, at + 4800) > 0.05)
-	check("and has died away before the next (%.5f), which sounds again (%.3f)" % [_modular_loudest(out, next - 4800, next),
-			_modular_loudest(out, next, next + 4800)], _modular_loudest(out, next - 4800, next) < 0.001
-			and _modular_loudest(out, next, next + 4800) > 0.05)
-	var m := Modular.new()
-	m.set_patch(patch)
-	m.trig(&"world:drips")
-	m.run(Modular.BLOCK)
-	var open: bool = m.world_now(&"world:drips")[1]
-	m.run(Modular.BLOCK * Modular.WORLD_GATE_BLOCKS)
-	check("a gate stays open %d blocks and shuts" % Modular.WORLD_GATE_BLOCKS, open and not m.world_now(&"world:drips")[1])
 
 
 ## A looper ring's socket carries its layer's own notes: the level the loudest note sounding (its
 ## velocity over 127), 0 between them and none for a muted layer, and a gate each note begins; a
-## second machine with the room's mirror of the mix (MixWire) works out the same events, and the same
-## patch renders the same samples from them; read whole or in pieces, the same.
+## second machine with the room's mirror of the mix (MixWire) works out the same events; read whole or
+## in pieces, the same.
 func _test_a_rings_level_follows_its_layers_notes_the_same_on_two_machines() -> void:
 	var backend := _offline()
 	var s := DAW.state
@@ -47976,68 +47550,11 @@ func _test_a_rings_level_follows_its_layers_notes_the_same_on_two_machines() -> 
 	check("read whole or in pieces, the same", mine.events(0.0, 5.05) + mine.events(5.05, 8.0) == here)
 	check("where they stand at a moment, the same on both", mine.levels_at(5.2) == theirs.levels_at(5.2)
 			and mine.levels_at(5.2).any(func(e: Array) -> bool: return e[2] == &"world:ring_1" and is_equal_approx(float(e[3]), 120.0 / 127.0)))
-	var patch := Modular.default_patch()
-	Modular.answer_patch(patch, &"vca.cv", &"")
-	Modular.answer_patch(patch, &"world:ring_1", &"vca.cv")
-	var key := [[0.0, Modular.Event.ON, 57, 100]]
-	var a := Modular.render(patch, key + here, 0.0, 8 * Modular.RATE)
-	var b := Modular.render(patch, key + there, 0.0, 8 * Modular.RATE)
-	check("the ring into the VCA's CV renders the same samples on both machines, sounding with its notes (%.3f) and silent between (%.5f)"
-			% [_modular_loudest(a, roundi(4.1 * Modular.RATE), roundi(4.4 * Modular.RATE)), _modular_loudest(a, roundi(4.55 * Modular.RATE), roundi(4.95 * Modular.RATE))],
-			a == b and _modular_loudest(a, roundi(4.1 * Modular.RATE), roundi(4.4 * Modular.RATE)) > 0.05
-			and _modular_loudest(a, roundi(4.55 * Modular.RATE), roundi(4.95 * Modular.RATE)) < 0.001)
 	s.track(ada).mute = true
 	check("muted, its layer is no level", mine.events(0.0, 8.0).all(func(e: Array) -> bool: return e[2] != &"world:ring_1"))
 	s.track(ada).mute = false
 	mine.free()
 	theirs.free()
-	_offline()
-
-
-## A take through the modular hears the world: when it ends, what the world played into its sockets
-## over its span (ModularTakes.world) goes into it once, where the levels stood at its start and every
-## event after, and its render is not the same take's without it.
-func _test_a_modular_take_hears_the_world() -> void:
-	_offline()
-	_weather_song()
-	_as_session(Session.Role.SOLO, 1)
-	var s := DAW.state
-	var loft := Venue.make(&"loft", LoftVenue.STORM)
-	var weather := Weather.new(Weather.spec_of(loft), Weather.seed_of(&"loft"))
-	loft.free()
-	var world := ModularWorld.new()
-	world.weather = func() -> Variant: return weather
-	var takes := Session.modular_takes
-	var saved_patch := takes.patch
-	var saved_world := takes.world
-	var patch := Modular.default_patch()
-	Modular.answer_patch(patch, &"world:weather", &"vcf.cv")
-	takes.patch = func() -> Dictionary: return patch
-	takes.world = world.for_take
-	var start := s.bar_to_seconds(3.0)
-	takes.begin(start)
-	takes.note(Session.Note.ON, 57, 100, start + 0.01)
-	takes.note(Session.Note.OFF, 57, 0, start + 1.5)
-	takes.finish([], start + 2.0)
-	var take := takes.last_mine
-	var heard := take.events.filter(func(e: Array) -> bool: return int(e[1]) in [Modular.Event.WORLD, Modular.Event.TRIG])
-	var want := world.for_take(start, start + 2.0)
-	check("ended, it holds what the world played over it (%d), the level at its start first" % heard.size(),
-			take.heard_world() and heard.size() == want.size() and heard.size() > 16
-			and is_equal_approx(float(heard[0][0]), start) and int(heard[0][1]) == Modular.Event.WORLD)
-	var once := take.render()
-	take.hear_world(want)
-	check("put in once: again changes nothing", take.render() == once)
-	var bare := ModularTake.new().begin(patch, start)
-	bare.note(Session.Note.ON, 57, 100, start + 0.01)
-	bare.note(Session.Note.OFF, 57, 0, start + 1.5)
-	bare.end = start + 2.0
-	check("and its render is not the same take's without the world", bare.render() != once and bare.frames() == take.frames())
-	takes.patch = saved_patch
-	takes.world = saved_world
-	takes.last_mine = null
-	world.free()
-	weather.free()
 	_offline()
 
 

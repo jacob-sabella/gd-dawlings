@@ -279,31 +279,6 @@ const MARBLE_BAR := 7.0
 const THEREMIN_SONG := 800.0
 const THEREMIN_FROM := 69.0
 const THEREMIN_TO := 74.6
-## A modular wall (slice 51): at 62.94 the guest re-patches the room's modular (the room's verb
-## `modular_patch`): an LFO onto the VCF's CV, and the noise into that same CV, which the host refuses
-## to it in words (an input taken twice); it streams MODULAR_TURNS of a knob's turn (Session.send_knob)
-## and lets it go at MODULAR_KNOB (`modular_knob`). The host answers as the studio does
-## (Modular.answer_patch, answer_knob) and publishes the room's row `modular`; by 63.0 its row has the
-## guest's cable and knob and not the refused cable, and it heard every streamed value from the guest.
-## By 63.04 the guest's mirror of the room has them too.
-const MODULAR_TURNS := [0.6, 0.7, 0.8]
-const MODULAR_KNOB := 0.85
-## The modular recorded and heard (slice 52): from 63.06 the guest plays the modular (its keys at the
-## wall, GuestMidi.through_modular) hearing the song at MODULAR_SONG and recording onto TAKE_TRACK:
-## MODULAR_PITCH held, and from 63.1 the cutoff swept down through MODULAR_SWEEP a frame at a time
-## (Session.send_knob, stamped as it is turned); let go at 63.24, its clock stopped at 63.26. Its
-## take is marked to the host on both lanes and nothing else is sent. By 63.62 the host has one
-## audio take named `modular` on TAKE_TRACK at the guest's song and no MIDI take there, heard the
-## notes with the modular's source and every step of the sweep, and publishes the WAV's start,
-## frames and digest (the room's row `modular_probe`); by 63.68 the guest finds them equal to its
-## own render of the take.
-## The world into the modular (slice 53): at 63.74 the guest pulls the LFO out of the VCF's CV and
-## patches the weather's socket into it (`modular_patch` [world:weather, vcf.cv]); by 63.8 the host's
-## row has it, and the host renders WEATHER_BAR of the loft's Thunderstorm through its patch, MODULAR_PITCH
-## held and the weather's level and drops played in from its own song (ModularWorld.weather_events),
-## and publishes the render's frames and digest (`world_probe`); by 63.86 the guest's own render of the
-## same bar, from its mirror of the room's patch and its copy of the host's song, begins, and by 64.0
-## (the host's render takes most of a tenth of a second) it is the host's sample for sample.
 ## The grain cloud recorded and heard (slice 55): from 64.08 the guest's cloud plays GRAINS events, one
 ## a frame (Session.send_grains, stamped with the song it hears from GRAINS_SONG plus the cloud's
 ## figure), while it records onto TAKE_TRACK, both halves' clouds sounding the same tone
@@ -321,9 +296,6 @@ const MODULAR_KNOB := 0.85
 const GRAINS_SONG := 960.0
 const LYRIC_SONG := 980.0
 const GRAINS := 12
-const MODULAR_SONG := 900.0
-const MODULAR_PITCH := 57
-const MODULAR_SWEEP := [0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.25, 0.2]
 ## The host's own take, on the built-in engine: a track, a stretch of song with nothing in it,
 ## and how far from the beat a click may land.
 const HOST_TAKE_TRACK := 3
@@ -397,10 +369,6 @@ var _audio_placed := {}
 var _placed_all: Array = []
 ## Host: what guests asked of the room, as [verb, args, from].
 var _room_asks: Array = []
-## The modular's knobs as the guest turned them (slice 51), heard on the host: [id, v, from] each.
-var _knobs_heard: Array = []
-## Host: the modular takes placed (slice 52), as ModularTakes.placed says each.
-var _modular_placed: Array = []
 ## Host: the grain events heard (slice 55), [event, from, song] each; and the grain takes placed.
 var _grains_heard: Array = []
 var _grains_placed: Array = []
@@ -565,9 +533,6 @@ func _host(port: int) -> void:
 	Session.audio_take_placed.connect(func(info: Dictionary):
 		_audio_placed = info
 		_placed_all.append(info))
-	# The patch a take through the modular starts from, as the studio hears it (slice 52).
-	Session.modular_takes.patch = _probe_patch
-	Session.modular_takes.placed.connect(func(info: Dictionary): _modular_placed.append(info))
 	# The grain cloud's sound both halves hear, and what the guest's grains do here (slice 55).
 	Session.grain_takes.sound = _probe_grain_sound
 	Session.grain_takes.placed.connect(func(info: Dictionary): _grains_placed.append(info))
@@ -624,8 +589,6 @@ func _host(port: int) -> void:
 	Session.note_played.connect(_on_note_played)
 	Session.item_hit.connect(func(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int, zone: StringName):
 		_item_hits.append([item, velocity, from, song, snap, take, zone]))
-	Session.knob_turned.connect(func(id: StringName, v: float, from: int, _song: float):
-		_knobs_heard.append([id, v, from]))
 	Session.room_asked.connect(func(verb: StringName, args: Array, from: int):
 		_room_asks.append([verb, args, from])
 		if verb == &"put_item":
@@ -653,8 +616,6 @@ func _host(port: int) -> void:
 			_answer_string(args, from)
 		if verb == MarbleRun.VERB:
 			_answer_marble(args, from)
-		if verb == Modular.PATCH_VERB or verb == Modular.KNOB_VERB:
-			_answer_modular(verb, args, from)
 		if verb == &"open_tablet":
 			var room: Dictionary = Session.room.duplicate(true)
 			room["tablets"][&"tablet_2"] = [args[0], args[1], args[2], args[3], args[4], 0.0]
@@ -1160,22 +1121,10 @@ func _host(port: int) -> void:
 	# A theremin (slice 50): the guest's glide from 62.72, sent at 62.86, is a take on TAKE_TRACK by 62.92.
 	await _until(62.92)
 	_check_theremin_take()
-	# A modular wall (slice 51): the guest's cable and knob at 62.94 are my room's row by 63.0, its
-	# second cable into the same input refused, and its knob's turn heard here as it streamed.
-	await _until(63.0)
-	_check_the_modular()
-	# The modular recorded (slice 52): the guest's take from 63.06, ended at 63.26, is an audio take on
-	# TAKE_TRACK by 63.62, which I render from what reached me.
-	await _until(63.62)
-	_check_the_modular_take()
 
 	# How much of the time before the end the work took: the end has moved twelve times as it grew.
 	if DAW.backend is GodotBackend:
 		print("engine: %s" % ("native lanes" if (DAW.backend as GodotBackend).lanes != null else "players"))
-	# The world into the modular (slice 53): the guest's weather into my VCF's CV at 63.74 is my row by
-	# 63.8, and my render of the storm's bar through it is published for the guest's.
-	await _until(63.8)
-	_check_the_world_patched()
 	# The grain cloud recorded (slice 55): the guest's grains from 64.08, its take ended at 64.3, are
 	# an audio take on TAKE_TRACK by 64.4, which I render from my own sound.
 	await _until(64.4)
@@ -2581,7 +2530,6 @@ func _undo_takes() -> void:
 
 func _guest(port: int) -> void:
 	Session.local_name = "Grace"
-	Session.modular_takes.patch = _probe_patch
 	Session.grain_takes.sound = _probe_grain_sound
 	# On the host's own machine, which would ordinarily mean not listening: the host's speakers
 	# are already in the room. Asked for here, because the probe is what is listening.
@@ -2906,9 +2854,6 @@ func _guest(port: int) -> void:
 	await _tie_and_pluck_a_string()
 	await _build_a_marble_run()
 	await _play_a_theremin()
-	await _patch_the_modular()
-	await _play_the_modular()
-	await _patch_the_world()
 	await _play_the_grains()
 	await _tap_the_lyrics()
 	await _until(64.88)
@@ -4805,26 +4750,6 @@ func _build_a_marble_run() -> void:
 			not mine.is_empty() and mine == theirs)
 
 
-## Host: the guest's cable or knob on the modular wall (slice 51), answered as the studio answers it
-## (Modular.answer_patch, answer_knob): the room's row `modular` with it, published, or the refusal
-## told to the guest.
-func _answer_modular(verb: StringName, args: Array, from: int) -> void:
-	var patch := Modular.clean(Session.room.get(Modular.ROW, Modular.default_patch()))
-	var refusal := Modular.answer_patch(patch, args[0], args[1]) if verb == Modular.PATCH_VERB \
-			else Modular.answer_knob(patch, args[0], args[1])
-	if refusal != "":
-		Session.tell(from, refusal)
-		return
-	var room: Dictionary = Session.room.duplicate(true)
-	room[Modular.ROW] = patch
-	Session.publish_room(room)
-	# Into a take through the modular, at the song it was asked at, as the studio does (slice 52).
-	if verb == Modular.PATCH_VERB:
-		Session.modular_takes.cable(args[0], args[1], args[2])
-	else:
-		Session.modular_takes.knob(args[0], args[1], args[2])
-
-
 ## The grain cloud's sound on both halves (slice 55): two seconds of a tone swelling from silence, at
 ## GrainVoice.RATE, every place in it different, standing in for a sample both machines have.
 func _probe_grain_sound() -> PackedFloat32Array:
@@ -4886,7 +4811,7 @@ func _play_the_grains() -> void:
 	gm.target_track = 0
 	await _until(64.46)
 	var theirs: Array = Session.room.get("grains_probe", [])
-	var mine := ModularTake.pcm(GrainTake.at_take_rate(gt.last_mine.render(_probe_grain_sound()))) if gt.last_mine != null else PackedByteArray()
+	var mine := GrainTake.pcm(GrainTake.at_take_rate(gt.last_mine.render(_probe_grain_sound()))) if gt.last_mine != null else PackedByteArray()
 	check("and the host's audio take of it is my own render: at my first event's song, as long, the same samples (%s)" % [theirs],
 			theirs.size() == 3 and gt.last_mine != null and absf(float(theirs[0]) - gt.last_mine.lands()) < 1e-6
 			and int(theirs[1]) == mine.size() / 2 and theirs[2] == _digest(mine))
@@ -4917,179 +4842,12 @@ func _tap_the_lyrics() -> void:
 	board.queue_free()
 
 
-## The modular's patch as both halves hear it here: the room's row (slice 52's takes start from it).
-func _probe_patch() -> Dictionary:
-	return Modular.clean(Session.room.get(Modular.ROW, Modular.default_patch()))
-
-
 ## The MD5 of `bytes`, hex.
 static func _digest(bytes: PackedByteArray) -> String:
 	var ctx := HashingContext.new()
 	ctx.start(HashingContext.HASH_MD5)
 	ctx.update(bytes)
 	return ctx.finish().hex_encode()
-
-
-## Host: the guest's take through the modular (slice 52), as my DAW has it: one audio take named
-## `modular` on TAKE_TRACK at MODULAR_SONG, no MIDI take of it there, its notes heard as the
-## modular's and its sweep as it streamed; its start, frames and digest published for the guest.
-func _check_the_modular_take() -> void:
-	var notes := _sourced.filter(func(n: Array) -> bool: return n[3] == Modular.SOURCE and n[2] == _other_id())
-	check("the guest's keys at the wall reached me as the modular's (%s)" % [notes],
-			notes.size() >= 2 and int(notes[0][1]) == MODULAR_PITCH)
-	var sweep := _knobs_heard.filter(func(k: Array) -> bool: return k[2] == _other_id()).slice(MODULAR_TURNS.size())
-	check("and its sweep as it streamed (%d of %d)" % [sweep.size(), MODULAR_SWEEP.size()],
-			sweep.size() == MODULAR_SWEEP.size() and range(sweep.size()).all(func(i: int) -> bool:
-				return is_equal_approx(sweep[i][1], MODULAR_SWEEP[i])))
-	var near := DAW.state.track(TAKE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
-			return it.start > MODULAR_SONG - 0.1 and it.start < MODULAR_SONG + 1.0)
-	check("and its take is one audio take named modular on track %d at its song, no MIDI (%s)" % [TAKE_TRACK,
-			near.map(func(it: MixState.ItemState) -> String: return "%s %.3f %.3f" % [it.name, it.start, it.length])],
-			near.size() == 1 and near[0].name == ModularTakes.NAME and near[0].notes.is_empty()
-			and near[0].source.ends_with(".wav") and _modular_placed.size() == 1)
-	if _modular_placed.size() != 1:
-		return
-	var info: Dictionary = _modular_placed[0]
-	var bytes := FileAccess.get_file_as_bytes(info["path"])
-	var frames := (bytes.size() - AudioTake.HEADER_BYTES) / 2
-	check("rendered from what reached me: %d frames, %.3f s from %.3f" % [frames, info["seconds"], info["start"]],
-			frames > 0 and info["peer"] == _other_id())
-	var room: Dictionary = Session.room.duplicate(true)
-	room["modular_probe"] = [info["start"], frames, _digest(bytes.slice(AudioTake.HEADER_BYTES))]
-	Session.publish_room(room)
-
-
-## Guest: the modular played (slice 52) from 63.06 at the wall, onto TAKE_TRACK at MODULAR_SONG:
-## MODULAR_PITCH held, the wheel moved up at 63.1 (its move to the host reliable, behind the notes:
-## ModularTakes.bend) and the cutoff swept down from then a frame at a time, let go at 63.24, the
-## clock stopped at 63.26 and the take ended. By 63.68 the host's WAV of it is my own render of it.
-func _play_the_modular() -> void:
-	await _until(63.06)
-	var gm := Session.guest_midi
-	var mt := Session.modular_takes
-	gm.target_track = TAKE_TRACK
-	gm.heard_source = _given_clock(MODULAR_SONG, true)
-	gm.reach(Modular.SOURCE, true)
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	check("at the wall my keys record through the modular (%s)" % [mt.mine],
-			gm.is_recording() and gm.through_modular() and mt.mine != null)
-	gm.note_on(MODULAR_PITCH, 100)
-	await _until(63.1)
-	gm.control(DawKitClip.PITCH_BEND, 4096)
-	for v: float in MODULAR_SWEEP:
-		Session.send_knob(&"vcf.cutoff", v, gm.song())
-		await get_tree().physics_frame
-	await _until(63.24)
-	gm.note_off(MODULAR_PITCH)
-	await _until(63.26)
-	gm.heard_source = _given_clock(MODULAR_SONG + 1.0, false)
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	check("ended, my take is the modular's, from MODULAR_SONG, and no MIDI take was sent (%s)" % [gm.last_take],
-			not gm.is_recording() and gm.last_take.get("modular", false) and mt.last_mine != null
-			and absf(mt.last_mine.start - MODULAR_SONG) < 0.1
-			and mt.last_mine.events.filter(func(e: Array) -> bool: return e[1] == Modular.Event.KNOB).size() == MODULAR_SWEEP.size()
-			and mt.last_mine.events.any(func(e: Array) -> bool: return e[1] == Modular.Event.BEND and e[2] == 4096))
-	gm.reach(Modular.SOURCE, false)
-	gm.heard_source = Callable()
-	gm.target_track = 0
-	await _until(63.68)
-	var theirs: Array = Session.room.get("modular_probe", [])
-	var mine := ModularTake.pcm(mt.last_mine.render()) if mt.last_mine != null else PackedByteArray()
-	check("and the host's audio take of it is my own render: at my song, as long, the same samples (%s)" % [theirs],
-			theirs.size() == 3 and absf(float(theirs[0]) - mt.last_mine.start) < 1e-6 and int(theirs[1]) == mine.size() / 2
-			and theirs[2] == _digest(mine))
-
-
-## WEATHER_BAR of the loft's Thunderstorm through `patch` (slice 53): MODULAR_PITCH held from its start,
-## and the weather's level and drops played into the patch from this half's song
-## (ModularWorld.weather_events), as both halves work it out.
-func _world_render(patch: Dictionary) -> PackedFloat32Array:
-	var loft := Venue.make(&"loft", LoftVenue.STORM)
-	var spec := Weather.spec_of(loft)
-	var venue_seed := Weather.seed_of(loft.venue_id())
-	loft.free()
-	var from := DAW.state.bar_to_seconds(WEATHER_BAR)
-	var to := DAW.state.bar_to_seconds(WEATHER_BAR + 1.0)
-	var events := [[from, Modular.Event.ON, MODULAR_PITCH, 100]] + ModularWorld.weather_events(spec, venue_seed, DAW.state, from, to)
-	return Modular.render(patch, events, from, roundi((to - from) * Modular.RATE))
-
-
-## Host: the guest's weather into my VCF's CV (slice 53) is my room's row, the LFO it pulled out of
-## there gone, and my render of the storm's bar through it is published for the guest (`world_probe`).
-func _check_the_world_patched() -> void:
-	var patch := Modular.clean(Session.room.get(Modular.ROW, {}))
-	var asks := _room_asks.filter(func(a: Array) -> bool:
-			return a[0] == Modular.PATCH_VERB and a[2] == _other_id() and Modular.is_world(StringName(a[1][0])))
-	check("the guest's weather into the VCF's CV reached me as the room's ask, and is my row (%s)" % [patch["cables"]],
-			asks.size() == 1 and Modular.source_of(patch, &"vcf.cv") == &"world:weather"
-			and not Modular.sinks_of(patch, &"lfo.out").has(&"vcf.cv"))
-	var out := _world_render(patch)
-	var loudest := 0.0
-	for v in out:
-		loudest = maxf(loudest, absf(v))
-	check("my render of the storm's bar through it sounds (%d frames, %.3f)" % [out.size(), loudest], loudest > 0.05)
-	var room: Dictionary = Session.room.duplicate(true)
-	room["world_probe"] = [out.size(), _digest(out.to_byte_array())]
-	Session.publish_room(room)
-
-
-## Guest: at 63.74 the LFO out of the room's VCF's CV and the weather's socket into it (slice 53), each
-## asked of the host; by 63.86 my mirror of the room's patch has it, and my render of the storm's bar
-## through it is, by 64.0, the host's, sample for sample.
-func _patch_the_world() -> void:
-	await _until(63.74)
-	var song := Session.guest_midi.song() if Session.guest_midi != null else -1.0
-	Session.ask_room(Modular.PATCH_VERB, [&"vcf.cv", &"", song])
-	var seq := Session.ask_room(Modular.PATCH_VERB, [&"world:weather", &"vcf.cv", song])
-	check("the weather into the VCF's CV is asked of the host (seq %d)" % seq, seq > 0)
-	await _until(63.86)
-	var patch := Modular.clean(Session.room.get(Modular.ROW, {}))
-	check("and by 63.86 the room's patch has the weather on the VCF's CV (%s)" % [patch["cables"]],
-			Modular.source_of(patch, &"vcf.cv") == &"world:weather")
-	var mine := _world_render(patch)
-	# The host's render of the bar takes it most of a tenth of a second past 63.8 before it publishes.
-	await _until(64.0)
-	var theirs: Array = Session.room.get("world_probe", [])
-	check("both renders of the storm's bar through it agree, sample for sample (%s)" % [theirs],
-			theirs.size() == 2 and int(theirs[0]) == mine.size() and theirs[1] == _digest(mine.to_byte_array()))
-
-
-## Host: the guest's re-patch (slice 51) is in my room's row, its cable into a taken input not; its
-## knob let go is the row's, and its turn reached me as it streamed, from the guest, in order.
-func _check_the_modular() -> void:
-	var asks := _room_asks.filter(func(a: Array) -> bool: return a[0] == Modular.PATCH_VERB or a[0] == Modular.KNOB_VERB)
-	var patch := Modular.clean(Session.room.get(Modular.ROW, {}))
-	check("the guest's two cables and its knob reached me as the room's asks (%d)" % asks.size(),
-			asks.size() == 3 and asks.all(func(a: Array) -> bool: return a[2] == _other_id()))
-	check("and my room's patch has its LFO on the VCF's CV, not the noise refused there (%s)" % [patch["cables"]],
-			Modular.source_of(patch, &"vcf.cv") == &"lfo.out" and patch["cables"].size() == Modular.DEFAULT_CABLES.size() + 1)
-	check("and its knob let go (%.2f)" % patch["knobs"][&"vcf.cutoff"], is_equal_approx(patch["knobs"][&"vcf.cutoff"], MODULAR_KNOB))
-	var turned := _knobs_heard.filter(func(k: Array) -> bool: return k[2] == _other_id())
-	check("its knob's turn reached me as it streamed, in order, from the guest (%s)" % [turned],
-			turned.size() == MODULAR_TURNS.size() and turned.all(func(k: Array) -> bool: return k[0] == &"vcf.cutoff")
-			and range(turned.size()).all(func(i: int) -> bool: return is_equal_approx(turned[i][1], MODULAR_TURNS[i])))
-
-
-## Guest: the room's modular re-patched at 62.94 (slice 51): an LFO onto the VCF's CV asked of the
-## host, and the noise into the same input, which it refuses to me in words; a knob's turn streamed
-## and let go. By 63.04 my mirror of the room has the cable and the knob.
-func _patch_the_modular() -> void:
-	await _until(62.94)
-	var song := Session.guest_midi.song() if Session.guest_midi != null else -1.0
-	var seq := Session.ask_room(Modular.PATCH_VERB, [&"lfo.out", &"vcf.cv", song])
-	Session.ask_room(Modular.PATCH_VERB, [&"noise.out", &"vcf.cv", song])
-	for v: float in MODULAR_TURNS:
-		Session.send_knob(&"vcf.cutoff", v, song)
-	Session.ask_room(Modular.KNOB_VERB, [&"vcf.cutoff", MODULAR_KNOB, song])
-	check("my cables and my knob are asked of the host (seq %d)" % seq, seq > 0)
-	await _until(63.04)
-	var patch := Modular.clean(Session.room.get(Modular.ROW, {}))
-	check("and by 63.04 the room's patch has my LFO on the VCF's CV and my knob (%s)" % [patch["cables"]],
-			Modular.source_of(patch, &"vcf.cv") == &"lfo.out" and is_equal_approx(patch["knobs"][&"vcf.cutoff"], MODULAR_KNOB))
-	check("the noise into the same input was refused to me, in words",
-			_notices.any(func(t) -> bool: return String(t).contains("VCF CV IN has a cable in it already")))
 
 
 ## Host: the guest's press on the weather's switch (slice 44) reached me from the guest, and my

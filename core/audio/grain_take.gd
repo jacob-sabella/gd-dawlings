@@ -91,12 +91,21 @@ static func at_take_rate(mono: PackedFloat32Array) -> PackedFloat32Array:
 	return out
 
 
+## The take's sound as 16-bit mono (AudioTake's), from `render`'s samples.
+static func pcm(samples: PackedFloat32Array) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(samples.size() * 2)
+	for i in samples.size():
+		out.encode_s16(i * 2, int(round(clampf(samples[i], -1.0, 1.0) * 32767.0)))
+	return out
+
+
 ## The take's sound written as a WAV in the project's media folder (AudioTake.DIR) under `file_name`,
 ## finished, or null if the file cannot be made. Safe off the main thread.
 func write(file_name: String, sound: PackedFloat32Array) -> AudioTake:
 	var take := AudioTake.create(file_name)
 	if take == null:
 		return null
-	take.append(ModularTake.pcm(at_take_rate(render(sound))))
+	take.append(pcm(at_take_rate(render(sound))))
 	take.finish()
 	return take

@@ -2391,7 +2391,8 @@ and DaisySP (MIT) are submodules under `vendor/`, compiled into the helper.
 - **Recorded.** REC (or the song recording with a track chosen) tapes what the rack plays and, at the
   stop, puts it on the rack's track as audio at the song position the take began (`DAW.import_audio`),
   so the rack feeds the arrangement, the track's FX and the export like any recorded audio. The old
-  MIDI-through-the-wall take system (`ModularTakes`) is off (`enabled = false`).
+  GDScript modular synth, its takes (`ModularTakes`) and the keys helper's `mod` lines are gone; a
+  guest's rack notes are not in its MIDI take.
 - **Lit by what it plays, in the venue's mood.** `RackMood.palette(venue_id)` gives the venue's lamp
   colour, hit colour and glow strength for all 14 venues; the wall's halo and light follow the rack's
   level and pulse on a hit (`RackWall.glow_with`). The voice's level also feeds `Venue.pulse`, so the

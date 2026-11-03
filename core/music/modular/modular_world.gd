@@ -1,8 +1,8 @@
 class_name ModularWorld
 extends Node
 
-## The world into the modular (docs/spatial_loop.md part two, slice 53; idea #31): what the room's own
-## music-makers play into the modular's world sockets (Modular.WORLD), worked out on every machine
+## The world into the rack (docs/spatial_loop.md part two, slice 53; idea #31): what the room's own
+## music-makers play into the rack's world sockets (Modular.WORLD), worked out on every machine
 ## from the song clock and the rows, so the rain on the filter sounds the same everywhere and nothing
 ## of it crosses the wire. The studio's (`Studio.modular_world`).
 ##
@@ -20,9 +20,8 @@ extends Node
 ##
 ## `events(from, to)` is every one of them from song position `from` up to `to`, in order, and pure:
 ## the same span, the same rows, the same events, on every machine. `levels_at` is where each level
-## stands at a moment, for a take or a voice starting from it. As the song plays here (`follow`), each
-## frame's span is handed on (`fired`) to every copy of the patch this machine plays (ModularVoice:
-## this player's, each bandmate's, the world's own at the wall). A strike heard from a bandmate after
+## stands at a moment, for a rack starting from it. As the song plays here (`follow`), each frame's span
+## is handed on (`fired`) to the rack's engine (RackVoice.play_world). A strike heard from a bandmate after
 ## its song has gone by is played into them at once.
 
 ## The events a span of the song played into the world's sockets: [song, Modular.Event, socket, value]
@@ -161,12 +160,6 @@ func levels_at(at: float) -> Array:
 			rung.append([float(r["song"]), int(r["velocity"])])
 		out.append([at, Modular.Event.WORLD, &"world:marbles", pulse_at(rung, at)])
 	return out
-
-
-## What a take through the modular from `from` to `to` hears of the world: where the levels stood at
-## its start, and everything after (ModularTakes, before it renders).
-func for_take(from: float, to: float) -> Array:
-	return levels_at(from) + events(from, to)
 
 
 ## `list` in song order, those at one song in the order they were made: the same on every machine.
@@ -358,12 +351,3 @@ func follow(h: Dictionary) -> void:
 		_until = now
 		if not span.is_empty():
 			fired.emit(span)
-
-
-## Every event of `list` played into `voice` now.
-static func play_into(voice: ModularVoice, list: Array) -> void:
-	for e: Array in list:
-		if int(e[1]) == Modular.Event.WORLD:
-			voice.world(e[2], float(e[3]))
-		elif int(e[1]) == Modular.Event.TRIG:
-			voice.trig(e[2])

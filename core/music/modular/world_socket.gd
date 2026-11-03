@@ -10,8 +10,8 @@ extends ControlAffordance
 ## station's track jack (JackSocket), which it is independent of: the rain can record onto a track
 ## and drive the filter at once, one a jack row and the other a cable in the modular's patch.
 ##
-## A press steps its cable through the modular wall's free inputs (Modular.step_input: unplugged, then
-## each free input, VCF CV first, and past the last unplugged again); the wheel and the thumbstick
+## A press steps its cable through the rack's free inputs (RackPatch.step_world: unplugged, then
+## each free input, and past the last unplugged again); the wheel and the thumbstick
 ## (`nudge`) step it either way, and on a desktop P and Shift+P over it (MouseInteractor). Any hand
 ## presses it, as a track jack: a finger, a ray, a controller, a cursor, and a dwell. It only asks
 ## (`step_asked`): the studio asks the room, and the room's patch comes back through `show_into`.
@@ -273,7 +273,7 @@ func dwell_activates() -> bool:
 	return true
 
 
-## Where it goes is the room's (the `modular_patch` verb), not a hold.
+## Where it goes is the room's (the `rack` verb), not a hold.
 func personal() -> bool:
 	return true
 

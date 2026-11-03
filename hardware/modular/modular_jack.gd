@@ -23,7 +23,7 @@ const FACE_Z := 0.006
 
 enum Light { PLAIN, CANDIDATE, TARGET }
 
-## Its id (Modular.OUTS or INS: `vcf.cv`) and whether it is an output.
+## Its id (`vcf.cv`) and whether it is an output.
 var jack := &""
 var output := false
 ## What the wall says it carries: for its card. Set by the wall as the patch changes.
@@ -32,14 +32,6 @@ var plugged_to: Array[StringName] = []
 var _ring_material := StandardMaterial3D.new()
 var _ring: MeshInstance3D
 var _light := Light.PLAIN
-
-
-static func create(id: StringName) -> ModularJack:
-	var j := ModularJack.new()
-	j.jack = id
-	j.output = Modular.OUTS.has(id)
-	j.name = "Jack_%s" % String(id).replace(".", "_")
-	return j
 
 
 func _ready() -> void:

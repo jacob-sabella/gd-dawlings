@@ -32,14 +32,11 @@ extends Node
 ## and ends when it hears the recording stop -- heard, not told, so the take's edges are on the
 ## same clock as its notes.
 ##
-## THE MODULAR'S ROUTE (docs/spatial_loop.md part two, slice 52). While the modular wall is in this
-## player's reach (`through_modular`), everything their keys sound plays its patch (ModularVoice), so
-## what they send goes out as the modular's (`source` Modular.SOURCE, decided at the note-on and kept
-## for its note-off), for bandmates to hear it through the same patch. A take with a note played so
-## is the modular's: its notes and wheel go into a ModularTake as they are sent (Session.modular_takes),
-## and when it ends the host renders it and puts it in as audio, named `modular`. Those notes are
-## not in its MIDI take; whatever else the take holds (the harp before the player walked up to the
-## wall, the keys after they left it while it rolled on) is, and goes in as a MIDI take beside it.
+## THE RACK'S ROUTE. While the modular room's rack is in this player's reach (`through_modular`),
+## everything their keys sound plays the rack, so what they send goes out as the rack's (`source`
+## Modular.SOURCE, decided at the note-on and kept for its note-off), for the host to play in its rack
+## (Presence.modular_heard). Those notes are not in a MIDI take; whatever else the take holds (the
+## harp before the player walked up to the rack, the keys after they left it while it rolled on) is.
 
 signal changed()
 ## A key down or up, wherever it was played from: for the keytar in this player's hands to show.
@@ -198,11 +195,7 @@ var held := {}
 var _down := KeysDown.new()
 ## The sources played into the running take, in the order they first played, to name it by.
 var _take_sources: Array = []
-## Whether the running take goes through the modular (`_begin_modular`): its modular notes rendered
-## as audio by the host when it ends, and not put in as MIDI. How many of its notes went so.
-var _take_modular := false
-var _take_modular_notes := 0
-## What each pitch down was sent as (its source, or Modular.SOURCE through the modular), so its
+## What each pitch down was sent as (its source, or Modular.SOURCE through the rack), so its
 ## note-off goes out as its note-on did whatever has changed since: {pitch: source}.
 var _sent_as := {}
 ## This player's controls as they are now, {kind: value} (Session.CONTROL_KINDS): what was last
@@ -300,8 +293,8 @@ func has_instruments() -> bool:
 	return not instruments.is_empty()
 
 
-## Whether this player's keys play the modular wall's patch now (its voice engaged: Modular.SOURCE
-## in reach), so what they send is the modular's and a take is recorded through it.
+## Whether this player's keys play the rack now (Modular.SOURCE in reach), so what they send is the
+## rack's.
 func through_modular() -> bool:
 	return instruments.has(Modular.SOURCE)
 
@@ -363,7 +356,7 @@ func is_recording() -> bool:
 
 
 func take_note_count() -> int:
-	return 0 if _take == null else _take.notes.size() + _take.held_count() + _take_modular_notes
+	return 0 if _take == null else _take.notes.size() + _take.held_count()
 
 
 func _on_role_changed() -> void:
@@ -374,9 +367,6 @@ func _on_role_changed() -> void:
 		return
 	# Out of the session: a take in progress has nowhere to go any more.
 	_take = null
-	if _take_modular:
-		_take_modular = false
-		Session.modular_takes.cancel()
 	# A grain take running here (GrainTakes, slice 55) is dropped too, not carried on unplaced.
 	if Session.grain_takes != null:
 		Session.grain_takes.cancel()
@@ -459,13 +449,6 @@ func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := fal
 	if _take != null and route != Modular.SOURCE:
 		_take.note_on(pitch, velocity, channel, at if timed else stamp(age))
 		_take_played(source)
-	elif _take != null:
-		# Through the modular the note is its take's (audio), not the MIDI take's.
-		if not _take_modular:
-			_begin_modular(_take.start, pitch)
-		_take_modular_notes += 1
-	if route == Modular.SOURCE:
-		Session.modular_takes.note(Session.Note.ON, pitch, velocity, sent)
 	changed.emit()
 
 
@@ -493,8 +476,6 @@ func note_off(pitch: int, channel := 0, age := 0.0, sounded := false, source := 
 	Session.send_note(Session.Note.OFF, pitch, 0, sent, route)
 	note.emit(Session.Note.OFF, pitch, 0, sent, source)
 	sends.emit(Session.Note.OFF, pitch, 0, sent, channel)
-	if route == Modular.SOURCE:
-		Session.modular_takes.note(Session.Note.OFF, pitch, 0, sent)
 	if not _down.let_go(pitch, source):
 		changed.emit()
 		return
@@ -599,8 +580,6 @@ func _send_control(kind: int, now: int, at := NAN) -> void:
 	var route := Modular.SOURCE if through_modular() else _moved_by
 	Session.send_control(kind, int(controls[kind]), sent, route)
 	control_sent.emit(kind, int(controls[kind]), sent, _moved_by)
-	if route == Modular.SOURCE and kind == DawKitClip.PITCH_BEND:
-		Session.modular_takes.bend(int(controls[kind]), sent)
 
 
 func _ticks() -> int:
@@ -804,17 +783,10 @@ func follow(h: Dictionary) -> void:
 			_take.begin(h["seconds"])
 			_take_track = take_track()
 			_take_sources.clear()
-			_take_modular = false
-			_take_modular_notes = 0
-			if through_modular():
-				_begin_modular(h["seconds"])
 			# Keys already down when the take starts are in it from its first moment, and so is
-			# where the wheel stands: those sent as the modular's in the modular's take, the rest in
-			# this one.
+			# where the wheel stands: but not those sent as the rack's.
 			for pitch in held:
 				if _sent_as.get(pitch, &"") == Modular.SOURCE:
-					if _take_modular:
-						_take_modular_notes += 1
 					continue
 				_take.note_on(pitch, held[pitch], 0, h["seconds"])
 				for source in _down.sources_of(pitch):
@@ -824,27 +796,11 @@ func follow(h: Dictionary) -> void:
 					_take.control(kind, controls[kind], 0, h["seconds"])
 			changed.emit()
 		_take.reach(h["seconds"])
-		if _take_modular:
-			Session.modular_takes.reach(h["seconds"])
 	elif _take != null:
 		_commit()
 
 
-## The running take goes through the modular from here (`_take_modular`): begun in
-## Session.modular_takes from the take's `start`, with the keys sent as the modular's held in it
-## (but `playing`, the key whose note-on begins it, which goes in where it was played).
-func _begin_modular(start: float, playing := -1) -> void:
-	_take_modular = true
-	var through := {}
-	for pitch: int in held:
-		if pitch != playing and _sent_as.get(pitch, &"") == Modular.SOURCE:
-			through[pitch] = held[pitch]
-	Session.modular_takes.begin(start, through)
-
-
-## The take, to the host, as one intent; and what of it went through the modular, ended for the
-## host to render. A take played on the harp, then at the wall, then on the keys away from it is
-## both: the wall's notes as audio, and everything else as a MIDI take of its own beside it.
+## The take, to the host, as one intent.
 func _commit() -> void:
 	var take := _take
 	_take = null
@@ -852,30 +808,18 @@ func _commit() -> void:
 		return
 	var done := take.finish()
 	var notes: Array = done["notes"]
-	var modular := _take_modular and _take_track > 0 and _take_modular_notes > 0
-	if _take_modular:
-		_take_modular = false
-		if modular:
-			Session.modular_takes.finish(take_tracks(), done["end"])
-		else:
-			Session.modular_takes.cancel()
 	var midi := not notes.is_empty() and _take_track > 0
-	if not modular and not midi:
+	if not midi:
 		changed.emit()
 		return
 	takes_sent += 1
 	var onto := take_tracks()
-	if midi:
-		var name := "%s %s %d" % [Session.local_name, take_name(_take_sources), takes_sent]
-		for index in onto:
-			DAW.insert_midi_take(index, done["start"], done["end"], notes, name, done["controls"])
-	last_take = {"notes": notes.size() + (_take_modular_notes if modular else 0), "track": _take_track,
+	var name := "%s %s %d" % [Session.local_name, take_name(_take_sources), takes_sent]
+	for index in onto:
+		DAW.insert_midi_take(index, done["start"], done["end"], notes, name, done["controls"])
+	last_take = {"notes": notes.size(), "track": _take_track,
 			"start": done["start"], "end": done["end"], "tracks": onto,
 			"controls": (done["controls"] as Array).size() / DawKitClip.CONTROL_WIDTH}
-	if modular:
-		last_take["modular"] = true
-		last_take["midi_notes"] = notes.size() if midi else 0
-	_take_modular_notes = 0
 	changed.emit()
 
 

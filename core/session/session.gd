@@ -142,11 +142,6 @@ signal jack_played(source: StringName, kind: int, pitch: int, velocity: int, fro
 signal control_played(kind: int, value: int, from: int, song: float, source: StringName)
 ## The host's track spectra have arrived (`spectra`), on a guest.
 signal spectra_heard()
-## A knob on the modular wall turning in `from`'s hand (`send_knob`, docs/spatial_loop.md part two,
-## slice 51): `id` (Modular.KNOBS) at `value` (0..1, kept in bounds by the host), at song position
-## `song` (-1 for not known). Only the let-go is the room's (`modular_knob`); these are for hearing
-## and seeing the turn on the way there.
-signal knob_turned(id: StringName, value: float, from: int, song: float)
 ## A grain event from `from`'s grain cloud (`send_grains`, docs/spatial_loop.md part two, slice 55):
 ## `event` (GrainVoice.event, checked by the host) made at song position `song` (-1 for not known),
 ## for the cloud here to play from the same sound on a voice of theirs.
@@ -276,10 +271,6 @@ var host_audio: GuestAudio = null
 var files: FileSend = null
 ## This player's own sound into their Discord voice channel. See core/audio/discord_feed.gd.
 var discord: DiscordFeed = null
-## Takes played through the modular wall, recorded as audio from what was played: a player's own,
-## and on the host each player's, rendered and put in when they end (docs/spatial_loop.md part two,
-## slice 52). See core/session/modular_takes.gd.
-var modular_takes: ModularTakes = null
 ## Takes played on the grain cloud, recorded as audio from its events: a player's own, and on the
 ## host each player's, rendered and put in when they end (docs/spatial_loop.md part two, slice 55).
 ## See core/session/grain_takes.gd.
@@ -299,18 +290,12 @@ const CONTROLS_CHANNEL := 6
 ## The host's track spectra (Spectra, the EQ wall's), five times a second: unreliable and ordered,
 ## a lost one overtaken by the next, on a channel of their own so they never wait behind a key.
 const SPECTRA_CHANNEL := 7
-## A gesture streamed as it moves (`send_knob`, the modular's knobs; `send_grains`, the grain cloud's
-## events): reliable, so every turn and every grain arrives in order to be heard where it was made,
-## and on a channel of its own, so a retransmit holds back only the gestures behind it and never a
-## note (KEYS_CHANNEL) or the room.
+## A gesture streamed as it moves (`send_grains`, the grain cloud's events): reliable, so every grain
+## arrives in order to be heard where it was made, and on a channel of its own, so a retransmit holds
+## back only the gestures behind it and never a note (KEYS_CHANNEL) or the room.
 const GESTURE_CHANNEL := 8
-## How often a knob's turn may be streamed (`send_knob`), a second: the studio holds a turn to this.
+## How often a knob's turn may be streamed, a second: the studio holds a turn to this.
 const KNOBS_PER_SECOND := 30.0
-## Host: how many knob events have been refused (an unknown knob, a value that is not one), and how
-## many this machine has sent; and how many times this host has published the room. For the suite
-## and the probe.
-var knobs_refused := 0
-var knobs_sent := 0
 ## Host: how many grain events have been refused (bytes that are not one); and how many this machine
 ## has sent. For the suite and the probe.
 var grains_refused := 0
@@ -358,8 +343,7 @@ var layout: LayoutProfile = null
 ## "patches": {peer id: [SEND socket per tablet receiver, "" for none]},
 ## "jacks": {source: sink}, where each instrument's output jack goes (Jacks),
 ## "weather": whether the venue's weather's switch is on LISTEN (Weather),
-## "modular": the modular wall's patch, {cables: [[from, to]], knobs: {id: v}} (Modular), its cables'
-##   `from` a module's output or one of the world's sockets (`world:weather`, slice 53)}
+## "rack": the modular room's rack, {patch, track} (RackPatch),
 ## -- the venue, the plugins out on stands, where every stand and
 ## trolley is, and where gear that stands on nothing (the desk) has been put. A fact about the room, like where the desk is, so
 ## it is the host's and there is one of it; a guest's own venue and tablets wait in its layout
@@ -459,9 +443,6 @@ func _ready() -> void:
 	discord = DiscordFeed.new()
 	discord.name = "DiscordFeed"
 	add_child(discord)
-	modular_takes = ModularTakes.new()
-	modular_takes.name = "ModularTakes"
-	add_child(modular_takes)
 	grain_takes = GrainTakes.new()
 	grain_takes.name = "GrainTakes"
 	add_child(grain_takes)
@@ -1112,8 +1093,6 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	# A take still arriving is kept: what was sung before the line dropped is still a take.
 	_finish_take(peer_id)
 	participants.erase(peer_id)
-	if modular_takes != null:
-		modular_takes.forget(peer_id)
 	if grain_takes != null:
 		grain_takes.forget(peer_id)
 	participant_left.emit(peer_id)
@@ -1743,13 +1722,8 @@ const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOA
 		# let go on a beat, the room's `marble_balls` row (MarbleRun.answer_ball).
 		&"marble": [TYPE_VECTOR3I, TYPE_STRING_NAME, TYPE_INT],
 		&"marble_ball": [TYPE_FLOAT],
-		# The modular wall (slice 51): a cable from an output jack into an input, or with an empty
-		# `to` the cable at a jack pulled (Modular.answer_patch); and a knob let go at a value
-		# (Modular.answer_knob). Each with the song position it was made at. The room's `modular` row.
-		# A cable from one of the world's sockets (slice 53, `world:weather`) is asked the same way.
+		# The modular room's rack (RackPatch.answer): its patch, edited. The room's `rack` row.
 		&"rack": [TYPE_STRING_NAME, TYPE_ARRAY],
-		&"modular_patch": [TYPE_STRING_NAME, TYPE_STRING_NAME, TYPE_FLOAT],
-		&"modular_knob": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT],
 		# Look to solo (LookSolo, docs/spatial_loop.md part three, G): the track looked at, held or
 		# let go. The host solos it alone for the room and puts every solo back at the let-go.
 		&"look_solo": [TYPE_INT, TYPE_BOOL]}
@@ -2170,8 +2144,6 @@ func _note_up(kind: int, pitch: int, velocity: int, song: float, source: StringN
 	if String(source).length() > NOTE_SOURCE_MAX:
 		source = &""
 	note_played.emit(kind, pitch, velocity, from, song, source)
-	# A note through the modular, into their take here (ModularTakes, slice 52).
-	modular_takes.heard_note(from, kind, pitch, velocity, song, source)
 	for id in _audience():
 		if id != from:
 			_note.rpc_id(id, kind, pitch, velocity, from, song, source)
@@ -2226,57 +2198,6 @@ func _pass_control(kind: int, value: int, song: float, source: StringName, from:
 @rpc("authority", "call_remote", "unreliable_ordered", CONTROLS_CHANNEL)
 func _control(kind: int, value: int, from: int, song: float, source: StringName) -> void:
 	control_played.emit(kind, value, from, song, source)
-
-
-## A knob on the modular wall as it turns (docs/spatial_loop.md part two, slice 51): `id` at `value`,
-## at song position `song` (-1 for not known), to everyone, through the host, which refuses an unknown
-## knob and keeps the value 0..1 (`_pass_knob`). Reliable and ordered on GESTURE_CHANNEL. The studio
-## sends at most KNOBS_PER_SECOND; the let-go is the room's ask (`modular_knob`), never this.
-func send_knob(id: StringName, value: float, song := -1.0) -> void:
-	# Into a take through the modular, this player's, and on a host its players' (slice 52).
-	if modular_takes != null and Modular.KNOBS.has(id) and is_finite(value):
-		modular_takes.knob(id, clampf(value, 0.0, 1.0), song)
-	if not _connected():
-		return
-	knobs_sent += 1
-	if role == Role.HOST:
-		_pass_knob(id, value, song, local_peer_id)
-	else:
-		_knob_up.rpc_id(1, id, value, song)
-
-
-@rpc("any_peer", "call_remote", "reliable", GESTURE_CHANNEL)
-func _knob_up(id: StringName, value: float, song: float) -> void:
-	var from := multiplayer.get_remote_sender_id()
-	if role != Role.HOST or not _is_member(from):
-		return
-	_pass_knob(id, value, song, from)
-
-
-## Host: `from`'s knob, refused unless it is one of the modular's with a value, kept 0..1, heard here
-## (unless it is the host's own) and passed on to everyone else. Whether it passed.
-func _pass_knob(id: StringName, value: float, song: float, from: int) -> bool:
-	if not Modular.KNOBS.has(id) or not is_finite(value):
-		knobs_refused += 1
-		return false
-	value = clampf(value, 0.0, 1.0)
-	if not is_finite(song) or song < 0.0:
-		song = -1.0
-	if from != local_peer_id:
-		knob_turned.emit(id, value, from, song)
-		modular_takes.knob(id, value, song)
-	for peer in _audience():
-		if peer != from:
-			_knob.rpc_id(peer, id, value, from, song)
-	return true
-
-
-@rpc("authority", "call_remote", "reliable", GESTURE_CHANNEL)
-func _knob(id: StringName, value: float, from: int, song: float) -> void:
-	if not Modular.KNOBS.has(id) or not is_finite(value):
-		return
-	knob_turned.emit(id, clampf(value, 0.0, 1.0), from, song)
-	modular_takes.knob(id, clampf(value, 0.0, 1.0), song)
 
 
 ## A grain event from this player's grain cloud as it plays it (docs/spatial_loop.md part two, slice
@@ -2351,48 +2272,6 @@ func _grain_take_up(take_id: int, begun: bool, start: float, end: float, tracks:
 	var from := multiplayer.get_remote_sender_id()
 	if role == Role.HOST and _is_member(from):
 		grain_takes.heard_mark(from, take_id, begun, start, end, tracks)
-
-
-## A take through the modular wall (docs/spatial_loop.md part two, slice 52) marked to the host,
-## `begun` at song position `start` or ended at `end` onto `tracks` (none: abandoned): twice, once
-## on the keys' channel behind this player's notes and once on the gestures' behind their knobs, so
-## the host takes each lane's events from its own begin to its own end (ModularTakes.heard_mark).
-## Nothing else of the take is sent: the host renders it from what reached it.
-func send_modular_take(take_id: int, begun: bool, start: float, end: float, tracks: Array) -> void:
-	if role != Role.GUEST or not _connected():
-		return
-	_modular_take_keys.rpc_id(1, take_id, begun, start, end, tracks)
-	_modular_take_gestures.rpc_id(1, take_id, begun, start, end, tracks)
-
-
-@rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
-func _modular_take_keys(take_id: int, begun: bool, start: float, end: float, tracks: Array) -> void:
-	var from := multiplayer.get_remote_sender_id()
-	if role == Role.HOST and _is_member(from):
-		modular_takes.heard_mark(from, ModularTakes.Lane.KEYS, take_id, begun, start, end, tracks)
-
-
-## A move of this player's wheel kept in their take through the modular (ModularTakes.bend), to the
-## host for its render of the take: reliable, on the keys' channel behind the notes and inside the
-## take's keys' marks. What bandmates hear of the wheel live is still the controls' (send_control).
-func send_modular_bend(value: int, song: float) -> void:
-	if role != Role.GUEST or not _connected():
-		return
-	_modular_bend_up.rpc_id(1, value, song)
-
-
-@rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
-func _modular_bend_up(value: int, song: float) -> void:
-	var from := multiplayer.get_remote_sender_id()
-	if role == Role.HOST and _is_member(from) and is_finite(song):
-		modular_takes.heard_bend(from, control_value(DawKitClip.PITCH_BEND, value), song)
-
-
-@rpc("any_peer", "call_remote", "reliable", GESTURE_CHANNEL)
-func _modular_take_gestures(take_id: int, begun: bool, start: float, end: float, tracks: Array) -> void:
-	var from := multiplayer.get_remote_sender_id()
-	if role == Role.HOST and _is_member(from):
-		modular_takes.heard_mark(from, ModularTakes.Lane.GESTURES, take_id, begun, start, end, tracks)
 
 
 ## `value` kept in bounds for a control of `kind`: the pitch wheel -8192 to 8191, a controller 0
