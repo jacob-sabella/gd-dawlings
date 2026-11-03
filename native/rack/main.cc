@@ -2,14 +2,16 @@
 //   add ID TYPE | remove ID | clear | cable MOD.OUT MOD.IN | uncable MOD.IN | cut MOD.OUT
 //   knob MOD.KNOB V01 | bpm N | play BEATS | stop | note_on P V | note_off P | bend V | cc K V
 //   run SECONDS (offline only) | patch (prints the patch) | quit
-// Modes: --describe prints the module catalogue as JSON; --render OUT.wav runs the script on stdin
+// Modes: --describe prints the module catalogue as JSON; --render OUT.wav [SCRIPT] runs the script (a file, or stdin)
 // and writes a stereo 16-bit WAV (and a line of peak/rms); --live streams float32 stereo to stdout,
 // paced by the reader, while stderr carries "meter ID PEAK ..." lines for the room's lights.
 #include <fcntl.h>
 #include <poll.h>
 #include <unistd.h>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <sstream>
 #include "rack.h"
 
@@ -73,12 +75,14 @@ static void run_line(Rack& r, const std::string& line, double* run_s) {
 static void put16(FILE* f, int v) { fputc(v & 255, f); fputc((v >> 8) & 255, f); }
 static void put32(FILE* f, uint32_t v) { put16(f, v & 0xFFFF); put16(f, v >> 16); }
 
-static int render(const char* path) {
+static int render(const char* path, const char* script) {
   Rack r;
+  FILE* src = script ? fopen(script, "r") : stdin;
+  if (!src) return 1;
   std::vector<float> L, R;
   std::string line;
   char buf[4096];
-  while (fgets(buf, sizeof buf, stdin)) {
+  while (fgets(buf, sizeof buf, src)) {
     line = buf;
     double secs = 0;
     run_line(r, line, &secs);
@@ -117,6 +121,12 @@ static int live(int chunk) {
   std::string pending;
   std::vector<float> L(chunk), R(chunk), inter(chunk * 2);
   int tick = 0;
+  // Paced by the clock, not by the reader: a chunk is due every chunk/RATE seconds, so the stream is
+  // real time however fast the reader drains the pipe. Behind by more than 60 ms (a stall), it
+  // starts again from now rather than racing to catch up.
+  auto now_ns = []() { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return (long long)t.tv_sec * 1000000000LL + t.tv_nsec; };
+  long long due = now_ns();
+  const long long step_ns = (long long)(chunk * 1e9 / RATE);
   for (;;) {
     char buf[4096];
     for (;;) {
@@ -145,6 +155,13 @@ static int live(int chunk) {
       else if (w < 0 && errno != EAGAIN && errno != EINTR) return 0;
       // Between waits, a command may have arrived.
     }
+    due += step_ns;
+    long long t = now_ns();
+    if (due < t - 60000000LL) due = t;
+    else if (due > t) {
+      struct timespec ts = {(time_t)((due - t) / 1000000000LL), (long)((due - t) % 1000000000LL)};
+      nanosleep(&ts, nullptr);
+    }
     if (++tick % 8 == 0) {
       std::string m = "meter";
       char t[64];
@@ -158,7 +175,7 @@ static int live(int chunk) {
 
 int main(int argc, char** argv) {
   if (argc > 1 && std::string(argv[1]) == "--describe") return describe();
-  if (argc > 2 && std::string(argv[1]) == "--render") return render(argv[2]);
+  if (argc > 2 && std::string(argv[1]) == "--render") return render(argv[2], argc > 3 ? argv[3] : nullptr);
   if (argc > 1 && std::string(argv[1]) == "--live") return live(argc > 2 ? atoi(argv[2]) : 240);
   fprintf(stderr, "usage: rack --describe | --render OUT.wav < script | --live [frames]\n");
   return 2;

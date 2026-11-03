@@ -21,11 +21,14 @@ struct Edge2 {
 struct Plaits_ : Module {
   plaits::Voice voice_;
   char* memory_ = nullptr;
-  Plaits_() { memory_ = new char[256 * 1024]; }
+  // The voice keeps a pointer to its allocator (to re-init an engine when it changes): it must live as long.
+  stmlib::BufferAllocator alloc_;
+  // Zeroed: the engines expect the .bss they have on hardware.
+  Plaits_() { memory_ = new char[256 * 1024](); }
   ~Plaits_() { delete[] memory_; }
   void init() override {
-    stmlib::BufferAllocator alloc(memory_, 256 * 1024);
-    voice_.Init(&alloc);
+    alloc_.Init(memory_, 256 * 1024);
+    voice_.Init(&alloc_);
   }
   void process() override {
     plaits::Patch p = {};
@@ -33,7 +36,7 @@ struct Plaits_ : Module {
     p.harmonics = real(3);
     p.timbre = real(4);
     p.morph = real(5);
-    p.engine = (int)real(0);
+    p.engine = (int)real(0);  // an index over the voice's 24 engines
     p.decay = real(6);
     p.lpg_colour = real(7);
     p.frequency_modulation_amount = real(8);
@@ -53,11 +56,15 @@ struct Plaits_ : Module {
     m.morph_patched = has(3);
     m.trigger_patched = has(4);
     m.level_patched = has(5);
+    // The voice renders plaits::kBlockSize frames at a time (12), the rack BLOCK (24): so twice a block.
+    static_assert(BLOCK % plaits::kBlockSize == 0, "the rack's block is whole voice blocks");
     plaits::Voice::Frame f[plaits::kBlockSize];
-    voice_.Render(p, m, f, plaits::kBlockSize);
-    for (int s = 0; s < BLOCK; ++s) {
-      o(0)[s] = f[s].out / 32768.0f;
-      o(1)[s] = f[s].aux / 32768.0f;
+    for (int at = 0; at < BLOCK; at += plaits::kBlockSize) {
+      voice_.Render(p, m, f, plaits::kBlockSize);
+      for (int s = 0; s < (int)plaits::kBlockSize; ++s) {
+        o(0)[at + s] = f[s].out / 32768.0f;
+        o(1)[at + s] = f[s].aux / 32768.0f;
+      }
     }
   }
 };
@@ -65,7 +72,7 @@ static Registrar r_plaits({"plaits", "PLAITS", "Voice",
     "Mutable Instruments' macro oscillator: 24 engines from virtual analogue to modal, granular, drums and speech.",
     {"pitch", "fm", "timbre", "morph", "trig", "level"}, {"out", "aux"},
     {{"engine", "ENGINE", 0, 23, 8, K::STEP,
-      "VA PAIR|WAVESHAPE|FM|GRAIN FORMANT|HARMONIC|WAVETABLE|CHORDS|SPEECH|SWARM|NOISE|PARTICLE|STRING|MODAL|BASS DRUM|SNARE|HI-HAT|VA VAR|WS WAVE|TWO-OP FM|GRAIN CLOUD|ADD PARTIALS|WAVETERRAIN|STRING MACH|CHIPTUNE"},
+      "VA+VCF|PHASE DIST|SIX-OP A|SIX-OP B|SIX-OP C|TERRAIN|STRING MACH|CHIPTUNE|VA|WAVESHAPE|FM|GRAIN|ADDITIVE|WAVETABLE|CHORD|SPEECH|SWARM|NOISE|PARTICLE|STRING|MODAL|KICK|SNARE|HAT"},
      {"note", "NOTE", -24, 24, 0, K::LIN, "st"}, {"fine", "FINE", -100, 100, 0, K::LIN, "ct"},
      {"harm", "HARMONICS", 0, 1, 0.5f, K::LIN, ""}, {"timbre", "TIMBRE", 0, 1, 0.5f, K::LIN, ""},
      {"morph", "MORPH", 0, 1, 0.5f, K::LIN, ""}, {"decay", "DECAY", 0, 1, 0.5f, K::LIN, ""},

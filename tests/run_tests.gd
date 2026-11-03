@@ -50671,3 +50671,120 @@ func _test_the_panel_shows_the_join_code_and_what_went_wrong() -> void:
 	panel.queue_free()
 	fake.stop()
 	_restore_offline()
+
+
+func _test_a_rack_catalogue_is_the_engines_own_description() -> void:
+	check("the catalogue has the modules", RackCatalogue.types().size() >= 25)
+	check("every group the palette lists has modules", RackCatalogue.GROUPS.all(func(g: String) -> bool: return not RackCatalogue.in_group(g).is_empty()))
+	check("every module is in a group the palette shows", RackCatalogue.types().all(func(t: String) -> bool: return RackCatalogue.spec(t)["group"] in RackCatalogue.GROUPS))
+	var k := RackCatalogue.knob("vco", "wave")
+	check("a step knob reads out its name", RackCatalogue.readout(k, 0.0) == "SINE" and RackCatalogue.readout(k, 0.99) == "PULSE")
+	var cut := RackCatalogue.knob("ladder", "cutoff")
+	check("an exponential knob spans its range", absf(RackCatalogue.real(cut, 0.0) - 20.0) < 0.01 and absf(RackCatalogue.real(cut, 1.0) - 18000.0) < 1.0)
+	check("a position and its value agree", absf(RackCatalogue.position(cut, RackCatalogue.real(cut, 0.37)) - 0.37) < 1e-4)
+	for t in RackCatalogue.types():
+		for kn in RackCatalogue.spec(t)["knobs"]:
+			var p := RackCatalogue.default_position(kn)
+			check("%s.%s default is inside the knob" % [t, kn["id"]], p >= 0.0 and p <= 1.0)
+	if not RackEngine.available():
+		print("  (no engine here: the catalogue is not held to it)")
+		return
+	var told := RackEngine.describe()
+	check("the committed catalogue is what the engine describes (run: build/rack/rack --describe | python3 -m json.tool > core/music/rack/modules.json)",
+			str(told["modules"]) == str(JSON.parse_string(FileAccess.get_file_as_string(RackCatalogue.PATH))["modules"]))
+
+
+func _test_a_rack_patch_checks_every_verb() -> void:
+	var p := RackPatch.empty()
+	var k := RackPatch.add(p, "keys")
+	var v := RackPatch.add(p, "vco")
+	var o := RackPatch.add(p, "out")
+	check("modules are added with their own ids", k == "keys" and v == "vco" and o == "out")
+	check("a second OUT is refused", RackPatch.add(p, "out") == "")
+	check("a made-up module is refused", RackPatch.add(p, "flux_capacitor") == "")
+	check("a second of a kind gets a new id", RackPatch.add(p, "vco") == "vco2")
+	check("a cable goes output to input", RackPatch.connect_cable(p, "keys.pitch", "vco.pitch"))
+	check("not the same cable twice", not RackPatch.connect_cable(p, "keys.pitch", "vco.pitch"))
+	check("not input to input", not RackPatch.connect_cable(p, "vco.pitch", "out.l"))
+	check("not a jack that is not there", not RackPatch.connect_cable(p, "keys.nope", "vco.pitch"))
+	check("not a module into itself", not RackPatch.connect_cable(p, "vco.out", "vco.fm"))
+	check("an input takes many cables", RackPatch.connect_cable(p, "vco2.out", "out.l") and RackPatch.connect_cable(p, "vco.out", "out.l"))
+	check("a knob is set and clamped", RackPatch.set_knob(p, "vco", "tune", 2.0) and RackPatch.knob_of(p, "vco", "tune") == 1.0)
+	check("a knob that is not there is refused", not RackPatch.set_knob(p, "vco", "bogus", 0.5))
+	check("pulling an input pulls them all", RackPatch.pull(p, "out.l") and not RackPatch.is_in(p, "nothing.l"))
+	RackPatch.connect_cable(p, "vco2.out", "out.l")
+	check("removing a module takes its cables", RackPatch.remove(p, "vco2") and (p["cables"] as Array).size() == 1)
+	var lines := RackPatch.lines(p)
+	check("the engine is told clear, then modules, knobs and cables", lines[0] == "clear" and "add vco vco" in lines and "cable keys.pitch vco.pitch" in lines)
+	var dirty := {"modules": {"x": {"type": "evil", "knobs": {}}, "vco": {"type": "vco", "at": [99, -4], "knobs": {"tune": 7, "zzz": 1}}, "bad id!": {"type": "vco"}},
+			"cables": [["vco.out", "nowhere.in"], ["vco.out", "vco.fm"], 5]}
+	var clean := RackPatch.sanitize(dirty)
+	check("a patch from anywhere keeps only what is real", clean["modules"].keys() == ["vco"] and clean["cables"].is_empty())
+	check("and clamps what it keeps", clean["modules"]["vco"]["at"] == [15, 0] and clean["modules"]["vco"]["knobs"]["tune"] == 1.0)
+	check("garbage is an empty patch", RackPatch.sanitize("nope")["modules"].is_empty())
+	for name in RackPatch.presets():
+		var pre := RackPatch.preset(name)
+		var again := RackPatch.sanitize(pre)
+		check("preset %s survives being sanitised whole" % name, str(again["cables"]) == str(pre["cables"]) and again["modules"].size() == pre["modules"].size())
+		check("preset %s has an OUT unless it is empty" % name, name == &"empty" or RackPatch.has_type(pre, "out"))
+
+
+func _rack_loudness(frames: PackedVector2Array, from_s := 0.0, to_s := 1e9) -> float:
+	var a := int(from_s * 48000.0)
+	var b := mini(frames.size(), int(to_s * 48000.0))
+	var e := 0.0
+	for i in range(a, b):
+		e += frames[i].x * frames[i].x + frames[i].y * frames[i].y
+	return sqrt(e / maxf(1.0, (b - a) * 2.0))
+
+
+func _test_a_rack_engine_makes_the_sound_the_patch_says() -> void:
+	if not RackEngine.available():
+		print("  (no engine here: no sound to check)")
+		return
+	var keys := RackEngine.render(RackPatch.default_patch(), PackedStringArray(["note_on 60 100", "run 1", "note_off 60", "run 1.5"]))
+	check("the keys voice plays for the seconds asked", keys.size() == 120000)
+	check("and sounds while the key is held", _rack_loudness(keys, 0.1, 1.0) > 0.02)
+	check("and rings out, then falls away", _rack_loudness(keys, 2.0, 2.5) < _rack_loudness(keys, 0.1, 1.0) * 0.5)
+	var silent := RackEngine.render(RackPatch.default_patch(), PackedStringArray(["run 0.5"]))
+	check("with no key down a voice of the keys is quiet", _rack_loudness(silent) < 0.01)
+	var dead := RackEngine.render(RackPatch.empty(), PackedStringArray(["run 0.2"]))
+	check("a rack with no OUT is silent, and does not crash", dead.size() == 9600 and _rack_loudness(dead) == 0.0)
+	var drums := RackEngine.render(RackPatch.preset(&"drum_machine"), PackedStringArray(["run 2"]), 120.0)
+	check("the drum machine plays on its own clock", _rack_loudness(drums) > 0.02)
+	var acid := RackEngine.render(RackPatch.preset(&"acid_line"), PackedStringArray(["run 3"]), 120.0)
+	check("the acid line sequences itself", _rack_loudness(acid) > 0.01)
+	var low := RackPatch.preset(&"acid_line")
+	RackPatch.set_knob(low, "ladder", "cutoff", 0.05)
+	var dark := RackEngine.render(low, PackedStringArray(["run 3"]), 120.0)
+	check("closing the filter makes it quieter", _rack_loudness(dark) < _rack_loudness(acid))
+	for name in [&"ambient_bells", &"fm_bass"]:
+		var pre := RackPatch.preset(name)
+		var play := PackedStringArray(["note_on 48 100", "run 2"]) if name == &"fm_bass" else PackedStringArray(["run 6"])
+		var heard := RackEngine.render(pre, play, 120.0)
+		check("preset %s makes sound" % name, _rack_loudness(heard) > 0.005)
+	var nan_free := true
+	for f in acid:
+		if is_nan(f.x) or is_inf(f.x) or absf(f.x) > 2.0:
+			nan_free = false
+	check("and nothing it makes is broken", nan_free)
+	for type in RackCatalogue.types():
+		if type == "out":
+			continue
+		var each := RackPatch.empty()
+		RackPatch.add(each, "keys")
+		RackPatch.add(each, "noise")
+		RackPatch.add(each, "out")
+		var id := RackPatch.add(each, type)
+		var spec := RackCatalogue.spec(type)
+		for pin in spec["ins"]:
+			RackPatch.connect_cable(each, "noise.white", "%s.%s" % [id, pin])
+		RackPatch.connect_cable(each, "keys.gate", "%s.%s" % [id, spec["ins"][0]] if not spec["ins"].is_empty() else "out.l")
+		for pout in spec["outs"]:
+			RackPatch.connect_cable(each, "%s.%s" % [id, pout], "out.l")
+		var out := RackEngine.render(each, PackedStringArray(["note_on 60 100", "run 0.3"]))
+		var sane := out.size() == 14400
+		for f in out:
+			if is_nan(f.x) or is_inf(f.x) or absf(f.x) > 2.0:
+				sane = false
+		check("%s runs on its own, hot, without breaking" % type, sane)
