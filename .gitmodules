@@ -1,3 +1,9 @@
 [submodule "vendor/dawkit"]
 	path = vendor/dawkit
 	url = ../gd-dawkit.git
+[submodule "vendor/mutable-eurorack"]
+	path = vendor/mutable-eurorack
+	url = https://github.com/pichenettes/eurorack.git
+[submodule "vendor/daisysp"]
+	path = vendor/daisysp
+	url = https://github.com/electro-smith/DaisySP.git
