@@ -66,6 +66,9 @@ struct Ctx {
   static const int WORLD_N = 12;
   float world[WORLD_N] = {};
   int world_gate[WORLD_N] = {};
+  // The room's CV bench: five boxes of two knobs and a slider, each 0..1 (`hand K V`).
+  static const int HAND_N = 15;
+  float hand[HAND_N] = {};
 };
 
 struct Module {

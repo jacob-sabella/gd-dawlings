@@ -5471,6 +5471,13 @@ func _stand_the_annex() -> void:
 	ModularAnnex.cut_the_wall(venue)
 	ModularAnnex.clear_the_site(venue)
 	modular_annex = ModularAnnex.build(venue)
+	rack_wall.extra_controls.clear()
+	for kn in modular_annex.bench:
+		rack_wall.extra_controls.append(kn)
+	modular_annex.bench_turned.connect(func(k: int, v: float) -> void:
+		if rack_voice != null:
+			rack_voice.set_hand(k, v))
+	rack_wall._apply_reach()
 
 
 ## A world socket's press (WorldSocket.step_asked): its cable out of the input it is in and into the

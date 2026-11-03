@@ -164,6 +164,12 @@ func play_world(events: Array) -> void:
 			engine.say("trig %d" % k)
 
 
+## A control on the room's CV bench (0..14: a, b, slider of each box in turn) set by a hand, 0..1.
+func set_hand(k: int, v: float) -> void:
+	if engine.running() and k >= 0 and k < 15:
+		engine.say("hand %d %f" % [k, clampf(v, 0.0, 1.0)])
+
+
 ## Play through `t` (a track index), or nothing at 0.
 func set_track(t: int) -> void:
 	if t != track:

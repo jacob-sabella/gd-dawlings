@@ -42,6 +42,10 @@ var _tile_material := StandardMaterial3D.new()
 var _line_material := StandardMaterial3D.new()
 ## The TV on the side wall: the wave at the first SCOPE patched in.
 var tv: ScopeScreen
+## The CV bench's fifteen controls (two knobs and a slider in each of five boxes), in the order of the
+## rack's HAND module outputs, and what a hand does to one: (index, 0..1).
+var bench: Array[Knob] = []
+signal bench_turned(k: int, v: float)
 var _sign_material := StandardMaterial3D.new()
 var _columns: Array[MeshInstance3D] = []
 ## Bars hung from the ceiling truss, each as long as a module is loud (the skyline, seen from above).
@@ -514,7 +518,8 @@ func _shelves(x0: float, case_paint: Material, metal: Material) -> void:
 		var bz := 6.35 + float(b) * 0.33
 		ZoneKit.block(self, Vector3(0.28, 0.1, 0.29), Vector3(x0 + 0.3, by + 0.075, bz), _paint(tints[b % tints.size()], 0.5, 0.4), "CvBox%d" % b)
 		for k in 2:
-			knob_at.append(Transform3D(Basis.IDENTITY, Vector3(x0 + 0.3 + (-0.06 + float(k) * 0.12), by + 0.13, bz - 0.06)))
+			_bench_knob(b * 3 + k, Vector3(x0 + 0.3 + (-0.06 + float(k) * 0.12), by + 0.125, bz - 0.06))
+		_bench_knob(b * 3 + 2, Vector3(x0 + 0.3, by + 0.13, bz + 0.07))
 		ZoneKit.block(self, Vector3(0.18, 0.006, 0.014), Vector3(x0 + 0.3, by + 0.127, bz + 0.07), metal, "CvSlot%d" % b)
 		ZoneKit.block(self, Vector3(0.025, 0.012, 0.03), Vector3(x0 + 0.3 - 0.05 + 0.02 * float(b % 4), by + 0.133, bz + 0.07), metal, "CvSlide%d" % b)
 		ZoneKit.block(self, Vector3(0.02, 0.014, 0.014), Vector3(x0 + 0.3 + 0.1, by + 0.13, bz - 0.09), null, "CvLed%d" % b).material_override = _sign_material
@@ -711,3 +716,16 @@ static func _cut_mesh(mi: MeshInstance3D, venue: Venue, opening: AABB, any_corne
 	if any:
 		mi.mesh = out
 	return any
+
+
+## One control of the CV bench: a knob a hand turns (the slider's too), at rest in the middle.
+func _bench_knob(k: int, at: Vector3) -> void:
+	var knob := Knob.new()
+	knob.name = "BenchKnob%d" % k
+	knob.position = at
+	knob.value = 0.0
+	knob.describe_title = func() -> String: return "CV BENCH  %s%d" % [["A", "B", "SLIDE"][k % 3], k / 3 + 1]
+	knob.describe_value = func(v: float) -> String: return "%d%%" % roundi(v * 100.0)
+	knob.turned.connect(func(v: float) -> void: bench_turned.emit(k, v))
+	add_child(knob)
+	bench.append(knob)

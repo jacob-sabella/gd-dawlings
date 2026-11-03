@@ -1134,6 +1134,31 @@
             "knobs": []
         },
         {
+            "type": "hand",
+            "title": "HAND",
+            "group": "Source",
+            "blurb": "The CV bench in the room as a source: five boxes of two knobs and a slider, set by a hand at the board.",
+            "ins": [],
+            "outs": [
+                "a1",
+                "b1",
+                "s1",
+                "a2",
+                "b2",
+                "s2",
+                "a3",
+                "b3",
+                "s3",
+                "a4",
+                "b4",
+                "s4",
+                "a5",
+                "b5",
+                "s5"
+            ],
+            "knobs": []
+        },
+        {
             "type": "plaits",
             "title": "PLAITS",
             "group": "Voice",

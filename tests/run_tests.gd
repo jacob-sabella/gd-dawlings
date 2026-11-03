@@ -800,6 +800,8 @@ func _ready() -> void:
 	await _test_a_key_played_in_the_studio_is_heard_and_lights_the_room()
 	await _test_a_bandmates_first_note_wakes_the_rack_and_is_heard()
 	await _test_a_scope_shows_the_wave_patched_into_it_even_when_unheard()
+	await _test_the_cv_bench_is_a_source_a_hand_sets()
+	await _test_the_rooms_cv_bench_is_reached_from_the_wall_and_drives_the_rack()
 	_test_every_module_has_a_skin_and_the_big_rig_fits_the_case()
 	await _test_the_discord_feed_sends_what_is_ticked_through_its_faders()
 	await _test_a_tracks_input_can_be_set_aside()
@@ -50199,6 +50201,63 @@ func _test_a_scope_shows_the_wave_patched_into_it_even_when_unheard() -> void:
 	check("its screen has the points of a window", voice.scopes.has("scope") and (voice.scopes["scope"] as PackedFloat32Array).size() == 96)
 	voice.shutdown()
 	voice.queue_free()
+
+
+func _test_the_cv_bench_is_a_source_a_hand_sets() -> void:
+	if not RackEngine.available():
+		return
+	var voice := RackVoice.new()
+	add_child(voice)
+	var p := RackPatch.empty()
+	RackPatch.add(p, "hand", Vector2i(0, 0))
+	RackPatch.add(p, "scope", Vector2i(4, 0))
+	RackPatch.connect_cable(p, "hand.s2", "scope.in")
+	voice.set_patch(p)
+	check("the voice starts", voice.start())
+	var read := func(n: int) -> float:
+		var peak := 0.0
+		for i in n:
+			await get_tree().create_timer(0.05).timeout
+			voice._process(0.05)
+		if voice.scopes.has("scope"):
+			for v in (voice.scopes["scope"] as PackedFloat32Array):
+				peak = maxf(peak, absf(v))
+		return peak
+	var low: float = await read.call(12)
+	voice.set_hand(5, 1.0)
+	var high: float = await read.call(12)
+	check("a slider at the bench moves the level patched from it (%.2f -> %.2f)" % [low, high], high > low + 0.1)
+	voice.set_hand(5, 0.0)
+	var back: float = await read.call(40)
+	check("and back down (%.2f)" % back, back < high - 0.1)
+	voice.shutdown()
+	voice.queue_free()
+
+
+func _test_the_rooms_cv_bench_is_reached_from_the_wall_and_drives_the_rack() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var annex: ModularAnnex = studio.modular_annex
+	check("the room has its annex", annex != null)
+	if annex == null:
+		studio.queue_free()
+		return
+	check("the bench has fifteen controls", annex.bench.size() == 15)
+	var reach := studio.rack_wall.reach_controls()
+	var all := true
+	for k in annex.bench:
+		all = all and reach.has(k)
+	check("the wall's hand reaches them", all)
+	var told: Array = []
+	annex.bench_turned.connect(func(k: int, v: float) -> void: told.append([k, v]))
+	annex.bench[7].value = 0.8
+	annex.bench[7].turned.emit(0.8)
+	check("turning one says which and how far", told == [[7, 0.8]])
+	studio.queue_free()
+	await get_tree().process_frame
 
 
 func _test_a_bandmates_first_note_wakes_the_rack_and_is_heard() -> void:

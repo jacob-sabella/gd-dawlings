@@ -895,8 +895,13 @@ func _apply_reach() -> void:
 				(node as CollisionShape3D).disabled = not within_reach
 
 
+## Controls elsewhere in the room that this wall's hand reaches too (the CV bench's knobs).
+var extra_controls: Array[ControlAffordance] = []
+
+
 func reach_controls() -> Array[ControlAffordance]:
 	var out: Array[ControlAffordance] = []
+	out.append_array(extra_controls)
 	for j: RackJack in jacks.values():
 		out.append(j)
 	for k: Knob in knobs.values():

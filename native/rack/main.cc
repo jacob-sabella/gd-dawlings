@@ -69,6 +69,7 @@ static void run_line(Rack& r, const std::string& line, double* run_s) {
   else if (c == "bend") { float v; in >> v; r.bend(v); }
   else if (c == "cc") { int k, v; in >> k >> v; r.cc(k, v); }
   else if (c == "world") { int k; float v; in >> k >> v; if (k >= 0 && k < Ctx::WORLD_N) r.ctx.world[k] = v < 0 ? 0 : (v > 1 ? 1 : v); }
+  else if (c == "hand") { int k; float v; in >> k >> v; if (k >= 0 && k < Ctx::HAND_N) r.ctx.hand[k] = v < 0 ? 0 : (v > 1 ? 1 : v); }
   else if (c == "trig") { int k; in >> k; if (k >= 0 && k < Ctx::WORLD_N) r.ctx.world_gate[k] = (int)(0.048 * RATE); }
   else if (c == "run") { in >> *run_s; }
   else if (c == "patch") { printf("%s", r.patch_lines().c_str()); fflush(stdout); }

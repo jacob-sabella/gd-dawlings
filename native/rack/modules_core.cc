@@ -624,3 +624,23 @@ static Registrar r_world({"world", "WORLD", "Source",
          "ring8_g", "marbles_g"},
     {}, []() -> Module* { return new World_; }});
 }  // namespace rack
+
+namespace rack {
+// ---- HAND: the room's CV bench ----------------------------------------------------------------------
+// Five boxes of two knobs (a, b) and a slider (s) on the board by the door: each a level 0..1 a hand sets,
+// smoothed so turning one does not click.
+struct Hand_ : Module {
+  float sm_[Ctx::HAND_N] = {};
+  void process() override {
+    for (int s = 0; s < BLOCK; ++s)
+      for (int k = 0; k < Ctx::HAND_N; ++k) {
+        sm_[k] += (ctx->hand[k] - sm_[k]) * 0.004f;
+        out[k][s] = sm_[k];
+      }
+  }
+};
+static Registrar r_hand({"hand", "HAND", "Source",
+    "The CV bench in the room as a source: five boxes of two knobs and a slider, set by a hand at the board.",
+    {}, {"a1", "b1", "s1", "a2", "b2", "s2", "a3", "b3", "s3", "a4", "b4", "s4", "a5", "b5", "s5"},
+    {}, []() -> Module* { return new Hand_; }});
+}  // namespace rack
