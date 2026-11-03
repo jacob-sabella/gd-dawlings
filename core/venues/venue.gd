@@ -749,7 +749,7 @@ const MODULAR_BOTTOM := 1.26
 func modular_spot() -> Variant:
 	if venue_id() == ROULETTE_ID:
 		return null
-	return ModularAnnex.rack_spot(live_room_half())
+	return ModularAnnex.rack_spot(annex_edge())
 
 
 ## Everywhere on foot: the venue's rooms, and the modular room built onto the live room's side with
@@ -757,7 +757,7 @@ func modular_spot() -> Variant:
 func walk_rooms() -> Array[Rect2]:
 	var out := rooms()
 	if venue_id() != ROULETTE_ID:
-		out.append_array(ModularAnnex.floors(live_room_half()))
+		out.append_array(ModularAnnex.floors(annex_edge(), live_room_half()))
 	return out
 
 
@@ -1475,6 +1475,12 @@ func open_floor(margin: float) -> Rect2:
 	var half := live_room_half() + margin
 	var front := Studio.ROOM_FRONT + 0.05 - margin
 	return Rect2(-half, front, half * 2.0, LIVE_ROOM_BACK + margin - front)
+
+
+## Where the modular room's near wall begins, along x: the live room's wall, or a house's outer wall
+## beyond it. Overridden by venues whose walls stand past the live room.
+func annex_edge() -> float:
+	return live_room_half()
 
 
 ## Half the live room's width, grown with the desk the way the zones are.

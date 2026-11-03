@@ -40,6 +40,8 @@ var _column_level: Array[float] = []
 var _lights: Array[OmniLight3D] = []
 var _level := 0.0
 var _hit := 0.0
+## The venue's weather (rain, snow, dust) put out while the eye is under this roof.
+var _hushed: Array[GPUParticles3D] = []
 
 
 ## The room's near wall's centre along x, for a live room `half` wide.
@@ -56,9 +58,10 @@ static func inside(half_width: float) -> Rect2:
 
 ## What a person can walk: the room, and the passage through the two walls that joins it to the live
 ## room (overlapping both, which the walker reads as floor on either side).
-static func floors(half_width: float) -> Array[Rect2]:
+static func floors(half_width: float, live_half := -1.0) -> Array[Rect2]:
 	var in_room := inside(half_width)
-	var passage := Rect2(half_width - 0.6, DOOR_Z - DOOR_WIDE * 0.5 + 0.05, GAP + WALL + 0.9, DOOR_WIDE - 0.1)
+	var from := (half_width if live_half < 0.0 else live_half) - 0.6
+	var passage := Rect2(from, DOOR_Z - DOOR_WIDE * 0.5 + 0.05, half_width + GAP + WALL + 0.9 - from, DOOR_WIDE - 0.1)
 	return [in_room, passage]
 
 
@@ -71,7 +74,7 @@ static func rack_spot(half_width: float) -> Transform3D:
 static func build(venue: Venue) -> ModularAnnex:
 	var out := ModularAnnex.new()
 	out.name = "ModularAnnex"
-	out.half = venue.live_room_half()
+	out.half = venue.annex_edge()
 	out.mood = RackMood.palette(venue.venue_id())
 	venue.add_child(out)
 	return out
@@ -179,6 +182,26 @@ func _ready() -> void:
 		lamp.add_to_group(&"presentation_chrome")
 		add_child(lamp)
 		_lights.append(lamp)
+	# Dressing: a bench along one wall, road cases stacked along the other, a cable tray over the room
+	# with the rack's leads dropping from it. Kept to the walls and the ceiling, out of the walk.
+	var case_paint := _paint(Color(0.07, 0.07, 0.08), 0.6, 0.15)
+	var wood := _paint(Color(0.2, 0.14, 0.09), 0.75, 0.0)
+	ZoneKit.block(self, Vector3(1.83, 0.06, 0.41), Vector3(x1 - 3.7, 0.47, Z_TO - 0.46), wood, "AnnexBenchTop")
+	for dx in [-0.78, 0.78]:
+		ZoneKit.block(self, Vector3(0.07, 0.44, 0.33), Vector3(x1 - 3.7 + dx, 0.24, Z_TO - 0.46), metal, "AnnexBenchLeg%d" % int(dx * 10.0))
+	var stack := [[Vector3(0.93, 0.57, 0.57), 0.0, 0.0], [Vector3(0.93, 0.53, 0.55), 1.05, 0.0], [Vector3(0.71, 0.47, 0.52), 0.1, 0.59]]
+	for n in stack.size():
+		var size: Vector3 = stack[n][0]
+		var cx := x0 + 1.4 + float(stack[n][1])
+		var cy := size.y * 0.5 + 0.02 + float(stack[n][2])
+		ZoneKit.block(self, size, Vector3(cx, cy, Z_FROM + 0.47), case_paint, "AnnexCase%d" % n)
+		for dz in [-1.0, 1.0]:
+			ZoneKit.block(self, Vector3(size.x + 0.03, 0.035, 0.03), Vector3(cx, cy + size.y * 0.5 - 0.1, Z_FROM + 0.47 + dz * (size.z * 0.5 + 0.004)), metal, "AnnexCaseEdge%d_%d" % [n, int(dz)])
+	ZoneKit.block(self, Vector3(DEEP - 0.9, 0.05, 0.27), Vector3((x0 + x1) * 0.5 - 0.05, HEIGHT - 0.23, DOOR_Z), metal, "AnnexTray")
+	for k in 3:
+		var lead_z := DOOR_Z - 0.09 + float(k) * 0.09
+		ZoneKit.block(self, Vector3(DEEP - 0.95, 0.025, 0.02), Vector3((x0 + x1) * 0.5 - 0.06, HEIGHT - 0.19, lead_z), case_paint, "AnnexLead%d" % k)
+		ZoneKit.block(self, Vector3(0.022, 1.12 + float(k) * 0.07, 0.024), Vector3(x1 - 0.3 - float(k) * 0.045, HEIGHT - 0.2 - (1.12 + float(k) * 0.07) * 0.5, lead_z), case_paint, "AnnexDrop%d" % k)
 	_shine()
 
 
@@ -195,6 +218,35 @@ func show_levels(levels: Array) -> void:
 		var want := clampf(float(levels[n % levels.size()]) if not levels.is_empty() else 0.0, 0.0, 1.0)
 		var now := _column_level[n]
 		_grow_column(n, lerpf(now, want, 0.5 if want > now else 0.15))
+
+
+## Under this roof there is no weather: the venue's particles (rain, snow, drifting dust) are put out
+## while the eye is inside the room, and come back when it leaves.
+func _process(_delta: float) -> void:
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if cam == null:
+		return
+	var local := to_local(cam.global_position)
+	var room := inside(half)
+	var under := room.has_point(Vector2(local.x, local.z)) and local.y < HEIGHT
+	if under and _hushed.is_empty():
+		for node in get_parent().find_children("*", "GPUParticles3D", true, false):
+			var p := node as GPUParticles3D
+			if p.visible and not is_ancestor_of(p):
+				p.visible = false
+				_hushed.append(p)
+	elif not under and not _hushed.is_empty():
+		for p in _hushed:
+			if is_instance_valid(p):
+				p.visible = true
+		_hushed.clear()
+
+
+func _exit_tree() -> void:
+	for p in _hushed:
+		if is_instance_valid(p):
+			p.visible = true
+	_hushed.clear()
 
 
 func set_mood(m: Dictionary) -> void:
@@ -246,11 +298,56 @@ func _paint(colour: Color, rough: float, metal: float) -> StandardMaterial3D:
 	return m
 
 
+## The venue's own scenery that stands where the room is built (the dome's plants and rocks, the
+## greenhouse's posts): each upright piece whose box falls inside the room, or in the passage, is hidden,
+## so the room is clear. Floors, ceilings and sky (flat or very large) are left. Returns how many.
+static func clear_the_site(venue: Venue) -> int:
+	var h := venue.annex_edge()
+	var room := inside(h)
+	var site := AABB(Vector3(room.position.x - WALL - 0.1, FLOOR_TOP + 0.05, Z_FROM - 0.1),
+			Vector3(room.size.x + WALL + 0.3, HEIGHT, room.size.y + 0.2))
+	var cleared := 0
+	# Scatter (kelp, rocks, trees, posts) is a MultiMesh: each copy inside the site is shrunk to nothing.
+	var flat := Rect2(site.position.x - 0.5, site.position.z - 0.5, site.size.x + 1.0, site.size.z + 1.0)
+	var to_venue := venue.global_transform.affine_inverse()
+	for node in venue.find_children("*", "MultiMeshInstance3D", true, false):
+		var holder := node as MultiMeshInstance3D
+		if holder.multimesh == null or not holder.visible or str(holder.get_path()).contains("ModularAnnex"):
+			continue
+		var mm := holder.multimesh
+		var gone := Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO)
+		for i in mm.instance_count:
+			var at: Vector3 = (to_venue * holder.global_transform * mm.get_instance_transform(i)).origin
+			if flat.has_point(Vector2(at.x, at.z)) and at.y < HEIGHT:
+				mm.set_instance_transform(i, Transform3D(gone.basis, mm.get_instance_transform(i).origin))
+				cleared += 1
+	for node in venue.find_children("*", "VisualInstance3D", true, false):
+		var vi := node as GeometryInstance3D
+		if vi == null or not vi.visible or vi.get_parent() == null:
+			continue
+		var n: Node = vi
+		var ours := false
+		while n != null and n != venue:
+			if n is ModularAnnex:
+				ours = true
+				break
+			n = n.get_parent()
+		if ours:
+			continue
+		var box := venue.global_transform.affine_inverse() * vi.global_transform * vi.get_aabb()
+		if box.size.y < 0.4 or maxf(box.size.x, box.size.z) > 6.0 or box.size.y > HEIGHT * 2.0:
+			continue
+		if site.intersects(box):
+			vi.visible = false
+			cleared += 1
+	return cleared
+
+
 ## Cut the doorway through whatever wall the venue stands at the live room's right-hand side: each
 ## box piece that crosses the opening is hidden and put back as the pieces round it (either side, and
 ## the lintel over it). Venues with no wall there are untouched.
 static func cut_the_wall(venue: Venue) -> int:
-	var h := venue.live_room_half()
+	var h := venue.annex_edge()
 	var lo := DOOR_Z - DOOR_WIDE * 0.5
 	var hi := DOOR_Z + DOOR_WIDE * 0.5
 	var cut := 0
@@ -290,4 +387,45 @@ static func cut_the_wall(venue: Venue) -> int:
 			part.position = parent.to_local(venue.to_global(Vector3(c.x, (p[2] + p[3]) * 0.5, (p[0] + p[1]) * 0.5)))
 			index += 1
 		cut += 1
+	# Whole-house meshes (a glasshouse's glass and ironwork) are cut triangle by triangle.
+	var opening := AABB(Vector3(h - 0.5, -0.5, lo - 0.05), Vector3(1.0, DOOR_HIGH + 0.6, DOOR_WIDE + 0.1))
+	for node in venue.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi.mesh is ArrayMesh and mi.visible and not mi.name.begins_with("Annex"):
+			var box := venue.global_transform.affine_inverse() * mi.global_transform * mi.get_aabb()
+			if box.size.x > 5.0 and box.has_point(Vector3(h, 1.0, DOOR_Z)) and _cut_mesh(mi, venue, opening):
+				cut += 1
 	return cut
+
+
+## `mi`'s mesh without the triangles whose middle is in `opening` (venue space). Whether any went.
+static func _cut_mesh(mi: MeshInstance3D, venue: Venue, opening: AABB) -> bool:
+	var src := mi.mesh as ArrayMesh
+	var to_venue := venue.global_transform.affine_inverse() * mi.global_transform
+	var out := ArrayMesh.new()
+	var any := false
+	for surface in src.get_surface_count():
+		var arrays := src.surface_get_arrays(surface)
+		if src.surface_get_primitive_type(surface) == Mesh.PRIMITIVE_TRIANGLES:
+			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var index: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+			if index.is_empty():
+				index.resize(verts.size())
+				for i in verts.size():
+					index[i] = i
+			var kept := PackedInt32Array()
+			for t in range(0, index.size() - 2, 3):
+				var mid := (to_venue * verts[index[t]] + to_venue * verts[index[t + 1]] + to_venue * verts[index[t + 2]]) / 3.0
+				if opening.has_point(mid):
+					any = true
+				else:
+					kept.append(index[t])
+					kept.append(index[t + 1])
+					kept.append(index[t + 2])
+			arrays[Mesh.ARRAY_INDEX] = kept
+		var at := out.get_surface_count()
+		out.add_surface_from_arrays(src.surface_get_primitive_type(surface), arrays)
+		out.surface_set_material(at, src.surface_get_material(surface))
+	if any:
+		mi.mesh = out
+	return any

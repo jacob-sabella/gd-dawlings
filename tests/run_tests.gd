@@ -8576,7 +8576,8 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 		var moved := []
 		for surface in studio.focus.surfaces:
 			# LEVELS is in the venue's wall, and the TV on it, or both stand in from where its wall would be.
-			if surface.surface_id == &"levels" or surface.surface_id == &"tv":
+			# The rack hangs in the modular room, which stands out past a glasshouse's glass.
+			if surface.surface_id == &"levels" or surface.surface_id == &"tv" or surface.surface_id == &"modular":
 				continue
 			if not surface.global_transform.is_equal_approx(poses[surface.surface_id]):
 				moved.append(surface.surface_id)
@@ -27347,14 +27348,14 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 				return false
 			# In the modular room built onto the live room: inside it, a doorway cut in the live room's wall
 			# to walk in by, and its seat on the walkable floor.
-			var room_inside := ModularAnnex.inside(studio.venue.live_room_half())
+			var room_inside := ModularAnnex.inside(studio.venue.annex_edge())
 			if not room_inside.has_point(Vector2(spot.origin.x, spot.origin.z)) \
 					or studio.venue.get_node_or_null("ModularAnnex") == null:
 				return false
 			var seat: Variant = Stations.seat(studio.venue, &"modular", studio.walker.fits)
 			if seat == null or not studio.walker.fits(Vector2((seat as Transform3D).origin.x, (seat as Transform3D).origin.z)):
 				return false
-			if not studio.walker.fits(Vector2(studio.venue.live_room_half() + 0.1, ModularAnnex.DOOR_Z)):
+			if not studio.walker.fits(Vector2(studio.venue.annex_edge() + 0.1, ModularAnnex.DOOR_Z)):
 				return false
 			return wall.find_child("Plaque", true, false) != null
 		&"lyrics":

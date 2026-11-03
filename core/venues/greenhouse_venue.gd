@@ -270,6 +270,11 @@ func wall_x() -> float:
 	return live_room_half() + KERB + BED + DWARF * 0.5
 
 
+## The modular room is built onto the glass wall, past the kerb and the border.
+func annex_edge() -> float:
+	return wall_x()
+
+
 func front_z() -> float:
 	return FRONT - KERB - BED - DWARF * 0.5
 

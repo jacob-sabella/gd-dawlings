@@ -5468,6 +5468,7 @@ func _stand_the_annex() -> void:
 	if venue == null or venue.get_node_or_null("ModularAnnex") != null:
 		return
 	ModularAnnex.cut_the_wall(venue)
+	ModularAnnex.clear_the_site(venue)
 	modular_annex = ModularAnnex.build(venue)
 
 
