@@ -657,6 +657,7 @@ func _keep_out_of_mirrors(node: Node) -> void:
 
 
 func _exit_tree() -> void:
+	Session.modular_takes.enabled = true
 	if hit_voices != null:
 		hit_voices.stop()
 		hit_voices = null

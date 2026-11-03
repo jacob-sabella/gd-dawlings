@@ -30309,7 +30309,7 @@ func _test_the_help_card_holds_the_keys_and_walks_to_a_station() -> void:
 	card._input(click)
 	check("a click on a page's name goes to it and keeps the card open (%s)" % card.page_names()[card.page],
 			card.visible and card.page == tab[1] and card.page_names()[card.page] == "ROOM")
-	card.show_page(card.page_names().find("PLAY · LIVE ROOM 1/2"))
+	card.show_page(card.page_names().find("PLAY · LIVE ROOM 1/3"))
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var harp_line: Array = card._lines.filter(func(l: Array) -> bool: return l[1] == &"harp")[0]
