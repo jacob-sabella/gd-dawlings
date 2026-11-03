@@ -799,6 +799,14 @@ func _ready() -> void:
 	await _test_the_studios_rack_is_edited_through_the_room_and_lit_by_its_level()
 	await _test_a_key_played_in_the_studio_is_heard_and_lights_the_room()
 	await _test_a_bandmates_first_note_wakes_the_rack_and_is_heard()
+	await _test_the_discord_feed_sends_what_is_ticked_through_its_faders()
+	await _test_a_tracks_input_can_be_set_aside()
+	await _test_the_input_panel_chooses_hears_and_sets_aside()
+	await _test_the_hover_card_is_printed_on_the_panel_and_not_in_the_air()
+	await _test_the_built_in_engine_monitors_a_track_through_its_bus()
+	await _test_the_input_monitor_never_queues_more_than_a_moment()
+	await _test_a_guests_devices_are_used_only_when_the_host_allows_them()
+	await _test_a_tracks_input_and_monitoring_are_set_in_2d()
 	_report()
 
 
