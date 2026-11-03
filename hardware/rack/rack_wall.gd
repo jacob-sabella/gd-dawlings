@@ -125,6 +125,8 @@ var _bands := {}
 const PILLARS := 12
 const PILLAR_RADIUS := 1.55
 const PILLAR_TALL := 1.7
+## Whether the floor pillars stand in front of the case (a room that has its own skyline turns them off).
+var pillars := true
 var _pillars: Array[MeshInstance3D] = []
 var _pillar_for: Array = []
 var _pillar_level: Array[float] = []
@@ -276,6 +278,8 @@ func _build_dressing() -> void:
 
 
 func _build_pillars() -> void:
+	if not pillars:
+		return
 	for n in PILLARS:
 		# Fanned from the left round the front to the right, leaving the middle open to see the case by.
 		var side := -1.0 if n < PILLARS / 2 else 1.0

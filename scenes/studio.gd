@@ -5402,6 +5402,7 @@ func _build_rack() -> void:
 	rack_wall = RackWall.new()
 	rack_wall.name = "RackWall"
 	rack_wall.parks = false
+	rack_wall.pillars = false
 	rack_wall.within_reach = false
 	rack_wall.patch = rack_row["patch"].duplicate(true)
 	studio_set.add_child(rack_wall)
