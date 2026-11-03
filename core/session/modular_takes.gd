@@ -49,6 +49,8 @@ var patch: Callable = Callable()
 var world: Callable = Callable()
 ## Render a take on a worker thread (false: at once, for the suite).
 var threaded := true
+## Off while the room's rack (RackVoice) replaces the wall: nothing is taken through the old patch.
+var enabled := true
 ## This player's take running now, or null; and the last one, ended.
 var mine: ModularTake = null
 var last_mine: ModularTake = null
@@ -79,6 +81,8 @@ func _patch_now() -> Dictionary:
 ## This player's take through the modular begun at song position `start`, the keys `held` down
 ## ({pitch: velocity}) in it from its first moment. A guest marks it to the host.
 func begin(start: float, held := {}) -> void:
+	if not enabled:
+		return
 	_mine_id += 1
 	mine = ModularTake.new().begin(_patch_now(), start, held)
 	if Session.is_authority():
@@ -90,6 +94,8 @@ func begin(start: float, held := {}) -> void:
 
 ## A note this player's keys sent through the modular (Session.Note's ON, OFF), at `song`.
 func note(kind: int, pitch: int, velocity: int, song: float) -> void:
+	if not enabled:
+		return
 	if mine != null:
 		mine.note(kind, pitch, velocity, song)
 
@@ -99,11 +105,15 @@ func note(kind: int, pitch: int, velocity: int, song: float) -> void:
 ## controls' unreliable channel, whose lost move the next resend makes good for the ear, but a take
 ## rendered from it would differ from the player's own where one was lost.
 func bend(value: int, song: float) -> void:
+	if not enabled:
+		return
 	if mine != null and mine.bend(value, song) and not Session.is_authority():
 		Session.send_modular_bend(value, song)
 
 
 func reach(at: float) -> void:
+	if not enabled:
+		return
 	if mine != null:
 		mine.reach(at)
 
@@ -111,6 +121,8 @@ func reach(at: float) -> void:
 ## This player's take ended at song position `end`, onto `tracks`: kept as `last_mine`, and the host
 ## (this machine, or told) places it. An empty `tracks`, or a take with no notes, places nothing.
 func finish(tracks: Array, end: float) -> void:
+	if not enabled:
+		return
 	if mine == null:
 		return
 	mine.reach(end)
@@ -146,12 +158,16 @@ func cancel() -> void:
 ## Knob `id` at `v` at song position `song`, whoever turned it: in this player's take and every take
 ## the host holds whose gestures have begun.
 func knob(id: StringName, v: float, song: float) -> void:
+	if not enabled:
+		return
 	for take in _open():
 		take.knob(id, v, song)
 
 
 ## A cable the room took, from `from` into `to` (an empty `to` pulls the cable at `from`), at `song`.
 func cable(from: StringName, to: StringName, song: float) -> void:
+	if not enabled:
+		return
 	for take in _open():
 		take.cable(from, to, song)
 
@@ -177,6 +193,8 @@ func _open() -> Array[ModularTake]:
 ## Host: `from`'s note as Session heard it, with its source: a note played through the modular is
 ## held, and in their take while its keys' lane is open.
 func heard_note(from: int, kind: int, pitch: int, velocity: int, song: float, source: StringName) -> void:
+	if not enabled:
+		return
 	if source != Modular.SOURCE or from == Session.local_peer_id:
 		return
 	var held: Dictionary = _held.get(from, {})
@@ -193,6 +211,8 @@ func heard_note(from: int, kind: int, pitch: int, velocity: int, song: float, so
 ## Host: `from`'s wheel in their take, as they sent it for it (Session.send_modular_bend): reliable,
 ## behind their notes, each move once.
 func heard_bend(from: int, value: int, song: float) -> void:
+	if not enabled:
+		return
 	var take := _their(from, Lane.KEYS)
 	if take != null:
 		take.bend(value, song)
@@ -211,6 +231,8 @@ func _their(from: int, lane: int) -> ModularTake:
 ## onto `tracks` (none: abandoned). The keys' begin puts in what they hold, the gestures' takes the
 ## patch as it is heard here now; a begin of a new take places the one before it if it was ended.
 func heard_mark(from: int, lane: int, id: int, begun: bool, start: float, end: float, tracks: Array) -> void:
+	if not enabled:
+		return
 	if from == Session.local_peer_id or not is_finite(start) or not is_finite(end):
 		return
 	var entry: Dictionary = _theirs.get(from, {})

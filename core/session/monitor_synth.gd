@@ -49,6 +49,9 @@ var native: NativeKeys = null
 ## at it (ModularVoice, docs/spatial_loop.md part two, slice 51), or null. On the helper the helper
 ## routes the keys itself (`mod on`), so this is only ever set while `native` is null.
 var modular: ModularVoice = null
+## An object with note_on, note_off, bend and all_off that takes the keys instead of everything above
+## (the room's rack, RackVoice, while this player is at it); null for none.
+var redirect: Object = null
 ## Off: always through Godot. For the suite, and R3D_GODOT_KEYS=1 to compare.
 var allow_native := OS.get_environment("R3D_GODOT_KEYS") != "1"
 ## The bus it plays on through Godot: the keys' own (Monitor) unless told otherwise -- another
@@ -167,6 +170,9 @@ func latency_seconds() -> float:
 func note_on(pitch: int, velocity: int) -> void:
 	if not enabled:
 		return
+	if redirect != null:
+		redirect.note_on(pitch, velocity)
+		return
 	if native != null:
 		native.note_on(pitch, velocity)
 		return
@@ -177,6 +183,9 @@ func note_on(pitch: int, velocity: int) -> void:
 
 
 func note_off(pitch: int) -> void:
+	if redirect != null:
+		redirect.note_off(pitch)
+		return
 	if native != null:
 		native.note_off(pitch)
 		return
@@ -199,6 +208,12 @@ func sustain(down: bool) -> void:
 ## DawKitTine.control on the render thread, or to the helper.
 func control(kind: int, value: int) -> void:
 	controls[kind] = value
+	if redirect != null:
+		if kind == DawKitClip.PITCH_BEND:
+			redirect.bend(clampf(value / 8192.0, -1.0, 1.0))
+		else:
+			redirect.cc(kind, value)
+		return
 	if native != null:
 		native.control(kind, value)
 		return
@@ -215,6 +230,8 @@ func rest_controls() -> void:
 
 
 func all_off() -> void:
+	if redirect != null:
+		redirect.all_off()
 	if native != null:
 		native.panic()
 		return

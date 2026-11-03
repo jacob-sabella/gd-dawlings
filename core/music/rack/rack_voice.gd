@@ -33,6 +33,7 @@ var meters := {}
 var level := 0.0
 var hit := 0.0
 var _last_peak := 0.0
+var _held := {}
 
 
 func _ready() -> void:
@@ -123,11 +124,19 @@ func knob(id: String, k: String, v01: float) -> void:
 
 
 func note_on(pitch: int, velocity := 100) -> void:
+	_held[pitch] = true
 	engine.say("note_on %d %d" % [pitch, velocity])
 
 
 func note_off(pitch: int) -> void:
+	_held.erase(pitch)
 	engine.say("note_off %d" % pitch)
+
+
+func all_off() -> void:
+	for pitch in _held.keys():
+		engine.say("note_off %d" % pitch)
+	_held.clear()
 
 
 func bend(v: float) -> void:

@@ -269,8 +269,8 @@ const ALL := [
 		# keys' near edge; its seat as far back as the bricks table behind it lets, and a headset's
 		# (`reach`) at the decks' front, the panel in arm's reach over them.
 		"id": &"modular", "title": "MODULAR", "area": LIVE, "zone": &"synth", "air": 0.5,
-		"spot": &"modular_spot", "at": ModularWall.LOOK,
-		"frame": [ModularWall.FRAME_TOP, ModularWall.FRAME_FOOT],
+		"spot": &"modular_spot", "at": RackWall.LOOK,
+		"frame": [RackWall.FRAME_TOP, RackWall.FRAME_FOOT],
 		"seat": 1.3, "reach": 0.8, "surface": &"modular",
 		"desk": "F walks to it, G brings it · drag from a jack to another to patch a cable: an output (pale) into an input · drag a cable's plug out of an input to move it, off the jacks to pull it · drag a knob up or down, or wheel it, to turn it · standing at it your keys play it: the touch keys under it, a MIDI keyboard, or PLAY for A to ' · OUT says which road it sounds on · record at it and the take is its sound, audio named modular · the world plugs in too: click a MODULAR socket (or P over it) by the weather, the venue's instrument, a looper ring or the marble run to step its long cable into the wall's next free input",
 		"hands": "pinch a jack and carry the cable to another: an output (pale) into an input · pull a plug out to move it, or let it go off the jacks · twist a knob · standing at it your keys play it, or touch the keys under it · record at it and the take is its sound · press a MODULAR socket by the weather, the venue's instrument, a looper ring or the marble run to patch the world in",

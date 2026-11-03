@@ -308,36 +308,21 @@ var marbles: MarbleRun
 ## a change of venue and stood again in the next.
 var marbles_row := {}
 var marble_balls: Array = []
-## The modular wall over the synth zone's keyboard stand (ModularWall, docs/spatial_loop.md part two,
-## slice 51), a surface hung again with each venue at its `modular_spot`; null in AR. The voice that
-## plays this player's keys through its patch while they stand at it (ModularVoice), and the room's
-## row `modular` {cables, knobs} (Modular), the room's and not the venue's.
-var modular_wall: ModularWall
+## The modular room's rack over the synth zone's keyboard stand (RackWall, docs/architecture.md), a
+## surface hung again with each venue at its `modular_spot`; null in AR. Its voice (RackVoice, the
+## engine), the room's row `rack` {patch, track} (RackPatch), and the computer keys as its keys.
+var rack_wall: RackWall
+var rack_voice: RackVoice
+var rack_row := {"patch": RackPatch.preset(&"keys_voice"), "track": 0}
 ## The lyric board in the vocal booth (LyricBoard, docs/spatial_loop.md part two, slice 56), stood
 ## again with each venue at its `lyrics_spot`; null where there is no booth and in AR. What it shows is
 ## the song's (MixState.lyrics), so nothing of it is the room's.
 var lyric_board: LyricBoard
-var modular_voice: ModularVoice
-var modular_row := Modular.default_patch()
-## Each bandmate playing the modular, heard through the room's patch at the wall (slice 52): a
-## ModularVoice of theirs by peer, and what they hold on it ({peer: {pitch: true}}).
-var modular_heard := {}
-var _modular_heard_held := {}
-## The knobs as this player last streamed them ({id: v}): what their own voice and their take hear
-## of a turn, kept on the voice while the room's row has not caught up (`_show_modular`).
-var _modular_streamed := {}
-## The computer keys as the modular's keys (PLAY on its KEYS module), and this player's newest key
-## and how many are held, for KEYS' readout.
 var modular_keys: KeyCatcher
 var _modular_held := {}
 var _modular_last := -1
-## The world into the modular (slice 53): what the weather, the venue's instrument, the looper's rings
-## and the marble run play into its world sockets (ModularWorld), on every machine from the song
-## clock and the rows; and the world's own voice at the wall, which plays the patch with no keys while
-## a world socket is patched into it and no other voice here is playing it, so a drip into an ENV's
-## gate sounds with nobody playing, and once, not twice, with somebody.
-var modular_world: ModularWorld
-var modular_world_voice: ModularVoice
+## Whether the rack's take under way began with the song's recording (and so ends with it).
+var _rack_auto_take := false
 ## The DJ platter on the leaf of the tape deck's cart (Platter, docs/spatial_loop.md part two, slice
 ## 27): bare it is the playhead, scrubbed by hand; a cassette in its slot is scratched. Rides the
 ## cart, so it is the studio's and not the venue's. Null in AR.
@@ -2734,7 +2719,7 @@ func room_state() -> Dictionary:
 			"weather": weather_listening, "bricks": _bricks_row(), "looper": looper_row.duplicate(),
 			"music_box": music_box_row.duplicate(), RoomString.ROW: strings_row.duplicate(),
 			MarbleRun.ROW: marbles_row.duplicate(), MarbleRun.BALLS: marble_balls.duplicate(),
-			Modular.ROW: modular_row.duplicate(true), GrainCloud.ROW: grains_key}
+			RackPatch.ROW: rack_row.duplicate(true), GrainCloud.ROW: grains_key}
 
 
 func _publish_room() -> void:
@@ -2773,7 +2758,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 				pending_items[p["args"][0]] = true
 			&"patch", &"on_air", &"plug", &"rope", &"make", &"paste", &"sampler", &"weather", &"bricks", \
 					&"looper", &"looper_layer", &"music_box", &"string", &"marble", &"marble_ball", \
-					&"modular_patch", &"modular_knob": pass
+					&"rack": pass
 			&"open_tablet", &"open_track_rack": pending_open[p["id"]] = true
 			&"close_tablet", &"close_track_rack": pending_close[p["args"][0]] = true
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
@@ -2915,15 +2900,14 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			if p["verb"] == MarbleRun.BALL_VERB:
 				held = MarbleRun.answer_ball(held, p["args"][0])
 		_show_marble_balls(held)
-	if state.has(Modular.ROW):
-		# The host's patch, with this guest's own cables and knobs it has not heard back about on top.
-		var patch := Modular.clean(state[Modular.ROW])
+	if state.has(RackPatch.ROW):
+		# The host's rack, with this guest's own edits it has not heard back about on top.
+		var row: Dictionary = (state[RackPatch.ROW] as Dictionary).duplicate(true)
+		row["patch"] = RackPatch.sanitize(row.get("patch", {}))
 		for p in _predictions:
-			if p["verb"] == Modular.PATCH_VERB:
-				Modular.answer_patch(patch, p["args"][0], p["args"][1])
-			elif p["verb"] == Modular.KNOB_VERB:
-				Modular.answer_knob(patch, p["args"][0], p["args"][1])
-		_show_modular(patch)
+			if p["verb"] == &"rack":
+				_rack_apply(row, String(p["args"][0]), p["args"][1])
+		_show_rack(row)
 	if state.has("board") and not _predictions.any(func(p): return p["verb"] == &"board_source"):
 		_show_board(StringName(state["board"]))
 	_applying_room = false
@@ -3160,12 +3144,9 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"marble_ball":
 			# A guest's BALL: a marble on that beat, for everyone.
 			_answer_marble_ball(args[0])
-		&"modular_patch":
-			# A guest's cable on the modular wall, or one pulled: the room's row, or told why not.
-			_answer_modular_patch(args[0], args[1], from, args[2])
-		&"modular_knob":
-			# A guest's knob let go: the room's row.
-			_answer_modular_knob(args[0], args[1], from, args[2])
+		&"rack":
+			# A guest's edit of the rack, or its track: the room's row, or told why not.
+			_answer_rack(String(args[0]), args[1], from)
 		&"scratch":
 			# A guest's scratch on the platter, for the sampler: of what is in its slot here, and
 			# a path that fits (Varispeed.fits: bounded in steps and in time). Rendered only when
@@ -3934,8 +3915,8 @@ func _build_surfaces() -> void:
 		focus.surfaces.append(tv)
 	# The modular wall, over the synth zone's keyboard stand (slice 51); none in AR.
 	if medium != Presentation.Medium.AR:
-		_build_modular()
-		focus.surfaces.append(modular_wall)
+		_build_rack()
+		focus.surfaces.append(rack_wall)
 	focus.show_halo = medium != Presentation.Medium.SCREEN
 	focus.visits = medium == Presentation.Medium.SCREEN
 	# Re-seat once the focused surface has been PLACED, which is when it finally knows both its
@@ -5382,30 +5363,24 @@ func _on_marble_rang(r: Dictionary) -> void:
 				float(r["length"]), float(r["song"]))
 
 
-# --- the modular wall (docs/spatial_loop.md part two, slice 51) ------------------------------
+# --- the modular room's rack (docs/architecture.md, "The modular room") ----------------------
 #
-# The patch is the room's row `modular` {cables: [[from, to]], knobs: {id: v}} (Modular): a cable put in
-# or pulled is the room's ask `modular_patch` [from, to, song] (an empty `to` pulls), a knob let go the
-# ask `modular_knob` [id, v, song], each shown at once here and rolled back if the host refuses it, as
-# the patchbay's `patch` is. A knob as it turns is streamed (Session.send_knob, at most
-# Session.KNOBS_PER_SECOND), heard where it is made and by bandmates, but never the room's until let
-# go. This player's keys play the patch while they stand at the stand (ModularVoice).
-#
-# Slice 52: a turn is heard here as it is streamed (`_on_knob_streamed`), the same events the band
-# hears and a take keeps; each bandmate playing the wall is heard through the room's patch on a voice
-# of theirs at it (`modular_heard`, from Presence.modular_heard); and every change of the room's patch
-# goes into a take through the modular at the song it was asked at (`_take_modular_change`,
-# Session.modular_takes), which the host renders and puts in as audio when it ends.
+# The patch is the room's row `rack` {patch: {modules, cables}, track} (RackPatch): every change to it
+# is the one ask `rack` [op, args] (RackPatch.answer: add, remove, move, cable, pull, pull_one, knob,
+# preset; and `track`, the track the rack sounds through), shown at once here and rolled back if the
+# host refuses it, as the patchbay's `patch` is. The engine (native/rack, RackVoice) runs on the host
+# alone, and what it plays goes through a track of the song (InputMonitor.feeds), so every guest hears
+# it in the mix; a guest's keys at the rack reach it as notes the host plays (Presence.modular_heard).
+# A knob turning is the ask too, at most Session.KNOBS_PER_SECOND, so the room hears a sweep as it is
+# made. The rack is caught as audio on its track while the song records, or with its REC key.
 
-## Where a player stands to play the wall, in its frame (m): in front of the stand, out to a step
+## Where a player stands to play the rack, in its frame (m): in front of the stand, out to a step
 ## past the station's seat (1.3), and no wider than the case. Its jacks and knobs take the pointer
 ## only from here (and only where no other station's seat is nearer, `at_modular`), or while it is
-## visited or brought. The harp, the music box and the bells stand within a metre or two of the
-## stand: a wider area played the harp's plucks through the patch and put 2 cm jacks under a
-## harp player's cursor.
+## visited or brought.
 const MODULAR_NEAR := 0.3
 const MODULAR_FAR := 1.7
-const MODULAR_SIDE := 0.6
+const MODULAR_SIDE := 1.1
 ## How often the stations' seats are worked out again for `at_modular` (s): a trolley pushed
 ## moves its seat, but not every frame's worth.
 const MODULAR_SEATS_EVERY := 0.5
@@ -5417,284 +5392,178 @@ var _modular_seats_at := -1
 var _modular_seats_venue := 0
 
 
-## The wall, its voice and its computer keys, made once with the surfaces; hung at the venue's spot
+## The rack, its voice and its computer keys, made once with the surfaces; hung at the venue's spot
 ## (`_stand_the_modular`). None in AR.
-func _build_modular() -> void:
-	modular_wall = ModularWall.new()
-	modular_wall.name = "ModularWall"
-	modular_wall.parks = false
-	modular_wall.within_reach = false
-	modular_wall.patch = modular_row.duplicate(true)
-	studio_set.add_child(modular_wall)
-	mount.register(modular_wall)
-	modular_wall.patch_asked.connect(ask_modular_patch)
-	modular_wall.knob_set.connect(ask_modular_knob)
-	# A turn is heard here as it is streamed, not as the hand moves the knob: the same events the
-	# band hears and the take keeps (slice 52).
-	modular_wall.knob_streamed.connect(_on_knob_streamed)
-	modular_wall.told.connect(func(text: String) -> void: Session.notice.emit(text))
-	modular_wall.touched.connect(_on_modular_touched)
-	modular_wall.keys_asked.connect(func() -> void: _modular_play(not modular_keys.is_active()))
-	Session.knob_turned.connect(_on_knob_turned)
-	modular_voice = ModularVoice.new()
-	modular_voice.name = "ModularVoice"
-	modular_voice.keys = Session.guest_midi.synth if Session.guest_midi != null else null
-	modular_voice.set_patch(modular_row)
-	add_child(modular_voice)
-	# Takes through the modular start from the patch as it is heard here; bandmates' keys through it
-	# play at the wall (slice 52).
-	Session.modular_takes.patch = heard_modular_patch
-	if presence != null:
-		presence.modular_heard = _on_modular_heard
-		presence.modular_control_heard = _on_modular_control_heard
-	Session.participant_left.connect(_forget_modular_player)
-	Session.role_changed.connect(_on_modular_role_changed)
+func _build_rack() -> void:
+	rack_wall = RackWall.new()
+	rack_wall.name = "RackWall"
+	rack_wall.parks = false
+	rack_wall.within_reach = false
+	rack_wall.patch = rack_row["patch"].duplicate(true)
+	studio_set.add_child(rack_wall)
+	mount.register(rack_wall)
+	rack_wall.edit_asked.connect(ask_rack)
+	rack_wall.knob_streamed.connect(func(id: String, k: String, v: float) -> void: ask_rack("knob", [id, k, v]))
+	rack_wall.knob_set.connect(func(id: String, k: String, v: float) -> void: ask_rack("knob", [id, k, v]))
+	rack_wall.told.connect(func(text: String) -> void: Session.notice.emit(text))
+	rack_wall.touched.connect(_on_rack_touched)
+	rack_wall.keys_asked.connect(func() -> void: _modular_play(not modular_keys.is_active()))
+	rack_wall.track_asked.connect(func() -> void: ask_rack("track", [0]))
+	rack_wall.record_asked.connect(_rack_toggle_record)
+	rack_voice = RackVoice.new()
+	rack_voice.name = "RackVoice"
+	add_child(rack_voice)
+	rack_voice.set_patch(rack_row["patch"])
 	modular_keys = KeyCatcher.new()
-	modular_keys.name = "ModularKeys"
+	modular_keys.name = "RackKeys"
 	modular_keys.base = 48
 	add_child(modular_keys)
-	modular_keys.note_on.connect(func(pitch: int, velocity: int) -> void: _on_modular_touched(pitch, true, velocity))
-	modular_keys.note_off.connect(func(pitch: int) -> void: _on_modular_touched(pitch, false))
-	modular_keys.active_changed.connect(func(on: bool) -> void: modular_wall.show_playing(on))
-	# The world into it (slice 53).
-	modular_world = ModularWorld.new()
-	modular_world.weather = func() -> Variant: return weather
-	modular_world.marbles = func() -> Variant: return marbles
-	modular_world.has_venue = func() -> bool: return venue_instrument != null and is_instance_valid(venue_instrument)
-	add_child(modular_world)
-	modular_world.fired.connect(_on_world_fired)
-	Session.modular_takes.world = modular_world.for_take
-	modular_world_voice = ModularVoice.new()
-	modular_world_voice.name = "ModularWorldVoice"
-	modular_world_voice.speaker = modular_wall
-	modular_world_voice.world_only = true
-	modular_world_voice.volume_db = -6.0
-	modular_world_voice.set_patch(modular_row)
-	add_child(modular_world_voice)
+	modular_keys.note_on.connect(func(pitch: int, velocity: int) -> void: _on_rack_touched(pitch, true, velocity))
+	modular_keys.note_off.connect(func(pitch: int) -> void: _on_rack_touched(pitch, false))
+	modular_keys.active_changed.connect(func(on: bool) -> void: rack_wall.show_playing(on))
+	if presence != null:
+		presence.modular_heard = _on_rack_heard
 	if Session.guest_midi != null:
 		Session.guest_midi.key.connect(_on_modular_key)
+		Session.modular_takes.enabled = false
+	_show_rack(rack_row)
 
 
-## The wall, hung at this venue's spot over the stand (Venue.modular_spot), the venue's rack giving way
-## to it; put away, and out of F's round, where the venue has none.
+## The rack, hung at this venue's spot over the stand (Venue.modular_spot), the venue's rack giving way
+## to it, in the venue's mood; put away, and out of F's round, where the venue has none.
 func _stand_the_modular() -> void:
-	if modular_wall == null or not is_instance_valid(modular_wall) or venue == null:
+	if rack_wall == null or not is_instance_valid(rack_wall) or venue == null:
 		return
 	var spot: Variant = Stations.spot(venue, Modular.STATION)
-	modular_wall.visible = spot != null
+	rack_wall.visible = spot != null
+	rack_wall.set_mood(RackMood.palette(venue.venue_id()))
 	if spot == null:
 		if focus != null:
-			if focus.focused_id == modular_wall.surface_id:
+			if focus.focused_id == rack_wall.surface_id:
 				focus.release()
-			focus.surfaces.erase(modular_wall)
+			focus.surfaces.erase(rack_wall)
 		return
 	ZoneKit.yield_rack(venue)
 	var at := _venue_to_set(spot as Transform3D)
-	mount.seat(modular_wall.surface_id, func() -> Transform3D: return at)
-	if focus != null and not focus.surfaces.has(modular_wall):
-		focus.surfaces.append(modular_wall)
+	mount.seat(rack_wall.surface_id, func() -> Transform3D: return at)
+	if focus != null and not focus.surfaces.has(rack_wall):
+		focus.surfaces.append(rack_wall)
 
 
-## The song position a cable or a knob is made at: this player's keys' clock, or -1.
-func _modular_song() -> float:
-	return Session.guest_midi.song() if Session.guest_midi != null else -1.0
-
-
-## A cable from `from` into `to`, or with `to` empty the cable at `from` pulled: done on the host, asked
-## by a guest and shown at once, or refused here in words where the host would refuse it.
-func ask_modular_patch(from: StringName, to: StringName) -> void:
-	var song := _modular_song()
+## An edit of the rack, `op` and `args` as RackPatch.answer takes them (or `track` [step]): done on the
+## host, asked by a guest and shown at once, or refused here in words where the host would refuse it.
+func ask_rack(op: String, args: Array) -> void:
 	if Session.is_authority():
-		_answer_modular_patch(from, to, Session.local_peer_id, song)
+		_answer_rack(op, args, Session.local_peer_id)
 		return
-	var patch := modular_row.duplicate(true)
-	var refusal := Modular.answer_patch(patch, from, to)
+	var row := rack_row.duplicate(true)
+	var refusal := _rack_apply(row, op, args)
 	if refusal != "":
 		Session.notice.emit(refusal)
 		return
-	if _predict(Modular.PATCH_VERB, [from, to, song]) > 0:
-		_show_modular(patch, song)
+	if op == "knob":
+		# A sweep is many asks and one room: the turn is shown here, and the host's room catches up.
+		Session.ask_room(&"rack", [StringName(op), args])
+		_show_rack(row)
+		return
+	if _predict(&"rack", [StringName(op), args]) > 0:
+		_show_rack(row)
 
 
-## The room's word on a cable asked by `from` at song position `song`: the row, told to the room, or
-## why not, to them.
-func _answer_modular_patch(cable_from: StringName, to: StringName, from: int, song := -1.0) -> void:
-	var patch := modular_row.duplicate(true)
-	var refusal := Modular.answer_patch(patch, cable_from, to)
+## `op` done to the row `row`; the refusal in words, or "".
+func _rack_apply(row: Dictionary, op: String, args: Array) -> String:
+	if op == "track":
+		var tracks: Array = DAW.state.track_indices() if DAW.state != null else []
+		tracks.sort()
+		var at := tracks.find(int(row["track"]))
+		var step := int(args[0]) if args.size() > 0 else 0
+		if step == 0:
+			# Round the tracks, and to none after the last.
+			row["track"] = tracks[at + 1] if at + 1 < tracks.size() and at >= -1 else 0
+			if at == -1 and not tracks.is_empty():
+				row["track"] = tracks[0]
+		elif tracks.has(step) or step < 0:
+			row["track"] = maxi(step, 0)
+		return ""
+	return RackPatch.answer(row["patch"], op, args)
+
+
+func _answer_rack(op: String, args: Array, from: int) -> void:
+	var row := rack_row.duplicate(true)
+	var refusal := _rack_apply(row, op, args)
 	if refusal != "":
 		Session.tell(from, refusal)
 		return
-	_show_modular(patch, song)
+	_show_rack(row)
 	_publish_room_soon()
 
 
-## Knob `id` let go at `v`: the room's from now on, done on the host, asked by a guest and kept here.
-func ask_modular_knob(id: StringName, v: float) -> void:
-	var song := _modular_song()
-	if Session.is_authority():
-		_answer_modular_knob(id, v, Session.local_peer_id, song)
+## The room's rack as `row` has it, here: on the wall and in the voice, with a knob a hand here is still
+## turning kept where the hand has it. On the host it wakes the engine for any edit.
+func _show_rack(row: Dictionary) -> void:
+	rack_row = {"patch": RackPatch.sanitize(row.get("patch", {})), "track": int(row.get("track", 0))}
+	var turning := rack_wall.turning() if rack_wall != null and is_instance_valid(rack_wall) else {}
+	var patch: Dictionary = rack_row["patch"]
+	for key: String in turning:
+		RackPatch.set_knob(patch, key.get_slice(".", 0), key.get_slice(".", 1), float(turning[key]))
+	if rack_wall != null and is_instance_valid(rack_wall):
+		rack_wall.show_patch(patch)
+		rack_wall.set_track(int(rack_row["track"]), _rack_track_name(int(rack_row["track"])))
+	if rack_voice != null and is_instance_valid(rack_voice) and Session.is_authority():
+		if rack_voice.running() or _rack_engaged():
+			_rack_wake()
+		rack_voice.set_patch(patch)
+		rack_voice.set_track(int(rack_row["track"]))
+	elif rack_voice != null and is_instance_valid(rack_voice):
+		rack_voice.patch = patch
+
+
+func _rack_track_name(index: int) -> String:
+	if index <= 0 or DAW.state == null:
+		return ""
+	var t: MixState.TrackState = DAW.state.track(index, false)
+	return t.name if t != null else ""
+
+
+## Start the engine if it is not going (host only), the track chosen for it if none is: the first one.
+func _rack_wake() -> void:
+	if rack_voice == null or not Session.is_authority() or rack_voice.running():
 		return
-	var patch := modular_row.duplicate(true)
-	var refusal := Modular.answer_knob(patch, id, v)
-	if refusal != "":
-		Session.notice.emit(refusal)
+	if not RackEngine.available():
 		return
-	if _predict(Modular.KNOB_VERB, [id, v, song]) > 0:
-		_show_modular(patch, song)
+	if rack_voice.start():
+		if int(rack_row["track"]) <= 0 and DAW.state != null:
+			var tracks: Array = DAW.state.track_indices()
+			tracks.sort()
+			if not tracks.is_empty():
+				rack_row["track"] = tracks[0]
+		rack_voice.set_patch(rack_row["patch"])
+		rack_voice.set_track(int(rack_row["track"]))
+		_show_rack(rack_row)
 
 
-func _answer_modular_knob(id: StringName, v: float, from: int, song := -1.0) -> void:
-	var patch := modular_row.duplicate(true)
-	var refusal := Modular.answer_knob(patch, id, v)
-	if refusal != "":
-		Session.tell(from, refusal)
+func _rack_engaged() -> bool:
+	return at_modular() or (modular_keys != null and modular_keys.is_active())
+
+
+## REC on the rack: a take of what it plays, on its track at the song position it began.
+func _rack_toggle_record() -> void:
+	if not Session.is_authority():
+		Session.notice.emit("The host records the rack: its sound is in the mix on its track.")
 		return
-	_show_modular(patch, song)
-	_publish_room_soon()
+	_rack_wake()
+	if rack_voice.recording():
+		var made := rack_voice.record_stop()
+		Session.notice.emit("Rack take: %s" % ("kept on track %d" % int(rack_row["track"]) if str(made.get("error", "")) == ""
+				else str(made["error"])))
+	elif not rack_voice.record_start(DAW.state.position_seconds if DAW.state != null else 0.0):
+		Session.notice.emit("Pick a track for the rack to sound through first: TRACK.")
+	if rack_wall != null:
+		rack_wall.set_recording(rack_voice.recording())
 
 
-## The room's patch as `patch` has it, here: on the wall, in this player's voice and every
-## bandmate's, with a knob a hand here is still turning kept where its stream has it. What changed
-## goes into a take through the modular (Session.modular_takes) at `song`, the song position it was
-## asked at (NAN: now, as this player hears it): a cable in or out, and a knob not under a hand here,
-## whose stream the take has already.
-func _show_modular(patch: Dictionary, song := NAN) -> void:
-	var was := modular_row
-	modular_row = Modular.clean(patch)
-	var turning := modular_wall.turning() if modular_wall != null and is_instance_valid(modular_wall) else {}
-	_take_modular_change(was, modular_row, turning, song if is_finite(song) else _modular_song())
-	if modular_wall != null and is_instance_valid(modular_wall):
-		modular_wall.show_patch(modular_row)
-	for voice: ModularVoice in _modular_voices():
-		voice.set_patch(modular_row)
-		for id: StringName in turning:
-			voice.knob(id, _modular_streamed.get(id, turning[id]))
-
-
-## The room's patch gone from `was` to `now`, into a take through the modular at `song`: each cable
-## pulled, then each put in, and each knob moved that no hand here is turning.
-func _take_modular_change(was: Dictionary, now: Dictionary, turning: Dictionary, song: float) -> void:
-	var before: Array = was.get("cables", [])
-	var after: Array = now.get("cables", [])
-	for c: Array in before:
-		if not after.has(c):
-			Session.modular_takes.cable(c[1], &"", song)
-	for c: Array in after:
-		if not before.has(c):
-			Session.modular_takes.cable(c[0], c[1], song)
-	var knobs: Dictionary = now["knobs"]
-	for id: StringName in knobs:
-		if not turning.has(id) and not is_equal_approx(float(knobs[id]), float((was["knobs"] as Dictionary).get(id, -1.0))):
-			Session.modular_takes.knob(id, knobs[id], song)
-
-
-## The modular's patch as it is heard here: the room's, with the knobs as they are being streamed
-## (this player's voice has both). What a take through the modular starts from (ModularTakes.patch).
-func heard_modular_patch() -> Dictionary:
-	return modular_voice.patch if modular_voice != null and is_instance_valid(modular_voice) else modular_row
-
-
-## This player's voice, every bandmate's and the world's own: all of them play the room's patch.
-func _modular_voices() -> Array[ModularVoice]:
-	var out: Array[ModularVoice] = []
-	if modular_voice != null and is_instance_valid(modular_voice):
-		out.append(modular_voice)
-	if modular_world_voice != null and is_instance_valid(modular_world_voice):
-		out.append(modular_world_voice)
-	for peer: int in modular_heard:
-		var v: ModularVoice = modular_heard[peer]
-		if is_instance_valid(v):
-			out.append(v)
-	return out
-
-
-## A knob's turn here as it is streamed (ModularWall.knob_streamed, at most Session.KNOBS_PER_SECOND):
-## heard in every voice here, sent to the band and kept in a take, all at once, so what this player
-## hears of the turn is what the take renders.
-func _on_knob_streamed(id: StringName, v: float) -> void:
-	_modular_streamed[id] = v
-	for voice: ModularVoice in _modular_voices():
-		voice.knob(id, v)
-	Session.send_knob(id, v, _modular_song())
-
-
-## A bandmate's knob as they turn it: on the wall and in every voice here.
-func _on_knob_turned(id: StringName, v: float, _from: int, _song: float) -> void:
-	if modular_wall != null and is_instance_valid(modular_wall):
-		modular_wall.show_knob(id, v)
-	for voice: ModularVoice in _modular_voices():
-		voice.knob(id, v)
-
-
-## A bandmate's note through the modular (Presence.modular_heard): played on their voice at the wall,
-## made the first time they play it, through the room's patch. Their last note let go rests their
-## wheel, as it does on their end.
-func _on_modular_heard(peer: int, kind: int, pitch: int, velocity: int) -> void:
-	if kind != Session.Note.ON and kind != Session.Note.OFF:
-		return
-	var voice := _modular_voice_of(peer, kind == Session.Note.ON)
-	if voice == null:
-		return
-	var held: Dictionary = _modular_heard_held.get(peer, {})
-	if kind == Session.Note.ON:
-		held[pitch] = true
-		voice.note_on(pitch, velocity)
-	else:
-		voice.note_off(pitch)
-		if held.erase(pitch) and held.is_empty():
-			voice.bend(0)
-	_modular_heard_held[peer] = held
-
-
-## A bandmate's wheel through the modular (Presence.modular_control_heard), while they hold a note.
-func _on_modular_control_heard(peer: int, kind: int, value: int) -> void:
-	if kind != DawKitClip.PITCH_BEND or (_modular_heard_held.get(peer, {}) as Dictionary).is_empty():
-		return
-	var voice := _modular_voice_of(peer, false)
-	if voice != null:
-		voice.bend(value)
-
-
-## `peer`'s voice at the wall, made (with `make`) if they have none yet; null where there is no wall
-## to play it from.
-func _modular_voice_of(peer: int, make: bool) -> ModularVoice:
-	var voice: ModularVoice = modular_heard.get(peer)
-	if voice != null and is_instance_valid(voice):
-		return voice
-	if not make or modular_wall == null or not is_instance_valid(modular_wall):
-		return null
-	voice = ModularVoice.new()
-	voice.name = "ModularHeard%d" % peer
-	voice.speaker = modular_wall
-	voice.volume_db = -4.0
-	voice.set_patch(modular_voice.patch if modular_voice != null else modular_row)
-	if modular_voice != null:
-		for socket: StringName in modular_voice.world_levels():
-			voice.world(socket, float(modular_voice.world_levels()[socket]))
-	add_child(voice)
-	voice.engaged = true
-	modular_heard[peer] = voice
-	return voice
-
-
-## Out of the session: no bandmate is playing the wall any more.
-func _on_modular_role_changed() -> void:
-	if Session.role == Session.Role.SOLO:
-		for peer: int in modular_heard.keys():
-			_forget_modular_player(peer)
-
-
-## A bandmate gone: their voice at the wall with them.
-func _forget_modular_player(peer: int) -> void:
-	var voice: ModularVoice = modular_heard.get(peer)
-	modular_heard.erase(peer)
-	_modular_heard_held.erase(peer)
-	if voice != null and is_instance_valid(voice):
-		voice.queue_free()
-
-
-## A touch key, or the computer keys under PLAY: a note on this player's keys, as the modular.
-func _on_modular_touched(pitch: int, down: bool, velocity := 100) -> void:
+## A touch key, or the computer keys under PLAY: a note on this player's keys, to the rack.
+func _on_rack_touched(pitch: int, down: bool, velocity := 100) -> void:
 	if Session.guest_midi == null:
 		return
 	if down:
@@ -5703,39 +5572,50 @@ func _on_modular_touched(pitch: int, down: bool, velocity := 100) -> void:
 		Session.guest_midi.note_off(pitch, 0, 0.0, false, Modular.SOURCE)
 
 
-## A key played on this player's keys, from anywhere: KEYS' readout, its newest note and its lamp.
+## A bandmate's note through the rack (Presence.modular_heard): the host plays it.
+func _on_rack_heard(_peer: int, kind: int, pitch: int, velocity: int) -> void:
+	if not Session.is_authority() or rack_voice == null:
+		return
+	_rack_wake()
+	if kind == Session.Note.ON:
+		rack_voice.note_on(pitch, velocity)
+	elif kind == Session.Note.OFF:
+		rack_voice.note_off(pitch)
+
+
+## A key played on this player's keys, from anywhere: KEYS' lamp.
 func _on_modular_key(pitch: int, down: bool) -> void:
 	if down:
 		_modular_held[pitch] = true
 		_modular_last = pitch
 	else:
 		_modular_held.erase(pitch)
-	if modular_wall != null and is_instance_valid(modular_wall):
-		modular_wall.show_keys(_modular_last, not _modular_held.is_empty())
+	if rack_wall != null and is_instance_valid(rack_wall):
+		rack_wall.show_keys(_modular_last, not _modular_held.is_empty())
 
 
-## The computer keys as the modular's, on or off, and said so the first time.
+## The computer keys as the rack's, on or off, and said so the first time.
 func _modular_play(on: bool) -> void:
 	if modular_keys == null or on == modular_keys.is_active():
 		return
 	modular_keys.set_active(on)
 	if on:
-		Session.notice.emit("Modular: A to ' play from %s, Z and X move the octave. Esc gives the keys back; PLAY takes them again."
+		Session.notice.emit("Rack: A to ' play from %s, Z and X move the octave. Esc gives the keys back; PLAY takes them again."
 				% modular_keys.octave_name())
 
 
-## Whether this player is at the wall: with it visited or brought, or standing in front of the
-## stand (MODULAR_NEAR to MODULAR_FAR out, MODULAR_SIDE either side) where the wall's own seat is
+## Whether this player is at the rack: with it visited or brought, or standing in front of the
+## stand (MODULAR_NEAR to MODULAR_FAR out, MODULAR_SIDE either side) where the rack's own seat is
 ## the nearest station's, so standing at the harp, the music box or the bells beside it plays them
 ## and not the patch.
 func at_modular() -> bool:
-	if modular_wall == null or not is_instance_valid(modular_wall) or not modular_wall.visible \
-			or not modular_wall.is_inside_tree():
+	if rack_wall == null or not is_instance_valid(rack_wall) or not rack_wall.visible \
+			or not rack_wall.is_inside_tree():
 		return false
-	if focus != null and focus.focused_id == modular_wall.surface_id:
+	if focus != null and focus.focused_id == rack_wall.surface_id:
 		return true
 	var me := _standing_at()
-	var local := modular_wall.global_transform.affine_inverse() * me
+	var local := rack_wall.global_transform.affine_inverse() * me
 	if local.z <= MODULAR_NEAR or local.z >= MODULAR_FAR or absf(local.x) >= MODULAR_SIDE:
 		return false
 	var seats := _station_seats()
@@ -5773,112 +5653,37 @@ func _station_seats() -> Dictionary:
 	return _modular_seats
 
 
-# --- the world into the modular (docs/spatial_loop.md part two, slice 53) ----------------------
-#
-# The world's sockets (Modular.WORLD) are outputs on the modular's patch, out in the room on the
-# stations that make what they carry (WorldSocket): a press steps a socket's long cable through the
-# wall's free inputs, each step the room's ask `modular_patch` like any cable. What they carry is
-# ModularWorld's, the same on every machine: played into every voice here as the song plays
-# (`_on_world_fired`), and into a take when it ends (ModularTakes.world).
-
-## A world socket's press (WorldSocket.step_asked): its cable out of the input it is in, and into the
-## next free one `way` on, each asked of the room, and said.
-func _on_world_step(socket: StringName, way: int) -> void:
-	var now := Modular.sinks_of(modular_row, socket)
-	var next := Modular.step_input(modular_row, socket, way)
-	if not now.is_empty():
-		if next == now[0]:
-			return
-		ask_modular_patch(now[0], &"")
-	if next != &"":
-		ask_modular_patch(socket, next)
-		Session.notice.emit(world_patched_text(socket, next))
-	elif not now.is_empty():
-		Session.notice.emit("%s is out of the modular wall." % Modular.world_title(socket).capitalize())
-
-
-## What this player is told on patching world socket `socket` into the wall's input `to`.
-static func world_patched_text(socket: StringName, to: StringName) -> String:
-	var what: String = {"world:weather": "its density, and a gate each drop", "world:drips": "a gate each drip",
-			"world:venue": "a gate each strike", "world:marbles": "a gate each bell rung"}.get(String(socket),
-			"its layer's notes as a level, and a gate each note")
-	return "%s goes into %s on the modular wall: %s. Press it again for the next free input." % [
-			Modular.world_title(socket).capitalize(), Modular.jack_title(to), what]
-
-
-## What the world played into the sockets as the song played here, into every voice.
-func _on_world_fired(events: Array) -> void:
-	for voice: ModularVoice in _modular_voices():
-		ModularWorld.play_into(voice, events)
-
-
-## Where a plug in the wall's input `id` sits, for a world socket's cable: null where the wall is not
-## up here.
-func _wall_jack(id: StringName) -> Variant:
-	if modular_wall == null or not is_instance_valid(modular_wall) or not modular_wall.is_visible_in_tree():
-		return null
-	var jack: ModularJack = modular_wall.jacks.get(id)
-	return jack.plug_transform() if jack != null and jack.is_inside_tree() else null
-
-
-## Each frame: every world socket in the room wired to its press and the wall, and showing where the
-## room's patch has its cable.
-func _follow_world_sockets() -> void:
-	for node in get_tree().get_nodes_in_group(WorldSocket.SOCKETS):
-		var socket := node as WorldSocket
-		if socket == null:
-			continue
-		if not socket.has_meta(&"wired"):
-			socket.set_meta(&"wired", true)
-			socket.step_asked.connect(_on_world_step)
-			socket.wall_jack = _wall_jack
-		var sinks := Modular.sinks_of(modular_row, socket.socket)
-		var into: StringName = sinks[0] if not sinks.is_empty() else &""
-		if socket.into != into:
-			socket.show_into(into)
-
-
-## Whether the room's patch has a cable out of any world socket.
-static func world_patched(patch: Dictionary) -> bool:
-	for c: Array in patch.get("cables", []):
-		if Modular.is_world(StringName(c[0])):
-			return true
-	return false
-
-
-## Each frame: this player's keys play the patch while they are at the wall (or its PLAY has the
-## computer keys), its controls take the pointer only then, and OUT says which road it sounds on,
-## and REC while a take goes through it.
+## Each frame: this player's keys play the rack while they are at it (or its PLAY has the computer
+## keys), its controls take the pointer only then, its lamps follow its meters, and the case glows with
+## what it plays in the venue's mood. The song's recording is caught from it on the host.
 func _follow_modular() -> void:
-	if modular_wall == null or not is_instance_valid(modular_wall):
+	if rack_wall == null or not is_instance_valid(rack_wall):
 		return
-	_follow_world_sockets()
 	var here := at_modular()
 	var engaged := here or (modular_keys != null and modular_keys.is_active())
-	modular_wall.within_reach = here
+	rack_wall.within_reach = here
 	if Session.guest_midi != null:
 		Session.guest_midi.reach(Modular.SOURCE, engaged)
-	if modular_voice != null:
-		modular_voice.engaged = engaged
-		# Recording through it (slice 52): OUT says so, in words, as the take is the wall's sound.
-		var recording := engaged and Session.modular_takes.mine != null
-		modular_wall.set_recording(recording)
-		modular_wall.set_tag(modular_voice.tag())
-	if not here and modular_keys != null and modular_keys.is_active() and not modular_wall.visible:
+		Session.guest_midi.synth.redirect = rack_voice if engaged and Session.is_authority() else null
+	if not here and modular_keys != null and modular_keys.is_active() and not rack_wall.visible:
 		_modular_play(false)
-	if modular_world_voice != null:
-		modular_world_voice.engaged = modular_wall.visible and world_patched(modular_row) \
-				and not _modular_played_here()
-
-
-## Whether a voice here other than the world's own is sounding the patch: this player's at the wall
-## or under PLAY, or a bandmate's not yet rested. Each already hears the world's sockets, so the
-## world's own voice rests then and a drip into a gate is heard once and not again a few ms later.
-func _modular_played_here() -> bool:
-	for voice: ModularVoice in _modular_voices():
-		if voice != modular_world_voice and voice.engaged and voice.path != ModularVoice.Path.NONE:
-			return true
-	return false
+	if rack_voice == null or not is_instance_valid(rack_voice):
+		return
+	if engaged and Session.is_authority():
+		_rack_wake()
+	if rack_voice.running():
+		rack_wall.show_meters(rack_voice.meters)
+		rack_wall.glow_with(rack_voice.level, rack_voice.hit)
+		rack_wall.set_recording(rack_voice.recording())
+		# The song recording catches the rack: begun at the take's start, kept where it ends.
+		if DAW.state != null and int(rack_row["track"]) > 0:
+			if DAW.state.recording and not rack_voice.recording() and DAW.state.playing:
+				_rack_auto_take = rack_voice.record_start(DAW.state.position_seconds)
+			elif not DAW.state.recording and rack_voice.recording() and _rack_auto_take:
+				rack_voice.record_stop()
+				_rack_auto_take = false
+	else:
+		rack_wall.glow_with(0.0, 0.0)
 
 
 # --- the sampler (docs/spatial_loop.md part two, slice 26) ----------------------------------
@@ -5993,10 +5798,6 @@ func _on_someones_use(id: StringName, down: bool, from: int, take := -1) -> void
 func _on_someones_hit(id: StringName, velocity: int, from: int, song := -1.0, _snap := false, take := -1,
 		zone := &"") -> void:
 	var item := items.items.get(id) as InstrumentItem if items != null else null
-	# A bandmate's strike of the venue's instrument, at the song they struck it at (slice 53).
-	if item != null and modular_world != null and from != Session.local_peer_id \
-			and item.jack_source() == VenueInstrument.SOURCE:
-		modular_world.strike(song, velocity)
 	if not _sampling() or item == null or from == Session.local_peer_id or not Session.is_authority():
 		return
 	if item.fixed:
@@ -7164,9 +6965,6 @@ func _on_key_played(pitch: int, down: bool) -> void:
 func _on_item_played(item: InstrumentItem, velocity: int, struck: bool, at: float, zone := &"") -> void:
 	# Onto the armed track, or the track its jack goes into.
 	jacks.hit(item, velocity, at, zone)
-	# A strike of the venue's instrument into the modular's `world:venue` (slice 53).
-	if modular_world != null and item.jack_source() == VenueInstrument.SOURCE:
-		modular_world.strike(at, velocity)
 	# And into this player's loop, while they loop (slice 45).
 	if looper != null and is_instance_valid(looper):
 		looper.hit(item, velocity, at, zone)
@@ -8131,7 +7929,7 @@ func _walk_to_seat() -> void:
 	# A surface that is a station mounted in a zone (the modular wall, slice 51) is visited where its
 	# station is played: where `seat_for` would stand a desk to fit it, the bricks table stands, and
 	# the fifths wheel's board across the view.
-	if target != null and target == modular_wall and venue != null and Stations.spot(venue, Modular.STATION) != null:
+	if target != null and target == rack_wall and venue != null and Stations.spot(venue, Modular.STATION) != null:
 		_walk_to_station(Modular.STATION)
 		return
 	# Anywhere in the set: a tablet stands on its own stand, a level further down.
@@ -8907,8 +8705,8 @@ func signal_sources() -> Array:
 		row.call(ChordHarp.SOURCE, "HARP", harp, SignalGraph.NOTES, to[0], to[1])
 	if theremin != null:
 		row.call(Theremin.SOURCE, "THEREMIN", theremin, SignalGraph.NOTES, armed)
-	if modular_wall != null:
-		row.call(Modular.SOURCE, "MODULAR", modular_wall, SignalGraph.NOTES, armed)
+	if rack_wall != null:
+		row.call(Modular.SOURCE, "MODULAR", rack_wall, SignalGraph.NOTES, armed)
 	for local in [[&"sampler", "SAMPLER", sampler], [&"grains", "GRAIN CLOUD", grain_cloud], [&"platter", "PLATTER", platter]]:
 		if local[2] != null:
 			row.call(local[0], local[1], local[2], SignalGraph.LOCAL_SOURCE, 0)

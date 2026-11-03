@@ -88,6 +88,7 @@ static func preset(name: StringName) -> Dictionary:
 			_put(p, "out", "out", 5, 0)
 			_wire(p, [["keys.pitch", "vco.pitch"], ["keys.gate", "env.gate"], ["lfo.out", "svf.cutoff"], ["vco.out", "fold.in"],
 					["env.out", "fold.fold"], ["fold.out", "svf.in"], ["svf.lp", "vca.in"], ["env.out", "vca.cv"], ["vca.out", "out.l"]])
+	RackLayout.tidy(p)
 	return p
 
 
@@ -256,6 +257,7 @@ static func sanitize(raw: Variant) -> Dictionary:
 		for c in cables:
 			if c is Array and c.size() == 2:
 				connect_cable(p, String(c[0]), String(c[1]))
+	RackLayout.tidy(p)
 	return p
 
 
@@ -275,3 +277,57 @@ static func lines(p: Dictionary) -> PackedStringArray:
 
 static func knob_line(id: String, knob: String, v01: float) -> String:
 	return "knob %s.%s %.5f" % [id, knob, clampf(v01, 0.0, 1.0)]
+
+
+## The room's asks of the patch, one verb: `op` is add [type, col, row], remove [id], move [id, col, row],
+## cable [from, to], pull [to], pull_one [from, to], knob [id, knob, v] or preset [name]. Done to `p`;
+## the refusal in words if it cannot be, "" when done.
+static func answer(p: Dictionary, op: String, args: Array) -> String:
+	match op:
+		"add":
+			var type := String(args[0])
+			var at := Vector2i(int(args[1]), int(args[2]))
+			if not RackCatalogue.has(type):
+				return "there is no module called %s" % type
+			if type == "out" and has_type(p, "out"):
+				return "the rack has its OUT already: one sound leaves the room"
+			if (p["modules"] as Dictionary).size() >= MAX_MODULES:
+				return "the case is full: take something out first"
+			if at.x < 0:
+				at = RackLayout.free_slot(p, type)
+			if not RackLayout.fits(p, type, at):
+				return "that does not fit there"
+			return "" if add(p, type, at) != "" else "that module could not be added"
+		"remove":
+			if type_of(p, String(args[0])) == "out":
+				return "the OUT stays: without it nothing leaves the room"
+			return "" if remove(p, String(args[0])) else "there is no such module"
+		"move":
+			var id := String(args[0])
+			if not (p["modules"] as Dictionary).has(id):
+				return "there is no such module"
+			var to := Vector2i(int(args[1]), int(args[2]))
+			if not RackLayout.fits(p, type_of(p, id), to, id):
+				return "that does not fit there"
+			move(p, id, to)
+			return ""
+		"cable":
+			if not is_out(p, String(args[0])) or not is_in(p, String(args[1])):
+				return "a cable goes from an output to an input"
+			if String(args[0]).get_slice(".", 0) == String(args[1]).get_slice(".", 0):
+				return "a module cannot patch into itself"
+			return "" if connect_cable(p, String(args[0]), String(args[1])) else "that cable is already there, or the case has no more room for cables"
+		"pull":
+			return "" if pull(p, String(args[0])) else "there was no cable there"
+		"pull_one":
+			return "" if pull_one(p, String(args[0]), String(args[1])) else "there was no such cable"
+		"knob":
+			return "" if set_knob(p, String(args[0]), String(args[1]), float(args[2])) else "there is no such knob"
+		"preset":
+			if not presets().has(StringName(args[0])):
+				return "there is no such preset"
+			var fresh := preset(StringName(args[0]))
+			p["modules"] = fresh["modules"]
+			p["cables"] = fresh["cables"]
+			return ""
+	return "the rack does not know %s" % op

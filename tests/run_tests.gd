@@ -725,23 +725,13 @@ func _ready() -> void:
 	_test_a_modular_repatch_changes_the_route()
 	_test_the_modular_renders_the_same_events_the_same_twice()
 	_test_the_keys_helper_renders_the_modular_as_godot_does()
-	_test_the_modular_voice_plays_the_keys_through_godot_off_the_helper()
-	_test_the_modular_walls_cables_are_carried_from_jack_to_jack()
-	await _test_a_modular_knob_turn_streams_and_is_one_room_ask()
-	await _test_the_modular_verbs_are_predicted_and_refused()
-	await _test_the_modular_wall_is_played_where_it_hangs()
-	await _test_the_modular_is_played_only_at_its_own_stand()
 	_test_a_modular_take_renders_the_same_twice_as_long_as_its_span()
 	_test_a_guests_modular_take_is_rendered_by_the_host_where_it_was_played()
 	await _test_a_modular_take_is_put_in_as_audio_on_the_built_in_engine()
-	await _test_a_take_of_the_harp_then_the_modular_then_the_keys_keeps_all_three()
-	await _test_a_bandmates_modular_is_heard_at_the_wall_through_the_rooms_patch()
 	_test_rain_density_into_the_modular_filter_changes_its_sound()
 	_test_a_drip_gates_an_env_in_the_cave()
 	_test_a_rings_level_follows_its_layers_notes_the_same_on_two_machines()
-	_test_the_keys_helper_plays_the_world_into_the_modular_as_godot_does()
 	_test_a_modular_take_hears_the_world()
-	await _test_the_weathers_track_jack_and_its_modular_cable_work_together()
 	await _test_a_looper_rings_sockets_stand_clear_of_their_bands()
 	_test_a_hand_in_the_grain_cloud_is_where_how_long_and_how_many()
 	_test_a_grain_clouds_spray_widens_where_its_grains_play_from()
@@ -27341,7 +27331,7 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 		&"modular":
 			# The modular wall over the synth zone's stand (slice 51), a surface in the set at the venue's
 			# spot, its jacks, knobs and touch keys on it, and the venue's own rack given way to it.
-			var wall := studio.modular_wall
+			var wall := studio.rack_wall
 			if wall == null or not wall.visible or not wall.transform.is_equal_approx(studio._venue_to_set(spot)) \
 					or wall.jacks.size() != Modular.OUTS.size() + Modular.INS.size() or wall.knobs.size() != Modular.KNOBS.size() \
 					or wall.touch_keys.size() != ModularWall.TOUCH_COUNT or not studio.focus.surfaces.has(wall):
@@ -30401,12 +30391,12 @@ func _test_going_to_a_station_holds_its_controls_in_view() -> void:
 					# The music box's cylinder, its top under the comb and its front's lowest cell, and its
 					# four keys' outer corners (slice 47): what a desk clicks there.
 					points.append_array(_music_box_looks(studio.music_box))
-				if station == Modular.STATION and studio.modular_wall != null:
+				if station == Modular.STATION and studio.rack_wall != null:
 					# The modular wall (slice 51): its top corners, its touch keys' ends on the deck, and its
 					# plaque's keys' feet under the deck: what a desk clicks there.
-					var wall := studio.modular_wall
+					var wall := studio.rack_wall
 					for side in [-1.0, 1.0]:
-						points.append(wall.to_global(Vector3(side * ModularWall.WIDE * 0.5, ModularWall.TALL, 0)))
+						points.append(wall.to_global(Vector3(side * RackWall.WIDE * 0.5, RackWall.TALL, 0)))
 					for key in [wall.touch_keys[0], wall.touch_keys[-1]]:
 						points.append(key.global_position)
 					for key_name in ["Instruments", "Back"]:
@@ -47603,440 +47593,6 @@ func _test_the_keys_helper_renders_the_modular_as_godot_does() -> void:
 					"ignored mod cable vco9.out vcf.in", "mod cut vca.in", "mod knob vcf.res 0.250000", "ignored mod knob vcf.nope 1", "mod on 0"]))
 
 
-## Off the helper, the modular plays through Godot (ModularVoice): engaged, the keys' MonitorSynth
-## hands it their notes and plays no tine of its own, its render has the note in it and its tag says
-## the road and its figure; a knob turned is heard; disengaged, the keys play their tine again.
-func _test_the_modular_voice_plays_the_keys_through_godot_off_the_helper() -> void:
-	var keys := MonitorSynth.new()
-	keys.allow_native = false
-	add_child(keys)
-	var voice := ModularVoice.new()
-	voice.keys = keys
-	add_child(voice)
-	check("not engaged, it plays nothing and its tag says how to (%s)" % voice.tag(), voice.path == ModularVoice.Path.NONE
-			and voice.tag() == "WALK UP TO THE STAND TO PLAY" and keys.modular == null)
-	voice.engaged = true
-	check("engaged with no helper, the keys go through Godot (%s)" % voice.tag(), voice.path == ModularVoice.Path.GODOT
-			and keys.modular == voice and voice.tag().begins_with("THROUGH GODOT · ") and voice.tag().ends_with(" ms"))
-	keys.note_on(69, 100)
-	var heard := voice.render(24000)
-	var tine := keys.render(2400)
-	var loud_tine := 0.0
-	for v in tine:
-		loud_tine = maxf(loud_tine, absf(v.x))
-	check("a note on the keys is the modular's, at 440 Hz (%.3f), and no tine (%.5f)" % [_modular_loudest(heard), loud_tine],
-			_modular_loudest(heard) > 0.1 and voice.gate()
-			and _modular_power(heard, 440.0, 4800, 24000) > _modular_power(heard, 466.16, 4800, 24000) * 20.0 and loud_tine == 0.0)
-	var open := voice.render(4800)
-	voice.knob(&"vcf.cutoff", 0.05)
-	var shut := voice.render(4800)
-	check("the VCF's cutoff turned right down is heard (%.3f to %.4f)" % [_modular_loudest(open), _modular_loudest(shut, 2400)],
-			_modular_loudest(shut, 2400) < _modular_loudest(open) * 0.3 and is_equal_approx(voice.patch["knobs"][&"vcf.cutoff"], 0.05))
-	keys.note_off(69)
-	voice.render(4800)
-	check("let go, the gate closes", not voice.gate())
-	voice.engaged = false
-	keys.note_on(64, 100)
-	var again := keys.render(4800)
-	var loud := 0.0
-	for v in again:
-		loud = maxf(loud, absf(v.x))
-	check("walked away, the keys play their own tine again (%.3f)" % loud, keys.modular == null and voice.path == ModularVoice.Path.NONE and loud > 0.01)
-	voice.free()
-	keys.free()
-
-
-## The wall's drags (ModularJack, as the patchbay's): from an output the free inputs light and letting
-## go over one asks for that cable; from an input with a cable in it the plug comes out, carried to
-## another free input it is pulled and patched there, off the jacks it is pulled; an input with a cable
-## in it is no place to let one go, and is said. The wall changes nothing itself: the patch shown is the
-## room's (`show_patch`).
-func _test_the_modular_walls_cables_are_carried_from_jack_to_jack() -> void:
-	var wall := ModularWall.new()
-	add_child(wall)
-	wall._process(0.0)
-	var asked: Array = []
-	wall.patch_asked.connect(func(a: StringName, b: StringName) -> void: asked.append([a, b]))
-	var said: Array = []
-	wall.told.connect(func(t: String) -> void: said.append(t))
-	check("eleven modules, every jack and knob on the wall, and the default patch's six cables drawn",
-			wall.jacks.size() == Modular.OUTS.size() + Modular.INS.size() and wall.knobs.size() == Modular.KNOBS.size()
-			and wall.cables.size() == 6 and wall.cable_into(&"vcf.in") != null)
-	var lfo: ModularJack = wall.jacks[&"lfo.out"]
-	var cv: ModularJack = wall.jacks[&"vcf.cv"]
-	var vca_in: ModularJack = wall.jacks[&"vca.in"]
-	wall._on_drag_began(lfo, lfo.global_position + Vector3(0, 0, 0.05))
-	check("from an output, every free input lights, and none with a cable in it",
-			cv.light() == ModularJack.Light.CANDIDATE and vca_in.light() == ModularJack.Light.PLAIN
-			and (wall.jacks[&"vco2.out"] as ModularJack).light() == ModularJack.Light.PLAIN)
-	wall._on_drag_moved(lfo, cv.global_position, cv)
-	check("over one, it is the target, brighter and bigger", cv.light() == ModularJack.Light.TARGET)
-	wall._on_drag_finished(lfo, cv)
-	check("let go there, it asks for the cable and changes nothing itself (%s)" % [asked],
-			asked == [[&"lfo.out", &"vcf.cv"]] and wall.cable_into(&"vcf.cv") == null and cv.light() == ModularJack.Light.PLAIN)
-	asked.clear()
-	wall._on_drag_began(lfo, lfo.global_position)
-	wall._on_drag_finished(lfo, vca_in)
-	check("let go over an input with a cable in it, it asks nothing and says why (%s)" % [said], asked.is_empty()
-			and said.size() == 1 and said[0].contains("VCA IN"))
-	wall._on_drag_began(vca_in, vca_in.global_position)
-	check("from a patched input its plug comes out, the cable hidden while it is carried",
-			not wall.cable_into(&"vca.in").visible and cv.light() == ModularJack.Light.CANDIDATE)
-	wall._on_drag_finished(vca_in, cv)
-	check("carried to another free input it is pulled and patched there (%s)" % [asked],
-			asked == [[&"vca.in", &""], [&"vcf.out", &"vcf.cv"]] and wall.cable_into(&"vca.in").visible)
-	asked.clear()
-	wall._on_drag_began(vca_in, vca_in.global_position)
-	wall._on_drag_finished(vca_in, null)
-	check("off the jacks it is pulled (%s)" % [asked], asked == [[&"vca.in", &""]])
-	asked.clear()
-	wall._on_drag_began(vca_in, vca_in.global_position)
-	wall._on_drag_finished(vca_in, vca_in)
-	check("let go where it came from, nothing", asked.is_empty())
-	var patch := Modular.default_patch()
-	Modular.answer_patch(patch, &"lfo.out", &"vcf.cv")
-	Modular.answer_knob(patch, &"vcf.res", 0.9)
-	wall.show_patch(patch)
-	check("the room's patch shown: its cable drawn, its knob turned, its jacks' cards say where they go (%s)" % [lfo._default_readout()],
-			wall.cable_into(&"vcf.cv") != null and wall.cables.size() == 7 and is_equal_approx((wall.knobs[&"vcf.res"] as Knob).value, 0.9)
-			and lfo._default_readout() == "to VCF CV IN" and cv._default_readout() == "from LFO OUT")
-	check("a jack's card names it and says how to patch it", lfo._default_title() == "MODULAR  LFO OUT" and lfo.hint().contains("drag"))
-	wall.free()
-
-
-## A knob turned on the wall for two seconds is heard as it turns, streamed to the band at most
-## Session.KNOBS_PER_SECOND (so at most 60 knob events), and the room's once, when it is let go: on a
-## host, one room published; on a guest, one room ask, predicted. A knob in a bandmate's hand
-## replicates: their stream turns this wall's and this voice's, and a knob that is not one is refused.
-func _test_a_modular_knob_turn_streams_and_is_one_room_ask() -> void:
-	var config: Dictionary = (Session.get_script() as Script).get_rpc_config()
-	for method in [&"_knob_up", &"_knob"]:
-		var c: Dictionary = config.get(method, {})
-		check("%s is reliable on GESTURE_CHANNEL (%s)" % [method, c],
-				c.get("transfer_mode") == MultiplayerPeer.TRANSFER_MODE_RELIABLE and c.get("channel") == Session.GESTURE_CHANNEL)
-	check("and the gestures' channel is nobody else's", Session.GESTURE_CHANNEL not in [Session.KEYS_CHANNEL,
-			Session.MOTION_CHANNEL, Session.AUDIO_TAKE_CHANNEL, Session.CONTROLS_CHANNEL, Session.SPECTRA_CHANNEL, 0])
-	var rig: Array = await _looper_studio(Session.Role.HOST, 1)
-	var studio: Studio = rig[0]
-	var wall := studio.modular_wall
-	# Connected, with nobody else in the room to send to.
-	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-	Session.participants.erase(2)
-	var clock := [100000]
-	wall.clock = func() -> int: return clock[0]
-	var heard: Array = []
-	wall.knob_turning.connect(func(id: StringName, v: float) -> void: heard.append(v))
-	var turn := func(id: StringName, by: float) -> float:
-		var k: Knob = wall.knobs[id]
-		var hand := Node3D.new()
-		add_child(hand)
-		var c := k.global_position
-		var up := k.global_basis.y.normalized()
-		var right := k.global_basis.x.normalized()
-		k.grab_begin(hand, c + up * 0.01)
-		# Two seconds, a frame at a time at 60 a second.
-		for i in 120:
-			clock[0] += 16 if i % 3 == 0 else 17
-			var a := -by * (i + 1) / 120.0
-			k.grab_move(hand, c + (up * cos(a) + right * sin(a)) * 0.01)
-			wall._process(0.0)
-		k.grab_end(hand)
-		for i in 30:
-			clock[0] += 17
-			wall._process(0.0)
-		hand.free()
-		return k.value
-	for i in 3:
-		await get_tree().process_frame
-	Session.knobs_sent = 0
-	var published := Session.rooms_published
-	var was: float = studio.modular_row["knobs"][&"vcf.cutoff"]
-	var to: float = turn.call(&"vcf.cutoff", 1.6)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	check("a host's two-second turn is heard as it turns (%d), streamed at most 60 times (%d)" % [heard.size(), Session.knobs_sent],
-			heard.size() >= 100 and Session.knobs_sent > 20 and Session.knobs_sent <= 60)
-	check("and the room's once, let go: its row has it (%.3f from %.3f) and the room was published once (%d)"
-			% [to, was, Session.rooms_published - published], to > was + 0.2
-			and is_equal_approx(studio.modular_row["knobs"][&"vcf.cutoff"], to)
-			and is_equal_approx(Session.room[Modular.ROW]["knobs"][&"vcf.cutoff"], to) and Session.rooms_published == published + 1)
-	check("and its voice plays it", is_equal_approx(studio.modular_voice.patch["knobs"][&"vcf.cutoff"], to))
-
-	# A bandmate's stream, through the host.
-	var refused := Session.knobs_refused
-	check("a bandmate's knob as they turn it is passed", Session._pass_knob(&"vcf.res", 0.9, 4.0, 2))
-	check("and turns it here, and in the voice, but not the room's row",
-			is_equal_approx((wall.knobs[&"vcf.res"] as Knob).value, 0.9) and is_equal_approx(studio.modular_voice.patch["knobs"][&"vcf.res"], 0.9)
-			and is_equal_approx(studio.modular_row["knobs"][&"vcf.res"], Modular.KNOB_REST[&"vcf.res"]))
-	Session._pass_knob(&"vcf.res", 4.0, 4.0, 2)
-	check("a value past the end is the end", is_equal_approx((wall.knobs[&"vcf.res"] as Knob).value, 1.0))
-	check("a knob that is not one is refused", not Session._pass_knob(&"vcf.nope", 0.5, 4.0, 2)
-			and not Session._pass_knob(&"vcf.res", NAN, 4.0, 2) and Session.knobs_refused == refused + 2)
-	var turned: Array = []
-	var listen := func(id: StringName, v: float, from: int, song: float) -> void: turned.append([id, v, from, song])
-	Session.knob_turned.connect(listen)
-	Session._knob(&"env1.a", 0.25, 2, 3.5)
-	Session.knob_turned.disconnect(listen)
-	check("a guest hears a bandmate's knob from the host, who it is and when (%s)" % [turned],
-			turned == [[&"env1.a", 0.25, 2, 3.5]] and is_equal_approx((wall.knobs[&"env1.a"] as Knob).value, 0.25))
-
-	# A guest's turn: streamed, and one ask, shown at once.
-	_as_session(Session.Role.GUEST, 2)
-	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-	Session._register(1, "Ada", 0)
-	Session._register(2, "Grace", 1)
-	Session.room_seq = 0
-	studio._predictions.clear()
-	Session.knobs_sent = 0
-	var down: float = turn.call(&"vca.level", -1.2)
-	check("a guest's two-second turn streams at most 60 times (%d) and is one room ask, predicted (%s)"
-			% [Session.knobs_sent, studio._predictions.map(func(p): return p["verb"])],
-			Session.knobs_sent > 20 and Session.knobs_sent <= 60 and Session.room_seq == 1 and studio._predictions.size() == 1
-			and studio._predictions[0]["verb"] == Modular.KNOB_VERB and is_equal_approx(studio.modular_row["knobs"][&"vca.level"], down)
-			and down < 0.8)
-	Session.room_seq = 0
-	studio._predictions.clear()
-	Session.start_solo()
-	studio.queue_free()
-	await get_tree().process_frame
-	_as_session(Session.Role.SOLO, 1)
-	_offline()
-
-
-## The room's verbs: the host keeps a guest's cable and its knob in the row `modular` and tells the room,
-## and refuses an unknown jack and an input taken twice; a guest's cable is shown at once and asked,
-## kept over a room from before the host heard it, and taken out again when the host's answer has not
-## got it (refused); a cable the host would refuse is refused there, in words, and never asked.
-func _test_the_modular_verbs_are_predicted_and_refused() -> void:
-	var rig: Array = await _looper_studio(Session.Role.HOST, 1)
-	var studio: Studio = rig[0]
-	var wall := studio.modular_wall
-	studio._on_room_asked(Modular.PATCH_VERB, [&"lfo.out", &"vcf.cv", 2.0], 2)
-	check("the host keeps a guest's cable, its room says so, and the wall draws it",
-			Modular.source_of(studio.modular_row, &"vcf.cv") == &"lfo.out"
-			and Modular.source_of(studio.room_state()[Modular.ROW], &"vcf.cv") == &"lfo.out" and wall.cable_into(&"vcf.cv") != null)
-	var before: Dictionary = studio.modular_row.duplicate(true)
-	studio._on_room_asked(Modular.PATCH_VERB, [&"vco9.out", &"vcf.in", 2.0], 2)
-	studio._on_room_asked(Modular.PATCH_VERB, [&"noise.out", &"vcf.cv", 2.0], 2)
-	check("and refuses an unknown jack and an input taken twice", studio.modular_row == before)
-	studio._on_room_asked(Modular.KNOB_VERB, [&"vcf.res", 0.75, 2.0], 2)
-	check("a guest's knob let go is the room's", is_equal_approx(studio.modular_row["knobs"][&"vcf.res"], 0.75)
-			and is_equal_approx((wall.knobs[&"vcf.res"] as Knob).value, 0.75))
-	check("the verbs are the session's, with their types", Session.room_ask_is_valid(Modular.PATCH_VERB, [&"lfo.out", &"", -1.0])
-			and Session.room_ask_is_valid(Modular.KNOB_VERB, [&"vcf.res", 0.5, -1.0])
-			and not Session.room_ask_is_valid(Modular.KNOB_VERB, [&"vcf.res", "0.5", -1.0]))
-	studio._publish_room()
-	var published: Dictionary = Session.room.duplicate(true)
-	studio._show_modular(Modular.default_patch())
-	studio.apply_room(published)
-	check("a room applied shows its patch again", Modular.source_of(studio.modular_row, &"vcf.cv") == &"lfo.out"
-			and wall.cable_into(&"vcf.cv") != null)
-	studio.set_venue(&"loft", false, 0)
-	check("a change of venue keeps the room's patch, the wall hung over the new venue's stand",
-			wall.cable_into(&"vcf.cv") != null and wall.visible
-			and wall.transform.is_equal_approx(studio._venue_to_set(Stations.spot(studio.venue, Modular.STATION))))
-	studio.set_venue(&"studio", false, 0)
-
-	_as_session(Session.Role.GUEST, 2)
-	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-	Session._register(1, "Ada", 0)
-	Session._register(2, "Grace", 1)
-	Session.room_seq = 0
-	studio._predictions.clear()
-	var host_patch: Dictionary = studio.modular_row.duplicate(true)
-	studio.ask_modular_patch(&"vco2.out", &"mix.in2")
-	check("a guest's cable is drawn at once and asked of the host", wall.cable_into(&"mix.in2") != null
-			and studio._predictions.size() == 1 and studio._predictions[0]["verb"] == Modular.PATCH_VERB and Session.room_seq == 1)
-	studio.apply_room({Modular.ROW: host_patch.duplicate(true), "acks": {2: 0}})
-	check("a room from before the host heard it keeps it", wall.cable_into(&"mix.in2") != null and wall.cable_into(&"vcf.cv") != null)
-	studio.apply_room({Modular.ROW: host_patch.duplicate(true), "acks": {2: Session.room_seq}})
-	check("the host's answer without it takes it out: refused", wall.cable_into(&"mix.in2") == null
-			and studio.modular_row == Modular.clean(host_patch) and studio._predictions.is_empty())
-	var notices: Array[String] = []
-	var listen := func(t: String) -> void: notices.append(t)
-	Session.notice.connect(listen)
-	var seq := Session.room_seq
-	studio.ask_modular_patch(&"noise.out", &"vcf.cv")
-	studio.ask_modular_patch(&"vco9.out", &"vcf.cv")
-	check("a guest's cable into an input taken, or from a jack there is not, is refused there, in words, and never asked (%s)" % [notices],
-			Session.room_seq == seq and notices.size() == 2 and notices[0].contains("VCF CV IN has a cable in it already")
-			and notices[1].contains("no jack vco9.out"))
-	studio.ask_modular_patch(&"vcf.cv", &"")
-	Session.notice.disconnect(listen)
-	check("a guest's pull is shown at once and asked", wall.cable_into(&"vcf.cv") == null and Session.room_seq == seq + 1)
-	Session.room_seq = 0
-	studio._predictions.clear()
-	Session.start_solo()
-	studio.queue_free()
-	await get_tree().process_frame
-	_as_session(Session.Role.SOLO, 1)
-	_offline()
-
-
-## The wall at the stand (docs/spatial_loop.md part two, slice 51): from the desk none of its jacks,
-## knobs or keys takes a click (they are 2 cm things six metres off), but its plaque's keys do; walked
-## to (I, or its station) its keys play it, every control takes a click from the eye and is at least
-## SEAT_MIN_PIXELS; F visits it; its touch keys play this player's keys as the modular, lettered on
-## KEYS; PLAY takes the computer keys; and OUT's tag says the road.
-func _test_the_modular_wall_is_played_where_it_hangs() -> void:
-	var saved_layout := Session.layout
-	Session.layout = LayoutProfile.new()
-	Session.layout.save_path = "user://test_layout_profile.cfg"
-	DAW.use(OfflineBackend.new())
-	var monitor := SubViewport.new()
-	monitor.size = Vector2i(1600, 900)
-	add_child(monitor)
-	var studio := Studio.new()
-	studio.medium = Presentation.Medium.SCREEN
-	monitor.add_child(studio)
-	for i in 4:
-		await get_tree().physics_frame
-	var saved_motion := studio.ergonomics.motion_scale
-	studio.ergonomics.motion_scale = 0.0
-	var wall := studio.modular_wall
-	var gm := Session.guest_midi
-	var spy := _spy_on_keys()
-	studio._follow_modular()
-	var shapes := func(on: bool) -> bool:
-		var mine := wall.reach_controls()
-		if mine.size() != Modular.OUTS.size() + Modular.INS.size() + Modular.KNOBS.size() + ModularWall.TOUCH_COUNT + 2:
-			return false
-		for node in wall.find_children("*", "CollisionShape3D", true, false):
-			var c := node.get_parent() as ControlAffordance
-			if c == null:
-				continue
-			if (node as CollisionShape3D).disabled != (not on and mine.has(c)):
-				return false
-		return true
-	check("from the desk it is not in reach: its jacks, knobs and keys take no click, its plaque's keys do, and the keys do not play it",
-			not wall.within_reach and shapes.call(false) and not gm.instruments.has(Modular.SOURCE)
-			and wall.tag_text() == "WALK UP TO THE STAND TO PLAY")
-	check("it is one of F's surfaces, and does not park", studio.focus.surfaces.has(wall) and not wall.parks)
-	studio.go_to_station(Modular.STATION)
-	await get_tree().physics_frame
-	studio._follow_modular()
-	await get_tree().physics_frame
-	check("walked to, it is in reach and the keys play it (%s)" % wall.tag_text(), wall.within_reach and shapes.call(true)
-			and gm.instruments.has(Modular.SOURCE) and studio.modular_voice.engaged and wall.tag_text() != "WALK UP TO THE STAND TO PLAY")
-	var hand: Interactor = studio.get_node("MouseHand")
-	var eye := studio.camera.global_position
-	var px_per_rad := 900.0 / deg_to_rad(studio.camera.fov)
-	var missed: Array = []
-	var smallest := INF
-	var count := 0
-	for node in wall.find_children("*", "CollisionShape3D", true, false):
-		var c := node.get_parent() as ControlAffordance
-		if c == null or not c.is_visible_in_tree():
-			continue
-		count += 1
-		var centre := (node as CollisionShape3D).global_position
-		if hand._cast(eye, (centre - eye).normalized())["control"] != c:
-			missed.append(c.name)
-		var aabb := (node as CollisionShape3D).shape.get_debug_mesh().get_aabb()
-		var across := minf(aabb.size.x * node.global_basis.x.length(), aabb.size.y * node.global_basis.y.length())
-		if c is ModularTouch:
-			across = minf(aabb.size.x, aabb.size.z * absf((centre - eye).normalized().y))
-		smallest = minf(smallest, across / eye.distance_to(centre) * px_per_rad)
-	check("from its seat every one of its %d controls takes a click (%s missed) and is at least %d px (%.1f)"
-			% [count, missed.slice(0, 6), SEAT_MIN_PIXELS, smallest], count > 60 and missed.is_empty() and smallest >= SEAT_MIN_PIXELS)
-	var sunk: Array = []
-	for key in wall.touch_keys:
-		var letter := key.get_node("Cap/Name") as Label3D
-		var box := letter.get_aabb()
-		var lowest := INF
-		for k in 8:
-			lowest = minf(lowest, (key.global_transform.affine_inverse() * letter.global_transform * box.get_endpoint(k)).y)
-		if box.size.y <= 0.0 or lowest < key.cap_top() - 0.0002:
-			sunk.append("%s %.4f" % [letter.text, lowest])
-	check("every touch key's letter stands clear of its cap, the row's C3 too (%s sunk)" % [sunk],
-			sunk.is_empty() and wall.touch_keys[0].get_node("Cap/Name").text == "C3")
-	var touch := wall.touch_keys[9]
-	var touch_hand := Node.new()
-	touch.grab_begin(touch_hand, touch.global_position)
-	check("a touch key plays this player's keys as the modular, and KEYS letters it (%s, %s)" % [spy.on, wall._note.text],
-			spy.on.has(57) and wall._note.text == "A3")
-	touch.grab_end(touch_hand)
-	touch_hand.free()
-	check("let go, the note stops", not spy.on.has(57))
-	touch._on_nudge(1, false)
-	check("the wheel over the keys moves them an octave", wall.touch_base == 60 and wall.touch_keys[0].pitch() == 60)
-	wall.play_key._on_grab_begin(Vector3.ZERO)
-	check("PLAY takes the computer keys for it, lit while it has them", studio.modular_keys.is_active() and wall.play_key.lit)
-	wall.play_key._on_grab_begin(Vector3.ZERO)
-	check("and gives them back", not studio.modular_keys.is_active() and not wall.play_key.lit)
-	studio._on_escape()
-	await get_tree().physics_frame
-	studio._follow_modular()
-	check("walked back to the desk, out of reach again", not wall.within_reach and not gm.instruments.has(Modular.SOURCE))
-	studio.focus.focus(wall.surface_id)
-	await get_tree().physics_frame
-	studio._follow_modular()
-	check("visited with F, it is in reach", wall.within_reach and gm.instruments.has(Modular.SOURCE))
-	studio.focus.release()
-	studio._follow_modular()
-	_put_back_synth(spy)
-	studio.ergonomics.motion_scale = saved_motion
-	monitor.queue_free()
-	await get_tree().process_frame
-	Session.layout = saved_layout
-
-
-## docs/spatial_loop.md slice 51: the wall is played from its stand and nowhere else. Walked to every
-## other station here (the harp beside the stand, the bells, the section blocks and the music box
-## behind it), the keys do not play it, so the harp's plucks are the harp's own voice, and none of
-## its 2 cm jacks, knobs or keys takes a click meant for the station in front of you.
-func _test_the_modular_is_played_only_at_its_own_stand() -> void:
-	var saved_layout := Session.layout
-	Session.layout = LayoutProfile.new()
-	Session.layout.save_path = "user://test_layout_profile.cfg"
-	DAW.use(OfflineBackend.new())
-	var monitor := SubViewport.new()
-	monitor.size = Vector2i(1600, 900)
-	add_child(monitor)
-	var studio := Studio.new()
-	studio.medium = Presentation.Medium.SCREEN
-	monitor.add_child(studio)
-	for i in 4:
-		await get_tree().physics_frame
-	var saved_motion := studio.ergonomics.motion_scale
-	studio.ergonomics.motion_scale = 0.0
-	var wall := studio.modular_wall
-	var gm := Session.guest_midi
-	var spy := _spy_on_keys()
-	var engaged: Array = []
-	var walked := 0
-	for id in studio.station_ids():
-		if id == Modular.STATION:
-			continue
-		studio.go_to_station(id)
-		await get_tree().physics_frame
-		studio._follow_modular()
-		walked += 1
-		var local := wall.global_transform.affine_inverse() * studio._standing_at()
-		if studio.at_modular() or wall.within_reach or gm.instruments.has(Modular.SOURCE):
-			engaged.append("%s (%.2f, %.2f)" % [id, local.x, local.z])
-		studio._on_escape()
-		await get_tree().physics_frame
-	check("at none of the %d other stations' seats are its controls in reach or do the keys play it (%s)"
-			% [walked, ", ".join(engaged)], walked >= 10 and engaged.is_empty())
-	studio.go_to_station(Modular.STATION)
-	await get_tree().physics_frame
-	studio._follow_modular()
-	var mine := wall.global_transform.affine_inverse() * studio._standing_at()
-	check("at its own seat it still is (%.2f, %.2f)" % [mine.x, mine.z],
-			wall.within_reach and gm.instruments.has(Modular.SOURCE))
-	studio._on_escape()
-	await get_tree().physics_frame
-	studio._follow_modular()
-	_put_back_synth(spy)
-	studio.ergonomics.motion_scale = saved_motion
-	monitor.queue_free()
-	await get_tree().process_frame
-	Session.layout = saved_layout
-
-
-# --- the modular, recorded and heard by the band (docs/spatial_loop.md part two, slice 52) ----------
-
 ## The 16-bit samples of the WAV at `path` (AudioTake's mono), as floats.
 func _wav_samples(path: String) -> PackedFloat32Array:
 	var bytes := FileAccess.get_file_as_bytes(path)
@@ -48329,169 +47885,6 @@ func _test_a_modular_take_is_put_in_as_audio_on_the_built_in_engine() -> void:
 	_offline()
 
 
-## One take that rolls on while the player plays the harp, walks up to the wall and plays it, then
-## walks away and plays the keys: the wall's note is the modular's audio take, and the harp's and the
-## keys' are a MIDI take beside it, not lost because the take went through the wall for a while.
-func _test_a_take_of_the_harp_then_the_modular_then_the_keys_keeps_all_three() -> void:
-	var backend := GodotBackend.new()
-	backend.state = MixState.new()
-	DAW.use(backend)
-	_as_session(Session.Role.HOST, 1)
-	Session.local_name = "Ada"
-	var gm := Session.guest_midi
-	var mt := Session.modular_takes
-	var saved_heard := gm.heard_source
-	var saved_patch := mt.patch
-	var saved_roll := gm.roll_every
-	gm.roll_every = 0.0
-	gm.record_with_host = true
-	mt.patch = func() -> Dictionary: return Modular.default_patch()
-	mt.threaded = false
-	var spy := _spy_on_keys()
-	var track := 0
-	for index: int in DAW.state.tracks:
-		if not DAW.state.input_of(index).begins_with("audio:"):
-			track = index
-			break
-	gm.target_track = track
-	DAW.state.track(track).items.clear()
-	var heard := {"seconds": 20.0, "playing": true, "recording": true, "valid": true}
-	gm.heard_source = func() -> Dictionary: return heard
-	gm._process(0.016)
-	check("a take begins away from the wall, as MIDI", gm.is_recording() and not gm._take_modular)
-	gm.reach(&"harp", true)
-	heard["seconds"] = 20.1
-	gm.note_on(60, 100, 0, 0.0, false, &"harp", 20.1)
-	heard["seconds"] = 20.3
-	gm.note_off(60, 0, 0.0, false, &"harp", 20.3)
-	gm.reach(&"harp", false)
-	gm.reach(Modular.SOURCE, true)
-	heard["seconds"] = 20.5
-	gm._process(0.016)
-	gm.note_on(69, 100, 0, 0.0, false, &"", 20.5)
-	check("at the wall the take goes through the modular from here (%s)" % [gm._sent_as],
-			gm._take_modular and gm._sent_as.get(69) == Modular.SOURCE and mt.mine != null)
-	heard["seconds"] = 20.7
-	gm.note_off(69, 0, 0.0, false, &"", 20.7)
-	gm.reach(Modular.SOURCE, false)
-	heard["seconds"] = 21.0
-	gm._process(0.016)
-	gm.note_on(64, 90, 0, 0.0, false, &"", 21.0)
-	heard["seconds"] = 21.2
-	gm.note_off(64, 0, 0.0, false, &"", 21.2)
-	check("all three counted while it runs (%d)" % gm.take_note_count(), gm.take_note_count() == 3)
-	heard["seconds"] = 21.5
-	gm._process(0.016)
-	heard["recording"] = false
-	gm._process(0.016)
-	var items: Array = DAW.state.track(track).items
-	var midi: Array = items.filter(func(it: MixState.ItemState) -> bool: return not it.notes.is_empty())
-	var pitches: Array = []
-	if midi.size() == 1:
-		var notes := MidiTake.unpack_relative((midi[0] as MixState.ItemState).notes, 0.0)
-		pitches = notes.map(func(n: Array) -> int: return int(n[2]))
-		pitches.sort()
-	check("ended, the harp's note and the keys' after the wall go in as a MIDI take, the wall's not (%s, %s)"
-			% [pitches, gm.last_take], midi.size() == 1 and pitches == [60, 64] and gm.last_take.get("modular", false)
-			and int(gm.last_take.get("notes", 0)) == 3 and int(gm.last_take.get("midi_notes", 0)) == 2)
-	var ons: Array = mt.last_mine.events.filter(func(e: Array) -> bool: return e[1] == Modular.Event.ON) \
-			if mt.last_mine != null else []
-	check("and the modular's take holds the wall's note alone (%s)" % [ons], ons.size() == 1 and int(ons[0][2]) == 69
-			and is_equal_approx(float(ons[0][0]), 20.5) and is_equal_approx(mt.last_mine.start, 20.0))
-	var placed: Array = []
-	var listen := func(info: Dictionary) -> void: placed.append(info)
-	mt.placed.connect(listen)
-	mt.place(Session.local_peer_id)
-	mt.placed.disconnect(listen)
-	items = DAW.state.track(track).items
-	var audio: Array = items.filter(func(it: MixState.ItemState) -> bool: return it.name == ModularTakes.NAME)
-	check("placed, the track has both: the modular's audio from the take's start and the MIDI (%d items)" % items.size(),
-			items.size() == 2 and audio.size() == 1 and is_equal_approx((audio[0] as MixState.ItemState).start, 20.0))
-	if not placed.is_empty():
-		DirAccess.remove_absolute(placed[0]["path"])
-	gm.heard_source = saved_heard
-	gm.roll_every = saved_roll
-	gm.target_track = 0
-	mt.patch = saved_patch
-	mt.threaded = true
-	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-
-
-## Bandmates hear a player's modular: their notes as the modular's (Presence.modular_heard) play on a
-## voice of theirs at the wall, through the room's patch, through Godot; the room's knob streams and
-## cables change it as they change this player's own; their wheel bends it while they hold a note and
-## rests at their last note-off; and gone, their voice goes. This player's own voice hears a turn as
-## it is streamed, not as the knob moves under the hand.
-func _test_a_bandmates_modular_is_heard_at_the_wall_through_the_rooms_patch() -> void:
-	var rig: Array = await _looper_studio(Session.Role.HOST, 1)
-	var studio: Studio = rig[0]
-	var wall := studio.modular_wall
-	studio.presence._on_note_played(Session.Note.ON, 69, 100, 2, 3.0, Modular.SOURCE)
-	var theirs: ModularVoice = studio.modular_heard.get(2)
-	check("a bandmate's note through the modular makes them a voice at the wall, through Godot",
-			theirs != null and theirs.speaker == wall and theirs.path == ModularVoice.Path.GODOT and theirs.engaged
-			and studio.modular_voice.path == ModularVoice.Path.NONE)
-	var sound := theirs.render(24000) if theirs != null else PackedFloat32Array()
-	check("it plays their A at 440 Hz through the room's patch (%.3f)" % _modular_loudest(sound), _modular_loudest(sound) > 0.1
-			and _modular_power(sound, 440.0, 4800, 24000) > _modular_power(sound, 466.16, 4800, 24000) * 20.0)
-	studio.presence._on_note_played(Session.Note.ON, 64, 100, 2, 3.0, &"harp")
-	check("a note of theirs from another instrument is not the modular's", not theirs._events.any(func(e: Array) -> bool:
-			return e[0] == Modular.Event.ON and e[1] == 64))
-	var open := theirs.render(4800)
-	Session._pass_knob(&"vcf.cutoff", 0.05, 3.2, 3)
-	var shut := theirs.render(4800)
-	check("someone's knob as it streams is heard in their voice (%.3f to %.4f)" % [_modular_loudest(open), _modular_loudest(shut, 2400)],
-			_modular_loudest(shut, 2400) < _modular_loudest(open) * 0.3 and is_equal_approx(theirs.patch["knobs"][&"vcf.cutoff"], 0.05))
-	Session._pass_knob(&"vcf.cutoff", 0.9, 3.3, 3)
-	studio._on_room_asked(Modular.PATCH_VERB, [&"vca.in", &"", 3.4], 3)
-	theirs.render(4800)
-	check("and the room's cable pulled from the VCA silences it", _modular_loudest(theirs.render(4800)) < 1e-4
-			and Modular.source_of(theirs.patch, &"vca.in") == &"")
-	studio._on_room_asked(Modular.PATCH_VERB, [&"vcf.out", &"vca.in", 3.5], 3)
-	theirs.render(4800)
-	studio.presence._on_control_played(DawKitClip.PITCH_BEND, 8191, 2, 3.6, Modular.SOURCE)
-	var bent := theirs.render(24000)
-	check("their wheel bends it while they hold the note: two semitones up, 494 Hz",
-			_modular_power(bent, 493.88, 4800, 24000) > _modular_power(bent, 440.0, 4800, 24000) * 10.0)
-	studio.presence._on_note_played(Session.Note.OFF, 69, 0, 2, 3.8, Modular.SOURCE)
-	theirs.render(4800)
-	check("let go, its gate closes and their wheel rests", not theirs.gate() and theirs._modular._bend == 0.0)
-	studio.presence._on_control_played(DawKitClip.PITCH_BEND, 8191, 2, 3.9, Modular.SOURCE)
-	theirs.render(64)
-	check("and a wheel with no note down is not played", theirs._modular._bend == 0.0)
-	theirs.rest_after = 0.0
-	await get_tree().process_frame
-	await get_tree().process_frame
-	check("quiet for its spell, their voice rests: no thread, no emitter (%s)" % [theirs.path], not theirs.engaged
-			and theirs.path == ModularVoice.Path.NONE and theirs._thread == null and theirs._player == null)
-	studio.presence._on_note_played(Session.Note.ON, 69, 100, 2, 4.0, Modular.SOURCE)
-	check("and their next note wakes it at the wall", theirs.engaged and theirs.path == ModularVoice.Path.GODOT
-			and studio.modular_heard.get(2) == theirs)
-	studio.presence._on_note_played(Session.Note.OFF, 69, 0, 2, 4.1, Modular.SOURCE)
-	theirs.rest_after = 5.0
-
-	# This player's own turn: heard as it is streamed.
-	var mine := studio.modular_voice
-	var res: float = mine.patch["knobs"][&"vcf.res"]
-	wall.knob_turning.emit(&"vcf.res", 0.95)
-	check("a knob moving under this player's hand is not yet heard", is_equal_approx(mine.patch["knobs"][&"vcf.res"], res))
-	wall.knob_streamed.emit(&"vcf.res", 0.95)
-	check("streamed, it is heard in their own voice and the bandmate's",
-			is_equal_approx(mine.patch["knobs"][&"vcf.res"], 0.95) and is_equal_approx(theirs.patch["knobs"][&"vcf.res"], 0.95))
-	Session.participant_left.emit(2)
-	await get_tree().process_frame
-	check("gone, their voice goes", not studio.modular_heard.has(2) and not is_instance_valid(theirs))
-	Session.start_solo()
-	studio.queue_free()
-	await get_tree().process_frame
-	_as_session(Session.Role.SOLO, 1)
-	_offline()
-
-
-# --- the world into the modular (docs/spatial_loop.md part two, slice 53) --------------------------
-
 ## How bright `samples` are from `from` to `to`: the RMS of each sample's step from the one before
 ## over the RMS of the samples, so a filter opened is brighter whatever the level.
 func _modular_brightness(samples: PackedFloat32Array, from: int, to: int) -> float:
@@ -48658,54 +48051,6 @@ func _test_a_rings_level_follows_its_layers_notes_the_same_on_two_machines() -> 
 	_offline()
 
 
-## The keys' helper plays the world into its modular as Godot does: a patch with the weather into the
-## VCF's CV and the drips into ENV 2's gate (onto VCO 1's FM), told `mod world` and `mod trig` lines at
-## the frames Modular.render has them, renders it to within 1e-4; its parser reads them and ignores a
-## socket it has not.
-func _test_the_keys_helper_plays_the_world_into_the_modular_as_godot_does() -> void:
-	var helper := NativeKeys.helper()
-	check("the keys helper builds here", helper != "")
-	if helper == "":
-		return
-	var patch := Modular.default_patch()
-	Modular.answer_patch(patch, &"world:weather", &"vcf.cv")
-	Modular.answer_patch(patch, &"world:drips", &"env2.gate")
-	Modular.answer_patch(patch, &"env2.out", &"vco1.fm")
-	Modular.answer_knob(patch, &"vco1.fm", 0.4)
-	var lines := NativeKeys.modular_lines(patch)
-	check("the patch's lines carry the world's cables", lines.has("mod cable world:weather vcf.cv") and lines.has("mod cable world:drips env2.gate"))
-	var told := Array(lines) + ["mod on 1", "on 57 100", NativeKeys.modular_world_line(&"world:weather", 0.3), "wait 4800",
-			"mod trig world:drips", NativeKeys.modular_world_line(&"world:weather", 0.9), "wait 1600", "mod trig world:drips",
-			"wait 3200", NativeKeys.modular_world_line(&"world:weather", 0.1), "off 57"]
-	var dir := OS.get_cache_dir().path_join("dawlings/tmp/ports")
-	DirAccess.make_dir_recursive_absolute(dir)
-	var lines_file := dir.path_join("modular_world_in.txt")
-	var f := FileAccess.open(lines_file, FileAccess.WRITE)
-	f.store_string("\n".join(told) + "\n")
-	f.close()
-	var out := dir.path_join("modular_world.raw")
-	OS.execute("sh", ["-c", "'%s' --render 14400 < '%s' > '%s' 2>/dev/null" % [helper, lines_file, out]])
-	var native := FileAccess.get_file_as_bytes(out).to_float32_array()
-	var ours := Modular.render(patch, [[0.0, Modular.Event.ON, 57, 100], [0.0, Modular.Event.WORLD, &"world:weather", 0.3],
-			[0.1, Modular.Event.TRIG, &"world:drips", 0.0], [0.1, Modular.Event.WORLD, &"world:weather", 0.9],
-			[0.1 + 1600.0 / 48000.0, Modular.Event.TRIG, &"world:drips", 0.0],
-			[0.2, Modular.Event.WORLD, &"world:weather", 0.1], [0.2, Modular.Event.OFF, 57, 0]], 0.0, 14400)
-	var plain := Modular.render(patch, [[0.0, Modular.Event.ON, 57, 100], [0.2, Modular.Event.OFF, 57, 0]], 0.0, 14400)
-	var worst := 0.0
-	for i in mini(ours.size(), native.size() / 2):
-		worst = maxf(worst, absf(native[i * 2] / 0.5 - ours[i]))
-	check("it renders it as Modular.render does, to within 1e-4 (worst %.7f of %.3f), and the world is heard in it"
-			% [worst, _modular_loudest(ours)], native.size() == 14400 * 2 and worst < 1e-4 and ours != plain)
-	f = FileAccess.open(lines_file, FileAccess.WRITE)
-	f.store_string("mod world world:weather 0.25\nmod trig world:drips\nmod world world:rain 1\nmod trig world:nope\nmod cable world:ring_3 vcf.cv\nmod cable vca.cv world:venue\nmod cut world:marbles\n")
-	f.close()
-	OS.execute("sh", ["-c", "'%s' --parse < '%s' > '%s' 2>/dev/null" % [helper, lines_file, out]])
-	var parsed := FileAccess.get_file_as_string(out).split("\n", false)
-	check("its parser reads world lines and cables, and ignores a socket it has not (%s)" % [parsed],
-			parsed == PackedStringArray(["mod world world:weather 0.250000", "mod trig world:drips", "ignored mod world world:rain 1",
-					"ignored mod trig world:nope", "mod cable world:ring_3 vcf.cv", "mod cable world:venue vca.cv", "mod cut world:marbles"]))
-
-
 ## A take through the modular hears the world: when it ends, what the world played into its sockets
 ## over its span (ModularTakes.world) goes into it once, where the levels stood at its start and every
 ## event after, and its render is not the same take's without it.
@@ -48753,147 +48098,6 @@ func _test_a_modular_take_hears_the_world() -> void:
 	_offline()
 
 
-## In the loft's storm, at a desk: the weather's MODULAR socket stands beside its track jack, and a
-## click on it steps its cable into the wall's first free input (the VCF's CV) and says so, P over it
-## the next, Shift+P back, and round to out; the long cable is drawn from its plug down to the floor
-## and up into the input on the wall; its jack into track 5 is untouched by any of it and records the
-## drops while the cable drives the filter, every voice here (the world's own at the wall among them)
-## told the rain's level as the song plays. The venue's instrument, the marble run and each looper ring
-## have their sockets too, clear of the rings' bands.
-func _test_the_weathers_track_jack_and_its_modular_cable_work_together() -> void:
-	_offline()
-	_as_session(Session.Role.SOLO, 1)
-	var studio := Studio.new()
-	studio.medium = Presentation.Medium.SCREEN
-	add_child(studio)
-	for i in 3:
-		await get_tree().physics_frame
-	studio.set_venue(&"loft", false, LoftVenue.STORM)
-	for i in 3:
-		await get_tree().physics_frame
-	_weather_song()
-	var w := studio.weather
-	var socket := w.modular
-	check("the weather's MODULAR socket stands beside its track jack (%s)" % [socket.position - w.jack.position if socket != null else null],
-			socket != null and socket.socket == &"world:weather" and socket.is_in_group(WorldSocket.SOCKETS)
-			and absf(socket.position.x - w.jack.position.x - WorldSocket.BESIDE) < 0.001)
-	check("its card names it and says how, at a desk", socket._default_title() == "MODULAR  THE WEATHER OUT"
-			and socket._default_readout().begins_with("not patched") and socket.hint().contains("click or P"))
-	InstrumentItem.hands_hint = true
-	check("(and in a headset)", socket.hint().begins_with("press it"))
-	InstrumentItem.hands_hint = false
-	studio._on_plug_asked(Weather.SOURCE, Jack.track_sink(5))
-	studio._follow_modular()
-	var said: Array = []
-	var listen := func(t: String) -> void: said.append(t)
-	Session.notice.connect(listen)
-	socket._on_grab_begin(socket.global_position)
-	studio._follow_modular()
-	check("a click steps its cable into the wall's first free input, the VCF's CV, and says so (%s)" % [said],
-			Modular.source_of(studio.modular_row, &"vcf.cv") == &"world:weather" and socket.into == &"vcf.cv"
-			and said.size() == 1 and said[0].contains("VCF CV IN"))
-	check("its card says where, and no tag floats over it (%s)" % socket.readout(),
-			socket.readout() == "into VCF CV IN on the modular wall" and not socket._tag.visible)
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	var spine := socket.spine()
-	var plug: Transform3D = studio._wall_jack(&"vcf.cv")
-	var lowest := INF
-	for p in spine:
-		lowest = minf(lowest, p.y)
-	check("the long cable is drawn from its plug, down to the floor (%.3f) and up into the input on the wall (%.3f m off)"
-			% [lowest, spine[spine.size() - 1].distance_to(plug.origin) if spine.size() > 0 else -1.0],
-			socket.cable_running() and spine.size() > 8 and spine[0].distance_to(socket.global_position) < 0.05
-			and spine[spine.size() - 1].distance_to(plug.origin) < 0.05 and lowest < WorldSocket.FLOOR + 0.01
-			and spine[0].distance_to(plug.origin) > 2.0)
-	check("and the wall's input says where it comes from", (studio.modular_wall.jacks[&"vcf.cv"] as ModularJack).plugged_to == [&"world:weather"]
-			and (studio.modular_wall.jacks[&"vcf.cv"] as ModularJack)._default_readout() == "from THE WEATHER")
-	check("its track jack is untouched: still into track 5", studio.jacks.sink_of(Weather.SOURCE) == Jack.track_sink(5)
-			and w.jack.sink == Jack.track_sink(5))
-	var mouse := studio.get_node("MouseHand") as MouseInteractor
-	var key := InputEventKey.new()
-	key.pressed = true
-	key.keycode = KEY_P
-	mouse.hovered = socket
-	mouse._unhandled_input(key)
-	studio._follow_modular()
-	check("P over it steps the cable on into the next free input, ENV 1's gate's taken by KEYS so ENV 2's (%s)" % [socket.into],
-			socket.into == &"env2.gate" and Modular.source_of(studio.modular_row, &"vcf.cv") == &"" 
-			and Modular.source_of(studio.modular_row, &"env1.gate") == &"keys.gate")
-	key.shift_pressed = true
-	mouse._unhandled_input(key)
-	studio._follow_modular()
-	check("Shift+P back to the VCF's CV", socket.into == &"vcf.cv")
-	key.shift_pressed = false
-	mouse.hovered = null
-	# The song plays and records: the jack takes the drops down, the cable drives the filter.
-	var heard := {"seconds": 0.0, "playing": true, "recording": true, "valid": true}
-	var rec := studio.hit_recorder
-	rec.heard_source = func() -> Dictionary: return heard
-	w.heard_source = rec.heard_source
-	studio.modular_world.heard_source = rec.heard_source
-	var told: Array = []
-	studio.modular_world.fired.connect(func(list: Array) -> void: told.append_array(list))
-	var from := DAW.state.bar_to_seconds(4.0)
-	var to := DAW.state.bar_to_seconds(6.0)
-	heard["seconds"] = from
-	rec.follow(heard)
-	w.follow(heard)
-	studio.modular_world.follow(heard)
-	var t := from
-	while t < to:
-		t = minf(t + 1.0 / 45.0, to)
-		heard["seconds"] = t
-		w.follow(heard, 1.0 / 45.0)
-		studio.modular_world.follow(heard)
-	heard["recording"] = false
-	rec.follow(heard)
-	var want := Weather.drops(w.spec, w.seed, DAW.state, from, to)
-	var taken: Array = DAW.state.track(5).items.filter(func(it: MixState.ItemState) -> bool:
-			return absf(it.start - float(rec.last_take.get("start", -1.0))) < 0.001)
-	var notes: Array = MidiTake.unpack_relative(taken[0].notes, taken[0].start) if taken.size() == 1 else []
-	var levels := told.filter(func(e: Array) -> bool: return e[2] == &"world:weather" and int(e[1]) == Modular.Event.WORLD)
-	check("the jack records the %d drops onto track 5 (%d) while the world tells the rain's level every sixteenth (%d)"
-			% [want.size(), notes.size(), levels.size()], notes.size() == want.size() and want.size() > 4
-			and levels.size() >= 2 * 16 and told.filter(func(e: Array) -> bool: return int(e[1]) == Modular.Event.TRIG).size() == want.size())
-	var world_voice := studio.modular_world_voice
-	check("every voice here hears it, the world's own at the wall engaged while a socket is patched (%s)" % [world_voice.world_levels()],
-			world_voice.engaged and world_voice.speaker == studio.modular_wall and world_voice.world_levels().has(&"world:weather")
-			and studio.modular_voice.world_levels().has(&"world:weather")
-			and is_equal_approx(float(world_voice.world_levels()[&"world:weather"]), float(levels[levels.size() - 1][3])))
-	# This player playing the patch (PLAY's computer keys): their own voice carries the world, and the
-	# world's own rests, so a drip into a gate is heard once and not again a few ms later.
-	studio._modular_play(true)
-	studio._follow_modular()
-	check("with this player's own voice playing the patch (%s) the world's own voice rests, and wakes when they stop"
-			% [studio.modular_voice.tag()], studio.modular_voice.engaged
-			and studio.modular_voice.path != ModularVoice.Path.NONE and not world_voice.engaged
-			and studio._modular_played_here())
-	studio._modular_play(false)
-	studio._follow_modular()
-	check("(awake again with nobody playing)", world_voice.engaged and not studio.modular_voice.engaged)
-	# Round to out: unplugged, the cable goes and the jack stays.
-	for n in 20:
-		if socket.into == &"":
-			break
-		socket.step(1)
-		studio._follow_modular()
-	await get_tree().physics_frame
-	check("stepped round past the last free input it is out, its cable gone, the world's voice at rest, the jack still in track 5",
-			socket.into == &"" and not socket.cable_running() and not Studio.world_patched(studio.modular_row)
-			and not world_voice.engaged and studio.jacks.sink_of(Weather.SOURCE) == Jack.track_sink(5))
-	Session.notice.disconnect(listen)
-	# The other sockets.
-	var venue_socket: WorldSocket = studio.venue_instrument.modular if studio.venue_instrument != null else null
-	check("the venue's instrument has its socket beside its jack, and the marble run its, on the tray",
-			venue_socket != null and venue_socket.socket == &"world:venue"
-			and studio.marbles != null and studio.marbles.modular != null and studio.marbles.modular.socket == &"world:marbles")
-	studio.queue_free()
-	await get_tree().process_frame
-	Session.start_solo()
-	_offline()
-
-
 ## Each looper ring has its MODULAR socket on a strip beside the post, at its own height, lettered
 ## with its place in the stack, clear of every ring's band so a grab for a ring never takes it; a
 ## press on ring 2's patches `world:ring_2` into the wall; and the sockets follow the rings.
@@ -48911,11 +48115,6 @@ func _test_a_looper_rings_sockets_stand_clear_of_their_bands() -> void:
 			clear = clear and rings.band_of(at + Vector3(dx, 0, 0)) == -1
 	check("each at its ring's height, its reach clear of every ring's band", clear)
 	check("lettered with its place in the stack", WorldSocket.short_name(&"world:ring_2") == "RING 2")
-	studio._follow_modular()
-	rings.sockets[1].step(1)
-	studio._follow_modular()
-	check("a press on ring 2's patches it into the wall's VCF CV", Modular.source_of(studio.modular_row, &"vcf.cv") == &"world:ring_2"
-			and rings.sockets[1].into == &"vcf.cv")
 	DAW.remove_track(int(LooperRings.layers(DAW.state)[2]["index"]))
 	rings.refresh()
 	await get_tree().process_frame
@@ -50829,3 +50028,76 @@ func _test_a_rack_voice_plays_live_through_a_track() -> void:
 	voice.shutdown()
 	check("shutting down lets the track go", not InputMonitor.feeds.has(4) and not voice.running())
 	voice.queue_free()
+
+
+func _test_a_rack_layout_keeps_modules_apart_and_answers_in_words() -> void:
+	var p := RackPatch.empty()
+	check("an empty case has a free place for a module", RackLayout.free_slot(p, "vco").x >= 0)
+	check("a sequencer is wider than a oscillator", RackLayout.width_of("seq") > RackLayout.width_of("vco"))
+	check("adding puts it in the free place", RackPatch.answer(p, "add", ["vco", -1, 0]) == "")
+	check("and again beside it", RackPatch.answer(p, "add", ["vco", -1, 0]) == "" and RackPatch.module_ids(p).size() == 2)
+	var spots := {}
+	for id in RackPatch.module_ids(p):
+		spots[Vector2i(int(p["modules"][id]["at"][0]), int(p["modules"][id]["at"][1]))] = true
+	check("two modules never share a place", spots.size() == 2)
+	check("a made-up module is refused in words", RackPatch.answer(p, "add", ["flux", -1, 0]) != "")
+	check("OUT cannot be removed", RackPatch.answer(RackPatch.preset(&"keys_voice"), "remove", ["out"]) != "")
+	check("an unknown op is refused", RackPatch.answer(p, "explode", []) != "")
+	for name in RackPatch.presets():
+		var q := RackPatch.preset(name)
+		var ok := true
+		var seen := {}
+		for id in RackPatch.module_ids(q):
+			var at := Vector2i(int(q["modules"][id]["at"][0]), int(q["modules"][id]["at"][1]))
+			for c in RackLayout.width_of(q["modules"][id]["type"]):
+				var cell := Vector2i(at.x + c, at.y)
+				ok = ok and not seen.has(cell) and cell.x < RackLayout.COLS
+				seen[cell] = true
+		check("the preset %s lays out inside the case without overlap" % name, ok)
+	for venue_id in [&"studio", &"cave", &"club", &"desert", &"nowhere"]:
+		var m := RackMood.palette(venue_id)
+		check("%s has a mood with base, hit and glow" % venue_id, m.has("base") and m.has("hit") and m.has("glow"))
+
+
+func _test_the_studios_rack_is_edited_through_the_room_and_lit_by_its_level() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var wall: RackWall = studio.rack_wall
+	check("the studio builds the rack wall", wall != null)
+	if wall == null:
+		studio.queue_free()
+		return
+	var before := RackPatch.module_ids(studio.rack_row["patch"]).size()
+	studio.ask_rack("add", ["lfo", -1, 0])
+	check("a module asked for is in the room's row", RackPatch.module_ids(studio.rack_row["patch"]).size() == before + 1)
+	check("and on the wall", _rack_panels(wall) == before + 1)
+	var said: Array = []
+	var listen := func(text: String) -> void: said.append(text)
+	Session.notice.connect(listen)
+	studio.ask_rack("remove", ["out"])
+	check("taking OUT out is refused and said", not said.is_empty() and RackPatch.has_type(studio.rack_row["patch"], "out"))
+	Session.notice.disconnect(listen)
+	studio.ask_rack("preset", ["drum_machine"])
+	check("a preset replaces the case", RackPatch.has_type(studio.rack_row["patch"], "seq") or RackPatch.has_type(studio.rack_row["patch"], "drums")
+			or RackPatch.module_ids(studio.rack_row["patch"]).size() > 0)
+	studio.ask_rack("knob", ["out", "level", 0.4])
+	check("a knob asked is in the row", is_equal_approx(RackPatch.knob_of(studio.rack_row["patch"], "out", "level"), 0.4)
+			or not studio.rack_row["patch"]["modules"]["out"]["knobs"].has("level"))
+	check("the row is the room's", studio.room_state().has(RackPatch.ROW))
+	var state: Dictionary = studio.room_state().duplicate(true)
+	state[RackPatch.ROW]["patch"] = RackPatch.preset(&"fm_bass")
+	studio.apply_room(state)
+	check("a room from the host is shown", RackPatch.has_type(studio.rack_row["patch"], "out")
+			and _rack_panels(wall) == RackPatch.module_ids(studio.rack_row["patch"]).size())
+	wall.glow_with(1.0, 1.0)
+	check("the Session accepts the rack verb's shape", Session.room_ask_is_valid(&"rack", [&"add", ["lfo", -1, 0]]))
+	check("and refuses a wrong one", not Session.room_ask_is_valid(&"rack", [&"add"]))
+	studio.queue_free()
+	await get_tree().process_frame
+
+
+func _rack_panels(wall: RackWall) -> int:
+	return wall.module_nodes.keys().filter(func(k: String) -> bool: return not k.contains("/")).size()

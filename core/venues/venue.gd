@@ -738,7 +738,7 @@ func default_grains_spot() -> Variant:
 ## space: the synth zone's module rack over the keyboard stand (ZoneKit.keyboard_stand), its panel's
 ## face MODULAR_BACK in from the zone's middle toward the wall behind the stand and its foot
 ## MODULAR_BOTTOM up, over the stand's upper deck, its front (+Z) out over the decks toward whoever
-## plays, so its touch keys lie on the upper deck under it; along the stand by ModularWall.OFF_MIDDLE,
+## plays, so its touch keys lie on the upper deck under it; along the stand by RackWall.OFF_MIDDLE,
 ## so the panel and the plaque beside it stand over the stand together. Mounted in the zone, not a
 ## trolley: the stand is the venue's, and the rack's own dressing gives way to it (ZoneKit.yield_rack).
 ## Null where there is no synth zone (the Rig Roulette room).
@@ -752,7 +752,7 @@ func modular_spot() -> Variant:
 		return null
 	var c := (at[&"synth"] as AABB).get_center()
 	return Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(c.x + MODULAR_BACK, MODULAR_BOTTOM,
-			c.z - ModularWall.OFF_MIDDLE))
+			c.z - RackWall.OFF_MIDDLE))
 
 
 ## Where the lyric board stands (LyricBoard, docs/spatial_loop.md part two, slice 56), in studio space:

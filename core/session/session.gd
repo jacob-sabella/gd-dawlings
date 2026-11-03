@@ -1747,6 +1747,7 @@ const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOA
 		# `to` the cable at a jack pulled (Modular.answer_patch); and a knob let go at a value
 		# (Modular.answer_knob). Each with the song position it was made at. The room's `modular` row.
 		# A cable from one of the world's sockets (slice 53, `world:weather`) is asked the same way.
+		&"rack": [TYPE_STRING_NAME, TYPE_ARRAY],
 		&"modular_patch": [TYPE_STRING_NAME, TYPE_STRING_NAME, TYPE_FLOAT],
 		&"modular_knob": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT],
 		# Look to solo (LookSolo, docs/spatial_loop.md part three, G): the track looked at, held or

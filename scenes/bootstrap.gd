@@ -322,26 +322,11 @@ func _ready() -> void:
 	if args["lyrics"] and studio.lyric_board != null and DAW.state != null:
 		DAW.set_lyrics("[00:01.00]Wires hum beneath the floor\n[00:05.00]Every fader finds its place\n[00:09.00]We tune the room until it's ours\n[00:13.00]And sing it back into the space\n\nTurn the lamps down, let it ring\nHold the last note, let it go")
 		studio.lyric_board.heard_source = func() -> Dictionary: return {"seconds": 7.0, "playing": true, "valid": true}
-	# `--modular`: the modular wall re-patched (docs/spatial_loop.md part two, slice 51), for a shot of
-	# it: the LFO onto the VCF's CV, the second VCO a fifth up through the MIX with the first, ENV 2 on
-	# the first VCO's FM, the noise into the MIX low, each cable and knob asked as the wall asks them,
-	# and an A held on its touch keys.
-	if args["modular"] and studio.modular_wall != null:
-		for c: Array in [[&"vcf.in", &""], [&"vco1.out", &"mix.in1"], [&"vco2.out", &"mix.in2"], [&"noise.out", &"mix.in3"],
-				[&"mix.out", &"vcf.in"], [&"keys.pitch", &"vco2.pitch"], [&"lfo.out", &"vcf.cv"],
-				[&"keys.gate", &"env2.gate"], [&"env2.out", &"vco1.fm"]]:
-			studio.ask_modular_patch(c[0], c[1])
-		for k: Array in [[&"vco2.wave", 0.0], [&"vco2.tune", 0.5 + 7.0 / 24.0], [&"vco1.fm", 0.3], [&"mix.l3", 0.15],
-				[&"vcf.res", 0.7], [&"lfo.rate", 0.4]]:
-			studio.ask_modular_knob(k[0], k[1])
-		studio.modular_wall.touch_keys[9].grab_begin(studio, studio.modular_wall.touch_keys[9].global_position)
-		# `--modular-rec`: a take through it under way (slice 52), as the keys at the wall begin one.
-		if args["modular_rec"]:
-			Session.modular_takes.begin(0.0)
-	# `--world`: the venue's weather patched into the modular wall's VCF CV (slice 53), as a press on
-	# its MODULAR socket asks it, for a shot of the long cable from the window to the wall.
-	if args["world"] and studio.weather != null and studio.weather.modular != null:
-		studio._on_world_step(studio.weather.modular.socket, 1)
+	# `--modular`: the rack with the drum machine preset put in, for a shot of it, and an A held on its
+	# touch keys.
+	if args["modular"] and studio.rack_wall != null:
+		studio.ask_rack("preset", ["acid_line"])
+		studio.rack_wall.touch_keys[9].grab_begin(studio, studio.rack_wall.touch_keys[9].global_position)
 	var view: Vector2 = args["view"]
 	if view.y > 0.0 and studio.timeline != null:
 		studio.timeline.set_view(view.x, view.y)
