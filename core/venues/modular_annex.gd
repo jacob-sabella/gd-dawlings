@@ -321,6 +321,15 @@ static func clear_the_site(venue: Venue) -> int:
 			if flat.has_point(Vector2(at.x, at.z)) and at.y < HEIGHT:
 				mm.set_instance_transform(i, Transform3D(gone.basis, mm.get_instance_transform(i).origin))
 				cleared += 1
+	# Ground that rises into the room (a cave's floor, a dome's shell) is carved away from it, triangle by
+	# triangle: any triangle with a corner up in the room's volume goes.
+	var volume := AABB(site.position + Vector3(-0.3, 0.13, -0.3), site.size + Vector3(0.6, -0.1, 0.6))
+	for node in venue.find_children("*", "MeshInstance3D", true, false):
+		var land := node as MeshInstance3D
+		if land.mesh is ArrayMesh and land.visible:
+			var whole := venue.global_transform.affine_inverse() * land.global_transform * land.get_aabb()
+			if whole.size.x > 6.0 and whole.intersects(volume) and _cut_mesh(land, venue, volume, true):
+				cleared += 1
 	for node in venue.find_children("*", "VisualInstance3D", true, false):
 		var vi := node as GeometryInstance3D
 		if vi == null or not vi.visible or vi.get_parent() == null:
@@ -399,7 +408,7 @@ static func cut_the_wall(venue: Venue) -> int:
 
 
 ## `mi`'s mesh without the triangles whose middle is in `opening` (venue space). Whether any went.
-static func _cut_mesh(mi: MeshInstance3D, venue: Venue, opening: AABB) -> bool:
+static func _cut_mesh(mi: MeshInstance3D, venue: Venue, opening: AABB, any_corner := false) -> bool:
 	var src := mi.mesh as ArrayMesh
 	var to_venue := venue.global_transform.affine_inverse() * mi.global_transform
 	var out := ArrayMesh.new()
@@ -415,8 +424,12 @@ static func _cut_mesh(mi: MeshInstance3D, venue: Venue, opening: AABB) -> bool:
 					index[i] = i
 			var kept := PackedInt32Array()
 			for t in range(0, index.size() - 2, 3):
-				var mid := (to_venue * verts[index[t]] + to_venue * verts[index[t + 1]] + to_venue * verts[index[t + 2]]) / 3.0
-				if opening.has_point(mid):
+				var a := to_venue * verts[index[t]]
+				var b := to_venue * verts[index[t + 1]]
+				var c := to_venue * verts[index[t + 2]]
+				var inside := opening.has_point(a) or opening.has_point(b) or opening.has_point(c) if any_corner \
+						else opening.has_point((a + b + c) / 3.0)
+				if inside:
 					any = true
 				else:
 					kept.append(index[t])
