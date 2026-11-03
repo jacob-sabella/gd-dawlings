@@ -61,6 +61,11 @@ struct Ctx {
   Transport tp;
   Keys keys;
   uint64_t block = 0;
+  // The room's world sockets (weather, drips, venue, rings, marbles): a level each, and a gate held
+  // open for a few samples after a trigger. Set by the host (`world`, `trig`).
+  static const int WORLD_N = 12;
+  float world[WORLD_N] = {};
+  int world_gate[WORLD_N] = {};
 };
 
 struct Module {

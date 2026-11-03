@@ -30178,8 +30178,8 @@ func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
 	var card := WelcomeCard.new()
 	var pages := card.pages()
 	var names := card.page_names()
-	check("the pages: START, PLAY · HELD on two (the drum pads, slice 41, ran it on), PLAY · CONTROL ROOM, PLAY · LIVE ROOM on two (the string spool, slice 48, ran it on), PLAY · THIS VENUE (slice 42's instrument), TOGETHER and ROOM (%s)" % [names],
-			names == PackedStringArray(["START", "PLAY · HELD 1/2", "PLAY · HELD 2/2", "PLAY · CONTROL ROOM", "PLAY · LIVE ROOM 1/2", "PLAY · LIVE ROOM 2/2", "PLAY · THIS VENUE", "TOGETHER", "ROOM"]))
+	check("the pages: START, PLAY · HELD on two (the drum pads, slice 41, ran it on), PLAY · CONTROL ROOM, PLAY · LIVE ROOM on three (the string spool, slice 48, and the modular room ran it on), PLAY · THIS VENUE (slice 42's instrument), TOGETHER and ROOM (%s)" % [names],
+			names == PackedStringArray(["START", "PLAY · HELD 1/2", "PLAY · HELD 2/2", "PLAY · CONTROL ROOM", "PLAY · LIVE ROOM 1/3", "PLAY · LIVE ROOM 2/3", "PLAY · LIVE ROOM 3/3", "PLAY · THIS VENUE", "TOGETHER", "ROOM"]))
 	var said := func(p: Dictionary) -> String:
 		return " ".join(p["lines"].map(func(l: Array) -> String: return "%s %s" % [l[0], l[1]]))
 	var start: String = said.call(pages[0])
@@ -30191,9 +30191,10 @@ func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
 	var held_sub: String = pages[names.find("PLAY · HELD 1/2")]["sub"]
 	check("PLAY · HELD says where each kind is kept: the bells by the harp, not all on the shelf (%s)" % held_sub,
 			held_sub.contains("shelf") and held_sub.contains("beside the harp") and held_sub.contains("always on you"))
-	var live := {"lines": (pages[names.find("PLAY · LIVE ROOM 1/2")]["lines"] as Array)
-			+ (pages[names.find("PLAY · LIVE ROOM 2/2")]["lines"] as Array)}
-	check("each PLAY line of a stood station is its title and its desk line, and goes there, over both pages",
+	var live := {"lines": (pages[names.find("PLAY · LIVE ROOM 1/3")]["lines"] as Array)
+			+ (pages[names.find("PLAY · LIVE ROOM 2/3")]["lines"] as Array)
+			+ (pages[names.find("PLAY · LIVE ROOM 3/3")]["lines"] as Array)}
+	check("each PLAY line of a stood station is its title and its desk line, and goes there, over all three pages",
 			live["lines"].map(func(l): return l[2]) == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics"]
 			and live["lines"][0][0] == "CHORD HARP" and live["lines"][0][1] == Stations.row(&"harp")["desk"])
 	var sizes: Array = []
@@ -49854,6 +49855,54 @@ func _rack_loudness(frames: PackedVector2Array, from_s := 0.0, to_s := 1e9) -> f
 	for i in range(a, b):
 		e += frames[i].x * frames[i].x + frames[i].y * frames[i].y
 	return sqrt(e / maxf(1.0, (b - a) * 2.0))
+
+
+func _test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input() -> void:
+	# The cable of a world socket is a rack cable: from the WORLD module's level, or its gate where the
+	# input takes one, stepped through the free inputs.
+	var p := RackPatch.preset(&"acid_line")
+	check("a rack with no WORLD module has nowhere to cable a socket from", RackPatch.world_out(p, &"world:weather") == "")
+	var id := RackPatch.add(p, "world", RackLayout.free_slot(p, "world"))
+	check("the WORLD module goes in the case", id == "world")
+	check("a level for an input that takes one", RackPatch.world_out(p, &"world:weather", "ladder.cutoff") == "world.weather")
+	check("a gate for an input that takes one", RackPatch.world_out(p, &"world:ring_3", "env.gate") == "world.ring3_g")
+	check("the marbles are a socket too", RackPatch.world_out(p, &"world:marbles") == "world.marbles")
+	check("every socket of the world is an output of the module",
+			Modular.WORLD.all(func(w): return RackCatalogue.has_out("world", RackPatch.WORLD_OUTS[Modular.WORLD.find(w)])))
+	check("and a gate besides", RackCatalogue.has_out("world", "marbles_g"))
+	var first := RackPatch.step_world(p, &"world:weather", 1)
+	check("a press patches the weather into the first free input", first != "" and RackPatch.is_in(p, first))
+	RackPatch.connect_cable(p, RackPatch.world_out(p, &"world:weather", first), first)
+	check("and the rack says where it went", RackPatch.world_sink(p, &"world:weather") == first)
+	check("a press again goes on to another input", RackPatch.step_world(p, &"world:weather", 1) not in ["", first])
+	check("and back takes it out", RackPatch.step_world(p, &"world:weather", -1) == "")
+	check("another socket is where it was", RackPatch.world_sink(p, &"world:drips") == "")
+	if not RackEngine.available():
+		print("  (no engine here: no sound to check)")
+		return
+	# The world plays: a drop's gate strikes a voice; with no drop it is quiet.
+	var w := RackPatch.empty()
+	RackPatch.add(w, "world")
+	RackPatch.add(w, "plaits", Vector2i(4, 0))
+	RackPatch.add(w, "out", Vector2i(9, 0))
+	RackPatch.connect_cable(w, "world.drips_g", "plaits.trig")
+	RackPatch.connect_cable(w, "plaits.out", "out.l")
+	RackPatch.connect_cable(w, "plaits.out", "out.r")
+	var quiet := RackEngine.render(w, PackedStringArray(["run 0.5"]))
+	var dripped := RackEngine.render(w, PackedStringArray(["trig 1", "run 0.5"]))
+	check("a drop of the world's strikes the voice patched to its gate", _rack_loudness(dripped) > _rack_loudness(quiet) + 0.005)
+	# A cloud of grains out of what goes in.
+	var c := RackPatch.empty()
+	RackPatch.add(c, "noise")
+	RackPatch.add(c, "clouds", Vector2i(3, 0))
+	RackPatch.add(c, "out", Vector2i(8, 0))
+	RackPatch.connect_cable(c, "noise.pink", "clouds.l")
+	RackPatch.connect_cable(c, "clouds.l", "out.l")
+	RackPatch.connect_cable(c, "clouds.r", "out.r")
+	RackPatch.set_knob(c, "clouds", "mix", 1.0)
+	RackPatch.set_knob(c, "clouds", "density", 1.0)
+	var cloud := RackEngine.render(c, PackedStringArray(["run 2"]))
+	check("CLOUDS makes a cloud out of what is played into it", _rack_loudness(cloud, 1.0, 2.0) > 0.005)
 
 
 func _test_a_rack_engine_makes_the_sound_the_patch_says() -> void:

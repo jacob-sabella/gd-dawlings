@@ -734,7 +734,7 @@ func default_grains_spot() -> Variant:
 	return Transform3D(Basis(Vector3.UP, 0.0 if away > 0.0 else PI), mid - Vector3(0, 0, away * SYNTH_RING))
 
 
-## Where the modular wall hangs (ModularWall, docs/spatial_loop.md part two, slice 51), in studio
+## Where the modular room's wall hangs (RackWall, docs/spatial_loop.md part two, slice 51), in studio
 ## space: the synth zone's module rack over the keyboard stand (ZoneKit.keyboard_stand), its panel's
 ## face MODULAR_BACK in from the zone's middle toward the wall behind the stand and its foot
 ## MODULAR_BOTTOM up, over the stand's upper deck, its front (+Z) out over the decks toward whoever

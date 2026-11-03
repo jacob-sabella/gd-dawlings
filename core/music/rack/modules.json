@@ -1068,6 +1068,40 @@
    ]
   },
   {
+   "type": "world",
+   "title": "WORLD",
+   "group": "Source",
+   "blurb": "The room itself as a source: the weather, the venue's instrument, the looper's rings and the marble run, each a level and a gate.",
+   "ins": [],
+   "outs": [
+    "weather",
+    "drips",
+    "venue",
+    "ring1",
+    "ring2",
+    "ring3",
+    "ring4",
+    "ring5",
+    "ring6",
+    "ring7",
+    "ring8",
+    "marbles",
+    "weather_g",
+    "drips_g",
+    "venue_g",
+    "ring1_g",
+    "ring2_g",
+    "ring3_g",
+    "ring4_g",
+    "ring5_g",
+    "ring6_g",
+    "ring7_g",
+    "ring8_g",
+    "marbles_g"
+   ],
+   "knobs": []
+  },
+  {
    "type": "plaits",
    "title": "PLAITS",
    "group": "Voice",
@@ -1315,6 +1349,113 @@
      "def": 0.35,
      "curve": "lin",
      "names": ""
+    }
+   ]
+  },
+  {
+   "type": "clouds",
+   "title": "CLOUDS",
+   "group": "Time",
+   "blurb": "Mutable Instruments' granular processor: listens to what comes in and plays it back as a cloud of grains.",
+   "ins": [
+    "l",
+    "r",
+    "freeze"
+   ],
+   "outs": [
+    "l",
+    "r"
+   ],
+   "knobs": [
+    {
+     "id": "position",
+     "label": "POSITION",
+     "lo": 0,
+     "hi": 1,
+     "def": 0.5,
+     "curve": "lin",
+     "names": ""
+    },
+    {
+     "id": "size",
+     "label": "SIZE",
+     "lo": 0,
+     "hi": 1,
+     "def": 0.5,
+     "curve": "lin",
+     "names": ""
+    },
+    {
+     "id": "pitch",
+     "label": "PITCH",
+     "lo": -24,
+     "hi": 24,
+     "def": 0,
+     "curve": "lin",
+     "names": "st"
+    },
+    {
+     "id": "density",
+     "label": "DENSITY",
+     "lo": 0,
+     "hi": 1,
+     "def": 0.8,
+     "curve": "lin",
+     "names": ""
+    },
+    {
+     "id": "texture",
+     "label": "TEXTURE",
+     "lo": 0,
+     "hi": 1,
+     "def": 0.5,
+     "curve": "lin",
+     "names": ""
+    },
+    {
+     "id": "mix",
+     "label": "MIX",
+     "lo": 0,
+     "hi": 1,
+     "def": 0.5,
+     "curve": "lin",
+     "names": ""
+    },
+    {
+     "id": "spread",
+     "label": "SPREAD",
+     "lo": 0,
+     "hi": 1,
+     "def": 0.5,
+     "curve": "lin",
+     "names": ""
+    },
+    {
+     "id": "feedback",
+     "label": "FEEDBACK",
+     "lo": 0,
+     "hi": 1,
+     "def": 0,
+     "curve": "lin",
+     "names": ""
+    },
+    {
+     "id": "reverb",
+     "label": "REVERB",
+     "lo": 0,
+     "hi": 1,
+     "def": 0.2,
+     "curve": "lin",
+     "names": ""
+    },
+    {
+     "id": "freeze",
+     "label": "FREEZE",
+     "lo": 0,
+     "hi": 1,
+     "def": 0,
+     "curve": "step",
+     "names": "OFF|ON"
     }
    ]
   }

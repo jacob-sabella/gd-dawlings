@@ -561,3 +561,29 @@ static Registrar r_out({"out", "OUT", "Mix", "The output: to the speakers, and o
     []() -> Module* { return new Out_; }});
 
 }  // namespace rack
+
+namespace rack {
+// ---- WORLD: the room's own sockets as outputs ---------------------------------------------------
+// What the weather, the venue's instrument, the looper's rings and the marble run play: a level each
+// (0..1, smoothed) and a gate for each drop or note. The host works them out from the song clock.
+struct World_ : Module {
+  float sm_[Ctx::WORLD_N] = {};
+  void process() override {
+    for (int s = 0; s < BLOCK; ++s) {
+      for (int k = 0; k < Ctx::WORLD_N; ++k) {
+        sm_[k] += (ctx->world[k] - sm_[k]) * 0.002f;
+        out[k][s] = sm_[k];
+        int& g = ctx->world_gate[k];
+        out[Ctx::WORLD_N + k][s] = g > 0 ? 1.0f : 0.0f;
+        if (g > 0) --g;
+      }
+    }
+  }
+};
+static Registrar r_world({"world", "WORLD", "Source",
+    "The room itself as a source: the weather, the venue's instrument, the looper's rings and the marble run, each a level and a gate.",
+    {}, {"weather", "drips", "venue", "ring1", "ring2", "ring3", "ring4", "ring5", "ring6", "ring7", "ring8", "marbles",
+         "weather_g", "drips_g", "venue_g", "ring1_g", "ring2_g", "ring3_g", "ring4_g", "ring5_g", "ring6_g", "ring7_g",
+         "ring8_g", "marbles_g"},
+    {}, []() -> Module* { return new World_; }});
+}  // namespace rack

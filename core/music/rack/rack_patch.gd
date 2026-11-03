@@ -137,6 +137,79 @@ static func add(p: Dictionary, type: String, at := Vector2i.ZERO) -> String:
 	return id
 
 
+## The room's world sockets (Modular.WORLD, in its order) as outputs of the rack's WORLD module.
+const WORLD_OUTS: Array[String] = ["weather", "drips", "venue", "ring1", "ring2", "ring3", "ring4", "ring5",
+		"ring6", "ring7", "ring8", "marbles"]
+## The inputs that take a gate rather than a level.
+const GATE_INS: Array[String] = ["gate", "trig", "strum", "clk", "clock", "reset", "rst", "step"]
+
+
+## The WORLD module's output a world socket (`world:weather`, `world:ring_3`) is, as a path: its gate
+## for an input that takes one, its level for the rest. "" for something that is no socket.
+static func world_out(p: Dictionary, socket: StringName, to := "") -> String:
+	var at := Modular.WORLD.find(socket)
+	var id := ""
+	for m in p["modules"]:
+		if p["modules"][m]["type"] == "world":
+			id = m
+			break
+	if at < 0 or id == "":
+		return ""
+	var gate := GATE_INS.has(to.get_slice(".", 1))
+	return "%s.%s%s" % [id, WORLD_OUTS[at], "_g" if gate else ""]
+
+
+## Where a world socket's cable goes now: the input it is in, or "".
+static func world_sink(p: Dictionary, socket: StringName) -> String:
+	var at := Modular.WORLD.find(socket)
+	for c in p["cables"]:
+		var id := String(c[0]).get_slice(".", 0)
+		if type_of(p, id) != "world" or at < 0:
+			continue
+		var port := String(c[0]).get_slice(".", 1).trim_suffix("_g")
+		if port == WORLD_OUTS[at]:
+			return c[1]
+	return ""
+
+
+## Every input of the rack's modules with nothing cabled into it, in the case's order (not the WORLD
+## module's own, which has none).
+static func free_inputs(p: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var taken := {}
+	for c in p["cables"]:
+		taken[c[1]] = true
+	var ids := module_ids(p)
+	ids.sort_custom(func(a, b) -> bool:
+		var pa: Array = p["modules"][a]["at"]
+		var pb: Array = p["modules"][b]["at"]
+		return (pa[1] < pb[1]) or (pa[1] == pb[1] and pa[0] < pb[0]))
+	for id in ids:
+		var t: String = p["modules"][id]["type"]
+		for port in RackCatalogue.spec(t).get("ins", []):
+			var path := "%s.%s" % [id, port]
+			if not taken.has(path) and t != "out":
+				out.append(path)
+	return out
+
+
+## The input a world socket's cable steps to, `way` on from where it is: none, then each free input.
+static func step_world(p: Dictionary, socket: StringName, way: int) -> String:
+	var now := world_sink(p, socket)
+	# The ring is the free inputs as they are with this socket's cable out, so the input it is in is
+	# one of them and the press goes on from there.
+	var bare := p.duplicate(true)
+	if now != "":
+		for c in (bare["cables"] as Array).duplicate():
+			if c[1] == now and type_of(bare, String(c[0]).get_slice(".", 0)) == "world" \
+					and String(c[0]).get_slice(".", 1).trim_suffix("_g") == WORLD_OUTS[Modular.WORLD.find(socket)]:
+				(bare["cables"] as Array).erase(c)
+	var ring: Array[String] = [""]
+	ring.append_array(free_inputs(bare))
+	var at := ring.find(now) if now != "" else 0
+	return ring[posmod(maxi(at, 0) + (1 if way >= 0 else -1), ring.size())]
+
+
 static func has_type(p: Dictionary, type: String) -> bool:
 	for id in p["modules"]:
 		if p["modules"][id]["type"] == type:

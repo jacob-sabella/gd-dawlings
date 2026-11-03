@@ -54,7 +54,7 @@ var socket := &""
 ## The wall's input its cable goes into, or &"" unplugged (`show_into`).
 var into := &""
 ## Where a plug in the wall's input `id` sits, in world space, facing out of the panel, or null where
-## there is no wall: the studio's (ModularJack.plug_transform).
+## there is no wall: the studio's (RackJack.plug_transform).
 var wall_jack: Callable = Callable()
 var _shape: CollisionShape3D
 var _look: Node3D

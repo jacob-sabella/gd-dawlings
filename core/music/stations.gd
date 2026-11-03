@@ -262,7 +262,7 @@ const ALL := [
 		"hands": "let a cassette go over the bowl · reach into the cloud: across is where in the sound, up is longer grains, further in is more of them · spread your fingers, or squeeze the grip, to widen the spray · KEY follows the chord's root · the band hears it · while the song records, your grains go onto the armed track as audio",
 	},
 	{
-		# The modular wall (ModularWall, slice 51): its help lines say where the world's sockets are
+		# The modular room (RackWall, slice 51): its help lines say where the world's sockets are
 		# (WorldSocket, slice 53), since they are out in the room and not on it. A surface hung on the synth zone's module rack over
 		# the keyboard stand, its touch keys on the stand's upper deck under it and its plaque beside
 		# it. Mounted in the zone, not a trolley. Its frame's top is the case's top, its foot the touch

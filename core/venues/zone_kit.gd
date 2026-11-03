@@ -458,7 +458,7 @@ static func keyboard_stand(parent: Node3D, width: float, metal: Material, deck: 
 	block(parent, Vector3(0.28, 0.025, width * 0.9), Vector3(0.14, 1.02, 0), deck, "UpperDeck")
 
 
-## The synth zone's module rack, given way to the modular wall that hangs where it was (ModularWall,
+## The synth zone's module rack, given way to the modular room (RackWall,
 ## Venue.modular_spot, docs/spatial_loop.md part two, slice 51): a venue's own case, lights or panel
 ## over the stand (named "Module..."), and whatever outlines one where it stands, hidden; or shown
 ## again, where the wall does not hang.

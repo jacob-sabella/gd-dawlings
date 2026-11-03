@@ -313,6 +313,8 @@ var marble_balls: Array = []
 ## engine), the room's row `rack` {patch, track} (RackPatch), and the computer keys as its keys.
 var rack_wall: RackWall
 var rack_voice: RackVoice
+## What the weather, the rings, the marbles and the venue's instrument play into the rack's WORLD module.
+var modular_world: ModularWorld
 var modular_annex: ModularAnnex
 var rack_row := {"patch": RackPatch.preset(&"keys_voice"), "track": 0}
 ## The lyric board in the vocal booth (LyricBoard, docs/spatial_loop.md part two, slice 56), stood
@@ -5415,6 +5417,14 @@ func _build_rack() -> void:
 	rack_voice.name = "RackVoice"
 	add_child(rack_voice)
 	rack_voice.set_patch(rack_row["patch"])
+	# The world plays into the rack's WORLD module, worked out from the song clock and the rows as it
+	# always was, the same on every machine; only the host's engine sounds it.
+	modular_world = ModularWorld.new()
+	modular_world.weather = func() -> Variant: return weather
+	modular_world.marbles = func() -> Variant: return marbles
+	modular_world.has_venue = func() -> bool: return venue_instrument != null and is_instance_valid(venue_instrument)
+	add_child(modular_world)
+	modular_world.fired.connect(func(events: Array) -> void: rack_voice.play_world(events))
 	modular_keys = KeyCatcher.new()
 	modular_keys.name = "RackKeys"
 	modular_keys.base = 48
@@ -5458,6 +5468,55 @@ func _stand_the_annex() -> void:
 		return
 	ModularAnnex.cut_the_wall(venue)
 	modular_annex = ModularAnnex.build(venue)
+
+
+## A world socket's press (WorldSocket.step_asked): its cable out of the input it is in and into the
+## next free one `way` on, the rack's WORLD module put in the case first if it has none.
+func _on_world_step(socket: StringName, way: int) -> void:
+	var patch: Dictionary = rack_row["patch"]
+	if not RackPatch.has_type(patch, "world"):
+		ask_rack("add", ["world", -1, 0])
+		patch = rack_row["patch"]
+		if not RackPatch.has_type(patch, "world"):
+			return
+	var now := RackPatch.world_sink(patch, socket)
+	var next := RackPatch.step_world(patch, socket, way)
+	if now != "":
+		var out := ""
+		for c in patch["cables"]:
+			if c[1] == now and RackPatch.type_of(patch, String(c[0]).get_slice(".", 0)) == "world":
+				out = c[0]
+		if out != "":
+			ask_rack("pull_one", [out, now])
+	if next != "":
+		ask_rack("cable", [RackPatch.world_out(patch, socket, next), next])
+		Session.notice.emit("%s goes into %s on the rack. Press it again for the next free input."
+				% [Modular.world_title(socket).capitalize(), next.replace(".", " ").to_upper()])
+
+
+## Where a plug in the rack's input `path` sits, for a world socket's cable.
+func _rack_jack(path: StringName) -> Variant:
+	if rack_wall == null or not is_instance_valid(rack_wall) or not rack_wall.is_visible_in_tree():
+		return null
+	var jack: RackJack = rack_wall.jacks.get(String(path))
+	return jack.plug_transform() if jack != null and jack.is_inside_tree() else null
+
+
+## Each frame: every world socket in the room wired to its press and to the rack, and showing where
+## the rack has its cable.
+func _follow_world_sockets() -> void:
+	var patch: Dictionary = rack_row["patch"]
+	for node in get_tree().get_nodes_in_group(WorldSocket.SOCKETS):
+		var socket := node as WorldSocket
+		if socket == null:
+			continue
+		if not socket.has_meta(&"wired"):
+			socket.set_meta(&"wired", true)
+			socket.step_asked.connect(_on_world_step)
+			socket.wall_jack = _rack_jack
+		var into := StringName(RackPatch.world_sink(patch, socket.socket))
+		if socket.into != into:
+			socket.show_into(into)
 
 
 ## An edit of the rack, `op` and `args` as RackPatch.answer takes them (or `track` [step]): done on the
@@ -5677,6 +5736,7 @@ func _follow_modular() -> void:
 		Session.guest_midi.synth.redirect = rack_voice if engaged and Session.is_authority() else null
 	if not here and modular_keys != null and modular_keys.is_active() and not rack_wall.visible:
 		_modular_play(false)
+	_follow_world_sockets()
 	if rack_voice == null or not is_instance_valid(rack_voice):
 		return
 	if engaged and Session.is_authority():
@@ -5813,6 +5873,9 @@ func _on_someones_use(id: StringName, down: bool, from: int, take := -1) -> void
 func _on_someones_hit(id: StringName, velocity: int, from: int, song := -1.0, _snap := false, take := -1,
 		zone := &"") -> void:
 	var item := items.items.get(id) as InstrumentItem if items != null else null
+	if item != null and modular_world != null and from != Session.local_peer_id \
+			and item.jack_source() == VenueInstrument.SOURCE:
+		modular_world.strike(song, velocity)
 	if not _sampling() or item == null or from == Session.local_peer_id or not Session.is_authority():
 		return
 	if item.fixed:
@@ -6980,6 +7043,9 @@ func _on_key_played(pitch: int, down: bool) -> void:
 func _on_item_played(item: InstrumentItem, velocity: int, struck: bool, at: float, zone := &"") -> void:
 	# Onto the armed track, or the track its jack goes into.
 	jacks.hit(item, velocity, at, zone)
+	# A strike of the venue's instrument into the rack's `world` module.
+	if modular_world != null and item.jack_source() == VenueInstrument.SOURCE:
+		modular_world.strike(at, velocity)
 	# And into this player's loop, while they loop (slice 45).
 	if looper != null and is_instance_valid(looper):
 		looper.hit(item, velocity, at, zone)

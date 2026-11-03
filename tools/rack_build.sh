@@ -12,7 +12,7 @@ mkdir -p "$OUT/obj"
 CXX=${CXX:-c++}
 FLAGS="-O2 -std=c++14 -DTEST -include cstdio -I$MI -I$DS -I$DS/Utility -Inative/rack -w"
 SRC="native/rack/rack.cc native/rack/main.cc native/rack/modules_core.cc native/rack/modules_mutable.cc
- $(ls $MI/plaits/dsp/*.cc $MI/plaits/dsp/*/*.cc $MI/plaits/resources.cc $MI/rings/dsp/*.cc $MI/rings/resources.cc $MI/stmlib/dsp/*.cc $MI/stmlib/utils/*.cc 2>/dev/null)
+ $(ls $MI/plaits/dsp/*.cc $MI/plaits/dsp/*/*.cc $MI/plaits/resources.cc $MI/rings/dsp/*.cc $MI/rings/resources.cc $MI/clouds/dsp/*.cc $MI/clouds/dsp/pvoc/*.cc $MI/clouds/resources.cc $MI/stmlib/dsp/*.cc $MI/stmlib/utils/*.cc 2>/dev/null)
  $(ls $DS/Control/adsr.cpp $DS/Effects/chorus.cpp $DS/Effects/decimator.cpp $DS/Effects/overdrive.cpp $DS/Effects/wavefolder.cpp $DS/Drums/analogbassdrum.cpp $DS/Drums/analogsnaredrum.cpp $DS/Drums/hihat.cpp $DS/Filters/ladder.cpp $DS/Filters/svf.cpp $DS/Synthesis/oscillator.cpp $DS/Utility/dcblock.cpp 2>/dev/null)"
 OBJS=()
 pids=()

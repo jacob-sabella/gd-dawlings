@@ -2,7 +2,7 @@ class_name Modular
 extends RefCounted
 
 ## A modular synth's arithmetic (docs/spatial_loop.md part two, slice 51; idea #25): the modules the
-## wall has (ModularWall), the patch that joins them, and the sound a patch makes of a player's keys.
+## wall had (the old ModularWall), the patch that joins them, and the sound a patch makes of a player's keys.
 ##
 ## THE PATCH. Room state, the room's row `modular` (ROW): {cables: [[from, to], ...], knobs: {id: v}}.
 ## A cable runs from an output jack (OUTS, `vco1.out`) into an input jack (INS, `vcf.in`); an output

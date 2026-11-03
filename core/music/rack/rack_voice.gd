@@ -147,6 +147,21 @@ func cc(k: int, v: int) -> void:
 	engine.say("cc %d %d" % [k, v])
 
 
+## What the world played into its sockets (ModularWorld's events: [song, Modular.Event, socket, value]):
+## the levels and gates of the engine's WORLD module.
+func play_world(events: Array) -> void:
+	if not engine.running():
+		return
+	for e: Array in events:
+		var k := Modular.WORLD.find(e[2])
+		if k < 0:
+			continue
+		if int(e[1]) == Modular.Event.WORLD:
+			engine.say("world %d %f" % [k, float(e[3])])
+		elif int(e[1]) == Modular.Event.TRIG:
+			engine.say("trig %d" % k)
+
+
 ## Play through `t` (a track index), or nothing at 0.
 func set_track(t: int) -> void:
 	if t != track:
