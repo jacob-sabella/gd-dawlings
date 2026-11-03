@@ -729,3 +729,6 @@ func _bench_knob(k: int, at: Vector3) -> void:
 	knob.turned.connect(func(v: float) -> void: bench_turned.emit(k, v))
 	add_child(knob)
 	bench.append(knob)
+	# A lit collar under it, so the knob reads in the dark: the box's own colour, in the room's light.
+	var collar := ZoneKit.block(self, Vector3(0.05, 0.004, 0.05), at + Vector3(0, -0.012, 0), null, "BenchCollar%d" % k)
+	collar.material_override = _sign_material
