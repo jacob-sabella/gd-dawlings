@@ -957,16 +957,41 @@ button, exactly like a MIDI take.
   arithmetic is the same for a real one, but a card that misreports its input latency puts every
   take early or late by the error, and there is no calibration step for the input yet
   (`GuestAudio.offset_ms` is where it would go).
-- **Hearing yourself.** A guest hears their voice through the room or headphones, not through the
-  game: there is no input monitoring of the microphone.
+- **Hearing yourself.** Off by default, "Hear myself" on the panel plays the guest's input through
+  their own output (`GuestAudio.monitor_self`); it is only as quick as that sound card, and an
+  interface's own direct monitoring is quicker still.
 - **Stereo takes.** The two sides of the input are averaged into one channel.
-- **Live preview on the host while the guest plays.** The host hears a take only once it is
-  placed. Reaper's `/vkb_midi/` OSC path could play the notes late, as a preview, but it is not
-  wired.
+- **Live preview on the host while the guest plays** is a guest's offered device (below), and
+  only on the built-in engine. Reaper's `/vkb_midi/` OSC path could play the notes late, as a
+  preview, but it is not wired.
 - **Bank offsets.** The take's track index is the one the host's cache uses, as for every other
   item edit; with Reaper banked past track 1 this is the bank slot.
 - **The guest's own gear's latency.** With "Hear my keys" off, the guest hears its own synth,
   whose latency is not known here, so no correction is applied.
+
+### A guest's devices, offered and allowed
+
+A guest's audio input and keys are theirs: the host uses neither until the guest offers it and the
+host says yes, one kind at a time, either able to end it.
+
+- **The protocol.** `Session.offer_share(kind, label)` (`audio` or `midi`, a guest's) asks;
+  `answer_share(peer, kind, allow, track)` (the host's) allows it, onto a track for audio, or
+  declines or ends it; `withdraw_share` takes an offer back. State: `share_offers` and `shares` on
+  the host, `my_shares` and `my_share_track` on the guest, `shares_changed` for the panel. A guest
+  who leaves takes theirs with them. Nothing is kept past the session.
+- **Audio, live.** Once allowed, `GuestAudio` (`sharing_live`) streams 240-frame mono 16-bit
+  packets (`Session.send_live_audio`, `LIVE_CHANNEL`, unreliable and ordered) which the host takes
+  only from an allowed guest, at most `LIVE_PACKET_MAX` bytes each. `GuestLive` queues each guest's
+  sound in a `LiveSource` (a 20ms prebuffer, nothing held past 100ms, the oldest dropped) and hands
+  it to `InputMonitor.live`, which plays it through the chosen track's bus like any monitored
+  input: its chain, fader, sends and meters. It is for hearing, and is not kept: the recorded take
+  is the guest's own, placed by song position (above), so the stream's latency, roughly 80 to 150ms
+  plus the network, never moves a take.
+- **Keys.** `GuestPlay` sounds a guest's notes and wheels on the host's instrument plugin only for
+  a guest the host has allowed `midi`; taking it away lets go of what they hold.
+- **The panel.** A guest's SHARE WITH THE HOST toggles show where each offer stands; the host's
+  GUEST DEVICES list shows each offer to allow (with a track, for audio) or decline, and each
+  allowed one to end. A new offer is a notice.
 
 ### Not done
 
