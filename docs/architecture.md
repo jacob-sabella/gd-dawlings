@@ -496,7 +496,7 @@ not colour, says which is which). Where each station stands is still the venue's
 | MIXING | the control room, a ring round the seat | desk, timeline, rack, deck and platter, patch stand, patch wall, EQ wall, stage table, station board |
 | RHYTHM | straight ahead turned round from the desk | drum riser with the hand drums and the looper; the lattice and its marble run; the venue's instrument on the back wall behind the riser |
 | HARMONY & STRINGS | front right | the bricks table (fifths wheel, chord ledge, section blocks); harp, music box and string spool in a row facing it; handbells across its far end |
-| SYNTH & SOUND DESIGN | back right | the keyboard stand and modular wall; theremin, grain cloud and sampler round a middle in front of it |
+| SYNTH & SOUND DESIGN | back right | the keyboard stand and modular rack; theremin, grain cloud and sampler round a middle in front of it |
 | VOCALS | back left | the booth (3.4 x 3.1 m, a 1.2 m door), the lyric board, room for a talk box |
 | TAPE & TOYS | front left | prop shelf and cassette rack on the wall, hoop and Tour case across the middle from them; the items' homes |
 
@@ -2358,141 +2358,48 @@ either side, clear of every solid taller than the hands' lowest and on walkable 
   `Studio._follow_theremin` reaches for its source while it sounds, its field is hovered or this
   player stands within ChordHarp.NEAR of it.
 
-A modular synth wall (slice 51). `ModularWall` (`hardware/modular/modular_wall.gd`) is a Surface,
-station `modular` (LIVE, mounted in the `synth` zone, `"surface": &"modular"`), hung at
-`Venue.modular_spot` over the keyboard stand (ZoneKit.keyboard_stand): its panel's face
-MODULAR_BACK in from the zone's middle and its foot MODULAR_BOTTOM up, facing the room, slid along
-the stand by OFF_MIDDLE so the panel and the plaque beside it stand over the stand together. The
-venue's own rack dressing ("Module..." under `Zone_synth`) gives way to it (`ZoneKit.yield_rack`).
-It is in F's round (`parks` false: a place, it stays home while something is brought), and a visit
-walks to its station's seat (`Studio._walk_to_station`), since where `seat_for` would stand a desk
-the bricks table stands.
+The modular room (replaces the slice 51-53 wall). `RackWall` (`hardware/rack/rack_wall.gd`) is a
+Surface, station `modular` (LIVE, mounted in the `synth` zone), hung at `Venue.modular_spot` over
+the keyboard stand as before, but now a case of `RackLayout.ROWS` (2) rows by `COLS` (16) columns that
+holds any of the engine's 25 modules, with a palette under it: a key for each group (Source, Voice,
+Shape, Mod, Time, Utility, Mix and PRESETS) and a key for each module of the group or each preset, PLAY
+(the computer keys), TRK (the track it sounds through) and REC. Third-party DSP is pinned, never copied
+(`THIRD_PARTY_NOTICES.md`): Mutable Instruments' STM32 projects (Plaits, Rings, the Clouds reverb, MIT)
+and DaisySP (MIT) are submodules under `vendor/`, compiled into the helper.
 
-- **Eleven modules.** `Modular.MODULES` from the left: KEYS (this player's keys' pitch, gate and
-  velocity out, its newest note lettered and a GATE lamp, and PLAY, a `EqWall.WallKey` that takes
-  the computer keys on a KeyCatcher of the studio's, `modular_keys`), LFO, NOISE, VCO 1 and 2, MIX
-  of four, VCF, ENV 1 and 2, VCA and OUT, whose tag says the road and its figure. Its jacks are
-  `ModularJack`s (the jack mesh `PatchCable.JACK_MESH`, an output's on a pale plate, a ring that lights brighter
-  and grows where a carried cable could go and more where it will), its knobs the console's
-  `Knob`, its cables `PatchCable`s from the room's patch; under it, on the stand's upper deck,
-  thirteen `ModularTouch` keys (the wheel moves them an octave). A lamp on a stalk lights it.
-- **The patch is the room's.** The row `modular` {cables: [[from, to]], knobs: {id: v}}
-  (`Modular.clean`, `default_patch`: KEYS to VCO 1 to the VCF to the VCA to OUT, KEYS' gate to ENV 1
-  to the VCA). The room verbs `modular_patch` [from, to, song] (an empty `to` pulls the cable at
-  `from`) and `modular_knob` [id, v, song] are answered by `Modular.answer_patch` and `answer_knob`
-  (refused: an unknown jack, output to output or input to input, an input with a cable in it
-  already, pulling nothing); the studio's `ask_modular_patch`/`ask_modular_knob` do it on the host
-  and predict it on a guest, and `apply_room` puts this guest's unanswered asks back on top, as
-  the patchbay's `patch`. The wall never changes its own patch: it asks (`patch_asked`,
-  `knob_set`) and shows the room's answer (`show_patch`).
-- **A knob's turn is streamed, not asked.** As it turns the wall says so every change
-  (`knob_turning`), and at most once each STREAM_GAP_MSEC (`knob_streamed`, on an injectable
-  `clock`), which is what every voice here hears (slice 52: `Studio._on_knob_streamed`, so this
-  player hears of their own turn exactly what the band and a take get) and what goes out as
-  `Session.send_knob(id, v, song)`: reliable, on
-  its own GESTURE_CHANNEL, passed by the host to everyone else (`_pass_knob` refuses a knob that is
-  not one and clamps the value), heard as `Session.knob_turned`, which turns the wall's knob and the
-  voice. Only the let-go, once the knob has rested for SETTLE, is a `modular_knob` ask.
-- **Within reach.** The wall's jacks, knobs, keys and the mount's handle take the pointer only
-  while this player is at it (`within_reach`: standing in front of the stand, MODULAR_NEAR to
-  MODULAR_FAR out and MODULAR_SIDE either side where the wall's own seat is the nearest station's,
-  `Studio._station_seats`, or with it visited or brought), so a click from the desk never lands on
-  a 2 cm jack six metres off, and a player at the harp, the music box or the bells beside the stand
-  plays them, not the patch; its plaque's keys always do.
-- **Cables.** Each is a PatchCable at CABLE_SAG; one across more than LONG_CABLE hangs to
-  CABLE_FLOOR under the lowest row of jacks (`cable_sag`), so a busy patch keeps its jacks' names
-  in view.
-- **The DSP, twice.** `Modular` (`core/music/modular/modular.gd`) is the arithmetic in GDScript,
-  `render(patch, events, from, frames)` at 48 kHz in blocks of 64, pure and deterministic (an event
-  at the start of the block it falls in), and runnable a block at a time (`run`, `apply`). Every
-  input reads its source a sample late, only modules whose sound reaches OUT run, and last-note
-  priority keys feed KEYS. `native/modular.c`, included by `native/keys.c`, is the same in C in
-  double precision: the helper takes `mod on N`, `mod clear`, `mod cable X Y`, `mod cut X` and
-  `mod knob ID V` lines (`NativeKeys.modular_lines`, a knob with 17 digits), plays this player's
-  keys through it while `mod on 1` (the tine silent), and `wait N` in `--render` renders N frames
-  before the lines after it. The suite holds the two within 1e-4.
-- **The road.** `ModularVoice` (`core/music/modular/modular_voice.gd`) plays this player's keys
-  through the room's patch while `engaged` (`Studio._follow_modular`: at the wall, or PLAY on): on
-  the helper where the keys' MonitorSynth has one (`modular_patch` and `modular_on`), else on
-  MONITOR through Godot, a Modular of its own on a thread, the MonitorSynth handing it its notes
-  (`MonitorSynth.modular`) instead of playing its tine. `tag()` is OUT's: `HELPER · 5.3 ms`,
-  `THROUGH GODOT · 42 ms`, or how to play it; while a take goes through the wall, OUT says REC on a
-  line of its own at a module title's size under it (`ModularWall.set_recording`).
-
-The modular, recorded and heard by the band (slice 52):
-
-- **What a player sends at the wall is the modular's.** While `Modular.SOURCE` is in GuestMidi's
-  reach (`through_modular`), every note and control their keys send goes out with that source,
-  decided at the note-on and kept for its note-off (`GuestMidi._sent_as`), since everything the
-  keys sound then plays the patch.
-- **Bandmates hear it at the wall.** Presence routes the modular's notes and controls by source
-  alone (`modular_heard`, `modular_control_heard`) to the studio, which keeps a `ModularVoice` for
-  each bandmate playing it (`Studio.modular_heard`): with a `speaker` (the wall) it plays the notes
-  it is handed through the room's patch on a Modular of its own through Godot, out of an emitter at
-  the wall (Foley's, on GEAR). The room's patch, the knob streams and the cables change every voice
-  here (`_modular_voices`), and a bandmate's last note-off rests their wheel. Quiet for
-  `rest_after` (5 s) with no note held, a bandmate's voice rests (`engaged` off: no thread, no
-  emitter) and their next note wakes it on the patch as it stands. Gone, their voice goes.
-- **A take is what was played, not sound.** `ModularTake` (`core/music/modular/modular_take.gd`)
-  is the patch as a take began and every event after it with its song: notes, the wheel (rested at
-  the last note-off on every end), knobs as streamed and cables as the room took them.
-  `render()` is Modular.render of it from its start for its span; `write` puts its 16-bit WAV in
-  AudioTake.DIR. `Session.modular_takes` (`ModularTakes`, `core/session/modular_takes.gd`) holds
-  them. GuestMidi begins this player's own (`mine`) when a take begins with the modular in reach
-  or its first note goes through it (`_take_modular`), feeds it the notes and bends it sends, and at
-  the end calls `finish` with the take's tracks. The notes sent as the modular's are not in the
-  MidiTake; whatever else the take holds (the harp before the player walked up to the wall, the keys
-  after they left it while the take rolled on) is, and goes in by `DAW.insert_midi_take` beside the
-  audio. `Session.send_knob`, `_pass_knob` and `_knob` feed it knobs; the studio's
-  `_show_modular(patch, song)` feeds it each cable pulled or put in and each knob let go that no
-  hand here is turning, at the song the room's verb was asked at (`_take_modular_change`).
-- **The host renders it from what reached it.** A guest marks its take begun and ended twice
-  (`Session.send_modular_take`): `_modular_take_keys` on KEYS_CHANNEL behind its notes and
-  `_modular_take_gestures` on GESTURE_CHANNEL behind its knobs, all reliable. The host takes that
-  guest's modular notes (`heard_note`, from `_note_up`) and wheel (`heard_bend`, from
-  `_modular_bend_up`: each move the take keeps, sent again reliable on KEYS_CHANNEL by
-  `Session.send_modular_bend`, since the live wheel rides CONTROLS_CHANNEL unreliable and a lost
-  move would make the host's render differ) from the keys' begin to the keys' end, with what they hold at the begin at the
-  take's start, and the room's knobs and cables from the gestures' begin, when it takes the patch
-  as it hears it (`ModularTakes.patch`, the studio's `heard_modular_patch`), until it is placed.
-  With both ends in and SETTLE (0.25 s) more, or ENDS_WAIT after one, it renders the take and
-  writes its WAV (the encode and the overview too) on a worker thread, and on the main thread
-  inserts it on the take's tracks at its start as an audio take named `modular`, on the player's
-  behalf (`placed`). A take past AudioTake.MAX_SECONDS is cut there and its player told. A host's own take is `mine`, placed the same
-  way. Everything is stamped, so a sweep heard late lands where it was turned, and the host's render
-  is the player's own (the probe checks the digests).
-
-The world plugs into the modular (slice 53):
-
-- **A world socket is an output of the patch.** `Modular.WORLD` names twelve (`world:weather`,
-  `world:drips`, `world:venue`, `world:ring_1`..`world:ring_8`, `world:marbles`; `is_output`,
-  `is_world`, `world_title`), so a cable from one is a `[from, to]` in the room's `modular` row,
-  asked with `modular_patch` and answered, mirrored and predicted as any other. Each carries a level
-  (`Modular.world`, Event.WORLD) and a gate (`trig`, Event.TRIG: open WORLD_GATE_BLOCKS, 48 ms,
-  shut a block first if already open). The ENVs' gates (`GATE_INS`) read the gate and every other
-  input the level. The output slots run the modules' outs, `_ZERO`, the twelve levels, the twelve
-  gates (`_slot`, `_reads`); native/modular.c is the same (`mod_world`, `mod_trig`, `mod_slot`), and
-  the keys helper reads `mod world NAME V` and `mod trig NAME` (`NativeKeys.modular_world_line`).
-- **What plays into them is worked out, not sent.** `ModularWorld`
-  (`core/music/modular/modular_world.gd`, `Studio.modular_world`) is pure: `events(from, to)` is
-  [song, WORLD or TRIG, socket, value] in order from the song clock and the rows (the weather's
-  `Weather.level` each sixteenth and a gate each `Weather.drops`; the cave's drips, the venue
-  instrument's strikes at their item_hit `song` and the marbles' bells as pulses; each looper layer's
-  own notes' velocities as its ring's level, `ring_level`), the same on every machine and nothing of
-  it on the wire. `levels_at` is where the levels stand at a moment. `follow` hands each frame's span
-  on (`fired`) to every ModularVoice here (`Studio._on_world_fired`): this player's, each bandmate's,
-  and the studio's world-only voice at the wall (`modular_world_voice`), engaged while a world cable
-  is in the patch and the wall is in view. A take hears it once, when finished or placed
-  (`ModularTakes.world` = `for_take`, `ModularTake.hear_world`), so the host's render has it too.
-- **The sockets stand where the sound comes from.** `WorldSocket`
-  (`core/music/modular/world_socket.gd`, a ControlAffordance, group `modular_world_sockets`): beside
-  the weather's track jack (the drips' at the cave's pool), the venue instrument's, on the marble
-  run's tray, and one per looper ring on a rod beside the rings (`LooperRings._show_sockets`). A
-  click, dwell or press steps its cable through the wall's free inputs (`Modular.step_input`,
-  `free_inputs`, WORLD_INPUTS, around to unpatched), P and Shift+P over it at a desk likewise
-  (MouseInteractor), each step asked of the host (`Studio._on_world_step`). Its long cable is a
-  CableSweep along the floor (`WorldSocket.route`, `CableSweep.rest_on`), and its track jack row is
-  untouched, so one socket can record onto a track and drive the filter at once.
+- **The engine.** `native/rack` is a C++ helper: a generic graph of modules (`modules.json` is its
+  catalogue, `RackCatalogue`), cables that sum into an input, audio in ±1, pitch in octaves from C4,
+  gates 0/1, knobs 0..1, `BLOCK`=24 frames at 48 kHz (Plaits renders its native 12 twice). It renders
+  offline (`--render`) or live: float32 stereo on stdout paced by the helper's own clock, `meter ID
+  PEAK @beat X` on stderr. `RackEngine` (`core/music/rack/rack_engine.gd`) runs it and offers the audio
+  as a `Source`, with a tape for takes. Commands: add, remove, clear, cable, uncable, cut, knob, bpm,
+  play BEATS, stop, note_on/off, bend, cc, run, patch, quit.
+- **The patch is the room's.** The room row `rack` {patch: {modules: {id: {type, at, knobs}}, cables:
+  [[from, to]]}, track} (`RackPatch`; `sanitize` and `RackLayout.tidy` keep it in the case). Every edit
+  is the one room ask `rack` [op, args]: `RackPatch.answer` takes add, remove (not OUT), move, cable,
+  pull, pull_one, knob and preset, and the studio answers `track` itself (the track the rack sounds
+  through, round the song's tracks then none). `Studio.ask_rack` shows it at once on a guest and rolls
+  it back with the host's word as other asks do; `_show_rack` is the one place the wall and voice take
+  a row.
+- **It sounds through a track.** The engine runs on the host alone (`RackVoice`,
+  `core/music/rack/rack_voice.gd`, started lazily when someone is at the rack, the patch is edited, or
+  the transport runs). Its stream is an `InputMonitor.feeds` entry for the chosen track, so it goes
+  through that track's chain, fader, sends and meters like any monitored input and everyone hears it in
+  the mix. It follows the song: DAW bpm, play from the song's beat, stop and seeks. A guest's keys at
+  the rack go out as `Modular.SOURCE` notes and the host plays them (`Presence.modular_heard`); the
+  local player's keys are redirected to the voice (`MonitorSynth.redirect`) while they are engaged.
+- **Recorded.** REC (or the song recording with a track chosen) tapes what the rack plays and, at the
+  stop, puts it on the rack's track as audio at the song position the take began (`DAW.import_audio`),
+  so the rack feeds the arrangement, the track's FX and the export like any recorded audio. The old
+  MIDI-through-the-wall take system (`ModularTakes`) is off (`enabled = false`).
+- **Lit by what it plays, in the venue's mood.** `RackMood.palette(venue_id)` gives the venue's lamp
+  colour, hit colour and glow strength for all 14 venues; the wall's halo and light follow the rack's
+  level and pulse on a hit (`RackWall.glow_with`). The voice's level also feeds `Venue.pulse`, so the
+  venue's own lights move to it.
+- **Pointer.** Jacks (`RackJack`) take a drag from an output to an input; dragging from an input that
+  has a cable lifts the newest. Knobs stream at most `STREAM_GAP_MSEC` and the let-go is the ask.
+  Controls take the pointer only at the rack (`Studio.at_modular`, the nearest station's seat) or
+  when it is visited.
 
 A sample as a cloud of grains (slice 54). `GrainCloud` (`core/music/grain_cloud.gd`) is a plaster
 plinth with a turned brass bowl on its cap and two brass posts up to a rail under the cloud's front
