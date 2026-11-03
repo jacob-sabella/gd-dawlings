@@ -44,6 +44,10 @@ var make_source: Callable = func(device: String) -> MixSource:
 ## outside every frame; the monitor never opens or closes these, only plays them.
 var live := {}
 var live_sources := {}
+## Sound the room itself makes, played through a track the same way: {track index: MixSource}, set by
+## whoever makes it (the modular room's RackVoice), so a guest's feed and the room's never overwrite
+## each other.
+static var feeds := {}
 ## {device: MixSource}
 var _sources := {}
 ## {track index: {bus: AudioStreamPlayer}}
@@ -105,9 +109,15 @@ func drive(state: MixState, outlets_of: Callable) -> void:
 	_routes = []
 	_lock.unlock()
 	var now := plan(state)
-	for index in live:
-		if live_sources.has(live[index]):
-			now[index] = "live:" + String(live[index]).trim_prefix("live:")
+	var heard_live := live.duplicate()
+	var heard_sources := live_sources.duplicate()
+	for index in feeds:
+		var key := "live:feed%d" % int(index)
+		heard_live[index] = key
+		heard_sources[key] = feeds[index]
+	for index in heard_live:
+		if heard_sources.has(heard_live[index]):
+			now[index] = "live:" + String(heard_live[index]).trim_prefix("live:")
 	var devices := {}
 	for index in now:
 		devices[GuestAudio.device_of(now[index])] = true
@@ -122,8 +132,8 @@ func drive(state: MixState, outlets_of: Callable) -> void:
 	for device in devices:
 		if String(device).begins_with("live:"):
 			# Handed in whole; swapped if the guest's source was made anew.
-			if live_sources.has(device):
-				_sources[device] = live_sources[device]
+			if heard_sources.has(device):
+				_sources[device] = heard_sources[device]
 			continue
 		if _sources.has(device) or _failed.has(device):
 			continue

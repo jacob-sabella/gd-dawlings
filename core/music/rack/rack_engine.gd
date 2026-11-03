@@ -188,9 +188,13 @@ func poll() -> void:
 	meters = m
 
 
-## The engine's sound as a source a track can monitor (InputMonitor.live_sources).
+## The engine's sound as a source a track can monitor (InputMonitor.feeds), with a tape that can be
+## kept running to catch what is played, for a take.
 class Source extends MixSource:
 	var engine: RackEngine
+	var _tape := PackedVector2Array()
+	var _taping := false
+	var _lock := Mutex.new()
 
 	func _init(e: RackEngine) -> void:
 		engine = e
@@ -198,11 +202,64 @@ class Source extends MixSource:
 	func start() -> bool:
 		return engine.running()
 
+	func stop() -> void:
+		pass
+
 	func read() -> PackedVector2Array:
-		return engine.read()
+		var got := engine.read()
+		if _taping and not got.is_empty():
+			_lock.lock()
+			_tape.append_array(got)
+			_lock.unlock()
+		return got
+
+	func tape(on: bool) -> void:
+		_lock.lock()
+		if on and not _taping:
+			_tape = PackedVector2Array()
+		_taping = on
+		_lock.unlock()
+
+	func taking() -> bool:
+		return _taping
+
+	func take_tape() -> PackedVector2Array:
+		_lock.lock()
+		var out := _tape
+		_tape = PackedVector2Array()
+		_lock.unlock()
+		return out
 
 	func describe() -> String:
 		return "the modular room"
 
 	func latency_ms() -> float:
 		return 6.0
+
+
+## Frames as a 16-bit stereo WAV file.
+static func write_wav(path: String, frames: PackedVector2Array) -> bool:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return false
+	var bytes := frames.size() * 4
+	f.store_buffer("RIFF".to_ascii_buffer())
+	f.store_32(36 + bytes)
+	f.store_buffer("WAVEfmt ".to_ascii_buffer())
+	f.store_32(16)
+	f.store_16(1)
+	f.store_16(2)
+	f.store_32(RATE)
+	f.store_32(RATE * 4)
+	f.store_16(4)
+	f.store_16(16)
+	f.store_buffer("data".to_ascii_buffer())
+	f.store_32(bytes)
+	var pcm := PackedByteArray()
+	pcm.resize(bytes)
+	for i in frames.size():
+		pcm.encode_s16(i * 4, int(clampf(frames[i].x, -1.0, 1.0) * 32767.0))
+		pcm.encode_s16(i * 4 + 2, int(clampf(frames[i].y, -1.0, 1.0) * 32767.0))
+	f.store_buffer(pcm)
+	f.close()
+	return true

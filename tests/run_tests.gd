@@ -50788,3 +50788,44 @@ func _test_a_rack_engine_makes_the_sound_the_patch_says() -> void:
 			if is_nan(f.x) or is_inf(f.x) or absf(f.x) > 2.0:
 				sane = false
 		check("%s runs on its own, hot, without breaking" % type, sane)
+
+
+func _test_a_rack_voice_plays_live_through_a_track() -> void:
+	if not RackEngine.available():
+		print("  (no engine here: no sound to check)")
+		return
+	var voice := RackVoice.new()
+	add_child(voice)
+	voice.transport_override = func() -> Dictionary: return {"playing": false, "beats": 0.0, "bpm": 100.0}
+	voice.set_patch(RackPatch.default_patch())
+	check("the voice starts the engine", voice.start())
+	check("with a patch the engine has", voice.running())
+	voice.set_track(3)
+	check("it plays through its track", InputMonitor.feeds.get(3) == voice.source)
+	voice.set_track(4)
+	check("and only the track it was moved to", not InputMonitor.feeds.has(3) and InputMonitor.feeds.has(4))
+	check("recording needs something playing it", voice.record_start(1.0))
+	voice.note_on(60, 110)
+	await get_tree().create_timer(0.8).timeout
+	var heard := PackedVector2Array()
+	for i in 20:
+		heard.append_array(voice.source.read())
+		await get_tree().create_timer(0.02).timeout
+	var peak := 0.0
+	for f in heard:
+		peak = maxf(peak, absf(f.x))
+	check("a held key is heard from the live stream", heard.size() > 4000 and peak > 0.02)
+	check("the room's lights hear the rack", voice.level > 0.0 or voice.meters.size() > 0)
+	voice.knob("lfo1", "rate", 0.5)
+	voice.note_off(60)
+	var took := voice.record_stop()
+	check("the take is kept: frames were caught", int(took.get("frames", 0)) > 4000 or took.has("error"))
+	check("a take is only kept once", voice.record_stop().has("error"))
+	# A patch with a module taken out and another put in reaches the engine without a restart.
+	var p := RackPatch.default_patch()
+	var added := RackPatch.add(p, "reverb", Vector2i(9, 0))
+	voice.set_patch(p)
+	check("a patch changed live is told as a difference", voice._sent["modules"].has(added))
+	voice.shutdown()
+	check("shutting down lets the track go", not InputMonitor.feeds.has(4) and not voice.running())
+	voice.queue_free()
