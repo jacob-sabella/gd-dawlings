@@ -5514,7 +5514,8 @@ func _test_every_light_in_the_room_comes_out_of_something() -> void:
 	var every_light := studio.find_children("*", "OmniLight3D", true, false)
 	var carried := every_light.filter(func(n): return studio.body.is_ancestor_of(n))
 	var lamps := every_light.filter(func(n): return not studio.body.is_ancestor_of(n) \
-			and not (studio.rack_wall != null and studio.rack_wall.is_ancestor_of(n)))
+			and not (studio.rack_wall != null and studio.rack_wall.is_ancestor_of(n)) \
+			and not (studio.modular_annex != null and studio.modular_annex.is_ancestor_of(n)))
 	var stands := studio.studio_set.get_children().filter(
 			func(n): return n.is_in_group(&"lamp_stand"))
 	check("every practical in the table is a light (%d of %d)"
@@ -27336,9 +27337,16 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 					or wall.jacks.is_empty() or wall.knobs.is_empty() \
 					or wall.touch_keys.size() != RackWall.TOUCH_COUNT or not studio.focus.surfaces.has(wall):
 				return false
-			var zone := studio.venue.get_node_or_null("Zone_synth")
-			if zone != null and zone.get_children().any(func(n: Node) -> bool:
-					return n is Node3D and String(n.name).begins_with("Module") and (n as Node3D).visible):
+			# In the modular room built onto the live room: inside it, a doorway cut in the live room's wall
+			# to walk in by, and its seat on the walkable floor.
+			var room_inside := ModularAnnex.inside(studio.venue.live_room_half())
+			if not room_inside.has_point(Vector2(spot.origin.x, spot.origin.z)) \
+					or studio.venue.get_node_or_null("ModularAnnex") == null:
+				return false
+			var seat: Variant = Stations.seat(studio.venue, &"modular", studio.walker.fits)
+			if seat == null or not studio.walker.fits(Vector2((seat as Transform3D).origin.x, (seat as Transform3D).origin.z)):
+				return false
+			if not studio.walker.fits(Vector2(studio.venue.live_room_half() + 0.1, ModularAnnex.DOOR_Z)):
 				return false
 			return wall.find_child("Plaque", true, false) != null
 		&"lyrics":

@@ -268,7 +268,7 @@ const ALL := [
 		# it. Mounted in the zone, not a trolley. Its frame's top is the case's top, its foot the touch
 		# keys' near edge; its seat as far back as the bricks table behind it lets, and a headset's
 		# (`reach`) at the decks' front, the panel in arm's reach over them.
-		"id": &"modular", "title": "MODULAR", "area": LIVE, "zone": &"synth", "air": 0.5,
+		"id": &"modular", "title": "MODULAR", "area": LIVE, "zone": &"", "air": 0.5,
 		"spot": &"modular_spot", "at": RackWall.LOOK,
 		"frame": [RackWall.FRAME_TOP, RackWall.FRAME_FOOT],
 		"seat": 2.0, "reach": 0.8, "surface": &"modular",

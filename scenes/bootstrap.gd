@@ -325,6 +325,8 @@ func _ready() -> void:
 	# `--modular`: the rack with the drum machine preset put in, for a shot of it, and an A held on its
 	# touch keys.
 	if args["modular"] and studio.rack_wall != null:
+		studio._rack_wake()
+		print("RACKRUN ", studio.rack_voice.running(), " ", RackEngine.available())
 		studio.ask_rack("preset", ["acid_line"])
 		studio.rack_wall.touch_keys[9].grab_begin(studio, studio.rack_wall.touch_keys[9].global_position)
 	var view: Vector2 = args["view"]

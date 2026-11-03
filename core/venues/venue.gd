@@ -747,12 +747,18 @@ const MODULAR_BOTTOM := 1.26
 
 
 func modular_spot() -> Variant:
-	var at := zones()
-	if not at.has(&"synth"):
+	if venue_id() == ROULETTE_ID:
 		return null
-	var c := (at[&"synth"] as AABB).get_center()
-	return Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(c.x + MODULAR_BACK, MODULAR_BOTTOM,
-			c.z - RackWall.OFF_MIDDLE))
+	return ModularAnnex.rack_spot(live_room_half())
+
+
+## Everywhere on foot: the venue's rooms, and the modular room built onto the live room's side with
+## its doorway.
+func walk_rooms() -> Array[Rect2]:
+	var out := rooms()
+	if venue_id() != ROULETTE_ID:
+		out.append_array(ModularAnnex.floors(live_room_half()))
+	return out
 
 
 ## Where the lyric board stands (LyricBoard, docs/spatial_loop.md part two, slice 56), in studio space:

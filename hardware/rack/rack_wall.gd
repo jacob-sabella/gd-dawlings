@@ -36,6 +36,8 @@ const ROW_GAP := 0.02
 const PALETTE_TALL := 0.15
 const TALL := ROW_TALL * ROWS + ROW_GAP * (ROWS - 1) + PALETTE_TALL
 const BORDER := 0.025
+## The floor, below the case's foot (Venue.MODULAR_BOTTOM).
+const MODULAR_FLOOR := 1.26
 const CASE_DEEP := 0.05
 const KNOB_PITCH := 0.055
 const KNOB_ROW := 0.062
@@ -118,6 +120,14 @@ var _vu_on: StandardMaterial3D
 var _vu_peak: StandardMaterial3D
 var _edge_material := StandardMaterial3D.new()
 var _bands := {}
+## The room's own part of the rack: light pillars standing in an arc around the player, one for each
+## module (in order across the case), each as tall as its module is loud and in its module's colour.
+const PILLARS := 12
+const PILLAR_RADIUS := 1.55
+const PILLAR_TALL := 1.7
+var _pillars: Array[MeshInstance3D] = []
+var _pillar_for: Array = []
+var _pillar_level: Array[float] = []
 
 
 func _ready() -> void:
@@ -220,6 +230,7 @@ func _build_case() -> void:
 		post.add_to_group(&"presentation_chrome")
 		_put(post)
 	_build_dressing()
+	_build_pillars()
 
 
 ## What makes the case a thing to look at: the level bar along its top, glowing edge lines down its
@@ -262,6 +273,55 @@ func _build_dressing() -> void:
 			rail.position = Vector3(0, _row_foot(row) + top, -0.001)
 			rail.material_override = Materials.brushed_metal()
 			_put(rail)
+
+
+func _build_pillars() -> void:
+	for n in PILLARS:
+		# Fanned from the left round the front to the right, leaving the middle open to see the case by.
+		var side := -1.0 if n < PILLARS / 2 else 1.0
+		var k := (n % (PILLARS / 2)) / float(PILLARS / 2 - 1)
+		var angle := deg_to_rad(side * lerpf(30.0, 88.0, k))
+		var pillar := MeshInstance3D.new()
+		pillar.name = "Pillar%d" % n
+		var b := BoxMesh.new()
+		b.size = Vector3(0.07, 1.0, 0.07)
+		pillar.mesh = b
+		pillar.position = Vector3(sin(angle) * PILLAR_RADIUS, -MODULAR_FLOOR + 0.03, cos(angle) * PILLAR_RADIUS + 0.3)
+		pillar.material_override = _emissive(Color(0.3, 0.3, 0.3), 2.0)
+		pillar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		pillar.add_to_group(&"presentation_chrome")
+		panel.add_child(pillar)
+		_pillars.append(pillar)
+		_pillar_level.append(0.0)
+		_pillar_for.append("")
+	_seat_pillars()
+
+
+## Which module each pillar follows: the modules in order across the case, the rest left dark.
+func _seat_pillars() -> void:
+	var ids: Array = patch["modules"].keys() if patch.has("modules") else []
+	ids.sort_custom(func(a, b): 
+		var pa: Array = patch["modules"][a]["at"]
+		var pb: Array = patch["modules"][b]["at"]
+		return int(pa[0]) * 4 + int(pa[1]) < int(pb[0]) * 4 + int(pb[1]))
+	for n in _pillars.size():
+		_pillar_for[n] = ids[n] if n < ids.size() else ""
+		var m := _pillars[n].material_override as StandardMaterial3D
+		if _pillar_for[n] == "":
+			m.albedo_color = Color(0.1, 0.1, 0.1)
+			m.emission = Color(0.1, 0.1, 0.1)
+		else:
+			var t := _tint_of(RackPatch.type_of(patch, _pillar_for[n]))
+			m.albedo_color = t
+			m.emission = t
+		_grow_pillar(n, 0.0)
+
+
+func _grow_pillar(n: int, level: float) -> void:
+	var h := 0.2 + clampf(level, 0.0, 1.0) * (PILLAR_TALL - 0.2)
+	_pillar_level[n] = level
+	_pillars[n].scale = Vector3(1, h, 1)
+	_pillars[n].position.y = -MODULAR_FLOOR + 0.03 + h * 0.5
 
 
 func _emissive(colour: Color, energy: float) -> StandardMaterial3D:
@@ -685,6 +745,7 @@ func show_patch(to: Dictionary) -> void:
 		for id in patch["modules"]:
 			_build_module(id)
 		_build_blanks()
+		_seat_pillars()
 		_build_palette()
 		for key in held:
 			if knobs.has(key):
@@ -720,7 +781,20 @@ func show_knob(id: String, k: String, v: float) -> void:
 
 
 ## How loud each module is now ({id: peak}), on its lamp.
+## The module meters in the order of the modules across the case, for the room's own lights.
+func module_levels(meters: Dictionary) -> Array:
+	var out := []
+	for id in _pillar_for:
+		out.append(float(meters.get(id, 0.0)) if id != "" else 0.0)
+	return out
+
+
 func show_meters(meters: Dictionary) -> void:
+	for n in _pillars.size():
+		var id: String = _pillar_for[n]
+		var want := clampf(float(meters.get(id, 0.0)), 0.0, 1.0) if id != "" else 0.0
+		var now := _pillar_level[n]
+		_grow_pillar(n, lerpf(now, want, 0.5 if want > now else 0.15))
 	for id: String in _lamps:
 		var on := float(meters.get(id, 0.0)) > 0.02
 		var lamp: MeshInstance3D = _lamps[id]

@@ -313,6 +313,7 @@ var marble_balls: Array = []
 ## engine), the room's row `rack` {patch, track} (RackPatch), and the computer keys as its keys.
 var rack_wall: RackWall
 var rack_voice: RackVoice
+var modular_annex: ModularAnnex
 var rack_row := {"patch": RackPatch.preset(&"keys_voice"), "track": 0}
 ## The lyric board in the vocal booth (LyricBoard, docs/spatial_loop.md part two, slice 56), stood
 ## again with each venue at its `lyrics_spot`; null where there is no booth and in AR. What it shows is
@@ -1286,7 +1287,7 @@ func _lights_out(seconds: float) -> void:
 func _walkable() -> Array[Rect2]:
 	var out: Array[Rect2] = [_room_bounds()]
 	if venue != null:
-		out.append_array(venue.rooms())
+		out.append_array(venue.walk_rooms())
 	return out
 
 
@@ -5443,11 +5444,20 @@ func _stand_the_modular() -> void:
 				focus.release()
 			focus.surfaces.erase(rack_wall)
 		return
-	ZoneKit.yield_rack(venue)
+	_stand_the_annex()
 	var at := _venue_to_set(spot as Transform3D)
 	mount.seat(rack_wall.surface_id, func() -> Transform3D: return at)
 	if focus != null and not focus.surfaces.has(rack_wall):
 		focus.surfaces.append(rack_wall)
+
+
+## The modular room built onto this venue's live room: its walls, its doorway cut through the live
+## room's wall, its lights in the venue's mood.
+func _stand_the_annex() -> void:
+	if venue == null or venue.get_node_or_null("ModularAnnex") != null:
+		return
+	ModularAnnex.cut_the_wall(venue)
+	modular_annex = ModularAnnex.build(venue)
 
 
 ## An edit of the rack, `op` and `args` as RackPatch.answer takes them (or `track` [step]): done on the
@@ -5674,6 +5684,9 @@ func _follow_modular() -> void:
 	if rack_voice.running():
 		rack_wall.show_meters(rack_voice.meters)
 		rack_wall.glow_with(rack_voice.level, rack_voice.hit)
+		if modular_annex != null and is_instance_valid(modular_annex):
+			modular_annex.glow_with(rack_voice.level, rack_voice.hit)
+			modular_annex.show_levels(rack_wall.module_levels(rack_voice.meters))
 		rack_wall.set_recording(rack_voice.recording())
 		# The song recording catches the rack: begun at the take's start, kept where it ends.
 		if DAW.state != null and int(rack_row["track"]) > 0:
@@ -5684,6 +5697,8 @@ func _follow_modular() -> void:
 				_rack_auto_take = false
 	else:
 		rack_wall.glow_with(0.0, 0.0)
+		if modular_annex != null and is_instance_valid(modular_annex):
+			modular_annex.glow_with(0.0, 0.0)
 
 
 # --- the sampler (docs/spatial_loop.md part two, slice 26) ----------------------------------
