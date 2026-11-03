@@ -794,6 +794,7 @@ func _ready() -> void:
 	await _test_a_bandmates_first_note_wakes_the_rack_and_is_heard()
 	await _test_a_scope_shows_the_wave_patched_into_it_even_when_unheard()
 	await _test_the_cv_bench_is_a_source_a_hand_sets()
+	await _test_a_beat_is_made_in_the_rack_and_recorded_onto_a_track_of_the_song()
 	await _test_the_big_rigs_far_end_is_patched_and_turned_by_hand()
 	await _test_the_rooms_cv_bench_is_reached_from_the_wall_and_drives_the_rack()
 	_test_every_module_has_a_skin_and_the_big_rig_fits_the_case()
@@ -49826,6 +49827,47 @@ func _test_the_big_rigs_far_end_is_patched_and_turned_by_hand() -> void:
 		check("a cable dragged across the wall lands", (studio.rack_row["patch"]["cables"] as Array).size() == cables + 1)
 	else:
 		print("  (no lfo output / far input to drag between)")
+	studio.queue_free()
+	await get_tree().process_frame
+
+
+## The whole road: a preset is put in the room's case, the song plays and drives its clock, the rack
+## sounds through a track of the song, REC catches it, and the take is an audio item on that track.
+func _test_a_beat_is_made_in_the_rack_and_recorded_onto_a_track_of_the_song() -> void:
+	if not RackEngine.available():
+		return
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	_as_session(Session.Role.HOST, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var track: int = DAW.state.track_indices()[1]
+	DAW.state.track(track).items.clear()
+	var before: int = DAW.state.track(track).items.size()
+	studio.ask_rack("preset", ["drum_machine"])
+	studio.rack_row["track"] = track
+	studio._rack_wake()
+	var voice: RackVoice = studio.rack_voice
+	check("the rack is awake on the song's track", voice.running() and voice.track == track
+			and InputMonitor.feeds.get(track) == voice.source)
+	DAW.seek(0.0)
+	DAW.transport_play()
+	studio._rack_toggle_record()
+	check("REC is catching it", voice.recording())
+	var peak := 0.0
+	for i in 50:
+		await get_tree().create_timer(0.05).timeout
+		for f in voice.source.read():
+			peak = maxf(peak, absf(f.x))
+	check("the beat is audible through the track (%.3f)" % peak, peak > 0.01)
+	check("the room's lights follow it", voice.meters.size() > 0)
+	DAW.transport_stop()
+	studio._rack_toggle_record()
+	var items: Array = DAW.state.track(track).items
+	check("the take is an item on that track (%d -> %d)" % [before, items.size()], items.size() == before + 1)
 	studio.queue_free()
 	await get_tree().process_frame
 
