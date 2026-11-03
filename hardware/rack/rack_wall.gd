@@ -40,8 +40,8 @@ const CASE_DEEP := 0.05
 const KNOB_PITCH := 0.055
 const KNOB_ROW := 0.062
 const JACK_ROW := 0.06
-const TITLE_CAP := 0.02
-const LETTER_CAP := 0.0105
+const TITLE_CAP := 0.024
+const LETTER_CAP := 0.0135
 const TOUCH_COUNT := 13
 const TOUCH_SIZE := Vector2(0.078, 0.17)
 const TOUCH_X := 0.08
@@ -109,6 +109,15 @@ var _settle_at := {}
 var _palette_nodes: Array[Node] = []
 var _level := 0.0
 var _hit := 0.0
+## The level bar along the case's top edge, its segments, and the lit materials they take; the case's
+## edge lines; and each module's colour band by id (it lights while the module sounds).
+const VU_SEGMENTS := 36
+var _vu: Array[MeshInstance3D] = []
+var _vu_off: StandardMaterial3D
+var _vu_on: StandardMaterial3D
+var _vu_peak: StandardMaterial3D
+var _edge_material := StandardMaterial3D.new()
+var _bands := {}
 
 
 func _ready() -> void:
@@ -210,6 +219,60 @@ func _build_case() -> void:
 		post.material_override = Materials.brushed_metal()
 		post.add_to_group(&"presentation_chrome")
 		_put(post)
+	_build_dressing()
+
+
+## What makes the case a thing to look at: the level bar along its top, glowing edge lines down its
+## sides, and the rails the modules hang on.
+func _build_dressing() -> void:
+	_vu_off = _emissive(Color(0.12, 0.11, 0.1), 0.0)
+	_vu_on = _emissive(Color(0.4, 1.0, 0.6), 2.5)
+	_vu_peak = _emissive(Color(1.0, 0.45, 0.3), 3.0)
+	var seg_wide := WIDE / VU_SEGMENTS
+	for n in VU_SEGMENTS:
+		var seg := MeshInstance3D.new()
+		seg.name = "Vu%d" % n
+		var b := BoxMesh.new()
+		b.size = Vector3(seg_wide - 0.005, BORDER * 0.5, 0.002)
+		seg.mesh = b
+		seg.position = Vector3(-WIDE * 0.5 + seg_wide * (n + 0.5), TALL + BORDER * 0.5, -0.001)
+		seg.material_override = _vu_off
+		seg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_put(seg)
+		_vu.append(seg)
+	_edge_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_edge_material.albedo_color = Color(0.2, 0.2, 0.2)
+	for side in [-1.0, 1.0]:
+		var line := MeshInstance3D.new()
+		line.name = "Edge"
+		var b := BoxMesh.new()
+		b.size = Vector3(0.004, TALL, 0.002)
+		line.mesh = b
+		line.position = Vector3(side * (WIDE * 0.5 + BORDER * 0.5), TALL * 0.5, -0.001)
+		line.material_override = _edge_material
+		line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_put(line)
+	for row in ROWS:
+		for top in [0.0, ROW_TALL]:
+			var rail := MeshInstance3D.new()
+			rail.name = "Rail"
+			var b := BoxMesh.new()
+			b.size = Vector3(WIDE, 0.007, 0.006)
+			rail.mesh = b
+			rail.position = Vector3(0, _row_foot(row) + top, -0.001)
+			rail.material_override = Materials.brushed_metal()
+			_put(rail)
+
+
+func _emissive(colour: Color, energy: float) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = colour
+	if energy > 0.0:
+		m.emission_enabled = true
+		m.emission = colour
+		m.emission_energy_multiplier = energy
+	return m
 
 
 ## The glow the rack gives the room: a halo behind the case, and a light in front of it, both in the
@@ -266,6 +329,19 @@ func _shine() -> void:
 	_glow.light_color = colour
 	_glow.light_energy = float(mood["glow"]) * (0.15 + _level * 2.2 + _hit * 1.6)
 	_halo_material.albedo_color = Color(colour.r, colour.g, colour.b, clampf(0.04 + _level * 0.25 + _hit * 0.2, 0.0, 0.5))
+	_edge_material.albedo_color = base.lerp(flash, clampf(_hit, 0.0, 1.0)) * (0.35 + _level * 1.6 + _hit * 0.8)
+	if _vu_on != null:
+		_vu_on.albedo_color = base
+		_vu_on.emission = base
+		_vu_peak.albedo_color = flash
+		_vu_peak.emission = flash
+		var lit := roundi(clampf(_level * 1.4, 0.0, 1.0) * VU_SEGMENTS)
+		for n in _vu.size():
+			var want := _vu_off
+			if n < lit:
+				want = _vu_peak if n >= VU_SEGMENTS - 5 or (n == lit - 1 and _hit > 0.5) else _vu_on
+			if _vu[n].material_override != want:
+				_vu[n].material_override = want
 
 
 func set_mood(m: Dictionary) -> void:
@@ -330,6 +406,12 @@ func _key(legend: String, size: Vector2, at: Vector3, says: String, press: Calla
 	k.lit = lit
 	k.describe_title = func() -> String: return "RACK  %s" % legend
 	k.pressed.connect(press)
+	# A legend that is longer than its key is set smaller, to fit.
+	k.ready.connect(func() -> void:
+		var l := k.get_node_or_null("Legend") as Label3D
+		var need := legend.length() * 0.0195
+		if l != null and need > size.x - 0.012:
+			l.font_size = maxi(8, roundi(l.font_size * (size.x - 0.012) / need)))
 	return k
 
 
@@ -354,8 +436,49 @@ func _clear_modules() -> void:
 	jacks.clear()
 	knobs.clear()
 	_lamps.clear()
+	_bands.clear()
 	_settle_at.clear()
 	_stream_due.clear()
+
+
+## A blank plate in every place no module holds, so the case reads as a full rack with room left.
+func _build_blanks() -> void:
+	var taken := {}
+	for id in patch["modules"]:
+		var m: Dictionary = patch["modules"][id]
+		for c in RackLayout.width_of(m["type"]):
+			taken[Vector2i(int(m["at"][0]) + c, int(m["at"][1]))] = true
+	var paint := StandardMaterial3D.new()
+	paint.albedo_color = Color(0.085, 0.085, 0.09)
+	paint.metallic = 0.4
+	paint.roughness = 0.5
+	for row in ROWS:
+		for col in COLS:
+			if taken.has(Vector2i(col, row)):
+				continue
+			var holder := Node3D.new()
+			holder.name = "Blank_%d_%d" % [col, row]
+			holder.position = Vector3(_x_of(col + 0.5), _row_foot(row), 0)
+			var plate := MeshInstance3D.new()
+			var face := BoxMesh.new()
+			face.size = Vector3(MODULE_WIDE - 0.003, ROW_TALL - 0.004, 0.004)
+			plate.mesh = face
+			plate.position = Vector3(0, ROW_TALL * 0.5, -0.002)
+			plate.material_override = paint
+			holder.add_child(plate)
+			for y in [0.014, ROW_TALL - 0.014]:
+				var screw := MeshInstance3D.new()
+				var disc := CylinderMesh.new()
+				disc.top_radius = 0.0045
+				disc.bottom_radius = 0.0045
+				disc.height = 0.002
+				screw.mesh = disc
+				screw.rotation_degrees = Vector3(90, 0, 0)
+				screw.position = Vector3(0, y, 0.001)
+				screw.material_override = Materials.brushed_metal()
+				holder.add_child(screw)
+			_put(holder)
+			module_nodes["blank/%d_%d" % [col, row]] = holder
 
 
 func _build_module(id: String) -> void:
@@ -386,12 +509,14 @@ func _build_module(id: String) -> void:
 	var band := MeshInstance3D.new()
 	band.name = "Band"
 	var strip := BoxMesh.new()
-	strip.size = Vector3(wide - 0.01, 0.003, 0.001)
+	strip.size = Vector3(wide - 0.01, 0.005, 0.001)
 	band.mesh = strip
 	band.position = Vector3(0, ROW_TALL - 0.045, 0.0005)
 	var colour := StandardMaterial3D.new()
 	colour.albedo_color = tint
+	colour.emission = tint
 	band.material_override = colour
+	_bands[id] = colour
 	holder.add_child(band)
 	var lamp := MeshInstance3D.new()
 	lamp.name = "Lamp"
@@ -455,7 +580,7 @@ func _build_knob(holder: Node3D, id: String, k: Dictionary, at: Vector3) -> void
 	holder.add_child(knob)
 	knobs[key] = knob
 	var label := String(k["label"])
-	holder.add_child(_letter(label.substr(0, 6), LETTER_CAP * 0.85, at + Vector3(0, -0.02, 0.001), Color(0.85, 0.83, 0.78)))
+	holder.add_child(_letter(label.substr(0, 5), LETTER_CAP * 0.85, at + Vector3(0, -0.02, 0.001), Color(0.85, 0.83, 0.78)))
 
 
 func _tint_of(type: String) -> Color:
@@ -475,7 +600,7 @@ func _build_palette() -> void:
 	var key_size := Vector2(MODULE_WIDE - 0.008, 0.05)
 	for i in groups.size():
 		var g: String = groups[i]
-		var k := _key(g.to_upper().substr(0, 7), key_size,
+		var k := _key(g.to_upper(), key_size,
 				Vector3(_x_of(i + 0.5), PALETTE_TALL - 0.04, 0.0), "show the %s modules" % g.to_lower(),
 				func() -> void: show_group(g), g == group)
 		_palette_nodes.append(k)
@@ -559,6 +684,7 @@ func show_patch(to: Dictionary) -> void:
 		_clear_modules()
 		for id in patch["modules"]:
 			_build_module(id)
+		_build_blanks()
 		_build_palette()
 		for key in held:
 			if knobs.has(key):
@@ -602,6 +728,10 @@ func show_meters(meters: Dictionary) -> void:
 			var want := _lamp_hot if on else _lamp_cold
 			if lamp.material_override != want:
 				lamp.material_override = want
+		var band: StandardMaterial3D = _bands.get(id)
+		if band != null:
+			band.emission_enabled = on
+			band.emission_energy_multiplier = 1.8
 
 
 func turning() -> Dictionary:
