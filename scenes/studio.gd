@@ -5797,6 +5797,7 @@ func _follow_modular() -> void:
 	if rack_voice.running():
 		rack_wall.show_meters(rack_voice.meters)
 		rack_wall.show_scopes(rack_voice.scopes)
+		rack_wall.show_steps(rack_voice.steps)
 		rack_wall.glow_with(rack_voice.level, rack_voice.hit)
 		if modular_annex != null and is_instance_valid(modular_annex):
 			modular_annex.glow_with(rack_voice.level, rack_voice.hit)

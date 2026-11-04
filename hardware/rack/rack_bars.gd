@@ -15,6 +15,8 @@ var tint := Color(0.4, 0.75, 1.0)
 var values := PackedFloat32Array()
 var _bars: Array[MeshInstance3D] = []
 var _mats: Array[StandardMaterial3D] = []
+## The step lit as the sequencer's playhead, or -1.
+var playhead := -1
 var _last := -1
 var _touched := {}
 var _base: MeshInstance3D
@@ -71,6 +73,18 @@ func set_step(i: int, v: float) -> void:
 		_show(i)
 
 
+## The step the sequencer is on: lit white and pushed forward, the way a playhead would be. -1 for none.
+func set_playhead(i: int) -> void:
+	if i == playhead:
+		return
+	var was := playhead
+	playhead = i
+	if was >= 0 and was < _bars.size():
+		_show(was)
+	if i >= 0 and i < _bars.size():
+		_show(i)
+
+
 func _show(i: int) -> void:
 	var v := values[i]
 	var h := maxf(0.004, v * (tall - 0.006))
@@ -83,6 +97,11 @@ func _show(i: int) -> void:
 	_mats[i].albedo_color = c
 	_mats[i].emission = c
 	_mats[i].emission_energy_multiplier = 0.35 + v * 2.6
+	if i == playhead:
+		_mats[i].albedo_color = Color(1, 1, 1)
+		_mats[i].emission = Color(1, 0.97, 0.85)
+		_mats[i].emission_energy_multiplier = 4.5
+		bar.position.z = d * 0.5 + 0.006
 
 
 func hint() -> String:

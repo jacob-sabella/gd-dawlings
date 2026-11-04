@@ -116,6 +116,7 @@ struct Seq_ : Module {
   int gate_left_ = 0;
   int since_ = 0, period_ = (int)(0.125f * RATE);
   float pitch_ = 0;
+  int playhead() const override { return step_; }
   void process() override {
     int len = (int)real(16);
     float gate_len = real(17);

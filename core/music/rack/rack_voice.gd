@@ -31,6 +31,8 @@ var _take_track := 0
 var meters := {}
 ## What the SCOPE modules saw (RackEngine.scopes).
 var scopes := {}
+## The step each STEP-wise module is on (RackEngine.steps).
+var steps := {}
 ## A smoothed loudness of the whole rack, 0..1, and a hit pulse (set on a rise), for lights.
 var level := 0.0
 var hit := 0.0
@@ -204,6 +206,7 @@ func _process(delta: float) -> void:
 	engine.poll()
 	meters = engine.meters
 	scopes = engine.scopes
+	steps = engine.steps
 	var peak := 0.0
 	for id in patch["modules"]:
 		if patch["modules"][id]["type"] == "out":

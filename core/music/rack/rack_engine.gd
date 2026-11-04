@@ -105,6 +105,7 @@ var _spare := PackedByteArray()
 var meters := {}
 ## What each SCOPE module saw lately: id -> PackedFloat32Array of points, -1..1.
 var scopes := {}
+var steps := {}
 ## When something last took the sound (msec): the engine stalls on a full pipe, so a rack nobody is
 ## listening to is drained by its voice to keep its meters and scopes alive.
 var last_read := 0
@@ -239,6 +240,10 @@ func poll() -> void:
 				for k in w.size():
 					w[k] = float(q[k + 2])
 				scopes[q[1]] = w
+		elif line.begins_with("step "):
+			var sq := line.split(" ", false)
+			if sq.size() == 3:
+				steps[sq[1]] = int(sq[2])
 		elif line.begins_with("meter "):
 			last_meter = line
 	var parts := last_meter.split(" ", false)
@@ -256,6 +261,9 @@ func poll() -> void:
 	for id in scopes.keys():
 		if not m.has(id):
 			scopes.erase(id)
+	for id in steps.keys():
+		if not m.has(id):
+			steps.erase(id)
 
 
 ## The engine's sound as a source a track can monitor (InputMonitor.feeds), with a tape that can be

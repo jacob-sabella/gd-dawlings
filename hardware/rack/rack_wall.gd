@@ -42,8 +42,8 @@ const CASE_DEEP := 0.05
 const KNOB_PITCH := 0.055
 const KNOB_ROW := 0.062
 const JACK_ROW := 0.06
-const TITLE_CAP := 0.024
-const LETTER_CAP := 0.0135
+const TITLE_CAP := 0.032
+const LETTER_CAP := 0.018
 const TOUCH_COUNT := 13
 const TOUCH_SIZE := Vector2(0.078, 0.17)
 const TOUCH_X := 0.08
@@ -111,7 +111,8 @@ var _drag := {}
 const PAD_KNOBS := {"svf": ["cutoff", "res"], "ladder": ["cutoff", "res"], "vco": ["tune", "wave"], "plaits": ["harm", "timbre"],
 		"reverb": ["time", "mix"], "delay": ["time", "fb"], "clouds": ["position", "density"], "rings": ["structure", "bright"],
 		"chorus": ["rate", "depth"], "crush": ["rate", "bits"], "lfo": ["rate", "depth"], "drum": ["freq", "decay"],
-		"fold": ["gain", "offset"], "env": ["a", "r"], "drive": ["drive", "level"]}
+		"fold": ["gain", "offset"], "env": ["a", "r"], "drive": ["drive", "level"], "slew": ["rise", "fall"],
+		"att": ["gain", "offset"], "quant": ["scale", "root"], "clock": ["bpm", "swing"], "scope": ["time", "gain"], "keys": ["oct", "glide"]}
 ## Pads and bars on the modules: id -> {"node", "keys": [knob ids]}.
 var _pads := {}
 ## A module being carried about the case: its id, node, ghost cell and where it came from.
@@ -465,7 +466,7 @@ func _move_octave(by: int) -> void:
 		key.set_base(touch_base)
 
 
-func _letter(text: String, cap: float, at: Vector3, colour: Color) -> Label3D:
+func _letter(text: String, cap: float, at: Vector3, colour: Color, width := 0.0) -> Label3D:
 	var l := Label3D.new()
 	l.text = text
 	l.pixel_size = 0.0002
@@ -474,6 +475,8 @@ func _letter(text: String, cap: float, at: Vector3, colour: Color) -> Label3D:
 	l.position = at
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.double_sided = false
+	if width > 0.0:
+		Lettering.fit(l, width, l.font_size, 24)
 	Lettering.range_to_legibility(l)
 	return l
 
@@ -595,7 +598,7 @@ func _build_module(id: String) -> void:
 	plate.material_override = paint
 	holder.add_child(plate)
 	var title: String = spec["title"]
-	holder.add_child(_letter(title, TITLE_CAP, Vector3(0, ROW_TALL - 0.026, 0.001), Color(0.95, 0.9, 0.78)))
+	holder.add_child(_letter(title, TITLE_CAP, Vector3(0, ROW_TALL - 0.03, 0.001), Color(1.0, 0.96, 0.84), wide - 0.05))
 	var tint := _tint_of(type)
 	var print_strip := RackSkin.print_pattern(type, wide - 0.016, 0.012)
 	if print_strip != null:
@@ -603,7 +606,7 @@ func _build_module(id: String) -> void:
 		holder.add_child(print_strip)
 	var tag := RackSkin.tagline(type)
 	if tag != "":
-		var tag_label := _letter(tag, LETTER_CAP * 0.62, Vector3(0, 0.015, 0.001), tint.lerp(Color(1, 1, 1), 0.35))
+		var tag_label := _letter(tag, LETTER_CAP * 0.66, Vector3(0, 0.015, 0.001), tint.lerp(Color(1, 1, 1), 0.5), wide - 0.01)
 		holder.add_child(tag_label)
 	var band := MeshInstance3D.new()
 	band.name = "Band"
@@ -727,11 +730,13 @@ func _build_second_face(holder: Node3D, id: String, type: String, spec: Dictiona
 	pad.position = Vector3(0, top + band * 0.5, 0.0)
 	holder.add_child(pad)
 	pad.set_xy(RackPatch.knob_of(patch, id, ids[0]), RackPatch.knob_of(patch, id, ids[1]))
+	_pads[id] = {"node": pad, "keys": ids, "type": type}
+	_refresh_curve(id)
 	pad.moved.connect(func(x: float, y: float) -> void:
 		_face_to(id, ids[0], x)
-		_face_to(id, ids[1], y))
+		_face_to(id, ids[1], y)
+		_refresh_curve(id, {ids[0]: x, ids[1]: y}))
 	pad.released.connect(func(_x: float, _y: float) -> void: _face_done(id, ids))
-	_pads[id] = {"node": pad, "keys": ids}
 
 
 ## A knob set from a module's second face: the knob on the wall goes there, and the turn is streamed
@@ -750,6 +755,22 @@ func _face_done(id: String, keys: Array) -> void:
 		_settle_at["%s.%s" % [id, k]] = now + roundi(SETTLE * 1000.0)
 
 
+## The shape a module's knobs make (an envelope, a filter's response), drawn on its pad. `over` holds
+## knob positions that are newer than the patch's, as while an orb is being dragged.
+func _refresh_curve(id: String, over := {}) -> void:
+	var f: Dictionary = _pads.get(id, {})
+	if not (f.get("node") is RackPad):
+		return
+	var type: String = f.get("type", "")
+	var values := {}
+	for k in RackCatalogue.knob_ids(type):
+		var pos: float = over[k] if over.has(k) else RackPatch.knob_of(patch, id, k)
+		values[k] = RackCatalogue.real(RackCatalogue.knob(type, k), pos)
+	var c := RackCurves.of(type, values)
+	if c.size() > 1:
+		(f["node"] as RackPad).set_curve(c)
+
+
 ## The second faces take their knobs' values, where a hand is not on them.
 func _refresh_faces(only := "") -> void:
 	for id: String in _pads:
@@ -761,6 +782,7 @@ func _refresh_faces(only := "") -> void:
 			continue
 		if node is RackPad:
 			(node as RackPad).set_xy(RackPatch.knob_of(patch, id, f["keys"][0]), RackPatch.knob_of(patch, id, f["keys"][1]))
+			_refresh_curve(id)
 		elif node is RackBars and not (node as RackBars).is_held():
 			for n in 16:
 				(node as RackBars).set_step(n, RackPatch.knob_of(patch, id, f["keys"][n]))
@@ -780,7 +802,7 @@ func _build_knob(holder: Node3D, id: String, k: Dictionary, at: Vector3) -> void
 	holder.add_child(knob)
 	knobs[key] = knob
 	var label := String(k["label"])
-	holder.add_child(_letter(label.substr(0, 5), LETTER_CAP * 0.85, at + Vector3(0, -0.02, 0.001), Color(0.85, 0.83, 0.78)))
+	holder.add_child(_letter(label.substr(0, 6), LETTER_CAP * 0.9, at + Vector3(0, -0.022, 0.001), Color(0.95, 0.93, 0.88), KNOB_PITCH - 0.004))
 
 
 func _tint_of(type: String) -> Color:
@@ -942,6 +964,14 @@ func module_levels(meters: Dictionary) -> Array:
 
 
 ## The traces of the SCOPE modules' screens: module id -> points.
+## The step each sequencer is on, lit on its bars.
+func show_steps(on: Dictionary) -> void:
+	for id: String in _pads:
+		var node: Node = _pads[id]["node"]
+		if node is RackBars and is_instance_valid(node):
+			(node as RackBars).set_playhead(int(on.get(id, -1)))
+
+
 func show_scopes(waves: Dictionary) -> void:
 	for id: String in _scopes:
 		if is_instance_valid(_scopes[id]):

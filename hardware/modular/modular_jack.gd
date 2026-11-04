@@ -77,11 +77,12 @@ func _ready() -> void:
 	var short := String(jack).get_slice(".", 1).to_upper()
 	words.text = short
 	words.pixel_size = 0.0002
-	words.font_size = roundi(0.0105 / words.pixel_size)
+	words.font_size = roundi(0.0138 / words.pixel_size)
 	words.modulate = Color(0.12, 0.11, 0.1) if output else Color(0.9, 0.88, 0.82)
 	words.position = Vector3(0, 0.016, 0.0012)
 	words.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	words.double_sided = false
+	Lettering.fit(words, 0.052, words.font_size, 24)
 	Lettering.range_to_legibility(words)
 	add_child(words)
 	var shape := CollisionShape3D.new()

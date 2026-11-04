@@ -41,6 +41,9 @@ var _glass: MeshInstance3D
 var _mat: ShaderMaterial
 var _orb_mat: StandardMaterial3D
 var _swell := 0.0
+var _curve: MeshInstance3D
+var _curve_values := PackedFloat32Array()
+var _curve_mats: Array[StandardMaterial3D] = []
 
 
 func _ready() -> void:
@@ -92,6 +95,63 @@ func _ready() -> void:
 	_orb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_orb)
 	_place(0.0)
+	if _curve_values.size() > 1:
+		_draw_curve()
+
+
+## A shape standing out of the glass: a ramp from the pane's floor up to a lit ridge that follows
+## `values` (heights from 0 to 1, left to right).
+func set_curve(values: PackedFloat32Array) -> void:
+	if values == _curve_values:
+		return
+	_curve_values = values
+	if _glass != null:
+		_draw_curve()
+
+
+func _draw_curve() -> void:
+	if _curve == null:
+		_curve = MeshInstance3D.new()
+		_curve.name = "Curve"
+		_curve.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(_curve)
+		for a in [0.28, 1.0]:
+			var m := StandardMaterial3D.new()
+			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			m.cull_mode = BaseMaterial3D.CULL_DISABLED
+			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			m.albedo_color = Color(tint.r, tint.g, tint.b, a)
+			if a == 1.0:
+				m.albedo_color = tint.lerp(Color.WHITE, 0.5)
+			_curve_mats.append(m)
+	var n := _curve_values.size()
+	var floor_y := -size * 0.5 + size * 0.08
+	var reach := size * 0.78
+	var fill_v := PackedVector3Array()
+	var ridge_v := PackedVector3Array()
+	var fill_i := PackedInt32Array()
+	var ridge_i := PackedInt32Array()
+	for i in n:
+		var v := _curve_values[i]
+		var px := (float(i) / float(n - 1) - 0.5) * (size - 0.008)
+		var top := Vector3(px, floor_y + v * reach, 0.004 + v * 0.016)
+		fill_v.append(Vector3(px, floor_y, 0.002))
+		fill_v.append(top)
+		ridge_v.append(top + Vector3(0, -0.0008, 0))
+		ridge_v.append(top + Vector3(0, 0.0008, 0.0008))
+		if i < n - 1:
+			var b := i * 2
+			fill_i.append_array(PackedInt32Array([b, b + 1, b + 2, b + 1, b + 3, b + 2]))
+			ridge_i.append_array(PackedInt32Array([b, b + 1, b + 2, b + 1, b + 3, b + 2]))
+	var mesh := ArrayMesh.new()
+	for k in 2:
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = fill_v if k == 0 else ridge_v
+		arrays[Mesh.ARRAY_INDEX] = fill_i if k == 0 else ridge_i
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		mesh.surface_set_material(k, _curve_mats[k])
+	_curve.mesh = mesh
 
 
 func set_xy(nx: float, ny: float) -> void:

@@ -174,6 +174,12 @@ static int live(int chunk) {
       if (write(2, m.data(), m.size()) < 0) {}
     }
     if (tick % 3 == 0) {
+      std::string heads;
+      for (auto& kv : r.modules()) {
+        int h = kv.second->playhead();
+        if (h >= 0) heads += "step " + kv.first + " " + std::to_string(h) + "\n";
+      }
+      if (!heads.empty() && write(2, heads.data(), heads.size()) < 0) {}
       std::vector<float> pts(96);
       std::string m;
       char t[16];
