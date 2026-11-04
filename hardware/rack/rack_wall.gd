@@ -107,6 +107,13 @@ var _glow: OmniLight3D
 var _halo: MeshInstance3D
 var _halo_material := StandardMaterial3D.new()
 var _drag := {}
+## Modules with an orb pad: the two knobs its two axes are.
+const PAD_KNOBS := {"svf": ["cutoff", "res"], "ladder": ["cutoff", "res"], "vco": ["tune", "wave"], "plaits": ["harm", "timbre"],
+		"reverb": ["time", "mix"], "delay": ["time", "fb"], "clouds": ["position", "density"], "rings": ["structure", "bright"],
+		"chorus": ["rate", "depth"], "crush": ["rate", "bits"], "lfo": ["rate", "depth"], "drum": ["freq", "decay"],
+		"fold": ["gain", "offset"], "env": ["a", "r"], "drive": ["drive", "level"]}
+## Pads and bars on the modules: id -> {"node", "keys": [knob ids]}.
+var _pads := {}
 ## A module being carried about the case: its id, node, ghost cell and where it came from.
 var _carry := {}
 var _streamed_at := {}
@@ -517,6 +524,7 @@ func _clear_modules() -> void:
 	module_nodes.clear()
 	jacks.clear()
 	knobs.clear()
+	_pads.clear()
 	_lamps.clear()
 	_scopes.clear()
 	_bands.clear()
@@ -653,6 +661,7 @@ func _build_module(id: String) -> void:
 		screen.position = Vector3(0, 0.24, 0.003)
 		holder.add_child(screen)
 		_scopes[id] = screen
+	_build_second_face(holder, id, type, spec, w, wide, tint)
 	# Jacks, up from the foot: inputs, then outputs (pale), per rows of 2*w.
 	var paths: Array = []
 	for port in spec["ins"]:
@@ -673,6 +682,88 @@ func _build_module(id: String) -> void:
 		jacks[_jack_key(path, paths[n][1])] = j
 	_put(holder)
 	module_nodes[id] = holder
+
+
+## The free band of the panel between the knobs and the jacks, which a module's second face fills: an
+## orb pad on two of its knobs, or for a sequencer its steps as bars to paint.
+func _build_second_face(holder: Node3D, id: String, type: String, spec: Dictionary, w: int, wide: float, tint: Color) -> void:
+	var per := 2 * w
+	var krows := maxi(1, ceili(float((spec["knobs"] as Array).size()) / per))
+	var jacks_n: int = (spec["ins"] as Array).size() + (spec["outs"] as Array).size()
+	var jrows := maxi(1, ceili(float(jacks_n) / per))
+	var top := 0.05 + (jrows - 1) * JACK_ROW + 0.035
+	var bottom := ROW_TALL - 0.1 - (krows - 1) * KNOB_ROW - 0.03
+	var band := bottom - top
+	if type == "seq":
+		var bars := RackBars.new()
+		bars.name = "Steps"
+		bars.count = 16
+		bars.wide = wide - 0.02
+		bars.tall = minf(0.15, band - 0.02)
+		bars.tint = tint.lightened(0.25)
+		bars.position = Vector3(0, top + 0.01, 0.0)
+		var keys: Array = []
+		for n in 16:
+			keys.append("s%d" % (n + 1))
+		holder.add_child(bars)
+		for n in 16:
+			bars.set_step(n, RackPatch.knob_of(patch, id, keys[n]))
+		bars.painted.connect(func(step: int, v: float) -> void: _face_to(id, keys[step], v))
+		bars.released.connect(func(steps: Array) -> void: _face_done(id, steps.map(func(n: int) -> String: return keys[n])))
+		_pads[id] = {"node": bars, "keys": keys}
+		return
+	if not PAD_KNOBS.has(type):
+		return
+	var size := minf(minf(wide - 0.024, band - 0.012), 0.09)
+	if size < 0.045:
+		return
+	var ids: Array = PAD_KNOBS[type]
+	if RackCatalogue.knob(type, ids[0]).is_empty() or RackCatalogue.knob(type, ids[1]).is_empty():
+		return
+	var pad := RackPad.new()
+	pad.name = "Orb"
+	pad.size = size
+	pad.tint = tint.lightened(0.3)
+	pad.position = Vector3(0, top + band * 0.5, 0.0)
+	holder.add_child(pad)
+	pad.set_xy(RackPatch.knob_of(patch, id, ids[0]), RackPatch.knob_of(patch, id, ids[1]))
+	pad.moved.connect(func(x: float, y: float) -> void:
+		_face_to(id, ids[0], x)
+		_face_to(id, ids[1], y))
+	pad.released.connect(func(_x: float, _y: float) -> void: _face_done(id, ids))
+	_pads[id] = {"node": pad, "keys": ids}
+
+
+## A knob set from a module's second face: the knob on the wall goes there, and the turn is streamed
+## to the room as a knob's own would be.
+func _face_to(id: String, k: String, v: float) -> void:
+	var node: Knob = knobs.get("%s.%s" % [id, k])
+	if node != null:
+		node.apply_remote(v)
+	_on_knob_turned(id, k, v)
+
+
+## Let go: the knobs it moved are asked for once more, at rest, when the echoes of the stream have passed.
+func _face_done(id: String, keys: Array) -> void:
+	var now := int(clock.call())
+	for k in keys:
+		_settle_at["%s.%s" % [id, k]] = now + roundi(SETTLE * 1000.0)
+
+
+## The second faces take their knobs' values, where a hand is not on them.
+func _refresh_faces(only := "") -> void:
+	for id: String in _pads:
+		if only != "" and id != only:
+			continue
+		var f: Dictionary = _pads[id]
+		var node: Node = f["node"]
+		if not is_instance_valid(node):
+			continue
+		if node is RackPad:
+			(node as RackPad).set_xy(RackPatch.knob_of(patch, id, f["keys"][0]), RackPatch.knob_of(patch, id, f["keys"][1]))
+		elif node is RackBars and not (node as RackBars).is_held():
+			for n in 16:
+				(node as RackBars).set_step(n, RackPatch.knob_of(patch, id, f["keys"][n]))
 
 
 func _build_knob(holder: Node3D, id: String, k: Dictionary, at: Vector3) -> void:
@@ -820,6 +911,7 @@ func show_patch(to: Dictionary) -> void:
 				j.plugged_to.append(StringName(c[1]))
 			elif not j.output and c[1] == path:
 				j.plugged_to.append(StringName(c[0]))
+	_refresh_faces()
 	_lay_cables()
 	_apply_reach()
 
@@ -836,6 +928,8 @@ func show_knob(id: String, k: String, v: float) -> void:
 	var node: Knob = knobs.get("%s.%s" % [id, k])
 	if node != null:
 		node.apply_remote(v)
+	if _pads.has(id):
+		_refresh_faces(id)
 
 
 ## How loud each module is now ({id: peak}), on its lamp.
@@ -954,6 +1048,13 @@ func reach_controls() -> Array[ControlAffordance]:
 		out.append(k)
 	for t in touch_keys:
 		out.append(t)
+	for id: String in _pads:
+		if is_instance_valid(_pads[id]["node"]):
+			out.append(_pads[id]["node"])
+	for key in module_nodes:
+		var grip := (module_nodes[key] as Node).get_node_or_null("Grip") if not str(key).ends_with("/x") else null
+		if grip is ControlAffordance:
+			out.append(grip)
 	for n in _palette_nodes:
 		if n is ControlAffordance:
 			out.append(n)

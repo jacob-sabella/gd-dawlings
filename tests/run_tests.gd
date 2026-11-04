@@ -50028,3 +50028,38 @@ func _test_a_rack_module_is_carried_to_a_free_place_by_its_grip() -> void:
 		check("to the place it was carried to", moved[0][1][1] == int(here[0]) + 3 and moved[0][1][2] == int(here[1]) + 1)
 	check("the outline is gone", wall.panel.get_node_or_null("MoveGhost") == null or wall.panel.get_node("MoveGhost").is_queued_for_deletion())
 	studio.queue_free()
+
+
+func _test_a_module_has_a_second_face_that_moves_its_knobs() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	studio.ask_rack("preset", ["acid_line"])
+	await get_tree().process_frame
+	var wall: RackWall = studio.rack_wall
+	var pad: RackPad = wall.module_nodes["ladder"].get_node_or_null("Orb")
+	check("a filter has an orb to drag", pad != null)
+	var bars: RackBars = wall.module_nodes["seq"].get_node_or_null("Steps")
+	check("the sequencer has its steps as bars", bars != null)
+	if pad == null or bars == null:
+		studio.queue_free()
+		return
+	var sent := []
+	wall.knob_streamed.connect(func(id: String, k: String, v: float) -> void: sent.append([id, k, v]))
+	# The orb dragged to the top right: both its knobs go to the top.
+	pad.grab_begin(self, pad.to_global(Vector3(pad.size * 0.45, pad.size * 0.45, 0)))
+	pad.grab_end(self)
+	check("the orb's knobs follow it", wall.knobs["ladder.cutoff"].value > 0.9 and wall.knobs["ladder.res"].value > 0.9)
+	check("and the turn is sent to the room", sent.any(func(a: Array) -> bool: return a[0] == "ladder" and a[1] == "cutoff"))
+	# Painting across the bars: the steps under the hand take the hand's height.
+	var l := bars.wide * 0.5
+	bars.grab_begin(self, bars.to_global(Vector3(-l * 0.9, bars.tall * 0.8, 0)))
+	bars.grab_move(self, bars.to_global(Vector3(-l * 0.4, bars.tall * 0.8, 0)))
+	bars.grab_end(self)
+	check("painting sets the steps it crosses", wall.knobs["seq.s1"].value > 0.7 and wall.knobs["seq.s4"].value > 0.7)
+	check("the bars stand as high as their steps", bars.values[0] > 0.7)
+	studio.ask_rack("knob", ["ladder", "cutoff", 0.2])
+	check("a knob turned elsewhere moves the orb", absf(pad.x - 0.2) < 0.01)
+	studio.queue_free()
