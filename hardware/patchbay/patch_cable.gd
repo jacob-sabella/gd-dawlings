@@ -131,6 +131,7 @@ func rebuild() -> void:
 	for child in get_children():
 		child.queue_free()
 	_jacket = null
+	_own_material = false
 	_boots.clear()
 
 	# Built in LOCAL space from two GLOBAL transforms, so a cable survives its surface being
@@ -179,6 +180,24 @@ func signal_level() -> float:
 
 func signal_radius() -> float:
 	return JACKET_RADIUS * thickness
+
+
+## A cable that glows with what runs through it: 0 is its resting light, 1 the brightest. It takes a
+## material of its own the first time, so the shared one is never touched.
+func set_glow(level: float) -> void:
+	if _jacket == null or not lit:
+		return
+	var m := _jacket.material_override as StandardMaterial3D
+	if m == null:
+		return
+	if not _own_material:
+		m = m.duplicate() as StandardMaterial3D
+		_jacket.material_override = m
+		_own_material = true
+	m.emission_energy_multiplier = 0.55 + clampf(level, 0.0, 1.0) * 2.6
+
+
+var _own_material := false
 
 
 ## A dimmed cable keeps its colour and loses most of its light, so the ones still lit are the

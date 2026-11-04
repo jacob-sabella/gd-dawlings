@@ -49996,3 +49996,35 @@ func _test_a_small_preset_is_laid_out_as_the_signal_flows() -> void:
 	check("tidy answers with a layout", RackPatch.answer(messy, "tidy", []) == "")
 	check("tidy puts the clock before the out", int(messy["modules"]["clock"]["at"][0]) < int(messy["modules"]["out"]["at"][0]))
 	check("cables are coloured by what they carry", RackSkin.signal_of("pitch") != RackSkin.signal_of("out") and RackSkin.signal_of("gate") != RackSkin.signal_of("lp"))
+
+
+func _test_a_rack_module_is_carried_to_a_free_place_by_its_grip() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	studio.ask_rack("preset", ["keys_voice"])
+	await get_tree().process_frame
+	var wall: RackWall = studio.rack_wall
+	var asked := []
+	wall.edit_asked.connect(func(op: String, args: Array) -> void: asked.append([op, args]))
+	var holder: Node3D = wall.module_nodes["reverb"]
+	var grip: RackHandle = holder.get_node("Grip")
+	check("a module has a grip along its title", grip != null)
+	var here: Array = wall.patch["modules"]["reverb"]["at"]
+	# Carry it three columns right and one row down: the middle of the place, over the panel.
+	var w := RackLayout.width_of("reverb")
+	var to := Vector3(wall._x_of(int(here[0]) + 3 + w * 0.5), wall._row_foot(int(here[1]) + 1) + RackWall.ROW_TALL * 0.5, 0.0)
+	var start := holder.global_position + Vector3(0, RackWall.ROW_TALL - 0.026, 0)
+	wall._on_grip_began(grip, start)
+	wall._on_grip_moved(grip, wall.panel.to_global(to + Vector3(0, RackWall.ROW_TALL * 0.5 - 0.026, 0)))
+	check("while carried it stands out of the case", holder.position.z > 0.01)
+	check("and an outline marks where it would go", wall.panel.get_node_or_null("MoveGhost") != null)
+	wall._on_grip_finished(grip, Vector3.ZERO)
+	var moved := asked.filter(func(a: Array) -> bool: return a[0] == "move")
+	check("letting go asks for the move", moved.size() == 1 and moved[0][1][0] == "reverb")
+	if moved.size() == 1:
+		check("to the place it was carried to", moved[0][1][1] == int(here[0]) + 3 and moved[0][1][2] == int(here[1]) + 1)
+	check("the outline is gone", wall.panel.get_node_or_null("MoveGhost") == null or wall.panel.get_node("MoveGhost").is_queued_for_deletion())
+	studio.queue_free()

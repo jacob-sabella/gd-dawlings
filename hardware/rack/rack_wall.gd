@@ -107,6 +107,8 @@ var _glow: OmniLight3D
 var _halo: MeshInstance3D
 var _halo_material := StandardMaterial3D.new()
 var _drag := {}
+## A module being carried about the case: its id, node, ghost cell and where it came from.
+var _carry := {}
 var _streamed_at := {}
 var _stream_due := {}
 var _settle_at := {}
@@ -504,6 +506,11 @@ static func _jack_key(path: String, is_output: bool) -> String:
 
 
 func _clear_modules() -> void:
+	if not _carry.is_empty():
+		var g: Variant = _carry.get("ghost")
+		if g is Node and is_instance_valid(g):
+			(g as Node).queue_free()
+		_carry.clear()
 	for n in module_nodes.values():
 		if is_instance_valid(n):
 			_drop(n)
@@ -619,6 +626,17 @@ func _build_module(id: String) -> void:
 				"take %s out of the case, and its cables with it" % title, func() -> void: edit_asked.emit("remove", [id]))
 		holder.add_child(gone)
 		module_nodes[id + "/x"] = gone
+	# The grip along the title, clear of the take-out key: drag the module about the case.
+	var grip := RackHandle.new()
+	grip.name = "Grip"
+	grip.module_id = id
+	grip.module_title = title
+	grip.size = Vector2(wide - 0.05, 0.034)
+	grip.position = Vector3(-0.008, ROW_TALL - 0.026, 0.0)
+	grip.drag_began.connect(_on_grip_began)
+	grip.drag_moved.connect(_on_grip_moved)
+	grip.drag_finished.connect(_on_grip_finished)
+	holder.add_child(grip)
 	# Knobs, down from under the title, a row of 2*w.
 	var per := 2 * w
 	var ks: Array = spec["knobs"]
@@ -852,7 +870,13 @@ func show_meters(meters: Dictionary) -> void:
 		var band: StandardMaterial3D = _bands.get(id)
 		if band != null:
 			band.emission_enabled = on
-			band.emission_energy_multiplier = 1.8
+			band.emission_energy_multiplier = 1.0 + clampf(float(meters.get(id, 0.0)), 0.0, 1.0) * 5.0
+	# Each cable glows with what its source is putting out, so the signal can be followed by eye.
+	for cable in cables:
+		if is_instance_valid(cable):
+			var ends: Array = cable.get_meta(&"cable", [])
+			if ends.size() == 2:
+				cable.set_glow(clampf(float(meters.get(String(ends[0]).get_slice(".", 0), 0.0)) * 1.6, 0.0, 1.0))
 
 
 func turning() -> Dictionary:
@@ -956,7 +980,88 @@ func _on_knob_turned(id: String, k: String, v: float) -> void:
 		_stream_due[key] = [id, k, v]
 
 
+# --- carrying a module -----------------------------------------------------------------------
+
+## The cell (column, row) whose module of `w` columns has its middle under `local`, a point of the panel.
+func _cell_under(local: Vector3, w: int) -> Vector2i:
+	var col := roundi((local.x + WIDE * 0.5) / MODULE_WIDE - w * 0.5)
+	var up := (local.y - PALETTE_TALL) / (ROW_TALL + ROW_GAP)
+	var row := ROWS - 1 - clampi(floori(up), 0, ROWS - 1)
+	return Vector2i(clampi(col, 0, COLS - w), row)
+
+
+func _on_grip_began(from: RackHandle, at: Vector3) -> void:
+	var holder: Node3D = module_nodes.get(from.module_id)
+	if holder == null:
+		return
+	var local: Vector3 = panel.to_local(at)
+	var type := RackPatch.type_of(patch, from.module_id)
+	var ghost := MeshInstance3D.new()
+	ghost.name = "MoveGhost"
+	var box := BoxMesh.new()
+	var w := RackLayout.width_of(type)
+	box.size = Vector3(MODULE_WIDE * w - 0.003, ROW_TALL - 0.004, 0.006)
+	ghost.mesh = box
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ghost.material_override = m
+	ghost.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	panel.add_child(ghost)
+	_carry = {"id": from.module_id, "holder": holder, "ghost": ghost, "w": w, "type": type,
+			"grab": holder.position - Vector3(local.x, local.y, 0.0), "home": holder.position, "cell": Vector2i(-1, -1), "relaid": 0}
+	_carry_to(local)
+
+
+func _on_grip_moved(from: RackHandle, at: Vector3) -> void:
+	if _carry.is_empty() or _carry["id"] != from.module_id:
+		return
+	_carry_to(panel.to_local(at))
+
+
+## The module lifted to follow the hand, and the cell it would settle in outlined: green where it fits.
+func _carry_to(local: Vector3) -> void:
+	var holder: Node3D = _carry["holder"]
+	var w: int = _carry["w"]
+	var lifted: Vector3 = local + (_carry["grab"] as Vector3)
+	holder.position = Vector3(lifted.x, lifted.y, 0.05)
+	var cell := _cell_under(Vector3(lifted.x, lifted.y + ROW_TALL * 0.5, 0.0), w)
+	var fits := RackLayout.fits(patch, String(_carry["type"]), cell, String(_carry["id"]))
+	var ghost: MeshInstance3D = _carry["ghost"]
+	ghost.position = Vector3(_x_of(cell.x + w * 0.5), _row_foot(cell.y) + ROW_TALL * 0.5, 0.004)
+	(ghost.material_override as StandardMaterial3D).albedo_color = Color(0.3, 1.0, 0.5, 0.22) if fits else Color(1.0, 0.3, 0.25, 0.2)
+	_carry["cell"] = cell
+	_carry["fits"] = fits
+	# Its cables follow, as often as the wall can afford to lay them again.
+	_carry["relaid"] = int(_carry["relaid"]) + 1
+	if int(_carry["relaid"]) % 4 == 0 and (patch["cables"] as Array).size() <= 24:
+		_lay_cables()
+
+
+func _on_grip_finished(from: RackHandle, _at: Vector3) -> void:
+	if _carry.is_empty() or _carry["id"] != from.module_id:
+		return
+	var holder: Node3D = _carry["holder"]
+	var ghost: MeshInstance3D = _carry["ghost"]
+	var cell: Vector2i = _carry["cell"]
+	var id: String = _carry["id"]
+	var home: Vector3 = _carry["home"]
+	var fits: bool = _carry.get("fits", false)
+	var here: Array = patch["modules"][id]["at"]
+	_carry.clear()
+	if is_instance_valid(ghost):
+		ghost.queue_free()
+	if is_instance_valid(holder):
+		holder.position = home
+	if fits and (cell.x != int(here[0]) or cell.y != int(here[1])):
+		Foley.play(holder, Foley.plug_seat(), -6.0)
+		edit_asked.emit("move", [id, cell.x, cell.y])
+	else:
+		_lay_cables()
+
+
 # --- carrying a cable -------------------------------------------------------------------------
+
 
 func _on_drag_began(from: ModularJack, at: Vector3) -> void:
 	var path := String(from.jack)
