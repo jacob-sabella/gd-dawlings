@@ -475,7 +475,16 @@ func _song() -> Dictionary:
 	return h
 
 
+var _frame_owed := 1.0
+
+
 func _process(delta: float) -> void:
+	# Drawn at 60 Hz at most; the time that passed in between is carried, not lost.
+	_frame_owed += delta
+	if _frame_owed < 1.0 / 60.0 - 0.0005:
+		return
+	delta = _frame_owed
+	_frame_owed = 0.0
 	var h := _song()
 	var song := float(h.get("seconds", 0.0))
 	var motion := Ergonomics.current.motion_scale if Ergonomics.current != null else 1.0

@@ -28,7 +28,7 @@ const WALK_SPEED := 1.7
 const SPRINT_SPEED := 3.2
 ## Metres per second per second. Enough that a tap moves you, little enough that you feel it.
 const ACCELERATION := 9.0
-const FRICTION := 11.0
+const FRICTION := 16.0
 const AIR_CONTROL := 0.25
 ## We are ghosts: no gravity, no jump. Space rises, C sinks, and you hang where you let go.
 const FLY_SPEED := 1.8
@@ -471,20 +471,20 @@ func step(delta: float, wish_velocity: Vector3, rise := 0.0) -> void:
 		flat = flat.move_toward(wish_velocity, ACCELERATION * control * delta)
 		# Walking off a visit stands you back up.
 		eye_height = move_toward(eye_height, standing_eye, delta * 0.8)
-	elif grounded:
+	else:
 		flat = flat.move_toward(Vector3.ZERO, FRICTION * delta)
 	velocity.x = flat.x
 	velocity.z = flat.z
 	# Ghost flight: vertical speed is what the keys say, and zero means hover. Resting on the
 	# floor (or a riser) presses down a little so the body still reads as standing.
 	if rise > 0.0 and global_position.y < CEILING:
-		velocity.y = move_toward(velocity.y, rise * FLY_SPEED, ACCELERATION * delta)
+		velocity.y = move_toward(velocity.y, rise * FLY_SPEED, ACCELERATION * 2.0 * delta)
 	elif rise < 0.0:
-		velocity.y = move_toward(velocity.y, rise * FLY_SPEED, ACCELERATION * delta)
+		velocity.y = move_toward(velocity.y, rise * FLY_SPEED, ACCELERATION * 2.0 * delta)
 	elif grounded:
 		velocity.y = -0.5
 	else:
-		velocity.y = move_toward(velocity.y, 0.0, FRICTION * delta)
+		velocity.y = move_toward(velocity.y, 0.0, FRICTION * 3.0 * delta)
 	move_and_slide()
 	if grounded and wish_velocity != Vector3.ZERO and is_on_wall():
 		_step_up(Vector3(wish_velocity.x, 0, wish_velocity.z).normalized())

@@ -696,7 +696,16 @@ func song(age := 0.0) -> float:
 	return stamp(age) if h["valid"] and h["playing"] else -1.0
 
 
+var _frame_owed := 1.0
+
+
 func _process(_delta: float) -> void:
+	# Drawn at 60 Hz at most; the time that passed in between is carried, not lost.
+	_frame_owed += _delta
+	if _frame_owed < 1.0 / 60.0 - 0.0005:
+		return
+	_delta = _frame_owed
+	_frame_owed = 0.0
 	resend_controls(_ticks())
 	# On a host too: there, what is heard is the host's own playhead, and a monitor (TheirMonitor)
 	# asks it.

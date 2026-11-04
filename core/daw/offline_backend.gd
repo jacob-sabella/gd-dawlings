@@ -50,10 +50,18 @@ var own_windows_work := true
 var windows_opened: Array[PluginWindow] = []
 
 
+var _meter_owed := 1.0
+
+
 func _process(delta: float) -> void:
 	if not _open_edits.is_empty():
 		close_idle_edits()
-	_drive_meters(delta)
+	# Meters and the clock advance at 60 Hz at most: above that nobody can see the difference,
+	# and the string work and fan-out below is the single dearest thing the stand-in does per frame.
+	_meter_owed += delta
+	if _meter_owed >= 1.0 / 60.0 - 0.0005:
+		_drive_meters(_meter_owed)
+		_meter_owed = 0.0
 	follow_count_in()
 	follow_automation()
 	tick_replication(delta)

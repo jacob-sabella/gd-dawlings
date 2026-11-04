@@ -26,6 +26,8 @@ const LEAN := 0.003
 ## The key's colour: its mark's light, and its ring's.
 var led_colour := Color(0.55, 0.85, 0.55):
 	set(v):
+		if v == led_colour:
+			return
 		led_colour = v
 		_refresh()
 ## On and off, as a mode is (a view, a tab), rather than a thing that is done.
@@ -33,6 +35,8 @@ var toggle := false
 ## What it is called: the hover card's, not printed on it.
 var label := "":
 	set(v):
+		if v == label:
+			return
 		label = v
 		_refresh()
 ## The mark on it. See TimelineGlyph for the kinds.
@@ -46,11 +50,15 @@ var glyph := &"":
 ## signature, an input) -- the one place a word stays. "" for none.
 var caption := "":
 	set(v):
+		if v == caption:
+			return
 		caption = v
 		_refresh()
 ## Words ON the token instead of a mark, for a key whose whole meaning is a value ("4/4").
 var face := "":
 	set(v):
+		if v == face:
+			return
 		face = v
 		_refresh()
 ## Fixed by whoever lays the keys out, or 0 for the token's own.
@@ -58,11 +66,15 @@ var fixed_width := 0.0
 
 var lit := false:
 	set(v):
+		if v == lit:
+			return
 		lit = v
 		_refresh()
 ## False puts it out of reach as well as dark: something a press could not act on.
 var available := true:
 	set(v):
+		if v == available:
+			return
 		available = v
 		collision_layer = 2 if available and reachable else 0
 		_refresh()

@@ -750,7 +750,16 @@ func bar_length() -> float:
 	return _bar.basis.get_scale().x if _bar.visible else 0.0
 
 
+var _frame_owed := 1.0
+
+
 func _process(_delta: float) -> void:
+	# Drawn at 60 Hz at most; the time that passed in between is carried, not lost.
+	_frame_owed += _delta
+	if _frame_owed < 1.0 / 60.0 - 0.0005 and _delta > 0.0:
+		return
+	_delta = _frame_owed
+	_frame_owed = 0.0
 	var h := harmony_now()
 	_show_guide(h)
 	var lit := -1

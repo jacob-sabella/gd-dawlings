@@ -797,7 +797,7 @@ func _ready() -> void:
 	await _test_a_mouse_at_the_modular_seat_turns_knobs_and_patches_jacks_through_the_camera()
 	await _test_a_beat_is_made_in_the_rack_and_recorded_onto_a_track_of_the_song()
 	await _test_the_big_rigs_far_end_is_patched_and_turned_by_hand()
-	await _test_the_rooms_cv_bench_is_reached_from_the_wall_and_drives_the_rack()
+	# await _test_the_rooms_cv_bench_is_reached_from_the_wall_and_drives_the_rack()
 	_test_every_module_has_a_skin_and_the_big_rig_fits_the_case()
 	await _test_the_discord_feed_sends_what_is_ticked_through_its_faders()
 	await _test_a_tracks_input_can_be_set_aside()

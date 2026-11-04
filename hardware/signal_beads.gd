@@ -252,7 +252,16 @@ static func length_of(spine: PackedVector3Array) -> float:
 	return total
 
 
+var _owed := 1.0
+
+
 func _process(delta: float) -> void:
+	# 60 Hz is plenty for beads sliding along a cable; at 144 the walk of every carrier is waste.
+	_owed += delta
+	if _owed < 1.0 / 60.0 - 0.0005:
+		return
+	delta = _owed
+	_owed = 0.0
 	drive(delta, Ergonomics.current.motion_scale if Ergonomics.current != null else 1.0)
 
 

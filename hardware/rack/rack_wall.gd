@@ -176,6 +176,9 @@ func framing_root() -> Node3D:
 	return panel if panel != null else self
 
 
+var _shone_key := Vector3(-1, -1, -1)
+
+
 func _process(delta: float) -> void:
 	super(delta)
 	var now := int(clock.call())
@@ -389,6 +392,12 @@ func glow_with(level: float, hit: float) -> void:
 func _shine() -> void:
 	if _glow == null:
 		return
+	# Only when the light has actually moved: this is asked every frame, and it touches lights and
+	# materials (and a light that is touched is a light the renderer redoes).
+	var key := Vector3(roundf(_level * 150.0), roundf(_hit * 150.0), float(mood.hash() & 0xffff))
+	if key == _shone_key:
+		return
+	_shone_key = key
 	var base: Color = mood["base"]
 	var flash: Color = mood["hit"]
 	var colour := base.lerp(flash, clampf(_hit, 0.0, 1.0))

@@ -21,7 +21,10 @@ signal value_committed(value: float)
 ## 0..1 in the control's own terms, whatever it drives.
 @export var value: float = 0.0
 
-var held_by: Node = null
+var held_by: Node = null:
+	set(v):
+		held_by = v
+		_track_held()
 ## Somebody ELSE in the session has their hand on this -- on their own copy of it, in their own
 ## room. Set from outside (core/session/presence.gd), from the host's table of who holds what,
 ## and refused like a second local hand. Not `held_by`: a local hold also stops the control
@@ -74,6 +77,21 @@ func is_held() -> bool:
 	return held_by != null or bead != null
 
 
+## Every control in somebody's hand is in a group, so a surface asks the few that are held rather
+## than searching all of its own subtree each frame (Surface._anything_held).
+const HELD_GROUP := &"held_controls"
+
+
+func _track_held() -> void:
+	if not is_inside_tree():
+		return
+	var held := held_by != null or bead != null
+	if held and not is_in_group(HELD_GROUP):
+		add_to_group(HELD_GROUP)
+	elif not held and is_in_group(HELD_GROUP):
+		remove_from_group(HELD_GROUP)
+
+
 # --- automation by gesture (docs/spatial_loop.md part two, slice 22) --------------------------
 
 ## () -> Array: the lane this control writes, [track index, target] as MixState.TrackState.
@@ -88,7 +106,10 @@ var automates: Callable = Callable()
 var bead_writes: Callable = Callable()
 ## The write bead writing this control now, or null. While it is, the control ignores the mix's
 ## echoes as a held one does, and a hand cannot take it: the bead was first.
-var bead: Node = null
+var bead: Node = null:
+	set(v):
+		bead = v
+		_track_held()
 
 
 ## The lane a write bead over this control writes ([track index, target]), or [] when it writes

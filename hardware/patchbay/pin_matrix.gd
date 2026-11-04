@@ -153,7 +153,7 @@ const RELEASE := 4.0
 ## Words in the foot stay this long.
 const SAY_MSEC := 4000
 ## How often the meters, the pulses and the towers are read (Hz), and at motion 0 the towers.
-const METER_HZ := 30.0
+const METER_HZ := 20.0
 const CALM_HZ := 1.0
 ## A header's peak tick holds this long, and its clip light this long after the last clip (ms).
 const HOLD_MSEC := 1500
@@ -841,6 +841,9 @@ func pulse_of(i: int, j: int) -> float:
 	return float(_glow.get(Vector2i(i, j), 0.0))
 
 
+var _pulse_clock := 0.0
+
+
 func _process(delta: float) -> void:
 	var motion := Ergonomics.current.motion_scale if Ergonomics.current != null else 1.0
 	var moved := false
@@ -863,8 +866,13 @@ func _process(delta: float) -> void:
 			_meter_clock = 0.0
 			_pulse(step)
 			_read_meters(step, motion)
-	else:
-		_pulse(delta)
+	elif is_visible_in_tree():
+		# The pins' glow eases at a third of the frame rate: nobody sees the difference, and
+		# every pin of the matrix is asked each time.
+		_pulse_clock += delta
+		if _pulse_clock >= 1.0 / 20.0:
+			_pulse(minf(_pulse_clock, 0.1))
+			_pulse_clock = 0.0
 	if _status != null and _status.visible and Time.get_ticks_msec() >= _said_until:
 		_status.visible = false
 

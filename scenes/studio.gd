@@ -5733,6 +5733,9 @@ func _station_seats() -> Dictionary:
 ## Each frame: this player's keys play the rack while they are at it (or its PLAY has the computer
 ## keys), its controls take the pointer only then, its lamps follow its meters, and the case glows with
 ## what it plays in the venue's mood. The song's recording is caught from it on the host.
+var _modular_owed := 1.0
+
+
 func _follow_modular() -> void:
 	if rack_wall == null or not is_instance_valid(rack_wall):
 		return
@@ -7807,7 +7810,10 @@ func _process(delta: float) -> void:
 	_follow_wheel()
 	_follow_strings()
 	_follow_theremin()
-	_follow_modular()
+	_modular_owed += get_process_delta_time()
+	if _modular_owed >= 1.0 / 30.0 - 0.001:
+		_modular_owed = 0.0
+		_follow_modular()
 	_follow_making()
 	_follow_gives(delta)
 	_follow_kit()

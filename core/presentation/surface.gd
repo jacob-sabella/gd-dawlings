@@ -127,8 +127,10 @@ func set_wide(_wide: bool) -> void:
 
 
 func _anything_held() -> bool:
-	for node in find_children("*", "ControlAffordance", true, false):
-		if (node as ControlAffordance).is_held():
+	if not is_inside_tree():
+		return false
+	for node in get_tree().get_nodes_in_group(ControlAffordance.HELD_GROUP):
+		if node is ControlAffordance and (node as ControlAffordance).is_held() and is_ancestor_of(node):
 			return true
 	return false
 

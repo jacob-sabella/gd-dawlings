@@ -203,8 +203,28 @@ func _ready() -> void:
 		if n >= 0:
 			DAW.set_note_velocity(_target[0], _target[1], n, _velocity_of(v)))
 	DAW.timeline_changed.connect(refresh)
-	DAW.transport_changed.connect(refresh)
+	DAW.transport_changed.connect(_refresh_soon)
 	refresh()
+
+
+var _refreshed_at := -1.0
+var _refresh_pending := false
+
+
+## The transport ticks every frame while it plays; the page follows the playhead at 15 Hz at most,
+## the first tick after a rest at once, and the last of a burst once the gap has passed.
+func _refresh_soon() -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _refreshed_at >= 1.0 / 15.0:
+		_refreshed_at = now
+		refresh()
+	elif not _refresh_pending and is_inside_tree():
+		_refresh_pending = true
+		get_tree().create_timer(1.0 / 15.0).timeout.connect(func():
+			_refresh_pending = false
+			_refreshed_at = Time.get_ticks_msec() / 1000.0
+			if is_inside_tree():
+				refresh())
 
 
 ## Follows the selection: the bars set from the item while exactly one is selected, the crossfade

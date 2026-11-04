@@ -150,11 +150,14 @@ func _ready() -> void:
 	Ergonomics.current = studio.ergonomics
 	add_child(studio)
 	if args["perf"]:
+		RenderingServer.viewport_set_measure_render_time(get_tree().root.get_viewport_rid(), true)
 		var tick := Timer.new()
 		tick.wait_time = 2.0
 		tick.autostart = true
 		tick.timeout.connect(func() -> void:
-			print("PERF fps=%d process=%.1fms physics=%.1fms draws=%d prims=%dk objs=%d nodes=%d orphans=%d vram=%dMB" % [
+			print("PERF gpu=%.1fms cpu_render=%.1fms fps=%d process=%.1fms physics=%.1fms draws=%d prims=%dk objs=%d nodes=%d orphans=%d vram=%dMB" % [
+					RenderingServer.viewport_get_measured_render_time_gpu(get_tree().root.get_viewport_rid()),
+					RenderingServer.viewport_get_measured_render_time_cpu(get_tree().root.get_viewport_rid()),
 					Engine.get_frames_per_second(), Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
 					Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
 					int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),

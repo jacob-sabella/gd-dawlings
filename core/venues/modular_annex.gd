@@ -53,6 +53,9 @@ var _hangs: Array[MeshInstance3D] = []
 var _hang_level: Array[float] = []
 var _column_level: Array[float] = []
 var _lights: Array[OmniLight3D] = []
+var _was_under := false
+var _shone_level := 0.0
+var _shone_hit := 0.0
 var _level := 0.0
 var _hit := 0.0
 ## The venue's weather (rain, snow, dust) put out while the eye is under this roof.
@@ -223,9 +226,13 @@ func _ready() -> void:
 
 ## What the rack plays, as the room's light: its loudness 0..1 and the hit pulse.
 func glow_with(level: float, hit: float) -> void:
-	_level = level
-	_hit = maxf(_hit * 0.9, hit)
-	_shine()
+	# Eased, so the room breathes with the music rather than flashing on every beat.
+	_level = lerpf(_level, level, 0.06)
+	_hit = lerpf(_hit, hit, 0.05)
+	if absf(_level - _shone_level) + absf(_hit - _shone_hit) > 0.01:
+		_shone_level = _level
+		_shone_hit = _hit
+		_shine()
 
 
 ## How loud each module is now, in the order they are across the case (RackWall's pillars): a skyline.
@@ -249,7 +256,12 @@ func _process(_delta: float) -> void:
 	var local := to_local(cam.global_position)
 	var room := inside(half)
 	var under := room.has_point(Vector2(local.x, local.z)) and local.y < HEIGHT
-	if under and _hushed.is_empty():
+	# Only on the way in or out: searching every node of the venue for particles is not a thing to
+	# do each frame.
+	if under == _was_under:
+		return
+	_was_under = under
+	if under:
 		for node in get_parent().find_children("*", "GPUParticles3D", true, false):
 			var p := node as GPUParticles3D
 			if p.visible and not is_ancestor_of(p):
@@ -319,14 +331,14 @@ func _apply_mood() -> void:
 func _shine() -> void:
 	var base: Color = mood["base"]
 	var flash: Color = mood["hit"]
-	var live := clampf(_level * 1.5 + _hit, 0.0, 1.5)
-	var colour := base.lerp(flash, clampf(_hit, 0.0, 1.0))
-	_tile_material.albedo_color = colour * (0.55 + live * 1.4)
-	_line_material.albedo_color = colour * (0.4 + live * 1.2)
-	_sign_material.albedo_color = colour * (0.8 + live)
+	var live := clampf(_level * 0.8 + _hit * 0.3, 0.0, 1.0)
+	var colour := base.lerp(flash, clampf(_hit * 0.35, 0.0, 1.0))
+	_tile_material.albedo_color = colour * (0.6 + live * 0.6)
+	_line_material.albedo_color = colour * (0.45 + live * 0.5)
+	_sign_material.albedo_color = colour * (0.85 + live * 0.4)
 	for lamp in _lights:
 		lamp.light_color = colour
-		lamp.light_energy = float(mood["glow"]) * (1.1 + _level * 2.0 + _hit * 1.2)
+		lamp.light_energy = float(mood["glow"]) * (1.1 + _level * 0.8 + _hit * 0.3)
 
 
 func _grow_column(n: int, level: float) -> void:
@@ -430,7 +442,7 @@ func _furnish(room: Rect2, metal: Material, case_paint: Material, wood: Material
 	ZoneKit.block(self, Vector3(1.8, 0.012, 2.8), Vector3(spot_x - 0.2, FLOOR_TOP + 0.007, zc), _paint(Color(0.05, 0.05, 0.06), 0.95, 0.0), "Rug")
 	for dz in [-1.4, 1.4]:
 		ZoneKit.block(self, Vector3(1.76, 0.014, 0.03), Vector3(spot_x - 0.2, FLOOR_TOP + 0.0095, zc + dz * 0.96), null, "RugEdge%d" % int(dz * 10.0)).material_override = _line_material
-	_shelves(x0, case_paint, metal)
+	# The module library and the CV bench are not built for now (_shelves): not wanted in the room.
 	_build_tv(x0, metal)
 	# Cables swagged overhead: from the truss down to the towers and the monitors, and along it to the rack.
 	var swags := [
@@ -648,9 +660,9 @@ static func cut_the_wall(venue: Venue) -> int:
 		var c := venue.to_local(mi.global_position)
 		var s := box.size
 		# A wall: tall and thin along x, standing across the doorway at the live room's side.
-		if s.y < 2.0 or s.x > 1.4 or s.z < DOOR_WIDE:
+		if s.y < 0.3 or s.x > 1.4 or s.z < DOOR_WIDE:
 			continue
-		if absf(c.x - h) > 0.7 or c.z - s.z * 0.5 > lo or c.z + s.z * 0.5 < hi or c.y - s.y * 0.5 > 1.0:
+		if absf(c.x - h) > 0.7 or c.z - s.z * 0.5 > lo or c.z + s.z * 0.5 < hi or c.y - s.y * 0.5 > DOOR_HIGH - 0.3:
 			continue
 		var parent := mi.get_parent() as Node3D
 		var top := c.y + s.y * 0.5
