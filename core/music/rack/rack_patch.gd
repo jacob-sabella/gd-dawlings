@@ -50,14 +50,14 @@ static func preset(name: StringName) -> Dictionary:
 		&"acid_line":
 			_put(p, "clock", "clock", 0, 0, {"sync": 0.0, "bpm": 0.45})
 			_put(p, "seq", "seq", 1, 0, {"s1": 0.35, "s2": 0.0, "s3": 0.4, "s4": 0.35, "s5": 0.5, "s6": 0.0, "s7": 0.35, "s8": 0.42,
-					"s9": 0.35, "s10": 0.0, "s11": 0.55, "s12": 0.35, "s13": 0.35, "s14": 0.45, "s15": 0.0, "s16": 0.6, "gate": 0.3})
+					"s9": 0.35, "s10": 0.0, "s11": 0.55, "s12": 0.35, "s13": 0.35, "s14": 0.45, "s15": 0.0, "s16": 0.6, "gate": 0.55})
 			_put(p, "vco", "vco", 2, 0, {"wave": 0.5})
-			_put(p, "env", "env", 2, 1, {"a": 0.0, "d": 0.35, "s": 0.0, "r": 0.2})
+			_put(p, "env", "env", 2, 1, {"a": 0.0, "d": 0.72, "s": 0.12, "r": 0.5})
 			_put(p, "lfo", "lfo", 0, 1, {"rate": 0.4})
 			_put(p, "ladder", "ladder", 3, 0, {"cutoff": 0.45, "res": 0.65, "cv": 0.7})
 			_put(p, "vca", "vca", 4, 0)
 			_put(p, "delay", "delay", 5, 0, {"sync": 0.5, "fb": 0.45, "mix": 0.3})
-			_put(p, "out", "out", 6, 0)
+			_put(p, "out", "out", 6, 0, {"level": 0.75})
 			_wire(p, [["clock.16th", "seq.clk"], ["seq.pitch", "vco.pitch"], ["seq.gate", "env.gate"], ["vco.out", "ladder.in"],
 					["env.out", "ladder.cutoff"], ["ladder.out", "vca.in"], ["env.out", "vca.cv"], ["vca.out", "delay.in"],
 					["delay.l", "out.l"], ["delay.r", "out.r"]])
@@ -95,13 +95,13 @@ static func preset(name: StringName) -> Dictionary:
 			# loop under it, all crushed, driven, echoed and washed.
 			_put(p, "clk", "clock", 0, 0, {"sync": 0.0, "bpm": 0.40})
 			_put(p, "seq", "seq", 1, 0, {"s1": 0.10, "s2": 0.10, "s3": 0.22, "s4": 0.10, "s5": 0.10, "s6": 0.30, "s7": 0.10, "s8": 0.17,
-					"s9": 0.10, "s10": 0.10, "s11": 0.22, "s12": 0.10, "s13": 0.35, "s14": 0.10, "s15": 0.28, "s16": 0.17, "gate": 0.45})
+					"s9": 0.10, "s10": 0.10, "s11": 0.22, "s12": 0.10, "s13": 0.35, "s14": 0.10, "s15": 0.28, "s16": 0.17, "gate": 0.6})
 			_put(p, "v1", "vco", 2, 0, {"wave": 0.5, "tune": 0.40, "fine": 0.46})
 			_put(p, "v2", "vco", 2, 1, {"wave": 0.5, "tune": 0.40, "fine": 0.54})
-			_put(p, "env", "env", 3, 0, {"a": 0.0, "d": 0.45, "s": 0.15, "r": 0.3})
+			_put(p, "env", "env", 3, 0, {"a": 0.0, "d": 0.7, "s": 0.2, "r": 0.5})
 			_put(p, "lfo", "lfo", 3, 1, {"rate": 0.35, "depth": 0.7})
 			_put(p, "mixv", "mix", 4, 0, {"l1": 0.55, "l2": 0.55, "l3": 0.6})
-			_put(p, "fold", "fold", 5, 0, {"gain": 0.25})
+			_put(p, "fold", "fold", 5, 0, {"gain": 0.1})
 			_put(p, "lad", "ladder", 6, 0, {"cutoff": 0.42, "res": 0.7, "drive": 0.4, "cv": 0.75})
 			_put(p, "vca", "vca", 7, 0)
 			_put(p, "kick", "drum", 4, 1, {"kind": 0.0})
@@ -109,8 +109,8 @@ static func preset(name: StringName) -> Dictionary:
 			_put(p, "hat", "drum", 6, 1, {"kind": 0.99, "decay": 0.12})
 			_put(p, "mixd", "mix", 7, 1, {"l1": 0.9, "l2": 0.6, "l3": 0.35})
 			_put(p, "mixm", "mix", 8, 0, {"l1": 0.75, "l2": 0.8})
-			_put(p, "crush", "crush", 9, 0, {"rate": 0.1, "bits": 0.8, "mix": 0.4})
-			_put(p, "drive", "drive", 10, 0, {"drive": 0.6, "level": 0.5})
+			_put(p, "crush", "crush", 9, 0, {"rate": 0.05, "bits": 0.8, "mix": 0.15})
+			_put(p, "drive", "drive", 10, 0, {"drive": 0.35, "level": 0.6})
 			_put(p, "dly", "delay", 11, 0, {"sync": 0.5, "fb": 0.5, "mix": 0.3})
 			_put(p, "rev", "reverb", 12, 0, {"time": 0.7, "mix": 0.25})
 			_put(p, "out", "out", 13, 0, {"level": 0.5})
