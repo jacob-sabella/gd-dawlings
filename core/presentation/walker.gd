@@ -30,7 +30,9 @@ const SPRINT_SPEED := 3.2
 const ACCELERATION := 9.0
 const FRICTION := 11.0
 const AIR_CONTROL := 0.25
-const JUMP_SPEED := 3.1
+## We are ghosts: no gravity, no jump. Space rises, C sinks, and you hang where you let go.
+const FLY_SPEED := 1.8
+const CEILING := 6.0
 const LOOK_SPEED := 0.005
 ## How tall a footprint stands. Above a desk, below a lamp's shade; nobody steps over a console.
 const SOLID_HEIGHT := 1.25
@@ -65,7 +67,6 @@ var _solids: Array[CollisionShape3D] = []
 var _solid_body: StaticBody3D
 var _travel: Tween
 var _bob := 0.0
-var _jump_held := false
 
 
 func _ready() -> void:
@@ -454,14 +455,18 @@ func _physics_process(delta: float) -> void:
 	wish = (Basis(Vector3.UP, yaw) * wish).normalized() if wish != Vector3.ZERO else Vector3.ZERO
 	var sprint := Input.is_key_pressed(KEY_SHIFT) and focus_owner == null
 	var speed := SPRINT_SPEED if sprint else WALK_SPEED
-	step(delta, wish * speed, focus_owner == null and Input.is_key_pressed(KEY_SPACE))
+	var rise := 0.0
+	if focus_owner == null:
+		if Input.is_key_pressed(KEY_SPACE): rise += 1.0
+		if Input.is_key_pressed(KEY_C): rise -= 1.0
+	step(delta, wish * speed, rise * (2.0 if sprint else 1.0))
 
 
 ## One tick of the body, with the input already decided. Split out so a test can drive it.
-func step(delta: float, wish_velocity: Vector3, jump := false) -> void:
+func step(delta: float, wish_velocity: Vector3, rise := 0.0) -> void:
 	var grounded := is_on_floor()
 	var flat := Vector3(velocity.x, 0, velocity.z)
-	var control := 1.0 if grounded else AIR_CONTROL
+	var control := 1.0
 	if wish_velocity != Vector3.ZERO:
 		flat = flat.move_toward(wish_velocity, ACCELERATION * control * delta)
 		# Walking off a visit stands you back up.
@@ -470,12 +475,16 @@ func step(delta: float, wish_velocity: Vector3, jump := false) -> void:
 		flat = flat.move_toward(Vector3.ZERO, FRICTION * delta)
 	velocity.x = flat.x
 	velocity.z = flat.z
-	if grounded:
-		if jump and not _jump_held:
-			velocity.y = JUMP_SPEED
+	# Ghost flight: vertical speed is what the keys say, and zero means hover. Resting on the
+	# floor (or a riser) presses down a little so the body still reads as standing.
+	if rise > 0.0 and global_position.y < CEILING:
+		velocity.y = move_toward(velocity.y, rise * FLY_SPEED, ACCELERATION * delta)
+	elif rise < 0.0:
+		velocity.y = move_toward(velocity.y, rise * FLY_SPEED, ACCELERATION * delta)
+	elif grounded:
+		velocity.y = -0.5
 	else:
-		velocity.y -= GRAVITY * delta
-	_jump_held = jump
+		velocity.y = move_toward(velocity.y, 0.0, FRICTION * delta)
 	move_and_slide()
 	if grounded and wish_velocity != Vector3.ZERO and is_on_wall():
 		_step_up(Vector3(wish_velocity.x, 0, wish_velocity.z).normalized())
@@ -499,11 +508,16 @@ func _step_up(toward: Vector3) -> void:
 	var raised := global_transform.translated(up)
 	if test_move(raised, ahead):
 		return
+	var was := global_position
 	global_position += up + ahead
-	# Down onto whatever is there, now rather than over the next few frames of gravity.
+	# Down onto whatever is there. Nothing to stand on up here and you would hang in the air (a
+	# ghost does not fall), so it was not a step at all.
 	var drop := KinematicCollision3D.new()
-	if test_move(global_transform, -up, drop):
+	if test_move(global_transform, -up * 2.0, drop):
 		global_position += drop.get_travel()
+	else:
+		global_position = was
+		return
 	velocity.y = 0.0
 
 

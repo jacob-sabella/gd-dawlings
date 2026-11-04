@@ -591,8 +591,11 @@ static func clear_the_site(venue: Venue) -> int:
 		var mm := holder.multimesh
 		var gone := Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO)
 		for i in mm.instance_count:
-			var at: Vector3 = (to_venue * holder.global_transform * mm.get_instance_transform(i)).origin
-			if flat.has_point(Vector2(at.x, at.z)) and at.y < HEIGHT:
+			var placed := to_venue * holder.global_transform * mm.get_instance_transform(i)
+			var at: Vector3 = placed.origin
+			# Where it stands, or where any of it reaches (a canopy, a rock's shoulder).
+			var reach := (placed * mm.mesh.get_aabb()) if mm.mesh != null else AABB(at, Vector3.ZERO)
+			if (flat.has_point(Vector2(at.x, at.z)) and at.y < HEIGHT) or (site.intersects(reach) and reach.size.y > 0.05):
 				mm.set_instance_transform(i, Transform3D(gone.basis, mm.get_instance_transform(i).origin))
 				cleared += 1
 	# Ground that rises into the room (a cave's floor, a dome's shell) is carved away from it, triangle by
@@ -604,6 +607,7 @@ static func clear_the_site(venue: Venue) -> int:
 			var whole := venue.global_transform.affine_inverse() * land.global_transform * land.get_aabb()
 			if whole.size.x > 6.0 and whole.intersects(volume) and _cut_mesh(land, venue, volume, true):
 				cleared += 1
+	cleared += _clip_slabs(venue, site)
 	for node in venue.find_children("*", "VisualInstance3D", true, false):
 		var vi := node as GeometryInstance3D
 		if vi == null or not vi.visible or vi.get_parent() == null:
@@ -682,6 +686,87 @@ static func cut_the_wall(venue: Venue) -> int:
 
 
 ## `mi`'s mesh without the triangles whose middle is in `opening` (venue space). Whether any went.
+## Long thin pieces of a venue (a parapet, a backdrop, a beam, a bulkhead: boxes, or the few quads of one)
+## that run through the site are shortened to what lies outside it, in as many boxes as that takes, so
+## the room is not crossed by a wall that belongs to the live room. Only pieces standing square to the
+## venue's axes are cut; a rotated one is hidden where its middle is in the site.
+static func _clip_slabs(venue: Venue, site: AABB) -> int:
+	var cleared := 0
+	var to_venue := venue.global_transform.affine_inverse()
+	for node in venue.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi == null or not mi.visible or mi.mesh == null or mi.get_parent() == null:
+			continue
+		var n: Node = mi
+		var ours := false
+		while n != null and n != venue:
+			if n is ModularAnnex:
+				ours = true
+				break
+			n = n.get_parent()
+		if ours:
+			continue
+		var boxy := mi.mesh is BoxMesh
+		if mi.mesh is ArrayMesh and mi.mesh.get_surface_count() == 1:
+			var arrays: Array = mi.mesh.surface_get_arrays(0)
+			boxy = (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() <= 24
+		if not boxy:
+			continue
+		var local := to_venue * mi.global_transform
+		var whole := local * mi.get_aabb()
+		if not site.intersects(whole) or whole.size.y < 0.2:
+			continue
+		var long := maxf(whole.size.x, whole.size.z)
+		if long < 2.0 or long > 60.0:
+			continue
+		var b := local.basis
+		var square := true
+		for axis in [b.x, b.y, b.z]:
+			var a: Vector3 = (axis as Vector3).abs()
+			square = square and maxf(a.x, maxf(a.y, a.z)) > (axis as Vector3).length() * 0.999
+		if not square:
+			continue
+		# Subtract the site's footprint from this box's, in x and z: up to four boxes remain.
+		var x0 := whole.position.x
+		var x1 := whole.end.x
+		var z0 := whole.position.z
+		var z1 := whole.end.z
+		var sx0 := site.position.x
+		var sx1 := site.end.x
+		var sz0 := site.position.z
+		var sz1 := site.end.z
+		var rects: Array[Rect2] = []
+		if z0 < sz0:
+			rects.append(Rect2(x0, z0, x1 - x0, sz0 - z0))
+		if z1 > sz1:
+			rects.append(Rect2(x0, sz1, x1 - x0, z1 - sz1))
+		var mz0 := maxf(z0, sz0)
+		var mz1 := minf(z1, sz1)
+		if x0 < sx0:
+			rects.append(Rect2(x0, mz0, sx0 - x0, mz1 - mz0))
+		if x1 > sx1:
+			rects.append(Rect2(sx1, mz0, x1 - sx1, mz1 - mz0))
+		var material: Material = mi.material_override
+		if material == null:
+			material = mi.mesh.surface_get_material(0) if mi.mesh.get_surface_count() > 0 else null
+		for r in rects:
+			if r.size.x < 0.02 or r.size.y < 0.02:
+				continue
+			var piece := MeshInstance3D.new()
+			var box := BoxMesh.new()
+			box.size = Vector3(r.size.x, whole.size.y, r.size.y)
+			piece.mesh = box
+			piece.material_override = material
+			piece.cast_shadow = mi.cast_shadow
+			piece.name = mi.name + "_clip"
+			mi.get_parent().add_child(piece)
+			piece.global_transform = venue.global_transform * Transform3D(Basis.IDENTITY,
+					Vector3(r.position.x + r.size.x * 0.5, whole.position.y + whole.size.y * 0.5, r.position.y + r.size.y * 0.5))
+		mi.visible = false
+		cleared += 1
+	return cleared
+
+
 static func _cut_mesh(mi: MeshInstance3D, venue: Venue, opening: AABB, any_corner := false) -> bool:
 	var src := mi.mesh as ArrayMesh
 	var to_venue := venue.global_transform.affine_inverse() * mi.global_transform

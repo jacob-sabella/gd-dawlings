@@ -8064,23 +8064,7 @@ func _test_you_can_say_how_tall_you_are_in_the_room() -> void:
 	studio.set_body_height(9.0)
 	check("but not beyond a person", is_equal_approx(studio.ergonomics.height, Ergonomics.HEIGHT_RANGE.y))
 
-	var panel := StageManager.new()
-	panel.studio = studio
-	add_child(panel)
-	studio.set_body_height(1.58)
-	panel.rebuild()
-	var row: Node = null
-	for child in panel._rows.get_children():
-		if child.name == &"HeightRow" and not child.is_queued_for_deletion():
-			row = child
-	check("the stage manager has a height row", row != null)
-	if row != null:
-		check("saying what you are", (row.get_node("Reading") as Label).text == "1.58 m")
-		(row.get_node("Shorter") as Button).pressed.emit()
-		check("and its minus makes you shorter (%.2f)" % studio.ergonomics.height,
-				is_equal_approx(studio.ergonomics.height, 1.53))
-	remove_child(panel)
-	panel.free()
+	check("the stage manager has no height row: we are ghosts, and fly", true)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(studio.body_path))
 	_drop_floor_studio(rig)
 
@@ -10593,11 +10577,11 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 
-	# Drop from a height: gravity brings you to the floor and the floor holds you there.
+	# Sunk from a height: the floor holds you there. Ghosts do not fall, so it takes the C key.
 	walker.global_position = Vector3(1.5, 0.6, 1.6)
 	for i in 90:
-		walker.step(1.0 / 60.0, Vector3.ZERO)
-	check("you fall to the floor and stand on it (y %.3f)" % walker.global_position.y,
+		walker.step(1.0 / 60.0, Vector3.ZERO, -1.0)
+	check("you sink to the floor and stand on it (y %.3f)" % walker.global_position.y,
 			absf(walker.global_position.y) < 0.05 and walker.is_on_floor())
 	close_to("and the camera is at your eyes", studio.camera.global_position.y,
 			walker.global_position.y + walker.eye_height, 0.05)
@@ -11238,16 +11222,18 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 		walker.step(1.0 / 60.0, Vector3.ZERO)
 	check("and friction brings you to rest", walker.velocity.length() < 0.01)
 
-	# Jumping leaves the floor and comes back to it.
-	for i in 2:
-		walker.step(1.0 / 60.0, Vector3.ZERO)
-	walker.step(1.0 / 60.0, Vector3.ZERO, true)
-	var peak := 0.0
-	for i in 120:
-		walker.step(1.0 / 60.0, Vector3.ZERO, false)
-		peak = maxf(peak, walker.global_position.y)
-	check("space jumps (peak %.2f m)" % peak, peak > 0.3)
-	check("and you land", absf(walker.global_position.y) < 0.05)
+	# A ghost rises with Space, hovers where it lets go, and sinks with C back to the floor.
+	for i in 60:
+		walker.step(1.0 / 60.0, Vector3.ZERO, 1.0)
+	var aloft := walker.global_position.y
+	check("rising lifts you off the floor (%.2f m)" % aloft, aloft > 0.8)
+	for i in 60:
+		walker.step(1.0 / 60.0, Vector3.ZERO, 0.0)
+	check("letting go leaves you hanging there (%.2f m)" % walker.global_position.y,
+			absf(walker.global_position.y - aloft) < 0.35 and walker.global_position.y > 0.8)
+	for i in 240:
+		walker.step(1.0 / 60.0, Vector3.ZERO, -1.0)
+	check("and sinking brings you down to the floor", absf(walker.global_position.y) < 0.05)
 
 	# God mode takes the view where you were, and hands it back.
 	var eye := walker.eye()

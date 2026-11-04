@@ -66,7 +66,7 @@ const TOGETHER := [
 	["Listen from there", "Z and Enter over the ruler, or a note's LISTEN: the song plays from there for everyone. In a headset, pinch thumb and middle as you point."],
 ]
 const ROOM := [
-	["Walking", "WASD or the arrows walk, Shift runs, Space jumps, right-drag looks. N flies instead, and back."],
+	["Walking", "WASD or the arrows walk, Shift runs, right-drag looks. You are a ghost: Space rises, C sinks, and you hover where you let go. N takes the orbit camera instead."],
 	["The gear", "F walks you to the gear you look at, Shift-F the other way, Esc lets go. G brings it to you instead."],
 	["The desk", "E spreads the console out to every track at once, and back to its pages."],
 	["Carrying", "Q puts down what you carry. Hold R and let go to throw it. 1 to 3 pocket it, and the wheel picks a pocket."],
