@@ -194,7 +194,7 @@ func set_glow(level: float) -> void:
 		m = m.duplicate() as StandardMaterial3D
 		_jacket.material_override = m
 		_own_material = true
-	m.emission_energy_multiplier = 0.55 + clampf(level, 0.0, 1.0) * 2.6
+	m.emission_energy_multiplier = 0.45 + clampf(level, 0.0, 1.0) * 0.9
 
 
 var _own_material := false

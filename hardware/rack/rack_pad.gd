@@ -180,7 +180,7 @@ func _place(t: float) -> void:
 	_stem.scale = Vector3(1, lift, 1)
 	_mat.set_shader_parameter("orb", Vector2(x, 1.0 - y))
 	_mat.set_shader_parameter("hot", _swell)
-	_orb_mat.emission_energy_multiplier = 2.0 + _swell * 3.0
+	_orb_mat.emission_energy_multiplier = 1.4 + _swell * 1.2
 
 
 func hint() -> String:

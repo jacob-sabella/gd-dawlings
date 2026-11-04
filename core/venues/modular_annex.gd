@@ -338,7 +338,7 @@ func _shine() -> void:
 	_sign_material.albedo_color = colour * (0.85 + live * 0.4)
 	for lamp in _lights:
 		lamp.light_color = colour
-		lamp.light_energy = float(mood["glow"]) * (1.1 + _level * 0.8 + _hit * 0.3)
+		lamp.light_energy = float(mood["glow"]) * (0.7 + _level * 0.35 + _hit * 0.1)
 
 
 func _grow_column(n: int, level: float) -> void:

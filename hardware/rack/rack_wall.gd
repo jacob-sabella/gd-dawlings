@@ -412,9 +412,9 @@ func _shine() -> void:
 	var flash: Color = mood["hit"]
 	var colour := base.lerp(flash, clampf(_hit, 0.0, 1.0))
 	_glow.light_color = colour
-	_glow.light_energy = float(mood["glow"]) * (0.15 + _level * 2.2 + _hit * 1.6)
-	_halo_material.albedo_color = Color(colour.r, colour.g, colour.b, clampf(0.04 + _level * 0.25 + _hit * 0.2, 0.0, 0.5))
-	_edge_material.albedo_color = base.lerp(flash, clampf(_hit, 0.0, 1.0)) * (0.35 + _level * 1.6 + _hit * 0.8)
+	_glow.light_energy = float(mood["glow"]) * (0.12 + _level * 0.8 + _hit * 0.3)
+	_halo_material.albedo_color = Color(colour.r, colour.g, colour.b, clampf(0.03 + _level * 0.09 + _hit * 0.05, 0.0, 0.2))
+	_edge_material.albedo_color = base.lerp(flash, clampf(_hit, 0.0, 1.0)) * (0.3 + _level * 0.6 + _hit * 0.2)
 	if _vu_on != null:
 		_vu_on.albedo_color = base
 		_vu_on.emission = base
@@ -994,7 +994,7 @@ func show_meters(meters: Dictionary) -> void:
 		var band: StandardMaterial3D = _bands.get(id)
 		if band != null:
 			band.emission_enabled = on
-			band.emission_energy_multiplier = 1.0 + clampf(float(meters.get(id, 0.0)), 0.0, 1.0) * 5.0
+			band.emission_energy_multiplier = 0.8 + clampf(float(meters.get(id, 0.0)), 0.0, 1.0) * 1.6
 	# Each cable glows with what its source is putting out, so the signal can be followed by eye.
 	for cable in cables:
 		if is_instance_valid(cable):

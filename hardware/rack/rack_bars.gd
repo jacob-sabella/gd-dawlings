@@ -96,11 +96,11 @@ func _show(i: int) -> void:
 	var c := tint.lerp(Color(1.0, 0.45, 0.25), v)
 	_mats[i].albedo_color = c
 	_mats[i].emission = c
-	_mats[i].emission_energy_multiplier = 0.35 + v * 2.6
+	_mats[i].emission_energy_multiplier = 0.3 + v * 1.0
 	if i == playhead:
 		_mats[i].albedo_color = Color(1, 1, 1)
 		_mats[i].emission = Color(1, 0.97, 0.85)
-		_mats[i].emission_energy_multiplier = 4.5
+		_mats[i].emission_energy_multiplier = 2.2
 		bar.position.z = d * 0.5 + 0.006
 
 
