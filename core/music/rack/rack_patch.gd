@@ -166,6 +166,9 @@ static func preset(name: StringName) -> Dictionary:
 			col2 += RackLayout.width_of("scope")
 			_wire(p, [["clk.16th", "seq1.clk"], ["clk.8th", "seq2.clk"], ["clk.beat", "seq3.clk"], ["seq1.pitch", "v1.pitch"], ["seq1.pitch", "v2.pitch"], ["v2.out", "v1.fm"], ["seq1.gate", "env1.gate"], ["seq1.gate", "env2.gate"], ["v1.out", "mixL.in1"], ["v2.out", "mixL.in2"], ["v1.sub", "mixL.in3"], ["mixL.out", "fold.in"], ["lfo2.uni", "fold.fold"], ["fold.out", "lad.in"], ["env1.out", "lad.cutoff"], ["lfo1.uni", "lad.cutoff"], ["sh1.out", "lad.cutoff"], ["noise.white", "sh1.in"], ["clk.16th", "sh1.trig"], ["lad.out", "vca1.in"], ["env2.out", "vca1.cv"], ["seq2.pitch", "v3.pitch"], ["seq2.gate", "env3.gate"], ["v3.out", "svf.in"], ["env3.out", "svf.cutoff"], ["svf.lp", "vca3.in"], ["env3.out", "vca3.cv"], ["seq3.pitch", "pl.pitch"], ["seq3.gate", "pl.trig"], ["lfo1.uni", "pl.timbre"], ["lfo2.uni", "pl.morph"], ["seq1.pitch", "rg.pitch"], ["seq2.gate", "rg.strum"], ["vca1.out", "mixA.in1"], ["vca3.out", "mixA.in2"], ["pl.out", "mixA.in3"], ["rg.odd", "mixA.in4"], ["clk.beat", "kick.trig"], ["clk.bar", "snare.trig"], ["clk.16th", "hat.trig"], ["kick.out", "mixB.in1"], ["snare.out", "mixB.in2"], ["hat.out", "mixB.in3"], ["mixA.out", "mixC.in1"], ["mixB.out", "mixC.in2"], ["mixC.out", "crush.in"], ["crush.out", "dly.in"], ["dly.l", "cld.l"], ["dly.r", "cld.r"], ["cld.l", "rev.l"], ["cld.r", "rev.r"], ["rev.l", "out.l"], ["rev.r", "out.r"], ["rev.l", "scope.in"], ["vca1.out", "bass_scope.in"]])
 	RackLayout.tidy(p)
+	if name != &"big_rig":
+		# The big rig is laid out by hand, a row to a job; the small ones read as their own diagrams.
+		RackLayout.flow(p)
 	return p
 
 
@@ -397,7 +400,7 @@ static func sanitize(raw: Variant) -> Dictionary:
 		var at: Variant = m.get("at", [0, 0])
 		var col := int(at[0]) if at is Array and at.size() >= 2 else 0
 		var row := int(at[1]) if at is Array and at.size() >= 2 else 0
-		_put(p, sid, type, clampi(col, 0, 15), clampi(row, 0, 7))
+		_put(p, sid, type, clampi(col, 0, RackLayout.COLS - RackLayout.width_of(type)), clampi(row, 0, RackLayout.ROWS - 1))
 		var knobs: Variant = m.get("knobs", {})
 		if knobs is Dictionary:
 			for k in knobs:
@@ -473,6 +476,8 @@ static func answer(p: Dictionary, op: String, args: Array) -> String:
 			return "" if pull_one(p, String(args[0]), String(args[1])) else "there was no such cable"
 		"knob":
 			return "" if set_knob(p, String(args[0]), String(args[1]), float(args[2])) else "there is no such knob"
+		"tidy":
+			return "" if RackLayout.flow(p) else "the case is too full to lay out in a line: take something out"
 		"preset":
 			if not presets().has(StringName(args[0])):
 				return "there is no such preset"

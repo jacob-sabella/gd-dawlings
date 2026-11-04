@@ -49377,7 +49377,7 @@ func _test_a_rack_patch_checks_every_verb() -> void:
 			"cables": [["vco.out", "nowhere.in"], ["vco.out", "vco.fm"], 5]}
 	var clean := RackPatch.sanitize(dirty)
 	check("a patch from anywhere keeps only what is real", clean["modules"].keys() == ["vco"] and clean["cables"].is_empty())
-	check("and clamps what it keeps", clean["modules"]["vco"]["at"] == [15, 0] and clean["modules"]["vco"]["knobs"]["tune"] == 1.0)
+	check("and clamps what it keeps", clean["modules"]["vco"]["at"] == [RackLayout.COLS - RackLayout.width_of("vco"), 0] and clean["modules"]["vco"]["knobs"]["tune"] == 1.0)
 	check("garbage is an empty patch", RackPatch.sanitize("nope")["modules"].is_empty())
 	for name in RackPatch.presets():
 		var pre := RackPatch.preset(name)
@@ -49974,3 +49974,25 @@ func _test_a_bandmates_first_note_wakes_the_rack_and_is_heard() -> void:
 	studio._on_rack_heard(7, Session.Note.OFF, 60, 0)
 	studio.queue_free()
 	await get_tree().process_frame
+
+
+func _test_a_small_preset_is_laid_out_as_the_signal_flows() -> void:
+	var p := RackPatch.preset(&"acid_line")
+	var col := func(id: String) -> int: return int(p["modules"][id]["at"][0])
+	check("the clock comes before the sequencer", col.call("clock") < col.call("seq"))
+	check("the sequencer comes before the voice", col.call("seq") < col.call("vco"))
+	check("the voice comes before the filter", col.call("vco") < col.call("ladder"))
+	check("the filter comes before the amp", col.call("ladder") < col.call("vca"))
+	check("the out is the last", col.call("vca") < col.call("delay") and col.call("delay") < col.call("out"))
+	check("the env sits level with the voice it gates", col.call("env") == col.call("vco"))
+	var right: int = col.call("out") + RackLayout.width_of("out")
+	check("the patch is centred in the case", absi(col.call("clock") - (RackLayout.COLS - right)) <= 1)
+	var kept := RackPatch.sanitize(p)
+	check("a module far along the case is not thrown back to the left", int(kept["modules"]["out"]["at"][0]) == col.call("out"))
+	var messy := RackPatch.preset(&"acid_line")
+	for id in messy["modules"]:
+		messy["modules"][id]["at"] = [0, 0]
+	RackLayout.tidy(messy)
+	check("tidy answers with a layout", RackPatch.answer(messy, "tidy", []) == "")
+	check("tidy puts the clock before the out", int(messy["modules"]["clock"]["at"][0]) < int(messy["modules"]["out"]["at"][0]))
+	check("cables are coloured by what they carry", RackSkin.signal_of("pitch") != RackSkin.signal_of("out") and RackSkin.signal_of("gate") != RackSkin.signal_of("lp"))

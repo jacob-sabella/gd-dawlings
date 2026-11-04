@@ -113,3 +113,24 @@ static func print_pattern(type: String, wide: float, tall: float) -> MultiMeshIn
 	mat.roughness = 0.7
 	inst.material_override = mat
 	return inst
+
+
+## What a cable carries, from the output it leaves: audio is amber, pitch green, a gate or clock pink,
+## any other control voltage blue. The same colours everywhere, so a patch reads by its cables.
+const SIGNAL_AUDIO := Color(1.0, 0.72, 0.2)
+const SIGNAL_PITCH := Color(0.4, 0.95, 0.5)
+const SIGNAL_GATE := Color(1.0, 0.4, 0.62)
+const SIGNAL_CV := Color(0.4, 0.75, 1.0)
+const _GATES := ["gate", "trig", "16th", "8th", "beat", "bar", "reset", "step", "strum"]
+const _AUDIO := ["out", "sub", "aux", "l", "r", "lp", "bp", "hp", "notch", "odd", "even", "white", "pink",
+		"weather", "drips", "venue", "marbles"]
+
+
+static func signal_of(port: String) -> Color:
+	if port == "pitch":
+		return SIGNAL_PITCH
+	if port in _GATES or port.ends_with("_g"):
+		return SIGNAL_GATE
+	if port in _AUDIO or port.begins_with("ring"):
+		return SIGNAL_AUDIO
+	return SIGNAL_CV

@@ -701,7 +701,9 @@ func _build_palette() -> void:
 			[11.5, _track_legend(), "choose the track the rack sounds through (round the tracks, then none)",
 			func() -> void: track_asked.emit(), _track > 0, "track"],
 			[13.5, "REC", "record what the rack plays onto its track; again to keep it",
-			func() -> void: record_asked.emit(), _recording, "rec"]]
+			func() -> void: record_asked.emit(), _recording, "rec"],
+			[15.5, "TIDY", "lay the modules out as the signal flows, sources at the left and the OUT at the right",
+			func() -> void: edit_asked.emit("tidy", []), false, "tidy"]]
 	for e in extra:
 		var xk := _key(String(e[1]), key_size, Vector3(_x_of(e[0]), PALETTE_TALL - 0.04, 0.0), String(e[2]), e[3], e[4])
 		_palette_nodes.append(xk)
@@ -710,6 +712,13 @@ func _build_palette() -> void:
 		_extras[e[5]] = xk
 		if e[5] == "play":
 			play_key = xk
+	# What the cables' colours mean.
+	var legend := [["AUDIO", RackSkin.SIGNAL_AUDIO], ["PITCH", RackSkin.SIGNAL_PITCH],
+			["GATE", RackSkin.SIGNAL_GATE], ["CV", RackSkin.SIGNAL_CV]]
+	for n in legend.size():
+		var tag := _letter("o " + String(legend[n][0]), LETTER_CAP, Vector3(_x_of(18.5 + n * 2.2), PALETTE_TALL - 0.04, 0.0), legend[n][1])
+		_palette_nodes.append(tag)
+		panel.add_child(tag)
 	var items: Array = []
 	if group == GROUP_PRESETS:
 		for p in RackPatch.presets():
@@ -871,7 +880,7 @@ func _lay_cables() -> void:
 		var b: RackJack = jacks.get(_jack_key(c[1], false))
 		if a == null or b == null:
 			continue
-		var tint := _tint_of(RackPatch.type_of(patch, String(c[0]).get_slice(".", 0)))
+		var tint := RackSkin.signal_of(String(c[0]).get_slice(".", 1))
 		# A second cable from one output stands its plug further out, so the plugs never share a face.
 		var from_plug := a.plug_transform()
 		var fan: int = fanned.get(c[0], 0)
@@ -879,6 +888,9 @@ func _lay_cables() -> void:
 		from_plug.origin += from_plug.basis.z.normalized() * 0.014 * fan
 		var cable := PatchCable.create(from_plug, b.plug_transform(), tint, hash(c))
 		cable.name = "Cable_%s_%s" % [c[0], c[1]]
+		# Lit from within and drawn thicker than life: the wall is dark and seen from across the room.
+		cable.lit = true
+		cable.thickness = 2.0
 		var span := a.plug_transform().origin.distance_to(b.plug_transform().origin)
 		cable.sag_ratio = CABLE_SAG if absf(a.global_position.x - b.global_position.x) < MODULE_WIDE * 2.0 \
 				else clampf(0.25 / maxf(span, 0.05), CABLE_SAG, 0.6)

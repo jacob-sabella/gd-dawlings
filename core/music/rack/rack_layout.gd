@@ -71,3 +71,99 @@ static func tidy(p: Dictionary) -> void:
 	for id in (p["modules"] as Dictionary).keys():
 		if not placed["modules"].has(id):
 			RackPatch.remove(p, id)
+
+
+## The modules laid out as the signal flows: sources at the left, the OUT at the right, each stage a
+## band of columns with its modules stacked in the rows, the whole centred in the case. Cables then run
+## mostly left to right and short, and a patch reads like its own diagram. A module with no cable into
+## it sits just before the first thing it feeds. False (nothing moved) if it will not fit the case.
+static func flow(p: Dictionary) -> bool:
+	var ids: Array = (p["modules"] as Dictionary).keys()
+	ids.sort()
+	if ids.is_empty():
+		return true
+	var depth := {}
+	var feeds := {}
+	var fed := {}
+	for id in ids:
+		depth[id] = 0
+		feeds[id] = []
+	for c: Array in p["cables"]:
+		var a := String(c[0]).get_slice(".", 0)
+		var b := String(c[1]).get_slice(".", 0)
+		if depth.has(a) and depth.has(b) and a != b:
+			(feeds[a] as Array).append(b)
+			fed[b] = true
+	# Longest way in from a source, within as many passes as there are modules (a loop ends there).
+	for _pass in ids.size():
+		var moved := false
+		for a in ids:
+			for b in feeds[a]:
+				if depth[b] < depth[a] + 1 and depth[a] + 1 < ids.size():
+					depth[b] = depth[a] + 1
+					moved = true
+		if not moved:
+			break
+	# A source with nothing into it waits beside what it feeds, not at the far end.
+	for a in ids:
+		if not fed.has(a) and not (feeds[a] as Array).is_empty():
+			var first := ids.size()
+			for b in feeds[a]:
+				first = mini(first, int(depth[b]))
+			depth[a] = maxi(first - 1, 0)
+	var layers := {}
+	for id in ids:
+		var d: int = depth[id]
+		if not layers.has(d):
+			layers[d] = []
+		(layers[d] as Array).append(id)
+	var keys: Array = layers.keys()
+	keys.sort()
+	# Bands: a layer of more than ROWS modules goes on into a second band.
+	var bands: Array = []
+	var row_of := {}
+	for d in keys:
+		var members: Array = layers[d]
+		members.sort_custom(func(x: String, y: String) -> bool:
+			var rx := _mean_row(p, x, row_of)
+			var ry := _mean_row(p, y, row_of)
+			return rx < ry if rx != ry else x < y)
+		var at := 0
+		while at < members.size():
+			var chunk := members.slice(at, at + ROWS)
+			var band := {"ids": chunk, "wide": 0}
+			for n in chunk.size():
+				band["wide"] = maxi(int(band["wide"]), width_of(p["modules"][chunk[n]]["type"]))
+				row_of[chunk[n]] = n
+			bands.append(band)
+			at += ROWS
+	var total := 0
+	for band in bands:
+		total += int(band["wide"])
+	var gap := 1 if total + bands.size() - 1 <= COLS else 0
+	total += gap * (bands.size() - 1)
+	if total > COLS:
+		return false
+	var col := (COLS - total) / 2
+	var placed := {}
+	for band in bands:
+		for n in (band["ids"] as Array).size():
+			var id: String = band["ids"][n]
+			placed[id] = [col, n]
+		col += int(band["wide"]) + gap
+	for id in placed:
+		p["modules"][id]["at"] = placed[id]
+	return true
+
+
+## The mean row, so far placed, of what feeds `id`: a module sits level with what it is fed by.
+static func _mean_row(p: Dictionary, id: String, row_of: Dictionary) -> float:
+	var sum := 0.0
+	var n := 0
+	for c: Array in p["cables"]:
+		if String(c[1]).get_slice(".", 0) == id:
+			var a := String(c[0]).get_slice(".", 0)
+			if row_of.has(a):
+				sum += float(row_of[a])
+				n += 1
+	return sum / n if n > 0 else 99.0
