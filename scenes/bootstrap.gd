@@ -149,6 +149,20 @@ func _ready() -> void:
 		studio.ergonomics.text_scale = args["eyes"]
 	Ergonomics.current = studio.ergonomics
 	add_child(studio)
+	if args["perf"]:
+		var tick := Timer.new()
+		tick.wait_time = 2.0
+		tick.autostart = true
+		tick.timeout.connect(func() -> void:
+			print("PERF fps=%d process=%.1fms physics=%.1fms draws=%d prims=%dk objs=%d nodes=%d orphans=%d vram=%dMB" % [
+					Engine.get_frames_per_second(), Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+					Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
+					int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+					int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)) / 1000,
+					int(Performance.get_monitor(Performance.OBJECT_COUNT)), int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
+					int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)),
+					int(Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0)]))
+		add_child(tick)
 	# The card's PLAY pages are the stations standing in the studio's venue, and a line walks there.
 	welcome.studio = studio
 	if welcome.visible:
@@ -406,7 +420,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "public": false, "join": "", "online": false, "join_code": "", "noray_server": "", "relay": false, "xr": OS.has_feature("android"), "xr_sim": false, "ar": OS.has_feature("android"),
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
-		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "play": false, "slap": false, "rings": 0, "pegs": false, "strings": false, "marbles": false, "theremin": false, "grains": false, "grains_band": false, "lyrics": false, "modular": false, "rack_preset": "acid_line", "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
+		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "perf": false, "play": false, "slap": false, "rings": 0, "pegs": false, "strings": false, "marbles": false, "theremin": false, "grains": false, "grains_band": false, "lyrics": false, "modular": false, "rack_preset": "acid_line", "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 		"ghost": {}, "tablets": [], "plugins": [], "welcome": false,
@@ -549,6 +563,8 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 					out["step"] = float(argv[i])
 			# For photographs: the corner readout is for whoever is debugging, not for a picture.
 			"--no-hud": out["no_hud"] = true
+			# A readout of the frame's cost every two seconds on stdout: script, physics, draw calls, nodes.
+			"--perf": out["perf"] = true
 			# The song playing from the start: for photographing what moves with it, the weather's
 			# drops (docs/spatial_loop.md part two, slice 44) among them.
 			"--play": out["play"] = true

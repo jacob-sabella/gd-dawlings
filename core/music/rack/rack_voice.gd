@@ -198,8 +198,6 @@ func _transport() -> Dictionary:
 func _process(delta: float) -> void:
 	if not engine.running():
 		return
-	if Time.get_ticks_msec() - engine.last_read > 60:
-		engine.read()
 	engine.poll()
 	meters = engine.meters
 	scopes = engine.scopes

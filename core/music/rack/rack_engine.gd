@@ -109,7 +109,12 @@ var scopes := {}
 ## listening to is drained by its voice to keep its meters and scopes alive.
 var last_read := 0
 var running_beat := 0.0
-var _err_buf := ""
+var _err_lines := PackedStringArray()
+var _err_mutex := Mutex.new()
+var _err_thread: Thread
+var _drain_thread: Thread
+var _io_mutex := Mutex.new()
+var _alive := false
 
 
 func start() -> bool:
@@ -124,10 +129,47 @@ func start() -> bool:
 	_pid = int(started["pid"])
 	_io = started["stdio"]
 	_err = started["stderr"]
+	# The engine's meter and scope lines are read on a thread of their own: a read on a pipe waits
+	# for its bytes, and the main thread must never wait on the engine (a frame is 16 ms).
+	_err_lines = PackedStringArray()
+	_err_thread = Thread.new()
+	_err_thread.start(_read_lines.bind(_err, _pid))
+	_alive = true
+	_drain_thread = Thread.new()
+	_drain_thread.start(_drain.bind(_io))
 	return true
 
 
+## Keeps the engine's sound moving when nothing is taking it (no track plays the rack): the engine
+## stalls on a full pipe, and its meters and scopes with it. Off the main thread, which must not wait.
+func _drain(io: FileAccess) -> void:
+	while _alive:
+		if Time.get_ticks_msec() - last_read > 60:
+			_io_mutex.lock()
+			if Time.get_ticks_msec() - last_read > 60:
+				io.get_buffer(4096)
+			_io_mutex.unlock()
+		else:
+			OS.delay_msec(20)
+
+
+func _read_lines(err: FileAccess, pid: int) -> void:
+	while true:
+		var line := err.get_line()
+		if line == "" and (err.eof_reached() or not OS.is_process_running(pid)):
+			break
+		if line == "":
+			continue
+		_err_mutex.lock()
+		_err_lines.append(line)
+		_err_mutex.unlock()
+
+
 func stop() -> void:
+	_alive = false
+	if _drain_thread != null:
+		_drain_thread.wait_to_finish()
+		_drain_thread = null
 	if _io != null:
 		_io.store_line("quit")
 		_io.close()
@@ -136,6 +178,9 @@ func stop() -> void:
 	if _pid > 0 and OS.is_process_running(_pid):
 		OS.kill(_pid)
 	_pid = -1
+	if _err_thread != null:
+		_err_thread.wait_to_finish()
+		_err_thread = null
 	_spare.clear()
 	meters = {}
 	scopes = {}
@@ -161,7 +206,10 @@ func read() -> PackedVector2Array:
 	var out := PackedVector2Array()
 	if _io == null:
 		return out
-	var bytes := _spare + _io.get_buffer(1 << 15)
+	_io_mutex.lock()
+	var chunk := _io.get_buffer(1 << 15)
+	_io_mutex.unlock()
+	var bytes := _spare + chunk
 	var whole := bytes.size() / 8 * 8
 	_spare = bytes.slice(whole)
 	var samples := bytes.slice(0, whole).to_float32_array()
@@ -173,14 +221,14 @@ func read() -> PackedVector2Array:
 
 ## Reads the engine's meter lines, once a frame, on the main thread.
 func poll() -> void:
-	if _err == null:
+	if _err_thread == null:
 		return
-	_err_buf += _err.get_buffer(1 << 15).get_string_from_utf8()
-	var nl := _err_buf.rfind("\n")
-	if nl < 0:
+	_err_mutex.lock()
+	var lines := _err_lines
+	_err_lines = PackedStringArray()
+	_err_mutex.unlock()
+	if lines.is_empty():
 		return
-	var lines := _err_buf.substr(0, nl).split("\n", false)
-	_err_buf = _err_buf.substr(nl + 1)
 	var last_meter := ""
 	for line in lines:
 		if line.begins_with("scope "):
