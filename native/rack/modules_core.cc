@@ -579,6 +579,15 @@ static Registrar r_chorus({"chorus", "CHORUS", "Time", "Thickens a sound with a 
     []() -> Module* { return new Chorus_; }});
 
 // ---- OUT: the room's output --------------------------------------------------------------------
+// Clean until 0.6, then a soft shoulder that never passes 1: tanh from the start coloured every
+// patch that was merely loud, as if it were clipping.
+static inline float shoulder(float x) {
+  const float k = 0.6f;
+  float a = std::fabs(x);
+  if (a <= k) return x;
+  float y = k + (1.0f - k) * std::tanh((a - k) / (1.0f - k));
+  return x < 0 ? -y : y;
+}
 struct Out_ : Module {
   daisysp::DcBlock dcl_, dcr_;
   bool ready_ = false;
@@ -588,8 +597,8 @@ struct Out_ : Module {
     bool right = has(1);
     for (int s = 0; s < BLOCK; ++s) {
       float l = in[0][s], r = right ? in[1][s] : l;
-      l = std::tanh(dcl_.Process(l) * lvl);
-      r = std::tanh(dcr_.Process(r) * lvl);
+      l = shoulder(dcl_.Process(l) * lvl);
+      r = shoulder(dcr_.Process(r) * lvl);
       o(0)[s] = l; o(1)[s] = r;
     }
   }

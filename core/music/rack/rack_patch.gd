@@ -183,7 +183,7 @@ static func preset(name: StringName) -> Dictionary:
 			_add(p, "mix", "mix", {"l1": 0.9, "l2": 0.9, "l3": 0.5})
 			_add(p, "dly", "delay", {"sync": 0.67, "fb": 0.72, "tone": 0.4, "mix": 0.4, "pp": 1.0})
 			_add(p, "rev", "reverb", {"time": 0.6, "mix": 0.2})
-			_add(p, "out", "out", {"level": 0.6})
+			_add(p, "out", "out", {"level": 0.45})
 			_wire(p, [["clk.8th","seq.clk"],["seq.pitch","v.pitch"],["seq.pitch","v2.pitch"],["seq.gate","env.gate"],["v.out","mixv.in1"],["v2.out","mixv.in2"],["mixv.out","svf.in"],["lfo.uni","svf.cutoff"],
 				["svf.lp","vca.in"],["env.out","vca.cv"],["clk.beat","kick.trig"],["clk.bar","sn.trig"],["vca.out","mix.in1"],["kick.out","mix.in2"],["sn.out","mix.in3"],
 				["mix.out","dly.in"],["dly.l","rev.l"],["dly.r","rev.r"],["rev.l","out.l"],["rev.r","out.r"]])
