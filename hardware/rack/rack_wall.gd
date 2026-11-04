@@ -805,6 +805,7 @@ func _shape_of(p: Dictionary) -> String:
 
 
 func show_knob(id: String, k: String, v: float) -> void:
+	RackPatch.set_knob(patch, id, k, v)
 	var node: Knob = knobs.get("%s.%s" % [id, k])
 	if node != null:
 		node.apply_remote(v)

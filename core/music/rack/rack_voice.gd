@@ -121,7 +121,10 @@ func _sync_patch() -> void:
 ## One knob, at once (a hand turning it): the patch and the engine, with no diff.
 func knob(id: String, k: String, v01: float) -> void:
 	if RackPatch.set_knob(patch, id, k, v01):
-		_sent = patch.duplicate(true)
+		if RackPatch.set_knob(_sent, id, k, v01):
+			pass
+		else:
+			_sent = patch.duplicate(true)
 		engine.say(RackPatch.knob_line(id, k, v01))
 
 

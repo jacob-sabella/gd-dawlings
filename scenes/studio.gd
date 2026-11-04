@@ -5545,6 +5545,8 @@ func _follow_world_sockets() -> void:
 ## An edit of the rack, `op` and `args` as RackPatch.answer takes them (or `track` [step]): done on the
 ## host, asked by a guest and shown at once, or refused here in words where the host would refuse it.
 func ask_rack(op: String, args: Array) -> void:
+	if op == "knob" and args.size() == 3 and _turn_knob(String(args[0]), String(args[1]), float(args[2])):
+		return
 	if Session.is_authority():
 		_answer_rack(op, args, Session.local_peer_id)
 		return
@@ -5560,6 +5562,27 @@ func ask_rack(op: String, args: Array) -> void:
 		return
 	if _predict(&"rack", [StringName(op), args]) > 0:
 		_show_rack(row)
+
+
+## One knob turned: only that value is set, on the wall, in the voice and in the row. The patch is not
+## copied, sanitized, diffed or laid out again (that cost ~60 ms a turn). False if the knob is not there,
+## and the whole ask goes the long way to be refused in words.
+func _turn_knob(id: String, k: String, v: float) -> bool:
+	var patch: Dictionary = rack_row.get("patch", {})
+	if not RackPatch.set_knob(patch, id, k, v):
+		return false
+	v = RackPatch.knob_of(patch, id, k)
+	if rack_wall != null and is_instance_valid(rack_wall):
+		rack_wall.show_knob(id, k, v)
+	if Session.is_authority():
+		if rack_voice != null and is_instance_valid(rack_voice):
+			if not rack_voice.running() and _rack_engaged():
+				_rack_wake()
+			rack_voice.knob(id, k, v)
+		_publish_room_soon()
+	else:
+		Session.ask_room(&"rack", [&"knob", [id, k, v]])
+	return true
 
 
 ## `op` done to the row `row`; the refusal in words, or "".
@@ -5626,6 +5649,10 @@ func _rack_wake() -> void:
 	if rack_voice.start():
 		if int(rack_row["track"]) <= 0 and DAW.state != null:
 			var tracks: Array = DAW.state.track_indices()
+			if tracks.is_empty():
+				# A song with no track has nothing for the rack to sound through: it gets one.
+				DAW.add_track(1, "Modular")
+				tracks = DAW.state.track_indices()
 			tracks.sort()
 			if not tracks.is_empty():
 				rack_row["track"] = tracks[0]
