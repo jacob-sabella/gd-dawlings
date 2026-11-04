@@ -20,7 +20,7 @@ static func default_patch() -> Dictionary:
 
 
 static func presets() -> Array[StringName]:
-	return [&"keys_voice", &"acid_line", &"drum_machine", &"ambient_bells", &"fm_bass", &"big_rig", &"empty"]
+	return [&"keys_voice", &"acid_line", &"drum_machine", &"ambient_bells", &"fm_bass", &"big_rig", &"heavy_machine", &"empty"]
 
 
 static func preset_title(name: StringName) -> String:
@@ -31,6 +31,7 @@ static func preset_title(name: StringName) -> String:
 		&"ambient_bells": return "Ambient bells"
 		&"fm_bass": return "Wobble bass"
 		&"big_rig": return "Big rig (33 modules)"
+		&"heavy_machine": return "Heavy machine"
 	return "Empty"
 
 
@@ -89,6 +90,37 @@ static func preset(name: StringName) -> Dictionary:
 			_put(p, "out", "out", 5, 0)
 			_wire(p, [["keys.pitch", "vco.pitch"], ["keys.gate", "env.gate"], ["lfo.out", "svf.cutoff"], ["vco.out", "fold.in"],
 					["env.out", "fold.fold"], ["fold.out", "svf.in"], ["svf.lp", "vca.in"], ["env.out", "vca.cv"], ["vca.out", "out.l"]])
+		&"heavy_machine":
+			# A detuned saw pair and a sub through a folder and a screaming ladder, a kick-snare-hat
+			# loop under it, all crushed, driven, echoed and washed.
+			_put(p, "clk", "clock", 0, 0, {"sync": 0.0, "bpm": 0.40})
+			_put(p, "seq", "seq", 1, 0, {"s1": 0.10, "s2": 0.10, "s3": 0.22, "s4": 0.10, "s5": 0.10, "s6": 0.30, "s7": 0.10, "s8": 0.17,
+					"s9": 0.10, "s10": 0.10, "s11": 0.22, "s12": 0.10, "s13": 0.35, "s14": 0.10, "s15": 0.28, "s16": 0.17, "gate": 0.45})
+			_put(p, "v1", "vco", 2, 0, {"wave": 0.5, "tune": 0.40, "fine": 0.46})
+			_put(p, "v2", "vco", 2, 1, {"wave": 0.5, "tune": 0.40, "fine": 0.54})
+			_put(p, "env", "env", 3, 0, {"a": 0.0, "d": 0.45, "s": 0.15, "r": 0.3})
+			_put(p, "lfo", "lfo", 3, 1, {"rate": 0.35, "depth": 0.7})
+			_put(p, "mixv", "mix", 4, 0, {"l1": 0.55, "l2": 0.55, "l3": 0.6})
+			_put(p, "fold", "fold", 5, 0, {"gain": 0.25})
+			_put(p, "lad", "ladder", 6, 0, {"cutoff": 0.42, "res": 0.7, "drive": 0.4, "cv": 0.75})
+			_put(p, "vca", "vca", 7, 0)
+			_put(p, "kick", "drum", 4, 1, {"kind": 0.0})
+			_put(p, "snare", "drum", 5, 1, {"kind": 0.5})
+			_put(p, "hat", "drum", 6, 1, {"kind": 0.99, "decay": 0.12})
+			_put(p, "mixd", "mix", 7, 1, {"l1": 0.9, "l2": 0.6, "l3": 0.35})
+			_put(p, "mixm", "mix", 8, 0, {"l1": 0.75, "l2": 0.8})
+			_put(p, "crush", "crush", 9, 0, {"rate": 0.1, "bits": 0.8, "mix": 0.4})
+			_put(p, "drive", "drive", 10, 0, {"drive": 0.6, "level": 0.5})
+			_put(p, "dly", "delay", 11, 0, {"sync": 0.5, "fb": 0.5, "mix": 0.3})
+			_put(p, "rev", "reverb", 12, 0, {"time": 0.7, "mix": 0.25})
+			_put(p, "out", "out", 13, 0, {"level": 0.5})
+			_wire(p, [["clk.16th", "seq.clk"], ["seq.pitch", "v1.pitch"], ["seq.pitch", "v2.pitch"], ["seq.gate", "env.gate"],
+					["v1.out", "mixv.in1"], ["v2.out", "mixv.in2"], ["v1.sub", "mixv.in3"], ["mixv.out", "fold.in"],
+					["env.out", "fold.fold"], ["fold.out", "lad.in"], ["env.out", "lad.cutoff"], ["lfo.uni", "lad.cutoff"],
+					["lad.out", "vca.in"], ["env.out", "vca.cv"], ["clk.beat", "kick.trig"], ["clk.bar", "snare.trig"],
+					["clk.8th", "hat.trig"], ["kick.out", "mixd.in1"], ["snare.out", "mixd.in2"], ["hat.out", "mixd.in3"],
+					["vca.out", "mixm.in1"], ["mixd.out", "mixm.in2"], ["mixm.out", "crush.in"], ["crush.out", "drive.in"],
+					["drive.out", "dly.in"], ["dly.l", "rev.l"], ["dly.r", "rev.r"], ["rev.l", "out.l"], ["rev.r", "out.r"]])
 		&"big_rig":
 			var col0 := 0
 			_put(p, "clk", "clock", col0, 0, {"sync": 0.0, "bpm": 0.43})
