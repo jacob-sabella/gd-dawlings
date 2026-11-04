@@ -109,3 +109,9 @@ openxr/extensions/meta/anchor_api=true
 ; of them are simulated. Gravity is zeroed so that a knob accidentally left as a RigidBody falls
 ; out of the rack loudly in the editor instead of quietly at a session.
 3d/default_gravity=0.0
+
+; The physics tick is the dearest thing in a frame here (about 14 ms a tick on the heavy rig), and
+; nothing in the room is simulated: rays, footprints and the walker want 30 a second, not 60.
+; Interpolation keeps the camera and the hands smooth at the screen's rate between ticks.
+common/physics_ticks_per_second=30
+common/physics_interpolation=true

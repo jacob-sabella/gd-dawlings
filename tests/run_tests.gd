@@ -17,6 +17,8 @@ var _checks := 0
 
 
 func _ready() -> void:
+	# The game ticks physics at 30 a second to leave frames for drawing; the checks are written for 60.
+	Engine.physics_ticks_per_second = 60
 	OfflineBackend.autosave_every = 0.0
 	# Rig Roulette is off in the game for now; its tests run with it on.
 	check("Rig Roulette is off unless asked for", not Studio.roulette_enabled)
@@ -10577,7 +10579,7 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 
-	# Sunk from a height: the floor holds you there. Ghosts do not fall, so it takes the C key.
+	# Sunk from a height: the floor holds you there. Ghosts do not fall, so it takes the sink key (Ctrl).
 	walker.global_position = Vector3(1.5, 0.6, 1.6)
 	for i in 90:
 		walker.step(1.0 / 60.0, Vector3.ZERO, -1.0)
@@ -10585,6 +10587,14 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 			absf(walker.global_position.y) < 0.05 and walker.is_on_floor())
 	close_to("and the camera is at your eyes", studio.camera.global_position.y,
 			walker.global_position.y + walker.eye_height, 0.05)
+
+	# Risen as far as the keys will take you: the ceiling stops you, not the sky.
+	for i in 600:
+		walker.step(1.0 / 60.0, Vector3.ZERO, 1.0)
+	check("you cannot rise through the ceiling (y %.2f under %.2f)" % [walker.global_position.y, walker.ceiling],
+			walker.global_position.y <= walker.ceiling - Walker.HEAD + 0.01 and walker.global_position.y > 1.0)
+	for i in 400:
+		walker.step(1.0 / 60.0, Vector3.ZERO, -1.0)
 
 	# Walk straight at the desk from in front of it. The desk stops you.
 	var desk: Array = studio._desk_footprint()

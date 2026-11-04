@@ -1462,3 +1462,7 @@ func track_palette() -> Array:
 		Color(0.35, 0.52, 0.35), Color(0.29, 0.54, 0.52), Color(0.35, 0.53, 0.66), Color(0.29, 0.37, 0.54),
 		Color(0.43, 0.34, 0.52), Color(0.56, 0.35, 0.47), Color(0.72, 0.48, 0.53), Color(0.60, 0.61, 0.62),
 	]
+
+
+func ceiling_height() -> float:
+	return HEIGHT

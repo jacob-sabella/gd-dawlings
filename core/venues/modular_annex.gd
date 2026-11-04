@@ -659,10 +659,13 @@ static func cut_the_wall(venue: Venue) -> int:
 			continue
 		var c := venue.to_local(mi.global_position)
 		var s := box.size
-		# A wall: tall and thin along x, standing across the doorway at the live room's side.
-		if s.y < 0.3 or s.x > 1.4 or s.z < DOOR_WIDE:
+		# Anything boxy standing in the wall's line that reaches into the opening: a wall, a pier, a sill,
+		# a rail, a post. Thin along x, and not wholly above the door or under the floor.
+		if s.x > 1.4 or absf(c.x - h) > 0.7:
 			continue
-		if absf(c.x - h) > 0.7 or c.z - s.z * 0.5 > lo or c.z + s.z * 0.5 < hi or c.y - s.y * 0.5 > DOOR_HIGH - 0.3:
+		if c.z + s.z * 0.5 <= lo or c.z - s.z * 0.5 >= hi:
+			continue
+		if c.y - s.y * 0.5 >= DOOR_HIGH - 0.05 or c.y + s.y * 0.5 <= 0.02:
 			continue
 		var parent := mi.get_parent() as Node3D
 		var top := c.y + s.y * 0.5
@@ -670,7 +673,8 @@ static func cut_the_wall(venue: Venue) -> int:
 		var z0 := c.z - s.z * 0.5
 		var z1 := c.z + s.z * 0.5
 		# Pieces as [z from, z to, y from, y to] in the venue's frame: the wall either side, the lintel.
-		var pieces := [[z0, lo, bottom, top], [hi, z1, bottom, top], [lo, hi, maxf(bottom, DOOR_HIGH), top]]
+		var pieces := [[z0, minf(lo, z1), bottom, top], [maxf(hi, z0), z1, bottom, top],
+				[maxf(lo, z0), minf(hi, z1), maxf(bottom, DOOR_HIGH), top]]
 		mi.visible = false
 		var index := 0
 		for p in pieces:
@@ -726,7 +730,7 @@ static func _clip_slabs(venue: Venue, site: AABB) -> int:
 			continue
 		var local := to_venue * mi.global_transform
 		var whole := local * mi.get_aabb()
-		if not site.intersects(whole) or whole.size.y < 0.2:
+		if not site.intersects(whole) or whole.size.y < 0.04:
 			continue
 		var long := maxf(whole.size.x, whole.size.z)
 		if long < 2.0 or long > 60.0:

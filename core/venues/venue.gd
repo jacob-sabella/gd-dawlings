@@ -1362,6 +1362,11 @@ func mic_spot() -> Variant:
 ##
 ## In a studio the free-standing ones (WHEELED) are left out: they stand on trolleys there, and the
 ## walker already stops at every trolley in the floor plan, wherever it has been pushed.
+## How high the room's ceiling is, for the walker: no one flies out through the roof.
+func ceiling_height() -> float:
+	return LIVE_ROOM_HEIGHT
+
+
 func solids() -> Array:
 	var out := zone_solids()
 	out.append_array(instrument_solids())

@@ -1293,10 +1293,25 @@ func _walkable() -> Array[Rect2]:
 	return out
 
 
+## The venue's ceiling, over the walker wherever it is.
+func _ceiling() -> float:
+	return venue.ceiling_height() if venue != null else Venue.LIVE_ROOM_HEIGHT
+
+
+## The modular room's roof is lower than the live room's: under it, that is the ceiling.
+func _ceiling_at(where: Vector3) -> float:
+	if modular_annex != null and is_instance_valid(modular_annex) and modular_annex.is_inside_tree():
+		var local := modular_annex.to_local(where)
+		if ModularAnnex.inside(modular_annex.half).has_point(Vector2(local.x, local.z)):
+			return ModularAnnex.HEIGHT
+	return 1000.0
+
+
 func _walk_where_the_venue_lets() -> void:
 	if walker != null:
 		walker.walkable = _walkable()
 		walker.fixed = venue.solids() if venue != null else []
+		walker.ceiling = _ceiling()
 		walker.rebuild_walls()
 		walker.unstick()
 	if items != null and venue != null:
@@ -7526,6 +7541,8 @@ func _build_walker() -> void:
 	walker.floor_plan = floor_plan
 	walker.walkable = _walkable()
 	walker.fixed = venue.solids() if venue != null else []
+	walker.ceiling = _ceiling()
+	walker.ceiling_at = _ceiling_at
 	walker.solids_parent = studio_set
 	walker.standing_eye = ergonomics.eye_height
 	walker.eye_height = ergonomics.eye_height

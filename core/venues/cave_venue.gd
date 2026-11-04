@@ -1956,3 +1956,7 @@ func track_palette() -> Array:
 		Color(0.20, 0.70, 0.45), Color(0.30, 0.82, 0.78), Color(0.42, 0.70, 0.95), Color(0.24, 0.38, 0.88),
 		Color(0.60, 0.38, 0.92), Color(0.82, 0.30, 0.70), Color(0.95, 0.62, 0.74), Color(0.60, 0.56, 0.58),
 	]
+
+
+func ceiling_height() -> float:
+	return TUBE_HEIGHT

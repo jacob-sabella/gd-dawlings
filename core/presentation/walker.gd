@@ -30,9 +30,19 @@ const SPRINT_SPEED := 3.2
 const ACCELERATION := 9.0
 const FRICTION := 16.0
 const AIR_CONTROL := 0.25
-## We are ghosts: no gravity, no jump. Space rises, C sinks, and you hang where you let go.
+## We are ghosts: no gravity, no jump. Space rises, Ctrl sinks, and you hang where you let go.
 const FLY_SPEED := 1.8
-const CEILING := 6.0
+## How far the head is above the feet: the highest the feet go is the ceiling less this.
+const HEAD := 1.8
+## The ceiling of the room you are in; a venue sets it. No one flies out through the roof.
+var ceiling := 5.0
+## A lower roof over part of the floor (the modular room's): a Callable taking where you are and
+## giving the height there, or invalid for the one ceiling everywhere.
+var ceiling_at := Callable()
+
+
+func ceiling_here() -> float:
+	return minf(ceiling, float(ceiling_at.call(global_position))) if ceiling_at.is_valid() else ceiling
 const LOOK_SPEED := 0.005
 ## How tall a footprint stands. Above a desk, below a lamp's shade; nobody steps over a console.
 const SOLID_HEIGHT := 1.25
@@ -133,6 +143,10 @@ func _build_walls() -> void:
 		var half: Vector2 = f["h"]
 		var centre: Vector2 = f["c"]
 		var top: float = f.get("top", SOLID_HEIGHT)
+		# A partition or wall (as tall as the room, near enough) is not something to fly over; a
+		# riser, a stair or a gallery is something to stand on.
+		if top >= ceiling - 0.7:
+			top = tall
 		var box := BoxShape3D.new()
 		box.size = Vector3(half.x * 2.0, top, half.y * 2.0)
 		var c := CollisionShape3D.new()
@@ -458,7 +472,7 @@ func _physics_process(delta: float) -> void:
 	var rise := 0.0
 	if focus_owner == null:
 		if Input.is_key_pressed(KEY_SPACE): rise += 1.0
-		if Input.is_key_pressed(KEY_C): rise -= 1.0
+		if Input.is_key_pressed(KEY_CTRL): rise -= 1.0
 	step(delta, wish * speed, rise * (2.0 if sprint else 1.0))
 
 
@@ -477,7 +491,7 @@ func step(delta: float, wish_velocity: Vector3, rise := 0.0) -> void:
 	velocity.z = flat.z
 	# Ghost flight: vertical speed is what the keys say, and zero means hover. Resting on the
 	# floor (or a riser) presses down a little so the body still reads as standing.
-	if rise > 0.0 and global_position.y < CEILING:
+	if rise > 0.0 and global_position.y < ceiling_here() - HEAD:
 		velocity.y = move_toward(velocity.y, rise * FLY_SPEED, ACCELERATION * 2.0 * delta)
 	elif rise < 0.0:
 		velocity.y = move_toward(velocity.y, rise * FLY_SPEED, ACCELERATION * 2.0 * delta)
@@ -486,6 +500,10 @@ func step(delta: float, wish_velocity: Vector3, rise := 0.0) -> void:
 	else:
 		velocity.y = move_toward(velocity.y, 0.0, FRICTION * 3.0 * delta)
 	move_and_slide()
+	var lid := ceiling_here() - HEAD
+	if global_position.y > lid:
+		global_position.y = lid
+		velocity.y = minf(velocity.y, 0.0)
 	if grounded and wish_velocity != Vector3.ZERO and is_on_wall():
 		_step_up(Vector3(wish_velocity.x, 0, wish_velocity.z).normalized())
 	# A step's worth of bob, scaled by how fast you are actually going, so standing still is
