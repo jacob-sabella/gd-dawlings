@@ -20,7 +20,7 @@ static func default_patch() -> Dictionary:
 
 
 static func presets() -> Array[StringName]:
-	return [&"keys_voice", &"acid_line", &"drum_machine", &"ambient_bells", &"fm_bass", &"big_rig", &"heavy_machine", &"empty"]
+	return [&"keys_voice", &"acid_line", &"drum_machine", &"ambient_bells", &"fm_bass", &"big_rig", &"heavy_machine", &"techno_drive", &"dub_wobble", &"glitch_idm", &"ambient_pad", &"bell_garden", &"granular_cloud", &"arp_space", &"bass_drone", &"electro_funk", &"empty"]
 
 
 static func preset_title(name: StringName) -> String:
@@ -32,6 +32,15 @@ static func preset_title(name: StringName) -> String:
 		&"fm_bass": return "Wobble bass"
 		&"big_rig": return "Big rig (33 modules)"
 		&"heavy_machine": return "Heavy machine"
+		&"techno_drive": return "Techno drive"
+		&"ambient_pad": return "Ambient pad"
+		&"bell_garden": return "Bell garden"
+		&"dub_wobble": return "Dub wobble"
+		&"granular_cloud": return "Granular cloud"
+		&"arp_space": return "Space arp"
+		&"bass_drone": return "Bass drone"
+		&"electro_funk": return "Electro funk"
+		&"glitch_idm": return "Glitch IDM"
 	return "Empty"
 
 
@@ -121,6 +130,135 @@ static func preset(name: StringName) -> Dictionary:
 					["clk.8th", "hat.trig"], ["kick.out", "mixd.in1"], ["snare.out", "mixd.in2"], ["hat.out", "mixd.in3"],
 					["vca.out", "mixm.in1"], ["mixd.out", "mixm.in2"], ["mixm.out", "crush.in"], ["crush.out", "drive.in"],
 					["drive.out", "dly.in"], ["dly.l", "rev.l"], ["dly.r", "rev.r"], ["rev.l", "out.l"], ["rev.r", "out.r"]])
+		&"techno_drive":
+			_add(p, "clk", "clock", {"sync": 0.0, "bpm": 0.45})
+			_add_seq(p, "seq", [13,0,13,25,13,0,16,13, 13,0,13,25,13,18,16,13], 0.45)
+			_add(p, "v", "vco", {"wave": 0.5, "tune": 0.25})
+			_add(p, "env", "env", {"a": 0.0, "d": 0.6, "s": 0.0, "r": 0.4})
+			_add(p, "lad", "ladder", {"cutoff": 0.35, "res": 0.62, "drive": 0.35, "cv": 0.8})
+			_add(p, "vca", "vca")
+			_add(p, "kick", "drum", {"kind": 0.0, "decay": 0.55, "freq": 0.15})
+			_add(p, "hat", "drum", {"kind": 0.99, "decay": 0.1})
+			_add(p, "clap", "drum", {"kind": 0.5, "decay": 0.35})
+			_add(p, "mix", "mix", {"l1": 0.65, "l2": 1.0, "l3": 0.3, "l4": 0.28})
+			_add(p, "drive", "drive", {"drive": 0.3, "level": 0.6})
+			_add(p, "dly", "delay", {"sync": 0.5, "fb": 0.4, "mix": 0.18})
+			_add(p, "rev", "reverb", {"time": 0.45, "mix": 0.15})
+			_add(p, "out", "out", {"level": 0.6})
+			_wire(p, [["clk.16th","seq.clk"],["seq.pitch","v.pitch"],["seq.gate","env.gate"],["v.out","lad.in"],["env.out","lad.cutoff"],["lad.out","vca.in"],["env.out","vca.cv"],
+				["clk.beat","kick.trig"],["clk.8th","hat.trig"],["clk.bar","clap.trig"],["vca.out","mix.in1"],["kick.out","mix.in2"],["hat.out","mix.in3"],["clap.out","mix.in4"],
+				["mix.out","drive.in"],["drive.out","dly.in"],["dly.l","rev.l"],["dly.r","rev.r"],["rev.l","out.l"],["rev.r","out.r"]])
+		&"ambient_pad":
+			_add(p, "clk", "clock", {"sync": 0.0, "bpm": 0.12})
+			_add_seq(p, "seq", [13,0,0,0, 20,0,0,0, 17,0,0,0, 22,0,0,0], 0.9)
+			_add(p, "pl", "plaits", {"engine": 0.0, "harm": 0.4, "timbre": 0.55, "decay": 0.95, "lpg": 0.95})
+			_add(p, "lfo", "lfo", {"rate": 0.2, "depth": 0.8})
+			_add(p, "cho", "chorus", {"rate": 0.25, "depth": 0.7, "mix": 0.6})
+			_add(p, "cl", "clouds", {"mix": 0.45, "size": 0.7, "texture": 0.6, "density": 0.7, "reverb": 0.5, "spread": 0.8})
+			_add(p, "rev", "reverb", {"time": 0.9, "mix": 0.4})
+			_add(p, "out", "out", {"level": 0.8})
+			_wire(p, [["clk.8th","seq.clk"],["seq.pitch","pl.pitch"],["seq.gate","pl.trig"],["lfo.uni","pl.timbre"],["pl.out","cho.in"],["cho.l","cl.l"],["cho.r","cl.r"],["cl.l","rev.l"],["cl.r","rev.r"],["rev.l","out.l"],["rev.r","out.r"]])
+		&"bell_garden":
+			_add(p, "clk", "clock", {"sync": 0.0, "bpm": 0.3})
+			_add_seq(p, "seq", [13,20,25,0,22,0,27,17, 0,25,0,20,29,0,22,0], 0.3)
+			_add(p, "rg", "rings", {"model": 0.2, "structure": 0.55, "bright": 0.7, "damping": 0.7, "poly": 0.5})
+			_add(p, "noise", "noise")
+			_add(p, "dly", "delay", {"sync": 0.5, "fb": 0.5, "mix": 0.35, "pp": 1.0})
+			_add(p, "cho", "chorus", {"mix": 0.3, "depth": 0.5})
+			_add(p, "rev", "reverb", {"time": 0.8, "mix": 0.4})
+			_add(p, "out", "out", {"level": 0.9})
+			_wire(p, [["clk.8th","seq.clk"],["seq.pitch","rg.pitch"],["seq.gate","rg.strum"],["noise.white","rg.in"],["rg.odd","dly.in"],["dly.l","cho.in"],["cho.l","rev.l"],["dly.r","rev.r"],["rev.l","out.l"],["rev.r","out.r"]])
+		&"dub_wobble":
+			_add(p, "clk", "clock", {"sync": 0.0, "bpm": 0.28})
+			_add_seq(p, "seq", [13,0,0,13, 0,0,16,0, 13,0,0,13, 0,18,0,0], 0.7)
+			_add(p, "v", "vco", {"wave": 0.5, "tune": 0.2})
+			_add(p, "v2", "vco", {"wave": 0.99, "tune": 0.2, "fine": 0.5})
+			_add(p, "svf", "svf", {"cutoff": 0.3, "res": 0.6, "drive": 0.3, "cv": 0.8})
+			_add(p, "lfo", "lfo", {"rate": 0.42, "shape": 0.1, "depth": 0.9})
+			_add(p, "mixv", "mix", {"l1": 0.7, "l2": 0.5})
+			_add(p, "env", "env", {"a": 0.0, "d": 0.7, "s": 0.5, "r": 0.5})
+			_add(p, "vca", "vca")
+			_add(p, "kick", "drum", {"kind": 0.0, "decay": 0.6, "freq": 0.12})
+			_add(p, "sn", "drum", {"kind": 0.5, "decay": 0.4})
+			_add(p, "mix", "mix", {"l1": 0.9, "l2": 0.9, "l3": 0.5})
+			_add(p, "dly", "delay", {"sync": 0.67, "fb": 0.72, "tone": 0.4, "mix": 0.4, "pp": 1.0})
+			_add(p, "rev", "reverb", {"time": 0.6, "mix": 0.2})
+			_add(p, "out", "out", {"level": 0.6})
+			_wire(p, [["clk.8th","seq.clk"],["seq.pitch","v.pitch"],["seq.pitch","v2.pitch"],["seq.gate","env.gate"],["v.out","mixv.in1"],["v2.out","mixv.in2"],["mixv.out","svf.in"],["lfo.uni","svf.cutoff"],
+				["svf.lp","vca.in"],["env.out","vca.cv"],["clk.beat","kick.trig"],["clk.bar","sn.trig"],["vca.out","mix.in1"],["kick.out","mix.in2"],["sn.out","mix.in3"],
+				["mix.out","dly.in"],["dly.l","rev.l"],["dly.r","rev.r"],["rev.l","out.l"],["rev.r","out.r"]])
+		&"granular_cloud":
+			_add(p, "clk", "clock", {"sync": 0.0, "bpm": 0.08})
+			_add(p, "noise", "noise")
+			_add(p, "rg", "rings", {"model": 0.0, "structure": 0.7, "bright": 0.8, "damping": 0.85, "poly": 1.0})
+			_add(p, "lfo", "lfo", {"rate": 0.18, "depth": 1.0})
+			_add(p, "lfo2", "lfo", {"rate": 0.3, "shape": 0.3, "depth": 1.0})
+			_add(p, "cl", "clouds", {"mix": 1.0, "size": 0.55, "texture": 0.7, "density": 0.85, "pitch": 0.6, "reverb": 0.6, "spread": 1.0, "feedback": 0.3})
+			_add(p, "rev", "reverb", {"time": 0.95, "mix": 0.35})
+			_add(p, "out", "out", {"level": 0.9})
+			_wire(p, [["clk.beat","rg.strum"],["noise.white","rg.in"],["rg.odd","cl.l"],["rg.even","cl.r"],["cl.l","rev.l"],["cl.r","rev.r"],["rev.l","out.l"],["rev.r","out.r"]])
+		&"glitch_idm":
+			_add(p, "clk", "clock", {"sync": 0.0, "bpm": 0.55})
+			_add(p, "noise", "noise")
+			_add(p, "sh", "sh")
+			_add(p, "q", "quant", {"scale": 0.2, "root": 0.0})
+			_add(p, "v", "vco", {"wave": 0.99, "tune": 0.5, "pw": 0.3})
+			_add(p, "env", "env", {"a": 0.0, "d": 0.5, "s": 0.0, "r": 0.3})
+			_add(p, "vca", "vca")
+			_add(p, "svf", "svf", {"cutoff": 0.6, "res": 0.5, "cv": 0.7})
+			_add(p, "lfo", "lfo", {"rate": 0.55, "shape": 0.7, "depth": 1.0})
+			_add(p, "cr", "crush", {"rate": 0.35, "bits": 0.4, "mix": 0.6})
+			_add(p, "kick", "drum", {"kind": 0.0, "decay": 0.4})
+			_add(p, "hat", "drum", {"kind": 0.99, "decay": 0.08})
+			_add(p, "sn", "drum", {"kind": 0.5, "decay": 0.25})
+			_add(p, "mix", "mix", {"l1": 0.7, "l2": 0.9, "l3": 0.4, "l4": 0.6})
+			_add(p, "dly", "delay", {"sync": 0.33, "fb": 0.55, "mix": 0.3, "pp": 1.0})
+			_add(p, "rev", "reverb", {"time": 0.4, "mix": 0.15})
+			_add(p, "out", "out", {"level": 0.6})
+			_wire(p, [["noise.white","sh.in"],["clk.16th","sh.trig"],["sh.out","q.in"],["q.out","v.pitch"],["clk.8th","env.gate"],["v.out","svf.in"],["lfo.uni","svf.cutoff"],["svf.lp","vca.in"],["env.out","vca.cv"],
+				["vca.out","cr.in"],["cr.out","mix.in1"],["clk.beat","kick.trig"],["clk.16th","hat.trig"],["clk.bar","sn.trig"],["kick.out","mix.in2"],["hat.out","mix.in3"],["sn.out","mix.in4"],
+				["mix.out","dly.in"],["dly.l","rev.l"],["dly.r","rev.r"],["rev.l","out.l"],["rev.r","out.r"]])
+		&"arp_space":
+			_add(p, "clk", "clock", {"sync": 0.0, "bpm": 0.42})
+			_add_seq(p, "seq", [13,20,25,29,25,20,13,20, 17,24,29,32,29,24,17,24], 0.4)
+			_add(p, "pl", "plaits", {"engine": 0.15, "harm": 0.5, "timbre": 0.6, "morph": 0.4, "decay": 0.5, "lpg": 0.6})
+			_add(p, "lfo", "lfo", {"rate": 0.25, "depth": 0.9})
+			_add(p, "dly", "delay", {"sync": 0.5, "fb": 0.55, "mix": 0.4, "pp": 1.0})
+			_add(p, "cl", "clouds", {"mix": 0.3, "size": 0.5, "texture": 0.5, "density": 0.7, "reverb": 0.5})
+			_add(p, "rev", "reverb", {"time": 0.8, "mix": 0.3})
+			_add(p, "out", "out", {"level": 0.9})
+			_wire(p, [["clk.16th", "seq.clk"], ["seq.pitch", "pl.pitch"], ["seq.gate", "pl.trig"], ["lfo.uni", "pl.morph"],
+					["pl.out", "dly.in"], ["dly.l", "cl.l"], ["dly.r", "cl.r"], ["cl.l", "rev.l"], ["cl.r", "rev.r"], ["rev.l", "out.l"], ["rev.r", "out.r"]])
+		&"bass_drone":
+			_add(p, "v1", "vco", {"wave": 0.5, "tune": 0.12, "fine": 0.47})
+			_add(p, "v2", "vco", {"wave": 0.5, "tune": 0.12, "fine": 0.53})
+			_add(p, "v3", "vco", {"wave": 0.0, "tune": 0.0})
+			_add(p, "lfo", "lfo", {"rate": 0.12, "depth": 1.0})
+			_add(p, "lfo2", "lfo", {"rate": 0.3, "shape": 0.2, "depth": 0.6})
+			_add(p, "mix", "mix", {"l1": 0.6, "l2": 0.6, "l3": 0.7})
+			_add(p, "lad", "ladder", {"cutoff": 0.4, "res": 0.55, "drive": 0.35, "cv": 0.7})
+			_add(p, "cho", "chorus", {"rate": 0.2, "depth": 0.8, "mix": 0.6})
+			_add(p, "rev", "reverb", {"time": 0.9, "mix": 0.35})
+			_add(p, "out", "out", {"level": 0.8})
+			_wire(p, [["v1.out", "mix.in1"], ["v2.out", "mix.in2"], ["v3.out", "mix.in3"], ["lfo2.out", "v1.fm"], ["mix.out", "lad.in"], ["lfo.uni", "lad.cutoff"],
+					["lad.out", "cho.in"], ["cho.l", "rev.l"], ["cho.r", "rev.r"], ["rev.l", "out.l"], ["rev.r", "out.r"]])
+		&"electro_funk":
+			_add(p, "clk", "clock", {"sync": 0.0, "bpm": 0.38})
+			_add_seq(p, "seq", [13,0,13,16,0,13,0,18, 20,0,18,0,16,0,13,0], 0.35)
+			_add(p, "v", "vco", {"wave": 0.99, "tune": 0.3, "pw": 0.35})
+			_add(p, "env", "env", {"a": 0.0, "d": 0.55, "s": 0.0, "r": 0.35})
+			_add(p, "svf", "svf", {"cutoff": 0.3, "res": 0.55, "drive": 0.3, "cv": 0.85})
+			_add(p, "vca", "vca")
+			_add(p, "kick", "drum", {"kind": 0.0, "decay": 0.5})
+			_add(p, "sn", "drum", {"kind": 0.5, "decay": 0.35})
+			_add(p, "hat", "drum", {"kind": 0.99, "decay": 0.1})
+			_add(p, "mix", "mix", {"l1": 0.75, "l2": 0.95, "l3": 0.6, "l4": 0.35})
+			_add(p, "cho", "chorus", {"rate": 0.3, "depth": 0.5, "mix": 0.4})
+			_add(p, "dly", "delay", {"sync": 0.5, "fb": 0.35, "mix": 0.2})
+			_add(p, "out", "out", {"level": 0.65})
+			_wire(p, [["clk.16th", "seq.clk"], ["seq.pitch", "v.pitch"], ["seq.gate", "env.gate"], ["v.out", "svf.in"], ["env.out", "svf.cutoff"], ["svf.lp", "vca.in"], ["env.out", "vca.cv"],
+					["clk.beat", "kick.trig"], ["clk.bar", "sn.trig"], ["clk.8th", "hat.trig"], ["vca.out", "mix.in1"], ["kick.out", "mix.in2"], ["sn.out", "mix.in3"], ["hat.out", "mix.in4"],
+					["mix.out", "cho.in"], ["cho.l", "dly.in"], ["dly.l", "out.l"], ["dly.r", "out.r"]])
 		&"big_rig":
 			var col0 := 0
 			_put(p, "clk", "clock", col0, 0, {"sync": 0.0, "bpm": 0.43})
@@ -202,6 +340,20 @@ static func preset(name: StringName) -> Dictionary:
 		# The big rig is laid out by hand, a row to a job; the small ones read as their own diagrams.
 		RackLayout.flow(p)
 	return p
+
+
+## A module put anywhere (the flow layout places it after), by the next free cell.
+static func _add(p: Dictionary, id: String, type: String, knobs := {}) -> void:
+	var n: int = (p["modules"] as Dictionary).size()
+	_put(p, id, type, n % 30, n / 30, knobs)
+
+
+## A sequencer from notes (steps above its bottom note, 0 a rest), a gate length and the steps used.
+static func _add_seq(p: Dictionary, id: String, notes: Array, gate := 0.5) -> void:
+	var k := {"gate": gate, "len": float(notes.size() - 1) / 15.0}
+	for i in notes.size():
+		k["s%d" % (i + 1)] = (float(notes[i]) + 0.5) / 38.0 if int(notes[i]) > 0 else 0.0
+	_add(p, id, "seq", k)
 
 
 static func _put(p: Dictionary, id: String, type: String, col: int, row: int, knobs := {}) -> void:
