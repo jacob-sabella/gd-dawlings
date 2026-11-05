@@ -97,3 +97,6 @@ folders you can open and rename in. On the pads' last key row: SAVE keeps the se
 pad, KSAVE keeps all sixteen pads and their settings as a kit, KITS steps through kits, KLOAD puts one on the
 pads, DEL (twice) deletes what was browsed last. A kit holds its sounds by name, so one sample serves any
 number of kits, and the same sound is never kept twice.
+
+The keys are on pages (2026-11-04): CUT, PLAY, SHAPE, MIDI and STORE tabs and STOP, always there, and under
+them only the keys of the tab chosen, two rows at most. The library keys above are the STORE page.

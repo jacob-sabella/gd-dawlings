@@ -7573,6 +7573,12 @@ func _test_the_library_keeps_samples_and_kits() -> void:
 	deck.step_kits()
 	deck.bank.set_sample(sound.slice(0, 1600))
 	deck.load_kit()
+	check("the keys are on pages: only the CUT page's and the tabs show at first",
+			deck.keys["SAMPLE"].visible and not deck.keys["SAVE"].visible and deck.keys["STOP"].visible
+			and deck.keys["SAVE"].collision_layer == 0 and deck.keys["SAMPLE"].collision_layer == 2)
+	deck.keys["STORE"].pressed.emit()
+	check("a tab shows its page and hides the other", deck.keys["SAVE"].visible and not deck.keys["SAMPLE"].visible
+			and deck.keys["SAVE"].collision_layer == 2 and deck.keys["STORE"].lit)
 	check("KITS and KLOAD bring the kit back", deck.bank.slice_frames(15).size() == 1000 and deck.bank.frames.size() == 16000)
 	tv.queue_free()
 	OS.move_to_trash(ProjectSettings.globalize_path(PadLibrary.root))

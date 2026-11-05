@@ -20,7 +20,22 @@ signal said(words: String)
 
 const PAD := 0.09
 const PAD_GAP := 0.014
-const KEY := Vector2(0.13, 0.044)
+const KEY := Vector2(0.13, 0.05)
+## The pages of keys: a tab each, and the keys of each page by row.
+const PAGES := {
+	"CUT": [["SAMPLE", "SRC", "CHOP", "SCALE", "KEY", "MODE"], ["IN-", "IN+", "OUT-", "OUT+"]],
+	"PLAY": [["TRIG", "REV", "CHOKE", "LOCK", "FIT"], ["TUNE-", "TUNE+", "VOL-", "VOL+", "PAN<", "PAN>"]],
+	"SHAPE": [["ATK", "REL", "FILT"], ["SEND", "FX", "PUNCH"]],
+	"MIDI": [["KEYS", "LEARN", "CH", "SEQ"]],
+	"STORE": [["SAVE", "LIB", "LOAD", "DEL"], ["KSAVE", "KITS", "KLOAD"]],
+}
+const PAGE_SAYS := {
+	"CUT": "cut a sample and choose where it comes from; trim the selected pad",
+	"PLAY": "how the selected pad plays: its pitch, volume, pan, direction, choke group and length",
+	"SHAPE": "the selected pad's fade in and out, filter and effect",
+	"MIDI": "the computer keys, MIDI keyboard learn and channel, and the track's notes",
+	"STORE": "your library: keep a pad's sound or all the pads as a kit, and bring them back",
+}
 const KEY_GAP := 0.012
 ## The console's foot and top, under the TV's case.
 const FOOT := 0.8
@@ -72,6 +87,10 @@ var learning := false
 var channel := 0
 ## PUNCH: every pad is sent to the effect while it is held on, whatever its own SEND.
 var punch := false
+## The page of keys shown (one of PAGES), and the keys of each.
+var page_shown := "CUT"
+var _page_keys := {}
+var _built := false
 ## The library's cursors (into PadLibrary.samples() and kits()), what was browsed last ("sample" or
 ## "kit"), and whether DEL has been asked once already.
 var lib_sample := -1
@@ -174,7 +193,8 @@ func _build() -> void:
 	_build_keys(wave_x, wave_y)
 
 
-## Four rows of keys under the waveform, each as wide as fits.
+## The keys under the waveform, on pages: a row of tabs (and STOP, always there) and the page's own
+## keys in up to two rows, big enough to read. Only the page shown can be seen or pressed.
 func _build_keys(wave_x: float, wave_y: float) -> void:
 	var rows := [
 		[["SAMPLE", "press at the start and again at the end of what to sample: from the TV's sound, or the source SRC names", sample],
@@ -216,25 +236,63 @@ func _build_keys(wave_x: float, wave_y: float) -> void:
 		["KITS", "browse your kits (press again for the next)", step_kits],
 		["KLOAD", "put the kit KITS shows on the pads", load_kit],
 		["DEL", "delete the sample or kit just browsed (press twice)", delete_browsed]]]
+	var defs := {}
+	for row in rows:
+		for k in row:
+			defs[k[0]] = k
 	var top := wave_y - WAVE.y * 0.5 - 0.016
-	for r in rows.size():
-		var row: Array = rows[r]
-		var width := minf(KEY.x, (WAVE.x - (row.size() - 1) * KEY_GAP) / row.size())
-		var across := row.size() * width + (row.size() - 1) * KEY_GAP
-		for i in row.size():
-			var key := EqWall.WallKey.new()
-			var legend: String = row[i][0]
-			key.name = "Key" + legend.capitalize().replace("+", "Up").replace("-", "Down").replace("<", "Left").replace(">", "Right")
-			key.legend = legend
-			key.says = row[i][1]
-			key.size = Vector2(width, KEY.y)
-			var called := "PADS  " + legend
-			key.describe_title = func() -> String: return called
-			key.position = Vector3(wave_x - across * 0.5 + width * 0.5 + i * (width + KEY_GAP),
-					top - KEY.y * 0.5 - r * (KEY.y + KEY_GAP_Y), 0.011)
-			key.pressed.connect(row[i][2])
-			add_child(key)
-			keys[legend] = key
+	var tabs := []
+	for page in PAGES:
+		tabs.append([page, PAGE_SAYS[page], func() -> void: show_page(page)])
+	tabs.append(defs["STOP"])
+	_place_row(tabs, 0, top, wave_x, "tab")
+	_page_keys.clear()
+	for page in PAGES:
+		var keys_here: Array = []
+		var lines: Array = PAGES[page]
+		for r in lines.size():
+			var row: Array = []
+			for legend in lines[r]:
+				row.append(defs[legend])
+				keys_here.append(legend)
+			_place_row(row, r + 1, top, wave_x, "page")
+		_page_keys[page] = keys_here
+	show_page(page_shown)
+	_built = true
+
+
+## One row of keys, `r` rows down from `top`, each as wide as fits (never wider than KEY).
+func _place_row(row: Array, r: int, top: float, wave_x: float, kind: String) -> void:
+	var width := minf(KEY.x, (WAVE.x - (row.size() - 1) * KEY_GAP) / row.size())
+	var across := row.size() * width + (row.size() - 1) * KEY_GAP
+	for i in row.size():
+		var key := EqWall.WallKey.new()
+		var legend: String = row[i][0]
+		key.name = "Key" + legend.capitalize().replace("+", "Up").replace("-", "Down").replace("<", "Left").replace(">", "Right")
+		key.legend = legend
+		key.says = row[i][1]
+		key.size = Vector2(width, KEY.y)
+		var called := "PADS  " + legend
+		key.describe_title = func() -> String: return called
+		key.position = Vector3(wave_x - across * 0.5 + width * 0.5 + i * (width + KEY_GAP),
+				top - KEY.y * 0.5 - r * (KEY.y + KEY_GAP_Y), 0.011)
+		key.pressed.connect(row[i][2])
+		add_child(key)
+		keys[legend] = key
+
+
+## Page `page` of keys shown (the tabs and STOP always are): the rest hidden and out of reach.
+func show_page(page: String) -> void:
+	if not PAGES.has(page):
+		return
+	page_shown = page
+	for legend in keys:
+		var key := keys[legend] as EqWall.WallKey
+		var here: bool = PAGES.has(legend) or legend == "STOP" or (_page_keys.get(page, []) as Array).has(legend)
+		key.visible = here
+		key.collision_layer = 2 if here else 0
+	if _built:
+		refresh()
 
 
 func _label(cap: float, colour: Color) -> Label3D:
@@ -826,6 +884,8 @@ func refresh() -> void:
 	if browsed != "":
 		_mode_words.text = browsed
 	Lettering.fit(_mode_words, WAVE.x * 0.4, roundi(0.026 / PIXEL), 12)
+	for page in PAGES:
+		(keys[page] as EqWall.WallKey).lit = page == page_shown
 	(keys["SCALE"] as EqWall.WallKey).lit = bank.scale_on
 	(keys["KEYS"] as EqWall.WallKey).lit = keys_on
 	(keys["LEARN"] as EqWall.WallKey).lit = learning
