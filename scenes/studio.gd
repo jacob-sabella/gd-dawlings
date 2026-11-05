@@ -2737,7 +2737,89 @@ func room_state() -> Dictionary:
 			"weather": weather_listening, "bricks": _bricks_row(), "looper": looper_row.duplicate(),
 			"music_box": music_box_row.duplicate(), RoomString.ROW: strings_row.duplicate(),
 			MarbleRun.ROW: marbles_row.duplicate(), MarbleRun.BALLS: marble_balls.duplicate(),
-			RackPatch.ROW: rack_row.duplicate(true), GrainCloud.ROW: grains_key}
+			RackPatch.ROW: rack_row.duplicate(true), GrainCloud.ROW: grains_key,
+			"tv": tv.row() if tv != null and is_instance_valid(tv) else {}, "pads": pads_row.duplicate(true)}
+
+
+## The pads' row (PadShare): what the host's sampling station holds, for the room.
+var pads_row := {}
+var _pads_rev := -1
+var _pads_file := ""
+var _pads_followed := {}
+var _pads_loaded := ""
+
+
+## The host's TV changed what it plays: the room is told.
+func _on_tv_changed() -> void:
+	if Session.role == Session.Role.HOST:
+		_publish_room()
+
+
+## The host's pads changed: the sample written once (and offered to guests), the row remade.
+func _on_pads_changed() -> void:
+	if Session.role != Session.Role.HOST or tv == null or not is_instance_valid(tv):
+		return
+	var bank := tv.bank
+	if bank.revision != _pads_rev:
+		_pads_rev = bank.revision
+		_pads_file = PadShare.write(bank)
+	var made := PadShare.row(bank, _pads_file)
+	if made != pads_row:
+		pads_row = made
+		_publish_room()
+
+
+## A guest asked the host's TV for something (its FIND, PLAY, a skip): the host does it.
+func _answer_tv(video: String, playing: bool, at: float) -> void:
+	if tv != null and is_instance_valid(tv):
+		tv.apply(video, playing, at)
+
+
+## A guest: the room's TV and pads, as the host has them.
+func _follow_tv(state: Dictionary) -> void:
+	if tv == null or not is_instance_valid(tv):
+		return
+	tv.guest = Session.role == Session.Role.GUEST
+	if not tv.guest:
+		return
+	if state.has("tv"):
+		tv.follow(state["tv"])
+	if state.has("pads") and state["pads"] != _pads_followed:
+		_pads_followed = (state["pads"] as Dictionary).duplicate(true)
+		_follow_pads_row(_pads_followed)
+
+
+func _follow_pads_row(row: Dictionary) -> void:
+	var file := str(row.get("file", ""))
+	if file == "" or file == _pads_loaded or tv.deck == null:
+		PadShare.set_settings(tv.bank, row)
+		if tv.deck != null:
+			tv.deck.refresh()
+		return
+	var have := Session.files.fetched_path(file) if Session.files != null else ""
+	if have == "":
+		if Session.files != null:
+			Session.files.fetch(file)
+			if not Session.files.fetched.is_connected(_on_pads_fetched):
+				Session.files.fetched.connect(_on_pads_fetched)
+		return
+	_pads_fetched_into(file, have, row)
+
+
+func _on_pads_fetched(file: String, path: String) -> void:
+	if file == str(_pads_followed.get("file", "")):
+		_pads_fetched_into(file, path, _pads_followed)
+
+
+func _pads_fetched_into(file: String, path: String, row: Dictionary) -> void:
+	if tv == null or not is_instance_valid(tv) or tv.deck == null:
+		return
+	var stream := AudioStreamWAV.load_from_file(path)
+	if stream == null:
+		return
+	_pads_loaded = file
+	PadShare.apply(tv.bank, row, stream)
+	tv.deck.refresh()
 
 
 func _publish_room() -> void:
@@ -2776,7 +2858,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 				pending_items[p["args"][0]] = true
 			&"patch", &"on_air", &"plug", &"rope", &"make", &"paste", &"sampler", &"weather", &"bricks", \
 					&"looper", &"looper_layer", &"music_box", &"string", &"marble", &"marble_ball", \
-					&"rack": pass
+					&"rack", &"tv": pass
 			&"open_tablet", &"open_track_rack": pending_open[p["id"]] = true
 			&"close_tablet", &"close_track_rack": pending_close[p["args"][0]] = true
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
@@ -2882,6 +2964,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	if stage != null and state.has("ropes"):
 		# The stage table keeps its own unanswered ties and cuts on top.
 		stage.apply_ropes(state["ropes"], answered)
+	_follow_tv(state)
 	if sampler != null and is_instance_valid(sampler) and state.has("sampler") \
 			and not _predictions.any(func(p): return p["verb"] == Sampler.VERB):
 		# Once its press is answered, the host's word: on for whoever the room says, or off.
@@ -3135,6 +3218,9 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 			# A guest's rope tied or cut on its stage table: the row says what the rope added.
 			if stage != null:
 				stage.answer_rope(args[0], args[1], args[2])
+		&"tv":
+			# A guest's wish for the TV: the video, whether it plays, where. The host does it.
+			_answer_tv(args[0], args[1], args[2])
 		&"sampler":
 			# A guest's REC: on for their next sound, or off.
 			_arm_sampler(args[0], from)
@@ -3926,6 +4012,10 @@ func _build_surfaces() -> void:
 		tv.find_asked.connect(find_on_tv)
 		tv.song_position = func() -> float: return hit_recorder.stamp() if hit_recorder != null else 0.0
 		tv.pad_struck.connect(_on_pad_struck)
+		tv.changed.connect(_on_tv_changed)
+		tv.asked.connect(func(video: String, playing: bool, at: float) -> void:
+			Session.ask_room(&"tv", [video, playing, at]))
+		tv.pads_changed.connect(_on_pads_changed)
 		tv.pads_said.connect(func(words: String) -> void: Session.notice.emit(words))
 		tv.searched.connect(_on_tv_searched)
 		studio_set.add_child(tv)

@@ -65,6 +65,8 @@ var params: Array[Dictionary] = []
 ## is slow, striking it again is not.
 var _made := {}
 var _gen := 0
+## Counts samples set, so a sample is told from the last without comparing them.
+var revision := 0
 
 
 func _init() -> void:
@@ -111,6 +113,10 @@ func nudge(pad: int, key: String, by: float) -> Variant:
 			p[key] = posmod(int(p[key]) + int(by), CHOKES + 1)
 	_made.clear()
 	return p.get(key)
+
+
+func clear_made() -> void:
+	_made.clear()
 
 
 ## Pad `pad`'s setting `key` set outright.
@@ -175,6 +181,7 @@ static func _frame(data: PackedByteArray, i: int, channels: int) -> Vector2:
 
 
 func set_sample(sound: PackedVector2Array) -> void:
+	revision += 1
 	_made.clear()
 	frames = sound
 	chop_equal()

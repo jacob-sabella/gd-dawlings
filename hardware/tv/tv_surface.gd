@@ -13,6 +13,12 @@ extends Surface
 ##
 ## Its frame: the origin is the floor under the screen's middle, +Y up, +Z out of its face.
 
+## The TV changed what it plays or how (the host's, for the room's row), and a guest's wish for it,
+## which the host answers (`apply`): the video id, whether it plays, and where (s).
+signal changed()
+## The pads' bank or settings changed (the deck's own signal, kept across rebuilds of the wall).
+signal pads_changed()
+signal asked(video: String, playing: bool, at: float)
 signal find_asked()
 signal searched(query: String, results: Array, error: String)
 ## A pad struck (PadDeck): the note it is, for the take.
@@ -68,6 +74,13 @@ var _title: Label3D
 var _time: Label3D
 var _play_key: EqWall.WallKey
 var _loading := ""
+## A guest's TV obeys the host's: what its own keys do is asked of the host, and the row that comes
+## back (`follow`) is what it plays.
+var guest := false
+var _applying := false
+var _want := {}
+var _want_at := 0
+var _followed := {}
 ## Its grab tab bigger than a desk's: it is read from the seat 4 m off (SurfaceHandle).
 var handle_scale := 1.6
 
@@ -120,6 +133,11 @@ func find(text: String) -> void:
 func watch(id: String) -> void:
 	if id == "" or id == _loading:
 		return
+	if guest and not _applying:
+		asked.emit(id, true, 0.0)
+		return
+	if not _applying:
+		_want = {}
 	_stop()
 	video = ""
 	_loading = id
@@ -156,10 +174,21 @@ func _loaded(id: String, stream: AudioStreamWAV) -> void:
 	_player.stream = stream
 	says = ""
 	_held_at = 0.0
-	play()
+	_play()
+	changed.emit()
+	if not _want.is_empty():
+		_sync_to_want()
 
 
 func play() -> void:
+	if guest and not _applying:
+		asked.emit(video, true, position())
+		return
+	_play()
+	changed.emit()
+
+
+func _play() -> void:
 	if video == "" or _player.stream == null:
 		return
 	if _held_at >= seconds - 0.05:
@@ -170,6 +199,14 @@ func play() -> void:
 
 
 func pause() -> void:
+	if guest and not _applying:
+		asked.emit(video, false, position())
+		return
+	_pause()
+	changed.emit()
+
+
+func _pause() -> void:
 	if not playing:
 		return
 	_held_at = position()
@@ -185,10 +222,70 @@ func toggle() -> void:
 		play()
 
 
+## The TV as a room row says it: what plays, whether it does, and where it is now.
+func row() -> Dictionary:
+	return {"video": video, "playing": playing, "pos": snappedf(position(), 0.01)}
+
+
+## The host's TV, or a guest's wish for it, taken up here: the video (fetched here if it is not),
+## and then where it is and whether it plays.
+func apply(id: String, play_it: bool, at: float) -> void:
+	_want = {"video": id, "playing": play_it, "pos": at}
+	_want_at = Time.get_ticks_msec()
+	_applying = true
+	if id != video and id != _loading:
+		if id == "":
+			_stop()
+			video = ""
+			_say_state()
+		else:
+			watch(id)
+	elif id == video:
+		_sync_to_want()
+	_applying = false
+
+
+## A guest: the host's row came in. Acted on only when it has changed since the last one.
+func follow(state: Dictionary) -> void:
+	if state == _followed:
+		return
+	_followed = state.duplicate()
+	apply(str(state.get("video", "")), bool(state.get("playing", false)), float(state.get("pos", 0.0)))
+
+
+## To where the host's TV is by now: its position then, and the time that has passed if it plays.
+func _sync_to_want() -> void:
+	if _want.is_empty() or str(_want["video"]) != video:
+		return
+	var at: float = float(_want["pos"])
+	var play_it: bool = bool(_want["playing"])
+	if play_it:
+		at += (Time.get_ticks_msec() - _want_at) / 1000.0
+	_applying = true
+	if play_it and (not playing or absf(position() - at) > 0.5):
+		_held_at = clampf(at, 0.0, maxf(seconds - 0.05, 0.0))
+		_play()
+	elif not play_it:
+		if playing:
+			_pause()
+		_held_at = clampf(at, 0.0, maxf(seconds - 0.05, 0.0))
+	_applying = false
+	if not guest:
+		changed.emit()
+
+
 ## To `t` (s) into the video, playing on if it was.
 func seek(t: float) -> void:
 	if video == "":
 		return
+	if guest and not _applying:
+		asked.emit(video, playing, t)
+		return
+	_seek(t)
+	changed.emit()
+
+
+func _seek(t: float) -> void:
 	_held_at = clampf(t, 0.0, maxf(seconds - 0.05, 0.0))
 	if playing:
 		_player.play(_held_at)
@@ -343,6 +440,7 @@ func _rebuild() -> void:
 		var rate: float = pow(2.0, bank.pad_semitones(pad) / 12.0)
 		pad_struck.emit(bank.note_of(pad), velocity, (slice.y - slice.x) / float(PadBank.RATE) / rate))
 	deck.said.connect(func(words: String) -> void: pads_said.emit(words))
+	deck.changed.connect(func() -> void: pads_changed.emit())
 	_adopt(deck)
 
 func _label(words: String, cap: float, colour: Color) -> Label3D:

@@ -7632,6 +7632,76 @@ func _test_the_pads_trim_filter_shape_lock_and_follow_the_song() -> void:
 	await get_tree().process_frame
 
 
+## 2026-11-04, slice 7: the host's pads and TV go to the room. The sample is written once and
+## offered to guests; its row carries the cuts and each pad's settings; a guest's TV asks the host,
+## and follows the host's row to its position.
+func _test_the_room_shares_the_pads_and_the_tv() -> void:
+	var host := PadBank.new()
+	var sound := PackedVector2Array()
+	sound.resize(32000)
+	for i in 32000:
+		sound[i] = Vector2(sin(i * 0.05) * 0.5, cos(i * 0.05) * 0.5)
+	host.set_sample(sound)
+	host.chop_equal(8)
+	host.set_param(2, "rev", true)
+	host.set_param(3, "mode", 2)
+	host.first_note = 48
+	host.scale_on = true
+	host.root = 2
+	host.mode = "dorian"
+	var file := PadShare.write(host)
+	check("the sample is written once under a name of what is in it (%s)" % file,
+			file.begins_with("pads_") and file == PadShare.name_of(host.frames) and FileSend.shared.has(file)
+			and FileAccess.file_exists(DAW.backend.media_path(file)))
+	var state := PadShare.row(host, file)
+	var guest := PadBank.new()
+	var stream := AudioStreamWAV.load_from_file(DAW.backend.media_path(file))
+	PadShare.apply(guest, state, stream)
+	check("a guest's bank is the host's: sample, cuts, settings, scale, first note (%d frames)" % guest.frames.size(),
+			absi(guest.frames.size() - 32000) <= 1 and guest.slices[7] == host.slices[7] and guest.slices[8] == Vector2i.ZERO
+			and bool(guest.params[2]["rev"]) and int(guest.params[3]["mode"]) == 2 and guest.scale_on
+			and guest.root == 2 and guest.mode == "dorian" and guest.first_note == 48)
+	check("a row from an older host with no settings leaves a pad at its defaults",
+			(func() -> bool:
+				var b := PadBank.new()
+				PadShare.set_settings(b, {"cuts": PackedInt32Array(), "params": [{"vol": 0.5}]})
+				return is_equal_approx(float(b.params[0]["vol"]), 0.5) and b.params[0]["lock"] == false).call())
+	check("a verb for the TV is one a guest may ask", Session.room_ask_is_valid(&"tv", ["abc", true, 1.5])
+			and not Session.room_ask_is_valid(&"tv", ["abc", true]))
+
+	var tv := TvSurface.new()
+	add_child(tv)
+	await get_tree().process_frame
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.stereo = true
+	wav.mix_rate = 44100
+	var data := PackedByteArray()
+	data.resize(44100 * 10 * 4)
+	wav.data = data
+	tv._player.stream = wav
+	tv.video = "clip"
+	tv.seconds = 10.0
+	tv.apply("clip", true, 2.0)
+	check("the host's TV takes up a wish: playing, from 2 s", tv.playing and absf(tv.position() - 2.0) < 0.6)
+	tv.apply("clip", false, 4.0)
+	check("and paused at 4 s", not tv.playing and absf(tv.position() - 4.0) < 0.05)
+	check("its row says so", tv.row()["video"] == "clip" and not tv.row()["playing"] and is_equal_approx(tv.row()["pos"], 4.0))
+	tv.guest = true
+	var wished: Array = []
+	tv.asked.connect(func(v: String, p: bool, at: float): wished.append([v, p, at]))
+	tv.toggle()
+	check("a guest's PLAY asks the host and does nothing itself", wished == [["clip", true, 4.0]] and not tv.playing)
+	tv.seek(7.0)
+	check("a guest's skip asks too", wished.size() == 2 and wished[1][2] == 7.0 and absf(tv.position() - 4.0) < 0.05)
+	tv.follow({"video": "clip", "playing": true, "pos": 1.0})
+	check("the host's row is what a guest plays", tv.playing and absf(tv.position() - 1.0) < 0.6)
+	tv.follow({"video": "clip", "playing": false, "pos": 3.0})
+	check("and when it pauses, so does the guest's", not tv.playing and absf(tv.position() - 3.0) < 0.05)
+	tv.queue_free()
+	await get_tree().process_frame
+
+
 ## 2026-10-30, "i dont like how clicking things moves me to other things in almost all scenarios":
 ## at a desk, what a click does to gear moves the gear, not the player. Only going somewhere (F, I,
 ## Escape, a station board row) walks.

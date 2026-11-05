@@ -81,6 +81,10 @@ trolley, and a sample is still a cassette on the rack as well as a pad.
    key-lock (the slice is overlap-add stretched by the rate it is played at, so pitch moves and
    length does not), pan, MIDI learn (the next note names the selected pad), and SEQ (the armed
    track's recorded notes are struck through the pads as the playhead crosses them).
-7. [ ] **The room**: the TV's row (video, playing, position at time) and the pads' row; a guest
-   fetches the video itself and follows the host; samples sent as files.
+7. [x] **The room**: the room's `tv` row (video, playing, position) and `pads` row (PadShare: the
+   sample's file, its cuts, each pad's settings, scale mode, first note). A guest's FIND, PLAY and
+   skips are asked of the host (the `tv` verb) and its TV follows the host's row: it fetches the
+   video itself (Tube) and plays it at the host's position. The host writes its sample once as a
+   WAV in the project's media, named by what is in it, and guests fetch it (FileSend.shared makes
+   it servable) and cut it the same. A guest's pads play locally; the samples are the host's.
 8. [ ] **The old Sampler retired**: its station row, verb and tests moved to the new station.

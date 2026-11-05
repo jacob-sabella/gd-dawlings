@@ -13,6 +13,8 @@ extends Node3D
 ## Its frame is the TV's: the origin the floor under the screen's middle, +Z out of its face.
 ## Built by TvSurface, which keeps the bank (a rebuild of the wall keeps the sample).
 
+## The bank or a pad's settings changed (the room shares them).
+signal changed()
 signal struck(pad: int, velocity: int)
 signal said(words: String)
 
@@ -677,6 +679,7 @@ func refresh() -> void:
 		pads[i].full = bank.slice_of(i).y > bank.slice_of(i).x
 		pads[i].words = bank.pad_label(i) if bank.scale_on else str(i + 1)
 	_wave_texture.update(draw_wave(bank, WAVE_PIXELS))
+	changed.emit()
 
 
 ## The sample drawn: its loudest and quietest in each column, its slices' starts as lines, each

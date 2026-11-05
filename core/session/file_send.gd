@@ -28,6 +28,9 @@ const FILE_CHANNEL := 6
 const INCOMING := "user://incoming"
 ## Guest: where the host's files it fetched are kept, by their names, while it is a guest.
 const FETCHED := "user://fetched"
+## Host: files besides the song's and the cassettes' that guests may fetch, by name: the pads'
+## sample (PadShare).
+static var shared := {}
 
 ## Guest: how far the batch being sent has got, 0-1, and its files' names.
 signal progress(fraction: float, names: PackedStringArray)
@@ -330,6 +333,8 @@ func fetch_asked(file_name: String, from: int) -> void:
 ## Whether something in the room plays file `fname`: an item of the song, or a made cassette's clip.
 ## A guest may fetch only those, never whatever else is in the host's folder.
 static func _plays_here(fname: String) -> bool:
+	if shared.has(fname):
+		return true
 	if DAW.state != null:
 		for index in DAW.state.track_indices():
 			for it: MixState.ItemState in DAW.state.track(index).items:
