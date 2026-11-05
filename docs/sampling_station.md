@@ -73,8 +73,14 @@ trolley, and a sample is still a cassette on the rack as well as a pad.
    SCALE spreads the last pad struck; KEY steps the root, MODE the scale. Still to come with slice
    4: a track's notes played back as the pads (until then a take plays through the track's own
    instrument).
-6. [ ] **The other sources**: the room mic (the Sampler's catching), the audio interface input,
-   the mix.
+6. [x] **The other sources** (core/sampling/pad_capture.gd): SRC steps TV, MIX (the Master bus,
+   resampling), ROOM (the Gear bus: items, castors, tape motors) and IN (the audio interface);
+   SAMPLE twice catches up to 30 s. The old Sampler's item-triggered catch is still its own.
+   Also in 2026-11-04's pass: per-pad trim (IN/OUT), attack, release, a state-variable filter
+   (low pass closing to high pass opening), an FX send (reverb, delay or both, on the PadFx bus),
+   key-lock (the slice is overlap-add stretched by the rate it is played at, so pitch moves and
+   length does not), pan, MIDI learn (the next note names the selected pad), and SEQ (the armed
+   track's recorded notes are struck through the pads as the playhead crosses them).
 7. [ ] **The room**: the TV's row (video, playing, position at time) and the pads' row; a guest
    fetches the video itself and follows the host; samples sent as files.
 8. [ ] **The old Sampler retired**: its station row, verb and tests moved to the new station.

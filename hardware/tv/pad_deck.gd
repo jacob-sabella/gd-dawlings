@@ -18,21 +18,26 @@ signal said(words: String)
 
 const PAD := 0.09
 const PAD_GAP := 0.014
-const KEY := Vector2(0.13, 0.06)
+const KEY := Vector2(0.13, 0.044)
 const KEY_GAP := 0.012
 ## The console's foot and top, under the TV's case.
 const FOOT := 0.8
 const TOP := 1.24
 const WIDE := TvSurface.SCREEN.x + TvSurface.BEZEL * 2.0
 ## The waveform: its size on the console and in pixels.
-const WAVE := Vector2(0.84, 0.2)
-const WAVE_PIXELS := Vector2i(640, 152)
+const WAVE := Vector2(0.84, 0.12)
+const WAVE_PIXELS := Vector2i(640, 91)
 const VOICES := 16
 ## The computer keys' sixteen pads, in the MPC's four by four: pad 1 is Z, the bottom left, and the
 ## top row is 1 2 3 4.
 const PAD_KEYS := [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_A, KEY_S, KEY_D, KEY_F,
 		KEY_Q, KEY_W, KEY_E, KEY_R, KEY_1, KEY_2, KEY_3, KEY_4]
-const KEY2 := Vector2(0.092, 0.055)
+const KEY_GAP_Y := 0.008
+## The FX send bus and the effects on it, stepped by FX.
+const FX_BUS := &"PadFx"
+const FX_KINDS := ["REVERB", "DELAY", "BOTH"]
+const CYCLES := {"atk": [0.0, 0.005, 0.02, 0.05, 0.15, 0.3], "rel": [0.0, 0.05, 0.15, 0.4, 1.0],
+		"filt": [-1.0, -0.6, -0.3, 0.0, 0.3, 0.6, 1.0], "send": [0.0, 0.25, 0.5, 0.75, 1.0]}
 ## CHOP's steps, from 16 (what SAMPLE cuts it into) to its hits first.
 const CHOPS := ["16", "HITS", "8", "4"]
 const PIXEL := 0.0004
@@ -55,6 +60,18 @@ var selected := 0
 ## and a MIDI keyboard's notes (`midi`), which no instrument of theirs hears meanwhile.
 var engaged := false
 var keys_on := true
+## Where SAMPLE takes from (PadCapture.SOURCES), the catcher for the sources that are not the TV.
+var source := 0
+var capture: PadCapture
+## MIDI learn: the next hardware note names the selected pad (the bank's first note moves to fit).
+var learning := false
+## The pads answer the armed track's recorded notes while the song plays (SEQ).
+var follow_on := false
+var fx_kind := 0
+var _fx_voices: Array[AudioStreamPlayer] = []
+var _last_song := -1.0
+var _offs: Array = []
+var _quiet := false
 var _voice_pad: Array[int] = []
 var _held: Dictionary = {}
 var pads: Array[Pad] = []
@@ -74,6 +91,14 @@ func _ready() -> void:
 		p.name = "Voice%d" % i
 		add_child(p)
 		_voices.append(p)
+	for i in VOICES:
+		var f := AudioStreamPlayer.new()
+		f.name = "Send%d" % i
+		add_child(f)
+		_fx_voices.append(f)
+	capture = PadCapture.new()
+	capture.name = "Capture"
+	add_child(capture)
 	_lit_until.resize(PadBank.PADS)
 	_voice_pad.resize(VOICES)
 	_voice_pad.fill(-1)
@@ -132,50 +157,60 @@ func _build() -> void:
 	_mode_words.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_mode_words.position = Vector3(wave_x + WAVE.x * 0.5, wave_y + WAVE.y * 0.5 + 0.018, 0.002)
 	add_child(_mode_words)
-	var row := [["SAMPLE", "press at the start and again at the end of what to sample from the TV", sample],
-			["CHOP", "cut it by its hits, or into 16, 8 or 4 equal slices", step_chop],
-			["SCALE", "spread the last pad struck across all sixteen, in a key", toggle_scale],
-			["KEY", "the scale's root, a semitone up", func() -> void: step_root(1)],
-			["MODE", "the next scale: the seven modes, harmonic and melodic minor, pentatonics, blues, chromatic", step_mode]]
-	var across := row.size() * KEY.x + (row.size() - 1) * KEY_GAP
-	for i in row.size():
-		var key := EqWall.WallKey.new()
-		var legend: String = row[i][0]
-		key.name = "Key" + legend.capitalize()
-		key.legend = legend
-		key.says = row[i][1]
-		key.size = KEY
-		var called := "PADS  " + legend
-		key.describe_title = func() -> String: return called
-		key.position = Vector3(wave_x - across * 0.5 + KEY.x * 0.5 + i * (KEY.x + KEY_GAP),
-				wave_y - WAVE.y * 0.5 - 0.02 - KEY.y * 0.5, 0.011)
-		key.pressed.connect(row[i][2])
-		add_child(key)
-		keys[legend] = key
-	# The second row: what the selected pad does, and whether the computer keys play the pads.
-	var row2 := [["TRIG", "how the selected pad plays: ONE through, GATE while held, LOOP until struck again", func() -> void: _edit("mode", 1.0)],
-			["REV", "play the selected pad's slice backwards", func() -> void: _edit("rev", 0.0)],
-			["CHOKE", "the selected pad's choke group: pads of one group cut each other off (0 is none)", func() -> void: _edit("choke", 1.0)],
-			["TUNE-", "the selected pad a semitone down", func() -> void: _edit("tune", -1.0)],
-			["TUNE+", "the selected pad a semitone up", func() -> void: _edit("tune", 1.0)],
-			["VOL-", "the selected pad quieter", func() -> void: _edit("vol", -0.1)],
-			["VOL+", "the selected pad louder", func() -> void: _edit("vol", 0.1)],
-			["KEYS", "the computer keys play the pads when you stand here: ZXCV ASDF QWER 1234, a MIDI keyboard's notes 36-51 always", toggle_keys]]
-	var across2 := row2.size() * KEY2.x + (row2.size() - 1) * KEY_GAP
-	for i in row2.size():
-		var key2 := EqWall.WallKey.new()
-		var legend2: String = row2[i][0]
-		key2.name = "Key" + legend2.capitalize().replace("+", "Up").replace("-", "Down")
-		key2.legend = legend2
-		key2.says = row2[i][1]
-		key2.size = KEY2
-		var called2 := "PADS  " + legend2
-		key2.describe_title = func() -> String: return called2
-		key2.position = Vector3(wave_x - across2 * 0.5 + KEY2.x * 0.5 + i * (KEY2.x + KEY_GAP),
-				wave_y - WAVE.y * 0.5 - 0.02 - KEY.y - 0.012 - KEY2.y * 0.5, 0.011)
-		key2.pressed.connect(row2[i][2])
-		add_child(key2)
-		keys[legend2] = key2
+	_build_keys(wave_x, wave_y)
+
+
+## Four rows of keys under the waveform, each as wide as fits.
+func _build_keys(wave_x: float, wave_y: float) -> void:
+	var rows := [
+		[["SAMPLE", "press at the start and again at the end of what to sample: from the TV's sound, or the source SRC names", sample],
+		["SRC", "where SAMPLE takes from: the TV, the MIX itself (resampling), the ROOM's sounds, or the audio interface IN", step_source],
+		["CHOP", "cut it by its hits, or into 16, 8 or 4 equal slices", step_chop],
+		["SCALE", "spread the last pad struck across all sixteen, in a key", toggle_scale],
+		["KEY", "the scale's root, a semitone up", func() -> void: step_root(1)],
+		["MODE", "the next scale: the seven modes, harmonic and melodic minor, pentatonics, blues, chromatic", step_mode]],
+		[["TRIG", "how the selected pad plays: ONE through, GATE while held, LOOP until struck again", func() -> void: _edit("mode", 1.0)],
+		["REV", "play the selected pad's slice backwards", func() -> void: _edit("rev", 0.0)],
+		["CHOKE", "the selected pad's choke group: pads of one group cut each other off (0 is none)", func() -> void: _edit("choke", 1.0)],
+		["TUNE-", "the selected pad a semitone down", func() -> void: _edit("tune", -1.0)],
+		["TUNE+", "the selected pad a semitone up", func() -> void: _edit("tune", 1.0)],
+		["VOL-", "the selected pad quieter", func() -> void: _edit("vol", -0.1)],
+		["VOL+", "the selected pad louder", func() -> void: _edit("vol", 0.1)],
+		["KEYS", "the computer keys play the pads when you stand here: ZXCV ASDF QWER 1234, a MIDI keyboard's notes always", toggle_keys]],
+		[["IN-", "trim the selected pad's start later", func() -> void: _edit("start", 0.05)],
+		["IN+", "trim the selected pad's start earlier", func() -> void: _edit("start", -0.05)],
+		["OUT-", "trim the selected pad's end earlier", func() -> void: _edit("end", -0.05)],
+		["OUT+", "trim the selected pad's end later", func() -> void: _edit("end", 0.05)],
+		["ATK", "the selected pad's fade in: none, then longer", func() -> void: _cycle("atk")],
+		["REL", "the selected pad's fade out: none, then longer", func() -> void: _cycle("rel")],
+		["FILT", "the selected pad's filter: low pass closing, none, high pass opening", func() -> void: _cycle("filt")],
+		["SEND", "how much of the selected pad goes to the effect (FX)", func() -> void: _cycle("send")],
+		["LOCK", "key-lock: the selected pad's pitch changes (TUNE, SCALE) without its length changing", func() -> void: _edit("lock", 0.0)]],
+		[["PAN<", "the selected pad toward the left", func() -> void: _edit("pan", -0.25)],
+		["PAN>", "the selected pad toward the right", func() -> void: _edit("pan", 0.25)],
+		["FX", "the effect the SEND goes to: reverb, delay or both", step_fx],
+		["LEARN", "then strike a key on a MIDI keyboard: that note is the selected pad (the others follow in order)", toggle_learn],
+		["SEQ", "play the armed track's recorded notes through the pads while the song plays", toggle_follow],
+		["STOP", "silence every pad", stop_all]]]
+	var top := wave_y - WAVE.y * 0.5 - 0.016
+	for r in rows.size():
+		var row: Array = rows[r]
+		var width := minf(KEY.x, (WAVE.x - (row.size() - 1) * KEY_GAP) / row.size())
+		var across := row.size() * width + (row.size() - 1) * KEY_GAP
+		for i in row.size():
+			var key := EqWall.WallKey.new()
+			var legend: String = row[i][0]
+			key.name = "Key" + legend.capitalize().replace("+", "Up").replace("-", "Down").replace("<", "Left").replace(">", "Right")
+			key.legend = legend
+			key.says = row[i][1]
+			key.size = Vector2(width, KEY.y)
+			var called := "PADS  " + legend
+			key.describe_title = func() -> String: return called
+			key.position = Vector3(wave_x - across * 0.5 + width * 0.5 + i * (width + KEY_GAP),
+					top - KEY.y * 0.5 - r * (KEY.y + KEY_GAP_Y), 0.011)
+			key.pressed.connect(row[i][2])
+			add_child(key)
+			keys[legend] = key
 
 
 func _label(cap: float, colour: Color) -> Label3D:
@@ -192,6 +227,9 @@ func _label(cap: float, colour: Color) -> Label3D:
 
 ## SAMPLE: the first press marks where the TV is, the second cuts from there to where it is now.
 func sample() -> void:
+	if PadCapture.SOURCES[source] != "TV":
+		_sample_live()
+		return
 	if tv == null or tv.video == "" or tv.sound() == null:
 		said.emit("Play something on the TV first: SAMPLE takes what it plays.")
 		return
@@ -208,6 +246,32 @@ func sample() -> void:
 		return
 	bank.set_sample(PadBank.cut(tv.sound(), from, to))
 	chop = 0
+	refresh()
+
+
+## SAMPLE from the mix, the room or the interface: the first press starts catching, the second
+## ends it and the sound is the sample.
+func _sample_live() -> void:
+	if capture.recording:
+		var sound := capture.stop()
+		if sound.size() < int(PadBank.SHORTEST * PadBank.RATE):
+			said.emit("Nothing caught: is anything playing?")
+		else:
+			bank.set_sample(sound)
+			chop = 0
+		refresh()
+		return
+	if not capture.start(PadCapture.SOURCES[source]):
+		said.emit(capture.why)
+	refresh()
+
+
+func step_source() -> void:
+	if capture.recording:
+		capture.stop()
+	marked = NAN
+	source = (source + 1) % PadCapture.SOURCES.size()
+	said.emit("Sampling from: " + PadCapture.SOURCES[source])
 	refresh()
 
 
@@ -280,10 +344,12 @@ func strike(pad: int, velocity := 100) -> void:
 	voice.pitch_scale = made[1]
 	voice.volume_db = linear_to_db(maxf(velocity, 1) / 127.0)
 	voice.play()
+	_send(at, stream, made[1], velocity, float(own["send"]))
 	var held := int(own["mode"]) != 0
 	_lit_until[pad] = (1 << 60) if held else Time.get_ticks_msec() + int(stream.get_length() / float(made[1]) * 1000.0)
 	pads[pad].lit = true
-	struck.emit(pad, velocity)
+	if not _quiet:
+		struck.emit(pad, velocity)
 
 
 ## The voice to play on: an idle one, else the one that has played longest.
@@ -295,6 +361,20 @@ func _free_voice() -> int:
 	var at := _next_voice
 	_next_voice = (_next_voice + 1) % VOICES
 	return at
+
+
+## Voice `at`'s sound to the effect bus too, `amount` of it.
+func _send(at: int, stream: AudioStream, rate: float, velocity: int, amount: float) -> void:
+	var fx := _fx_voices[at]
+	fx.stop()
+	if amount <= 0.0:
+		return
+	_ensure_fx_bus()
+	fx.bus = FX_BUS
+	fx.stream = stream
+	fx.pitch_scale = rate
+	fx.volume_db = linear_to_db(maxf(velocity, 1) / 127.0 * amount)
+	fx.play()
 
 
 func _voice_of(pad: int) -> int:
@@ -317,6 +397,7 @@ func release(pad: int, force := false) -> void:
 	for i in VOICES:
 		if _voice_pad[i] == pad and _voices[i].playing:
 			_voices[i].stop()
+			_fx_voices[i].stop()
 			_voice_pad[i] = -1
 	_lit_until[pad] = 0
 	pads[pad].lit = false
@@ -356,6 +437,71 @@ func _edit(key: String, by: float) -> void:
 	refresh()
 
 
+## Step setting `key` of the selected pad through its CYCLES.
+func _cycle(key: String) -> void:
+	var steps: Array = CYCLES[key]
+	var now := float(bank.params[selected][key])
+	var at := 0
+	for i in steps.size():
+		if absf(float(steps[i]) - now) < 0.0001:
+			at = i
+	var next: float = steps[(at + 1) % steps.size()]
+	bank.set_param(selected, key, next)
+	said.emit("Pad %d: %s %s" % [selected + 1, key, "%.3g" % next])
+	refresh()
+
+
+func step_fx() -> void:
+	fx_kind = (fx_kind + 1) % FX_KINDS.size()
+	_ensure_fx_bus()
+	said.emit("Pad effect: " + FX_KINDS[fx_kind])
+	refresh()
+
+
+func toggle_learn() -> void:
+	learning = not learning
+	if learning:
+		said.emit("Strike a note on your MIDI keyboard: it becomes pad %d." % (selected + 1))
+	refresh()
+
+
+func toggle_follow() -> void:
+	follow_on = not follow_on
+	_last_song = -1.0
+	if follow_on:
+		said.emit("The pads play the armed track's notes while the song plays; silence that track's own instrument so they are not heard twice.")
+	refresh()
+
+
+## The send bus: a reverb and a delay on it, each in or out by FX; it goes where the pads' own
+## sound goes.
+func _ensure_fx_bus() -> void:
+	var at := AudioServer.get_bus_index(FX_BUS)
+	if at < 0:
+		at = AudioServer.bus_count
+		AudioServer.add_bus(at)
+		AudioServer.set_bus_name(at, FX_BUS)
+		AudioServer.set_bus_send(at, AudioPorts.bus(AudioPorts.MONITOR))
+		var verb := AudioEffectReverb.new()
+		verb.room_size = 0.8
+		verb.wet = 1.0
+		verb.dry = 0.0
+		AudioServer.add_bus_effect(at, verb)
+		var echo := AudioEffectDelay.new()
+		echo.dry = 0.0
+		echo.tap1_active = true
+		echo.tap1_delay_ms = 250.0
+		echo.tap1_level_db = -3.0
+		echo.tap2_active = true
+		echo.tap2_delay_ms = 500.0
+		echo.tap2_level_db = -9.0
+		echo.feedback_active = true
+		echo.feedback_level_db = -8.0
+		AudioServer.add_bus_effect(at, echo)
+	AudioServer.set_bus_effect_enabled(at, 0, fx_kind != 1)
+	AudioServer.set_bus_effect_enabled(at, 1, fx_kind != 0)
+
+
 func toggle_keys() -> void:
 	keys_on = not keys_on
 	refresh()
@@ -384,6 +530,12 @@ func _input(event: InputEvent) -> void:
 func midi(pitch: int, velocity: int, on: bool) -> bool:
 	if not engaged:
 		return false
+	if learning and on and velocity > 0 and not bank.scale_on:
+		bank.first_note = clampi(pitch - selected, 0, 127 - PadBank.PADS + 1)
+		learning = false
+		said.emit("Pad %d is now note %d; pads %d to %d follow." % [selected + 1, pitch, 1, 16])
+		refresh()
+		return true
 	var pad := bank.pad_of_note(pitch)
 	if pad < 0 and not bank.scale_on:
 		return false
@@ -408,29 +560,95 @@ func _play_pitch(pitch: int, velocity: int) -> void:
 	var stream: AudioStreamWAV = made[0]
 	if stream == null:
 		return
-	var voice := _voices[_free_voice()]
+	var at := _free_voice()
+	var voice := _voices[at]
 	var bus := DAW.monitor_bus(HitRecorder.armed_track())
 	voice.bus = bus if bus != &"" and AudioServer.get_bus_index(bus) >= 0 else AudioPorts.MONITOR
 	voice.stream = stream
 	voice.pitch_scale = made[1]
 	voice.volume_db = linear_to_db(maxf(velocity, 1) / 127.0)
 	voice.play()
+	_voice_pad[at] = -1
+	_send(at, stream, made[1], velocity, float(bank.params[bank.scale_pad]["send"]))
 
 
 func _process(_delta: float) -> void:
+	_follow_song()
 	var now := Time.get_ticks_msec()
 	for i in pads.size():
 		if pads[i].lit and now >= _lit_until[i]:
 			pads[i].lit = false
-	if not is_nan(marked) and tv != null and Engine.get_process_frames() % 6 == 0:
+	if capture != null and capture.recording and Engine.get_process_frames() % 6 == 0:
+		_wave_words.text = "CATCHING %s  %.1f s … SAMPLE to end" % [capture.source, capture.seconds()]
+	elif not is_nan(marked) and tv != null and Engine.get_process_frames() % 6 == 0:
 		_wave_words.text = "SAMPLING  %.1f s … SAMPLE to end" % absf(tv.position() - marked)
+
+
+## SEQ: the armed track's recorded notes, struck as the song's playhead crosses them (not recorded
+## again), and let go where they end.
+func _follow_song() -> void:
+	_follow_song_for(HitRecorder.armed_track())
+
+
+func _follow_song_for(armed: int) -> void:
+	var st := DAW.state
+	if not follow_on or st == null:
+		_last_song = -1.0
+		return
+	var now := st.position_seconds
+	if not st.playing:
+		_last_song = now
+		_release_due(INF)
+		return
+	var from := _last_song
+	_last_song = now
+	if from < 0.0 or now < from or now - from > 0.5:
+		return
+	var track = null
+	var tracks: Dictionary = st.tracks
+	if armed > 0 and tracks.has(armed):
+		track = tracks[armed]
+	if track != null:
+		for item in track.items:
+			if item.muted or item.notes.is_empty():
+				continue
+			var lo: float = from - item.start
+			var hi: float = now - item.start
+			if hi < 0.0 or lo > item.length:
+				continue
+			var notes: PackedFloat32Array = item.notes
+			for i in range(0, notes.size() - 4, 5):
+				var on := notes[i]
+				if on >= lo and on < hi:
+					_quiet = true
+					var pitch := int(notes[i + 2])
+					var pad := bank.pad_of_note(pitch)
+					if pad >= 0:
+						strike(pad, int(notes[i + 3]))
+						_offs.append([item.start + notes[i + 1], pad])
+					elif bank.scale_on:
+						_play_pitch(pitch, int(notes[i + 3]))
+					_quiet = false
+	_release_due(now)
+
+
+func _release_due(now: float) -> void:
+	var keep: Array = []
+	for off in _offs:
+		if float(off[0]) <= now:
+			release(int(off[1]))
+		else:
+			keep.append(off)
+	_offs = keep
 
 
 ## The waveform, the words and the pads as the bank is.
 func refresh() -> void:
 	if _wave_words == null:
 		return
-	if not is_nan(marked):
+	if capture != null and capture.recording:
+		_wave_words.text = "CATCHING %s … SAMPLE to end" % capture.source
+	elif not is_nan(marked):
 		_wave_words.text = "SAMPLING … SAMPLE to end"
 	elif bank.frames.is_empty():
 		_wave_words.text = "NO SAMPLE · play the TV, SAMPLE twice"
@@ -440,10 +658,16 @@ func refresh() -> void:
 	if bank.scale_on:
 		_mode_words.text = "%s %s  ·  PAD %d" % [Harmony.SHARP_NAMES[bank.root], bank.mode.to_upper(), bank.scale_pad + 1]
 	else:
-		_mode_words.text = ""
+		_mode_words.text = "SRC %s  ·  NOTE %d" % [PadCapture.SOURCES[source], bank.first_note]
 	Lettering.fit(_mode_words, WAVE.x * 0.4, roundi(0.026 / PIXEL), 12)
 	(keys["SCALE"] as EqWall.WallKey).lit = bank.scale_on
 	(keys["KEYS"] as EqWall.WallKey).lit = keys_on
+	(keys["LEARN"] as EqWall.WallKey).lit = learning
+	(keys["SEQ"] as EqWall.WallKey).lit = follow_on
+	(keys["LOCK"] as EqWall.WallKey).lit = bool(bank.params[selected]["lock"])
+	(keys["SRC"] as EqWall.WallKey).lit = PadCapture.SOURCES[source] != "TV"
+	(keys["SEND"] as EqWall.WallKey).lit = float(bank.params[selected]["send"]) > 0.0
+	(keys["FILT"] as EqWall.WallKey).lit = float(bank.params[selected]["filt"]) != 0.0
 	var sel := bank.params[selected]
 	(keys["REV"] as EqWall.WallKey).lit = bool(sel["rev"])
 	(keys["TRIG"] as EqWall.WallKey).lit = int(sel["mode"]) != 0

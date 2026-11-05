@@ -56,9 +56,15 @@ var mode := "major"
 var scale_pad := 0
 ## The note the sample sounds (0 = C ... 11 = B), from which the root is reached.
 var sample_note := 0
+## The note pad 1 answers to out of scale mode (FIRST_NOTE; moved by MIDI learn).
+var first_note := FIRST_NOTE
 ## Each pad's own settings: {"vol": 0..VOLUME_LIMIT, "pan": -1..1, "tune": semitones, "rev": bool,
 ## "mode": index of PLAY_MODES, "choke": 0..CHOKES}.
 var params: Array[Dictionary] = []
+## Sounds already made, by what made them (the pad's settings, slice and pitch): stretching one
+## is slow, striking it again is not.
+var _made := {}
+var _gen := 0
 
 
 func _init() -> void:
@@ -68,7 +74,8 @@ func _init() -> void:
 
 
 static func default_params() -> Dictionary:
-	return {"vol": 1.0, "pan": 0.0, "tune": 0.0, "rev": false, "mode": 0, "choke": 0}
+	return {"vol": 1.0, "pan": 0.0, "tune": 0.0, "rev": false, "mode": 0, "choke": 0,
+			"start": 0.0, "end": 1.0, "atk": 0.0, "rel": 0.0, "filt": 0.0, "send": 0.0, "lock": false}
 
 
 ## Pad `pad`'s setting `key` moved by `by` (a bool flips, a mode or a choke steps round), kept in
@@ -84,13 +91,33 @@ func nudge(pad: int, key: String, by: float) -> Variant:
 			p[key] = clampf(snappedf(float(p[key]) + by, 0.05), -1.0, 1.0)
 		"tune":
 			p[key] = clampf(snappedf(float(p[key]) + by, 0.05), -TUNE_LIMIT, TUNE_LIMIT)
-		"rev":
+		"rev", "lock":
 			p[key] = not bool(p[key])
+		"start":
+			p[key] = clampf(snappedf(float(p[key]) + by, 0.01), 0.0, float(p["end"]) - 0.02)
+		"end":
+			p[key] = clampf(snappedf(float(p[key]) + by, 0.01), float(p["start"]) + 0.02, 1.0)
+		"atk":
+			p[key] = clampf(snappedf(float(p[key]) + by, 0.005), 0.0, 0.5)
+		"rel":
+			p[key] = clampf(snappedf(float(p[key]) + by, 0.01), 0.0, 1.0)
+		"filt":
+			p[key] = clampf(snappedf(float(p[key]) + by, 0.1), -1.0, 1.0)
+		"send":
+			p[key] = clampf(snappedf(float(p[key]) + by, 0.25), 0.0, 1.0)
 		"mode":
 			p[key] = posmod(int(p[key]) + int(by), PLAY_MODES.size())
 		"choke":
 			p[key] = posmod(int(p[key]) + int(by), CHOKES + 1)
+	_made.clear()
 	return p.get(key)
+
+
+## Pad `pad`'s setting `key` set outright.
+func set_param(pad: int, key: String, value: Variant) -> void:
+	if pad >= 0 and pad < PADS and params[pad].has(key):
+		params[pad][key] = value
+		_made.clear()
 
 
 ## The pad a note strikes out of scale mode (FIRST_NOTE up), or -1.
@@ -100,11 +127,13 @@ func pad_of_note(note: int) -> int:
 			if note_of(i) == note:
 				return i
 		return -1
-	var pad := note - FIRST_NOTE
+	var pad := note - first_note
 	return pad if pad >= 0 and pad < PADS else -1
 
 
 func _clear_slices() -> void:
+	_gen += 1
+	_made.clear()
 	slices.clear()
 	for i in PADS:
 		slices.append(Vector2i.ZERO)
@@ -146,6 +175,7 @@ static func _frame(data: PackedByteArray, i: int, channels: int) -> Vector2:
 
 
 func set_sample(sound: PackedVector2Array) -> void:
+	_made.clear()
 	frames = sound
 	chop_equal()
 
@@ -240,7 +270,7 @@ func slice_of(pad: int) -> Vector2i:
 func note_of(pad: int) -> int:
 	if scale_on:
 		return MIDDLE_C + sample_note + pad_semitones(pad)
-	return FIRST_NOTE + pad
+	return first_note + pad
 
 
 ## What note `note` plays: [slice, semitones], the slice empty for a note no pad answers to. In
@@ -248,7 +278,7 @@ func note_of(pad: int) -> int:
 func play_of(note: int) -> Array:
 	if scale_on:
 		return [slices[scale_pad], note - MIDDLE_C - sample_note]
-	var pad := note - FIRST_NOTE
+	var pad := note - first_note
 	if pad < 0 or pad >= PADS:
 		return [Vector2i.ZERO, 0]
 	return [slices[pad], 0]
@@ -256,22 +286,46 @@ func play_of(note: int) -> Array:
 
 ## A slice as a sound to play: 16-bit stereo at RATE, with the rate to play it at for `semitones`
 ## (AudioStreamPlayer.pitch_scale). Null for an empty slice.
-## With `pad` (0..15) the pad's own volume, pan, tune, reverse and loop apply too; without, the
-## slice as sampled.
+## With `pad` (0..15) the pad's own settings apply too: trim, direction, filter, envelope, volume,
+## pan, tune, loop, and key-lock (the pitch changes and the length does not: the slice is stretched
+## by the rate it will be played at). Without, the slice as sampled.
 func sound_of(slice: Vector2i, semitones := 0, pad := -1) -> Array:
 	if slice.y <= slice.x or slice.y > frames.size():
 		return [null, 1.0]
 	var own := params[pad] if pad >= 0 and pad < PADS else default_params()
-	var n := slice.y - slice.x
+	var rate := pow(2.0, (semitones + float(own["tune"])) / 12.0)
+	var key := "%s|%s|%d|%d|%d" % [var_to_str(own), slice, frames.size(), semitones, _gen]
+	if pad >= 0 and _made.has(key):
+		return [_made[key], rate]
+	var total := slice.y - slice.x
+	var from := slice.x + int(float(own["start"]) * total)
+	var to := slice.x + maxi(int(float(own["end"]) * total), int(float(own["start"]) * total) + 1)
+	var n := to - from
+	var src := PackedVector2Array()
+	src.resize(n)
+	var rev := bool(own["rev"])
+	for i in n:
+		src[i] = frames[from + (n - 1 - i if rev else i)]
+	if float(own["filt"]) != 0.0:
+		_filter(src, float(own["filt"]))
+	if bool(own["lock"]) and absf(rate - 1.0) > 0.001:
+		src = stretch(src, rate)
+		n = src.size()
+	var atk := mini(int(float(own["atk"]) * RATE * rate), n)
+	var rel := mini(int(float(own["rel"]) * RATE * rate), n)
 	var pan := float(own["pan"])
 	# Equal-power pan: both sides full at the centre.
 	var left := minf(1.0, 1.0 - pan) * float(own["vol"])
 	var right := minf(1.0, 1.0 + pan) * float(own["vol"])
-	var rev := bool(own["rev"])
 	var data := PackedByteArray()
 	data.resize(n * 4)
 	for i in n:
-		var f := frames[slice.x + (n - 1 - i if rev else i)]
+		var g := 1.0
+		if i < atk:
+			g = float(i) / atk
+		if rel > 0 and i >= n - rel:
+			g *= float(n - 1 - i) / rel
+		var f := src[i] * g
 		data.encode_s16(i * 4, clampi(roundi(f.x * left * 32767.0), -32768, 32767))
 		data.encode_s16(i * 4 + 2, clampi(roundi(f.y * right * 32767.0), -32768, 32767))
 	var stream := AudioStreamWAV.new()
@@ -283,7 +337,57 @@ func sound_of(slice: Vector2i, semitones := 0, pad := -1) -> Array:
 		stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		stream.loop_begin = 0
 		stream.loop_end = n
-	return [stream, pow(2.0, (semitones + float(own["tune"])) / 12.0)]
+	if pad >= 0:
+		_made[key] = stream
+	return [stream, rate]
+
+
+## A state-variable filter over `s`, in place: `amount` below 0 is a low pass closing from 18 kHz
+## to 200 Hz, above 0 a high pass opening from 20 Hz to 4 kHz.
+static func _filter(s: PackedVector2Array, amount: float) -> void:
+	var cutoff := 18000.0 * pow(200.0 / 18000.0, -amount) if amount < 0.0 else 20.0 * pow(200.0, amount)
+	var f := 2.0 * sin(PI * minf(cutoff, RATE * 0.45) / RATE)
+	var q := 0.8
+	var low := Vector2.ZERO
+	var band := Vector2.ZERO
+	for i in s.size():
+		low += band * f
+		var high := s[i] - low - band * q
+		band += high * f
+		s[i] = low if amount < 0.0 else high
+
+
+## `s` made `factor` times longer without changing its pitch: overlapped Hann grains read from
+## slower (or faster) along the source than they are laid down.
+static func stretch(s: PackedVector2Array, factor: float) -> PackedVector2Array:
+	var n := s.size()
+	var out_n := maxi(int(n * factor), 1)
+	var out := PackedVector2Array()
+	out.resize(out_n)
+	if n < 256:
+		for i in out_n:
+			out[i] = s[mini(int(i / factor), n - 1)]
+		return out
+	var grain := mini(1024, n)
+	var hop := grain / 4
+	var weight := PackedFloat32Array()
+	weight.resize(out_n)
+	var window := PackedFloat32Array()
+	window.resize(grain)
+	for i in grain:
+		window[i] = 0.5 - 0.5 * cos(TAU * (i + 0.5) / grain)
+	var at := 0
+	while at < out_n:
+		var read := clampi(int(at / factor), 0, maxi(n - grain, 0))
+		for i in mini(grain, out_n - at):
+			var w := window[i]
+			out[at + i] += s[read + i] * w
+			weight[at + i] += w
+		at += hop
+	for i in out_n:
+		if weight[i] > 0.0001:
+			out[i] /= weight[i]
+	return out
 
 
 ## Every pad's name in scale mode: the note it plays ("C3", "D3" ...), or "" out of it.

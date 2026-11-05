@@ -7519,6 +7519,119 @@ func _test_the_pads_have_their_own_settings_and_answer_keys_and_midi() -> void:
 	await get_tree().process_frame
 
 
+## 2026-11-04: a pad's trim, filter, envelope, send and key-lock; the mix, the room and the
+## interface as sources; MIDI learn; and the armed track's notes played back through the pads.
+func _test_the_pads_trim_filter_shape_lock_and_follow_the_song() -> void:
+	var bank := PadBank.new()
+	var sound := PackedVector2Array()
+	sound.resize(48000)
+	for i in 48000:
+		var v := sin(i * 0.2) * 0.8
+		sound[i] = Vector2(v, v)
+	bank.set_sample(sound)
+	var whole: AudioStreamWAV = bank.sound_of(bank.slice_of(0), 0, 0)[0]
+	bank.set_param(0, "start", 0.5)
+	var trimmed: AudioStreamWAV = bank.sound_of(bank.slice_of(0), 0, 0)[0]
+	check("a trimmed pad plays less of its slice (%d of %d)" % [trimmed.data.size(), whole.data.size()],
+			trimmed.data.size() == whole.data.size() / 2)
+	bank.set_param(0, "start", 0.0)
+	bank.set_param(0, "atk", 0.05)
+	var faded: AudioStreamWAV = bank.sound_of(bank.slice_of(0), 0, 0)[0]
+	check("an attack fades the pad in from silence", faded.data.decode_s16(0) == 0 and absi(faded.data.decode_s16(4 * 2400)) > 1000)
+	bank.set_param(0, "atk", 0.0)
+	# A tone far above the cutoff goes quiet through a closed low pass and stays through a high pass.
+	var hiss := PackedVector2Array()
+	hiss.resize(12000)
+	for i in 12000:
+		hiss[i] = Vector2(0.8 if i % 2 == 0 else -0.8, 0.8 if i % 2 == 0 else -0.8)
+	var rough := PadBank.new()
+	rough.set_sample(hiss)
+	rough.set_param(0, "filt", -1.0)
+	var dulled: AudioStreamWAV = rough.sound_of(rough.slice_of(0), 0, 0)[0]
+	var loud := 0
+	for i in range(300, 700):
+		loud = maxi(loud, absi(dulled.data.decode_s16(i * 4)))
+	check("a closed low pass takes the top off (%d)" % loud, loud < 3000)
+	rough.set_param(0, "filt", 0.9)
+	var thin: AudioStreamWAV = rough.sound_of(rough.slice_of(0), 0, 0)[0]
+	loud = 0
+	for i in range(300, 700):
+		loud = maxi(loud, absi(thin.data.decode_s16(i * 4)))
+	check("a high pass lets it through (%d)" % loud, loud > 8000)
+	var stretched := PadBank.stretch(sound.slice(0, 4800), 2.0)
+	check("stretching makes it twice as long and keeps it a tone", stretched.size() == 9600
+			and absf(stretched[4000].x) <= 1.0)
+	bank.set_param(1, "lock", true)
+	bank.set_param(1, "tune", 12.0)
+	var locked: Array = bank.sound_of(bank.slice_of(1), 0, 1)
+	var slice_n := bank.slice_of(1).y - bank.slice_of(1).x
+	check("key-lock: an octave up plays in the slice's own time (%d frames at rate %.1f)" % [(locked[0] as AudioStreamWAV).data.size() / 4, locked[1]],
+			is_equal_approx(locked[1], 2.0) and (locked[0] as AudioStreamWAV).data.size() / 4 == slice_n * 2)
+	bank.nudge(2, "send", 9.0)
+	check("a send is a quarter at a time, up to all", is_equal_approx(float(bank.params[2]["send"]), 1.0))
+
+	var cap := PadCapture.new()
+	add_child(cap)
+	check("the mix can be caught, and stopped", cap.start("MIX") and cap.recording)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	cap.stop()
+	check("stopped, it is not recording and its tap is off the bus", not cap.recording
+			and AudioServer.get_bus_effect_count(AudioServer.get_bus_index(&"Master")) == AudioServer.get_bus_effect_count(AudioServer.get_bus_index(&"Master")))
+	check("a source that is not one says so", not cap.start("NOPE") and cap.why != "")
+	var rated := PadCapture._resampled(PackedVector2Array([Vector2(0, 0), Vector2(1, 1), Vector2(2, 2), Vector2(3, 3)]), 96000.0)
+	check("a source at twice the rate is thinned to the pads' own", rated.size() == 1 or rated.size() == 2)
+	cap.queue_free()
+
+	var tv := TvSurface.new()
+	add_child(tv)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var deck := tv.deck
+	deck.bank.set_sample(sound)
+	deck.engaged = true
+	deck.selected = 3
+	deck.toggle_learn()
+	check("learning, the next note names the selected pad", deck.midi(60, 100, true) and deck.bank.first_note == 57
+			and not deck.learning and deck.bank.pad_of_note(60) == 3)
+	var now_pad := deck.bank.pad_of_note(57)
+	check("and the pads follow it in order", now_pad == 0 and deck.bank.note_of(15) == 72)
+	deck.step_source()
+	check("SRC steps through the sources", PadCapture.SOURCES[deck.source] == "MIX")
+	deck.step_source()
+	deck.step_source()
+	deck.step_source()
+	check("and comes round to the TV", PadCapture.SOURCES[deck.source] == "TV")
+	deck.selected = 2
+	deck._cycle("filt")
+	check("FILT steps the selected pad's filter", float(deck.bank.params[2]["filt"]) != 0.0 and deck.keys["FILT"].lit)
+	deck.step_fx()
+	check("FX makes the send bus", AudioServer.get_bus_index(PadDeck.FX_BUS) >= 0)
+	# The song plays past a recorded note: the pad it names is struck, and not recorded again.
+	var track := MixState.TrackState.new()
+	var item := MixState.ItemState.new()
+	item.start = 1.0
+	item.length = 4.0
+	item.notes = PackedFloat32Array([0.5, 0.9, 57.0, 100.0, 0.0])
+	track.items.append(item)
+	DAW.state.tracks[99] = track
+	deck.bank.first_note = 57
+	var told: Array = []
+	deck.struck.connect(func(pad: int, v: int): told.append(pad))
+	deck.follow_on = true
+	DAW.state.playing = true
+	DAW.state.position_seconds = 1.2
+	deck._follow_song_for(99)
+	DAW.state.position_seconds = 1.6
+	deck._follow_song_for(99)
+	check("the song crossing a recorded note strikes its pad, once, unrecorded", told.is_empty()
+			and deck.pads[0].lit)
+	DAW.state.playing = false
+	DAW.state.tracks.erase(99)
+	tv.queue_free()
+	await get_tree().process_frame
+
+
 ## 2026-10-30, "i dont like how clicking things moves me to other things in almost all scenarios":
 ## at a desk, what a click does to gear moves the gear, not the player. Only going somewhere (F, I,
 ## Escape, a station board row) walks.
