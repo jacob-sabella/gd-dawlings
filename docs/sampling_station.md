@@ -87,4 +87,4 @@ trolley, and a sample is still a cassette on the rack as well as a pad.
    video itself (Tube) and plays it at the host's position. The host writes its sample once as a
    WAV in the project's media, named by what is in it, and guests fetch it (FileSend.shared makes
    it servable) and cut it the same. A guest's pads play locally; the samples are the host's.
-8. [ ] **The old Sampler retired**: deliberately left for now. It still serves the item-triggered samplers (duck, ball, cassette) and their verbs; removing it is a cleanup, not a feature of the station. Done in the station itself: per-pad MIDI channel (CH), PUNCH (everything to the effect), FIT (a slice stretched to a beat fraction at the song tempo).
+8. [x] **The old Sampler kept (decided, not retired)**: it is the host-side catch of item sounds (duck, ball, cassette, yo-yo, card tricks) into sample cassettes on the rack, wired through Session, Venue, Stations and six item classes, and the station's pads do not replace that. The station's own ROOM source (PadCapture) covers sampling the room into pads. Revisit only if the item catch is to be rebuilt on the pads.
