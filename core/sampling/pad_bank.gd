@@ -36,6 +36,14 @@ const MODES := ["major", "dorian", "phrygian", "lydian", "mixolydian", "minor", 
 ## The shortest slice a pad keeps (s): attacks nearer than this are one.
 const SHORTEST := 0.02
 
+## How a pad plays (2026-11-04, "fully featured"): ONE plays its slice through, GATE only while the
+## pad is held, LOOP over and over until it is struck again.
+const PLAY_MODES := ["ONE", "GATE", "LOOP"]
+## Choke groups: 0 is none; pads of one group cut each other off (an open hat shut by a closed one).
+const CHOKES := 4
+const TUNE_LIMIT := 12.0
+const VOLUME_LIMIT := 1.5
+
 ## The sample, stereo at RATE.
 var frames := PackedVector2Array()
 ## Each pad's slice: [first frame, frame after its last]; an empty pad's is [0, 0].
@@ -48,10 +56,52 @@ var mode := "major"
 var scale_pad := 0
 ## The note the sample sounds (0 = C ... 11 = B), from which the root is reached.
 var sample_note := 0
+## Each pad's own settings: {"vol": 0..VOLUME_LIMIT, "pan": -1..1, "tune": semitones, "rev": bool,
+## "mode": index of PLAY_MODES, "choke": 0..CHOKES}.
+var params: Array[Dictionary] = []
 
 
 func _init() -> void:
 	_clear_slices()
+	for i in PADS:
+		params.append(default_params())
+
+
+static func default_params() -> Dictionary:
+	return {"vol": 1.0, "pan": 0.0, "tune": 0.0, "rev": false, "mode": 0, "choke": 0}
+
+
+## Pad `pad`'s setting `key` moved by `by` (a bool flips, a mode or a choke steps round), kept in
+## its range. Returns the new value.
+func nudge(pad: int, key: String, by: float) -> Variant:
+	if pad < 0 or pad >= PADS:
+		return null
+	var p := params[pad]
+	match key:
+		"vol":
+			p[key] = clampf(snappedf(float(p[key]) + by, 0.05), 0.0, VOLUME_LIMIT)
+		"pan":
+			p[key] = clampf(snappedf(float(p[key]) + by, 0.05), -1.0, 1.0)
+		"tune":
+			p[key] = clampf(snappedf(float(p[key]) + by, 0.05), -TUNE_LIMIT, TUNE_LIMIT)
+		"rev":
+			p[key] = not bool(p[key])
+		"mode":
+			p[key] = posmod(int(p[key]) + int(by), PLAY_MODES.size())
+		"choke":
+			p[key] = posmod(int(p[key]) + int(by), CHOKES + 1)
+	return p.get(key)
+
+
+## The pad a note strikes out of scale mode (FIRST_NOTE up), or -1.
+func pad_of_note(note: int) -> int:
+	if scale_on:
+		for i in PADS:
+			if note_of(i) == note:
+				return i
+		return -1
+	var pad := note - FIRST_NOTE
+	return pad if pad >= 0 and pad < PADS else -1
 
 
 func _clear_slices() -> void:
@@ -206,21 +256,34 @@ func play_of(note: int) -> Array:
 
 ## A slice as a sound to play: 16-bit stereo at RATE, with the rate to play it at for `semitones`
 ## (AudioStreamPlayer.pitch_scale). Null for an empty slice.
-func sound_of(slice: Vector2i, semitones := 0) -> Array:
+## With `pad` (0..15) the pad's own volume, pan, tune, reverse and loop apply too; without, the
+## slice as sampled.
+func sound_of(slice: Vector2i, semitones := 0, pad := -1) -> Array:
 	if slice.y <= slice.x or slice.y > frames.size():
 		return [null, 1.0]
+	var own := params[pad] if pad >= 0 and pad < PADS else default_params()
+	var n := slice.y - slice.x
+	var pan := float(own["pan"])
+	# Equal-power pan: both sides full at the centre.
+	var left := minf(1.0, 1.0 - pan) * float(own["vol"])
+	var right := minf(1.0, 1.0 + pan) * float(own["vol"])
+	var rev := bool(own["rev"])
 	var data := PackedByteArray()
-	data.resize((slice.y - slice.x) * 4)
-	for i in slice.y - slice.x:
-		var f := frames[slice.x + i]
-		data.encode_s16(i * 4, clampi(roundi(f.x * 32767.0), -32768, 32767))
-		data.encode_s16(i * 4 + 2, clampi(roundi(f.y * 32767.0), -32768, 32767))
+	data.resize(n * 4)
+	for i in n:
+		var f := frames[slice.x + (n - 1 - i if rev else i)]
+		data.encode_s16(i * 4, clampi(roundi(f.x * left * 32767.0), -32768, 32767))
+		data.encode_s16(i * 4 + 2, clampi(roundi(f.y * right * 32767.0), -32768, 32767))
 	var stream := AudioStreamWAV.new()
 	stream.format = AudioStreamWAV.FORMAT_16_BITS
 	stream.stereo = true
 	stream.mix_rate = RATE
 	stream.data = data
-	return [stream, pow(2.0, semitones / 12.0)]
+	if int(own["mode"]) == 2:
+		stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		stream.loop_begin = 0
+		stream.loop_end = n
+	return [stream, pow(2.0, (semitones + float(own["tune"])) / 12.0)]
 
 
 ## Every pad's name in scale mode: the note it plays ("C3", "D3" ...), or "" out of it.

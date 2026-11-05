@@ -7435,6 +7435,90 @@ func _test_the_station_samples_the_tv_and_plays_its_pads() -> void:
 	await get_tree().process_frame
 
 
+## 2026-11-04, "fully featured 16 pad sampler ... midi input support": each pad has its own volume,
+## pan, tune, direction, play mode and choke group; the computer keys and a MIDI keyboard play the
+## pads while the player stands at the station, and what they play is not heard on their instrument.
+func _test_the_pads_have_their_own_settings_and_answer_keys_and_midi() -> void:
+	var bank := PadBank.new()
+	var sound := PackedVector2Array()
+	sound.resize(16000)
+	for i in 16000:
+		sound[i] = Vector2(i / 16000.0, -i / 16000.0)
+	bank.set_sample(sound)
+	bank.nudge(1, "rev", 0.0)
+	var back: AudioStreamWAV = bank.sound_of(bank.slice_of(1), 0, 1)[0]
+	var plain: AudioStreamWAV = bank.sound_of(bank.slice_of(1), 0, 0)[0]
+	check("a reversed pad plays its slice backwards (%d, %d)" % [back.data.decode_s16(0), plain.data.decode_s16(0)],
+			back.data.decode_s16(0) > plain.data.decode_s16(0) and back.data.size() == plain.data.size())
+	bank.nudge(2, "pan", -1.0)
+	var panned: AudioStreamWAV = bank.sound_of(Vector2i(8000, 9000), 0, 2)[0]
+	check("hard left puts nothing in the right", panned.data.decode_s16(2) == 0 and panned.data.decode_s16(0) != 0)
+	bank.nudge(3, "tune", 12.0)
+	bank.nudge(3, "vol", -0.5)
+	var tuned: Array = bank.sound_of(bank.slice_of(3), 0, 3)
+	check("tune is an octave of playback rate", is_equal_approx(tuned[1], 2.0))
+	bank.nudge(4, "mode", 2.0)
+	var looped: AudioStreamWAV = bank.sound_of(bank.slice_of(4), 0, 4)[0]
+	check("a LOOP pad's sound loops over its slice", looped.loop_mode == AudioStreamWAV.LOOP_FORWARD
+			and looped.loop_end == bank.slice_of(4).y - bank.slice_of(4).x)
+	check("settings stay in range", bank.nudge(0, "vol", 9.0) == PadBank.VOLUME_LIMIT
+			and bank.nudge(0, "choke", 9.0) == (9 % (PadBank.CHOKES + 1)) and bank.nudge(0, "tune", -99.0) == -PadBank.TUNE_LIMIT)
+	check("a note names its pad out of scale mode, and in it the pad that sounds it",
+			bank.pad_of_note(36) == 0 and bank.pad_of_note(51) == 15 and bank.pad_of_note(52) == -1)
+	bank.scale_on = true
+	check("in scale mode the pad of a note is the pad at that degree", bank.pad_of_note(bank.note_of(5)) == 5)
+	bank.scale_on = false
+
+	var tv := TvSurface.new()
+	add_child(tv)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var deck := tv.deck
+	deck.bank.set_sample(sound)
+	var struck: Array = []
+	deck.struck.connect(func(pad: int, v: int): struck.append([pad, v]))
+	check("away from the station the pads take no MIDI", not deck.midi(36, 100, true) and struck.is_empty())
+	deck.engaged = true
+	check("a MIDI note 36-51 strikes its pad at its velocity", deck.midi(37, 90, true) and struck == [[1, 90]])
+	check("a note outside the pads is left for the instrument", not deck.midi(60, 90, true))
+	deck.bank.nudge(5, "mode", 1.0)
+	deck.midi(41, 100, true)
+	check("a GATE pad holds while its key is down", deck._voice_of(5) >= 0 and deck.pads[5].lit)
+	deck.midi(41, 0, true)
+	check("and stops when it is let go", deck._voice_of(5) < 0 and not deck.pads[5].lit)
+	deck.bank.nudge(6, "choke", 1.0)
+	deck.bank.nudge(7, "choke", 1.0)
+	deck.bank.nudge(6, "mode", 1.0)
+	deck.midi(42, 100, true)
+	deck.midi(43, 100, true)
+	check("a pad in a choke group cuts its group off", deck._voice_of(6) < 0 and deck._voice_of(7) >= 0)
+	deck.stop_all()
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_Z
+	key.pressed = true
+	struck.clear()
+	deck._input(key)
+	check("the Z key strikes pad 1 while engaged", struck.size() == 1 and struck[0][0] == 0)
+	deck.engaged = false
+	struck.clear()
+	deck._input(key)
+	check("and nothing away from the station", struck.is_empty())
+	deck.selected = 3
+	deck._edit("mode", 1.0)
+	check("the second row edits the selected pad", int(deck.bank.params[3]["mode"]) == 1 and deck.keys["TRIG"].lit)
+	var gm := GuestMidi.new()
+	var took: Array = []
+	gm.pad_sink = func(pitch: int, v: int, on: bool) -> bool:
+		took.append([pitch, on])
+		return pitch < 52
+	gm._input(_midi(MIDI_MESSAGE_NOTE_ON, 40, 100))
+	check("GuestMidi gives the pads a hardware note first, and the instrument none it took",
+			took == [[40, true]] and not gm.held.has(40))
+	gm.free()
+	tv.queue_free()
+	await get_tree().process_frame
+
+
 ## 2026-10-30, "i dont like how clicking things moves me to other things in almost all scenarios":
 ## at a desk, what a click does to gear moves the gear, not the player. Only going somewhere (F, I,
 ## Escape, a station board row) walks.

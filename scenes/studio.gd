@@ -5772,6 +5772,29 @@ func _station_seats() -> Dictionary:
 	return _modular_seats
 
 
+## Whether this player stands at the sampling station (or has it focused): its pads then answer the
+## computer keys and a MIDI keyboard's notes 36-51.
+func at_tv() -> bool:
+	if tv == null or not is_instance_valid(tv) or not tv.is_inside_tree() or tv.deck == null:
+		return false
+	if focus != null and focus.focused_id == tv.surface_id:
+		return true
+	var local := tv.global_transform.affine_inverse() * _standing_at()
+	return local.z > 0.2 and local.z < 3.2 and absf(local.x) < 1.8
+
+
+func _follow_pads() -> void:
+	var here := at_tv()
+	if tv != null and is_instance_valid(tv) and tv.deck != null:
+		if tv.deck.engaged and not here:
+			tv.deck.stop_all()
+		tv.deck.engaged = here
+	if Session.guest_midi != null:
+		var sink := Callable(tv.deck, "midi") if here else Callable()
+		if Session.guest_midi.pad_sink != sink:
+			Session.guest_midi.pad_sink = sink
+
+
 ## Each frame: this player's keys play the rack while they are at it (or its PLAY has the computer
 ## keys), its controls take the pointer only then, its lamps follow its meters, and the case glows with
 ## what it plays in the venue's mood. The song's recording is caught from it on the host.
@@ -7859,6 +7882,7 @@ func _process(delta: float) -> void:
 	if _modular_owed >= 1.0 / 30.0 - 0.001:
 		_modular_owed = 0.0
 		_follow_modular()
+		_follow_pads()
 	_follow_making()
 	_follow_gives(delta)
 	_follow_kit()

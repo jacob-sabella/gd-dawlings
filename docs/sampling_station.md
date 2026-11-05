@@ -61,8 +61,13 @@ trolley, and a sample is still a cassette on the rack as well as a pad.
    between two presses, cut from the WAV exactly), chop by transients (DawKitTransients) or into
    equal slices, a pad a slice; pads heard through the armed track's bus (DAW.monitor_bus), and
    taken down onto the armed track as notes (36-51) while the song records.
-4. [ ] **Playing and recording the pads**: click, the keyboard's 16 keys, MIDI notes 36-51;
-   recorded as notes on a track (HitRecorder.note), and played back from them as the pads' slices.
+4. [x] **Playing and recording the pads**: click, the computer keys (ZXCV ASDF QWER 1234, pad 1 at
+   the bottom left), and a MIDI keyboard's notes 36-51 (in scale mode every note), all while the
+   player stands at the station (Studio.at_tv); a hardware note the pads take is not heard on the
+   player's instrument (GuestMidi.pad_sink). Each pad has its own volume, tune, reverse, play mode
+   (TRIG: one-shot, gate while held, loop until struck again) and choke group, edited with the
+   second row of keys on the selected pad; velocity sets the level; 16 voices. Struck, it is
+   recorded as a note (HitRecorder.note). Still to come: a track's notes played back as the pads.
 5. [x] **Scale mode**: a pad's sound across all 16 in a key and mode (above): every mode,
    following the song's key unless one is picked, played and recorded at the scale's pitches.
    SCALE spreads the last pad struck; KEY steps the root, MODE the scale. Still to come with slice
