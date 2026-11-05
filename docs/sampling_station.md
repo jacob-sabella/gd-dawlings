@@ -100,3 +100,7 @@ number of kits, and the same sound is never kept twice.
 
 The keys are on pages (2026-11-04): CUT, PLAY, SHAPE, MIDI and STORE tabs and STOP, always there, and under
 them only the keys of the tab chosen, two rows at most. The library keys above are the STORE page.
+
+Seeing what you edit (2026-11-04): the selected pad glows blue and its slice is bright on the waveform (the
+others dimmed, trimmed-away ends darker); striking a pad selects it. Off the CUT page the line above the waveform
+reads the selected pad's settings back ("PAD 4 · GATE · TUNE +2 · PAN L25"), only what is not as it comes.

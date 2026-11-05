@@ -402,7 +402,11 @@ func step_mode() -> void:
 func strike(pad: int, velocity := 100) -> void:
 	if pad < 0 or pad >= PadBank.PADS:
 		return
+	var was := selected
 	selected = pad
+	if was != pad:
+		# The pad struck is the one the keys now edit: show it, without telling the room.
+		refresh(false)
 	var own := bank.params[pad]
 	if int(own["mode"]) == 2 and _voice_of(pad) >= 0:
 		release(pad, true)
@@ -864,7 +868,7 @@ func _release_due(now: float) -> void:
 
 
 ## The waveform, the words and the pads as the bank is.
-func refresh() -> void:
+func refresh(announce := true) -> void:
 	if _wave_words == null:
 		return
 	if capture != null and capture.recording:
@@ -872,9 +876,11 @@ func refresh() -> void:
 	elif not is_nan(marked):
 		_wave_words.text = "SAMPLING … SAMPLE to end"
 	elif bank.frames.is_empty():
-		_wave_words.text = "NO SAMPLE · play the TV, SAMPLE twice"
+		_wave_words.text = "NO SAMPLE · press PLAY on the TV, then SAMPLE at the start and again at the end"
+	elif page_shown == "CUT":
+		_wave_words.text = "%.2f s  ·  CHOP %s  ·  PAD %d" % [bank.seconds(), CHOPS[chop], selected + 1]
 	else:
-		_wave_words.text = "%.2f s  ·  CHOP %s" % [bank.seconds(), CHOPS[chop]]
+		_wave_words.text = pad_words(selected)
 	Lettering.fit(_wave_words, WAVE.x * 0.6, roundi(0.03 / PIXEL), 12)
 	if bank.scale_on:
 		_mode_words.text = "%s %s  ·  PAD %d" % [Harmony.SHARP_NAMES[bank.root], bank.mode.to_upper(), bank.scale_pad + 1]
@@ -905,13 +911,51 @@ func refresh() -> void:
 	for i in pads.size():
 		pads[i].full = bank.slice_of(i).y > bank.slice_of(i).x
 		pads[i].words = bank.pad_label(i) if bank.scale_on else str(i + 1)
-	_wave_texture.update(draw_wave(bank, WAVE_PIXELS))
-	changed.emit()
+		pads[i].chosen = i == selected
+	_wave_texture.update(draw_wave(bank, WAVE_PIXELS, selected))
+	if announce:
+		changed.emit()
+
+
+## What pad `pad` plays as, in words: only what is not as it comes (a pad never touched is "plain").
+func pad_words(pad: int) -> String:
+	var p := bank.params[pad]
+	var def := PadBank.default_params()
+	var out: Array[String] = ["PAD %d" % (pad + 1)]
+	if int(p["mode"]) != 0:
+		out.append(PadBank.PLAY_MODES[int(p["mode"])])
+	if float(p["vol"]) != float(def["vol"]):
+		out.append("VOL %d%%" % roundi(float(p["vol"]) * 100.0))
+	if float(p["tune"]) != 0.0:
+		out.append("TUNE %s%s" % ["+" if float(p["tune"]) > 0.0 else "", String.num(float(p["tune"]), 2)])
+	if float(p["pan"]) != 0.0:
+		out.append("PAN %s%d" % ["L" if float(p["pan"]) < 0.0 else "R", roundi(absf(float(p["pan"])) * 100.0)])
+	if bool(p["rev"]):
+		out.append("REV")
+	if bool(p["lock"]):
+		out.append("LOCK")
+	if int(p["choke"]) > 0:
+		out.append("CHOKE %d" % int(p["choke"]))
+	if float(p["start"]) > 0.0 or float(p["end"]) < 1.0:
+		out.append("TRIM %d-%d%%" % [roundi(float(p["start"]) * 100.0), roundi(float(p["end"]) * 100.0)])
+	if float(p["atk"]) > 0.0:
+		out.append("ATK %dms" % roundi(float(p["atk"]) * 1000.0))
+	if float(p["rel"]) > 0.0:
+		out.append("REL %dms" % roundi(float(p["rel"]) * 1000.0))
+	if float(p["filt"]) != 0.0:
+		out.append("%s %d%%" % ["LOW" if float(p["filt"]) < 0.0 else "HIGH", roundi(absf(float(p["filt"])) * 100.0)])
+	if float(p["send"]) > 0.0:
+		out.append("FX %d%%" % roundi(float(p["send"]) * 100.0))
+	if float(p["fit"]) > 0.0:
+		out.append("FIT %.2fs" % float(p["fit"]))
+	if out.size() == 1:
+		out.append("plain")
+	return "  ·  ".join(out)
 
 
 ## The sample drawn: its loudest and quietest in each column, its slices' starts as lines, each
 ## slice a shade of its own.
-static func draw_wave(b: PadBank, size: Vector2i) -> Image:
+static func draw_wave(b: PadBank, size: Vector2i, chosen := -1) -> Image:
 	var image := Image.create(size.x, size.y, false, Image.FORMAT_RGB8)
 	image.fill(Color(0.03, 0.035, 0.05))
 	var n := b.frames.size()
@@ -939,6 +983,17 @@ static func draw_wave(b: PadBank, size: Vector2i) -> Image:
 		var s := slice_of_column[x]
 		var colour := Color(0.35, 0.37, 0.42) if s < 0 else \
 				(Color(1.0, 0.62, 0.2) if s % 2 == 0 else Color(0.95, 0.82, 0.45))
+		if chosen >= 0 and s >= 0:
+			# The selected pad's slice at full colour, trimmed-away ends dim; the rest dimmed.
+			if s != chosen:
+				colour = colour.darkened(0.55)
+			else:
+				var sl: Vector2i = b.slices[s]
+				var t := float(a - sl.x) / maxf(sl.y - sl.x, 1.0)
+				if t < float(b.params[s]["start"]) or t > float(b.params[s]["end"]):
+					colour = colour.darkened(0.6)
+				else:
+					colour = colour.lightened(0.25)
 		var top := clampi(mid - int(hi * mid), 0, size.y - 1)
 		var foot := clampi(mid - int(lo * mid), 0, size.y - 1)
 		for y in range(top, foot + 1):
@@ -964,6 +1019,11 @@ class Pad extends ControlAffordance:
 	var full := false:
 		set(v):
 			full = v
+			_paint()
+	## The pad the keys edit: it glows blue, so the one being edited is never a guess.
+	var chosen := false:
+		set(v):
+			chosen = v
 			_paint()
 	var words := "":
 		set(v):
@@ -1005,8 +1065,9 @@ class Pad extends ControlAffordance:
 			return
 		var m := _face.material_override as StandardMaterial3D
 		m.albedo_color = PadDeck.PAD_LIT if lit else (PadDeck.PAD_FULL if full else PadDeck.PAD_OFF)
-		m.emission_enabled = lit
-		m.emission = PadDeck.PAD_LIT
+		m.emission_enabled = lit or chosen
+		m.emission = PadDeck.PAD_LIT if lit else Color(0.35, 0.65, 1.0)
+		m.emission_energy_multiplier = 1.0 if lit else 0.55
 		m.roughness = 0.85
 		# Dark on a pad with a slice, pale on an empty one.
 		_words.modulate = Color(0.08, 0.08, 0.09) if lit or full else Color(0.55, 0.56, 0.6)

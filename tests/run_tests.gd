@@ -7573,6 +7573,22 @@ func _test_the_library_keeps_samples_and_kits() -> void:
 	deck.step_kits()
 	deck.bank.set_sample(sound.slice(0, 1600))
 	deck.load_kit()
+	deck.selected = 3
+	deck.bank.set_param(3, "tune", 2.0)
+	deck.bank.set_param(3, "pan", -0.25)
+	deck.bank.set_param(3, "mode", 1)
+	var words := deck.pad_words(3)
+	check("the selected pad's settings are in words (%s)" % words,
+			words.contains("PAD 4") and words.contains("GATE") and words.contains("TUNE +2") and words.contains("PAN L25"))
+	check("a pad never touched is plain", deck.pad_words(9).ends_with("plain"))
+	deck.refresh()
+	check("the selected pad glows and no other does", deck.pads[3].chosen and not deck.pads[4].chosen)
+	deck.strike(6)
+	check("striking a pad selects it, and shows it", deck.selected == 6 and deck.pads[6].chosen and not deck.pads[3].chosen)
+	var shot := PadDeck.draw_wave(deck.bank, PadDeck.WAVE_PIXELS, 3)
+	var plain := PadDeck.draw_wave(deck.bank, PadDeck.WAVE_PIXELS)
+	check("its slice stands out on the waveform", shot != null and shot.get_data() != plain.get_data())
+	deck.keys["CUT"].pressed.emit()
 	check("the keys are on pages: only the CUT page's and the tabs show at first",
 			deck.keys["SAMPLE"].visible and not deck.keys["SAVE"].visible and deck.keys["STOP"].visible
 			and deck.keys["SAVE"].collision_layer == 0 and deck.keys["SAMPLE"].collision_layer == 2)
