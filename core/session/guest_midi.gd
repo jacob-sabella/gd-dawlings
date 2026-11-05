@@ -387,7 +387,7 @@ func _input(event: InputEvent) -> void:
 		return
 	match midi.message:
 		MIDI_MESSAGE_NOTE_ON:
-			if _pads_take(midi.pitch, midi.velocity, midi.velocity > 0):
+			if _pads_take(midi.pitch, midi.velocity, midi.velocity > 0, midi.channel):
 				return
 			# Running status: a note-on at velocity 0 is how most keyboards say note-off.
 			if midi.velocity == 0:
@@ -395,7 +395,7 @@ func _input(event: InputEvent) -> void:
 			else:
 				note_on(midi.pitch, midi.velocity, midi.channel)
 		MIDI_MESSAGE_NOTE_OFF:
-			if _pads_take(midi.pitch, 0, false):
+			if _pads_take(midi.pitch, 0, false, midi.channel):
 				return
 			note_off(midi.pitch, midi.channel)
 		MIDI_MESSAGE_CONTROL_CHANGE:
@@ -652,19 +652,19 @@ func _take_native_midi() -> void:
 			var at := song(e["age"])
 			control(e["control"], e["value"], &"", at if at >= 0.0 else NAN, e["channel"])
 		elif e["on"]:
-			if _pads_take(e["pitch"], e["velocity"], true):
+			if _pads_take(e["pitch"], e["velocity"], true, e["channel"]):
 				native_stop(e["pitch"])
 				continue
 			note_on(e["pitch"], e["velocity"], e["channel"], e["age"], true)
 		else:
-			if _pads_take(e["pitch"], 0, false):
+			if _pads_take(e["pitch"], 0, false, e["channel"]):
 				continue
 			note_off(e["pitch"], e["channel"], e["age"], true)
 
 
 ## Whether the sampling station's pads took a hardware note (PadDeck.midi).
-func _pads_take(pitch: int, velocity: int, on: bool) -> bool:
-	return pad_sink.is_valid() and bool(pad_sink.call(pitch, velocity, on))
+func _pads_take(pitch: int, velocity: int, on: bool, channel := -1) -> bool:
+	return pad_sink.is_valid() and bool(pad_sink.call(pitch, velocity, on, channel))
 
 
 ## The helper has already sounded a note it passed on, on its own synth: a note the pads took is

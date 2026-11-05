@@ -7508,7 +7508,7 @@ func _test_the_pads_have_their_own_settings_and_answer_keys_and_midi() -> void:
 	check("the second row edits the selected pad", int(deck.bank.params[3]["mode"]) == 1 and deck.keys["TRIG"].lit)
 	var gm := GuestMidi.new()
 	var took: Array = []
-	gm.pad_sink = func(pitch: int, v: int, on: bool) -> bool:
+	gm.pad_sink = func(pitch: int, v: int, on: bool, _ch: int) -> bool:
 		took.append([pitch, on])
 		return pitch < 52
 	gm._input(_midi(MIDI_MESSAGE_NOTE_ON, 40, 100))
@@ -7521,6 +7521,33 @@ func _test_the_pads_have_their_own_settings_and_answer_keys_and_midi() -> void:
 
 ## 2026-11-04: a pad's trim, filter, envelope, send and key-lock; the mix, the room and the
 ## interface as sources; MIDI learn; and the armed track's notes played back through the pads.
+func _test_the_pads_fit_the_tempo_listen_to_a_channel_and_punch_in() -> void:
+	var bank := PadBank.new()
+	var sound := PackedVector2Array()
+	sound.resize(48000)
+	for i in 48000:
+		var v := sin(i * 0.2) * 0.8
+		sound[i] = Vector2(v, v)
+	bank.set_sample(sound)
+	bank.set_param(0, "fit", 0.25)
+	var fitted: AudioStreamWAV = bank.sound_of(bank.slice_of(0), 0, 0)[0]
+	check("FIT stretches the slice to the length set (%d bytes)" % fitted.data.size(),
+			absi(fitted.data.size() / 4 - 12000) < 8)
+	var tv := TvSurface.new()
+	add_child(tv)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var deck := tv.deck
+	deck.bank.set_sample(sound)
+	deck.engaged = true
+	deck.channel = 3
+	check("a pad ignores another channel", not deck.midi(36, 100, true, 0))
+	check("a pad takes its own channel", deck.midi(36, 100, true, 2))
+	deck.channel = 0
+	check("every channel plays when ALL", deck.midi(37, 100, true, 9))
+	tv.queue_free()
+
+
 func _test_the_pads_trim_filter_shape_lock_and_follow_the_song() -> void:
 	var bank := PadBank.new()
 	var sound := PackedVector2Array()

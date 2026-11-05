@@ -67,6 +67,12 @@ var source := 0
 var capture: PadCapture
 ## MIDI learn: the next hardware note names the selected pad (the bank's first note moves to fit).
 var learning := false
+## Which MIDI channel the pads listen to: 0 is every channel, 1 to 16 only that one (so a second
+## controller on another channel can play the instrument while this one plays the pads).
+var channel := 0
+## PUNCH: every pad is sent to the effect while it is held on, whatever its own SEND.
+var punch := false
+const FITS := [0.0, 0.25, 0.5, 1.0, 2.0, 4.0]
 ## The pads answer the armed track's recorded notes while the song plays (SEQ).
 var follow_on := false
 var fx_kind := 0
@@ -193,7 +199,10 @@ func _build_keys(wave_x: float, wave_y: float) -> void:
 		["FX", "the effect the SEND goes to: reverb, delay or both", step_fx],
 		["LEARN", "then strike a key on a MIDI keyboard: that note is the selected pad (the others follow in order)", toggle_learn],
 		["SEQ", "play the armed track's recorded notes through the pads while the song plays", toggle_follow],
-		["STOP", "silence every pad", stop_all]]]
+		["STOP", "silence every pad", stop_all]],
+		[["FIT", "stretch the selected pad's slice, pitch kept, to a sixteenth, an eighth, a beat, two or four at the song's tempo", step_fit],
+		["CH", "the MIDI channel the pads listen to: ALL, then 1 to 16 (so another controller can play the instrument)", step_channel],
+		["PUNCH", "send every pad to the effect while this is lit", toggle_punch]]]
 	var top := wave_y - WAVE.y * 0.5 - 0.016
 	for r in rows.size():
 		var row: Array = rows[r]
@@ -369,6 +378,7 @@ func _free_voice() -> int:
 func _send(at: int, stream: AudioStream, rate: float, velocity: int, amount: float) -> void:
 	var fx := _fx_voices[at]
 	fx.stop()
+	amount = 1.0 if punch else amount
 	if amount <= 0.0:
 		return
 	_ensure_fx_bus()
@@ -449,7 +459,32 @@ func _cycle(key: String) -> void:
 			at = i
 	var next: float = steps[(at + 1) % steps.size()]
 	bank.set_param(selected, key, next)
-	said.emit("Pad %d: %s %s" % [selected + 1, key, "%.3g" % next])
+	said.emit("Pad %d: %s %s" % [selected + 1, key, String.num(next, 3)])
+	refresh()
+
+
+func step_fit() -> void:
+	var beat := 60.0 / maxf(DAW.state.tempo if DAW.state != null else 120.0, 20.0)
+	var now := float(bank.params[selected]["fit"])
+	var at := 0
+	for i in FITS.size():
+		if absf(float(FITS[i]) * beat - now) < 0.0005:
+			at = i
+	var next: float = FITS[(at + 1) % FITS.size()]
+	bank.set_param(selected, "fit", next * beat)
+	said.emit("Pad %d: %s" % [selected + 1, "fit to " + String.num(next, 3) + " beat" if next > 0.0 else "no fit"])
+	refresh()
+
+
+func step_channel() -> void:
+	channel = (channel + 1) % 17
+	said.emit("The pads listen to %s." % ("every MIDI channel" if channel == 0 else "MIDI channel %d" % channel))
+	refresh()
+
+
+func toggle_punch() -> void:
+	punch = not punch
+	said.emit("PUNCH: every pad goes to the effect." if punch else "PUNCH off.")
 	refresh()
 
 
@@ -529,8 +564,10 @@ func _input(event: InputEvent) -> void:
 
 ## A MIDI note meant for the pads: whether the pads took it (a note out of their range is left for
 ## the player's instrument). Velocity 0 is a note off. Pads 36-51, or in scale mode every note.
-func midi(pitch: int, velocity: int, on: bool) -> bool:
+func midi(pitch: int, velocity: int, on: bool, from_channel := -1) -> bool:
 	if not engaged:
+		return false
+	if channel > 0 and from_channel >= 0 and from_channel != channel - 1:
 		return false
 	if learning and on and velocity > 0 and not bank.scale_on:
 		bank.first_note = clampi(pitch - selected, 0, 127 - PadBank.PADS + 1)
@@ -666,6 +703,9 @@ func refresh() -> void:
 	(keys["KEYS"] as EqWall.WallKey).lit = keys_on
 	(keys["LEARN"] as EqWall.WallKey).lit = learning
 	(keys["SEQ"] as EqWall.WallKey).lit = follow_on
+	(keys["PUNCH"] as EqWall.WallKey).lit = punch
+	(keys["CH"] as EqWall.WallKey).lit = channel > 0
+	(keys["FIT"] as EqWall.WallKey).lit = float(bank.params[selected]["fit"]) > 0.0
 	(keys["LOCK"] as EqWall.WallKey).lit = bool(bank.params[selected]["lock"])
 	(keys["SRC"] as EqWall.WallKey).lit = PadCapture.SOURCES[source] != "TV"
 	(keys["SEND"] as EqWall.WallKey).lit = float(bank.params[selected]["send"]) > 0.0

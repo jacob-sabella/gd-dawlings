@@ -77,7 +77,7 @@ func _init() -> void:
 
 static func default_params() -> Dictionary:
 	return {"vol": 1.0, "pan": 0.0, "tune": 0.0, "rev": false, "mode": 0, "choke": 0,
-			"start": 0.0, "end": 1.0, "atk": 0.0, "rel": 0.0, "filt": 0.0, "send": 0.0, "lock": false}
+			"start": 0.0, "end": 1.0, "atk": 0.0, "rel": 0.0, "filt": 0.0, "send": 0.0, "lock": false, "fit": 0.0}
 
 
 ## Pad `pad`'s setting `key` moved by `by` (a bool flips, a mode or a choke steps round), kept in
@@ -315,6 +315,10 @@ func sound_of(slice: Vector2i, semitones := 0, pad := -1) -> Array:
 		src[i] = frames[from + (n - 1 - i if rev else i)]
 	if float(own["filt"]) != 0.0:
 		_filter(src, float(own["filt"]))
+	if float(own["fit"]) > 0.0 and n > 0:
+		# FIT: the slice stretched (pitch kept) to the length the player set, a beat's fraction at the tempo.
+		src = stretch(src, float(own["fit"]) * RATE / n)
+		n = src.size()
 	if bool(own["lock"]) and absf(rate - 1.0) > 0.001:
 		src = stretch(src, rate)
 		n = src.size()
