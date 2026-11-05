@@ -7521,6 +7521,64 @@ func _test_the_pads_have_their_own_settings_and_answer_keys_and_midi() -> void:
 
 ## 2026-11-04: a pad's trim, filter, envelope, send and key-lock; the mix, the room and the
 ## interface as sources; MIDI learn; and the armed track's notes played back through the pads.
+func _test_the_library_keeps_samples_and_kits() -> void:
+	PadLibrary.root = OS.get_environment("CLAUDE_JOB_DIR").path_join("tmp/lib_%d" % Time.get_ticks_msec())
+	var sound := PackedVector2Array()
+	sound.resize(16000)
+	for i in 16000:
+		var v := sin(i * 0.05 * (1.0 + i / 1000)) * 0.7
+		sound[i] = Vector2(v, v * 0.5)
+	var bank := PadBank.new()
+	bank.set_sample(sound)
+	bank.set_param(3, "vol", 0.5)
+	var kit := PadLibrary.save_kit("My Kit!", bank, "break")
+	check("a kit is saved under a safe name (%s)" % kit, kit == "My_Kit_")
+	check("each pad's slice is a sample of its own (%d)" % PadLibrary.samples().size(), PadLibrary.samples().size() == 16)
+	check("and the kit is listed", PadLibrary.kits() == PackedStringArray(["My_Kit_"]))
+	var other := PadBank.new()
+	check("a kit loads onto another bank (%d pads)" % PadLibrary.load_kit(kit, other), PadLibrary.load_kit(kit, other) == 16)
+	check("with every pad's sound as it was", other.slice_frames(5).size() == 1000 and other.slice_frames(5)[40].distance_to(bank.slice_frames(5)[40]) < 0.001)
+	check("and its settings", is_equal_approx(float(other.params[3]["vol"]), 0.5))
+	var one := PadLibrary.samples()[0]
+	var loaded := PadLibrary.load_sample(one)
+	check("a sample reads back within 16-bit rounding", loaded.size() == 1000)
+	var spliced := PadBank.new()
+	spliced.set_sample(sound)
+	var tone := PackedVector2Array()
+	tone.resize(300)
+	tone.fill(Vector2(0.25, 0.25))
+	spliced.put(2, tone)
+	check("one pad's sound swapped in leaves the others alone", spliced.slice_frames(2) == tone
+			and spliced.slice_frames(1) == sound.slice(1000, 2000) and spliced.slice_frames(3) == sound.slice(3000, 4000))
+	check("the library is the same for the same sound", PadLibrary.save_kit("again", bank, "break") == "again" and PadLibrary.samples().size() == 16)
+	check("a kit of nothing is not kept", PadLibrary.save_kit("empty", PadBank.new()) == "")
+	check("deleting a kit takes it from the list", PadLibrary.delete_kit("again") and PadLibrary.kits().size() == 1)
+	check("a sample name is made safe", PadLibrary.fresh("../x y", PackedStringArray()) == "___x_y")
+	var tv := TvSurface.new()
+	add_child(tv)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var deck := tv.deck
+	deck.bank.set_sample(sound)
+	deck.selected = 4
+	deck.save_to_library()
+	check("SAVE keeps the selected pad", PadLibrary.samples().size() == 17 and deck.lib_sample >= 0)
+	deck.selected = 0
+	deck.load_from_library()
+	check("LOAD puts the browsed sample on the selected pad", deck.bank.slice_frames(0).size() == 1000)
+	deck.delete_browsed()
+	check("DEL asks twice", PadLibrary.samples().size() == 17)
+	deck.delete_browsed()
+	check("and then deletes", PadLibrary.samples().size() == 16)
+	deck.step_kits()
+	deck.bank.set_sample(sound.slice(0, 1600))
+	deck.load_kit()
+	check("KITS and KLOAD bring the kit back", deck.bank.slice_frames(15).size() == 1000 and deck.bank.frames.size() == 16000)
+	tv.queue_free()
+	OS.move_to_trash(ProjectSettings.globalize_path(PadLibrary.root))
+	PadLibrary.root = "user://sampling"
+
+
 func _test_the_pads_fit_the_tempo_listen_to_a_channel_and_punch_in() -> void:
 	var bank := PadBank.new()
 	var sound := PackedVector2Array()

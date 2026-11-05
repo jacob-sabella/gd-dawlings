@@ -72,6 +72,12 @@ var learning := false
 var channel := 0
 ## PUNCH: every pad is sent to the effect while it is held on, whatever its own SEND.
 var punch := false
+## The library's cursors (into PadLibrary.samples() and kits()), what was browsed last ("sample" or
+## "kit"), and whether DEL has been asked once already.
+var lib_sample := -1
+var lib_kit := -1
+var _browsed := ""
+var _del_armed := false
 const FITS := [0.0, 0.25, 0.5, 1.0, 2.0, 4.0]
 ## The pads answer the armed track's recorded notes while the song plays (SEQ).
 var follow_on := false
@@ -199,10 +205,17 @@ func _build_keys(wave_x: float, wave_y: float) -> void:
 		["FX", "the effect the SEND goes to: reverb, delay or both", step_fx],
 		["LEARN", "then strike a key on a MIDI keyboard: that note is the selected pad (the others follow in order)", toggle_learn],
 		["SEQ", "play the armed track's recorded notes through the pads while the song plays", toggle_follow],
-		["STOP", "silence every pad", stop_all]],
-		[["FIT", "stretch the selected pad's slice, pitch kept, to a sixteenth, an eighth, a beat, two or four at the song's tempo", step_fit],
+		["STOP", "silence every pad", stop_all],
+		["FIT", "stretch the selected pad's slice, pitch kept, to a sixteenth, an eighth, a beat, two or four at the song's tempo", step_fit],
 		["CH", "the MIDI channel the pads listen to: ALL, then 1 to 16 (so another controller can play the instrument)", step_channel],
-		["PUNCH", "send every pad to the effect while this is lit", toggle_punch]]]
+		["PUNCH", "send every pad to the effect while this is lit", toggle_punch]],
+		[["SAVE", "keep the selected pad's sound in your library of samples", save_to_library],
+		["LIB", "browse your library of samples (press again for the next)", step_library],
+		["LOAD", "put the sample LIB shows on the selected pad", load_from_library],
+		["KSAVE", "keep all sixteen pads, with their settings, as a kit in your library", save_kit],
+		["KITS", "browse your kits (press again for the next)", step_kits],
+		["KLOAD", "put the kit KITS shows on the pads", load_kit],
+		["DEL", "delete the sample or kit just browsed (press twice)", delete_browsed]]]
 	var top := wave_y - WAVE.y * 0.5 - 0.016
 	for r in rows.size():
 		var row: Array = rows[r]
@@ -463,6 +476,117 @@ func _cycle(key: String) -> void:
 	refresh()
 
 
+func _browsed_words() -> String:
+	var all := PadLibrary.kits() if _browsed == "kit" else PadLibrary.samples()
+	var at := lib_kit if _browsed == "kit" else lib_sample
+	if _browsed == "" or at < 0 or at >= all.size():
+		return ""
+	return "%s %s" % ["KIT" if _browsed == "kit" else "LIB", all[at]]
+
+
+func _base_name() -> String:
+	return tv.title if tv != null and tv.title != "" else "sample"
+
+
+func save_to_library() -> void:
+	var sound := bank.slice_frames(selected)
+	if sound.is_empty():
+		said.emit("Pad %d has no sound to keep." % (selected + 1))
+		return
+	var name := PadLibrary.fresh("%s_pad%d" % [_base_name(), selected + 1], PadLibrary.samples())
+	if PadLibrary.save_sample(name, sound):
+		lib_sample = PadLibrary.samples().find(name)
+		_browsed = "sample"
+		said.emit("Kept pad %d as sample \"%s\" (%d in your library)." % [selected + 1, name, PadLibrary.samples().size()])
+	else:
+		said.emit("The sample could not be saved.")
+	refresh()
+
+
+func step_library() -> void:
+	var all := PadLibrary.samples()
+	_del_armed = false
+	if all.is_empty():
+		said.emit("Your library has no samples yet: SAVE keeps the selected pad.")
+		return
+	lib_sample = (lib_sample + 1) % all.size()
+	_browsed = "sample"
+	said.emit("Sample %d of %d: \"%s\" (LOAD puts it on pad %d)." % [lib_sample + 1, all.size(), all[lib_sample], selected + 1])
+	refresh()
+
+
+func load_from_library() -> void:
+	var all := PadLibrary.samples()
+	if lib_sample < 0 or lib_sample >= all.size():
+		said.emit("Browse a sample first: LIB.")
+		return
+	var sound := PadLibrary.load_sample(all[lib_sample])
+	if sound.is_empty():
+		said.emit("That sample would not load.")
+		return
+	bank.put(selected, sound)
+	said.emit("Pad %d plays \"%s\"." % [selected + 1, all[lib_sample]])
+	refresh()
+
+
+func save_kit() -> void:
+	var name := PadLibrary.save_kit(PadLibrary.fresh("kit", PadLibrary.kits()), bank, _base_name())
+	if name == "":
+		said.emit("There is no sample on the pads to keep as a kit.")
+		return
+	lib_kit = PadLibrary.kits().find(name)
+	_browsed = "kit"
+	said.emit("Kept the pads as kit \"%s\" (%d kits)." % [name, PadLibrary.kits().size()])
+	refresh()
+
+
+func step_kits() -> void:
+	var all := PadLibrary.kits()
+	_del_armed = false
+	if all.is_empty():
+		said.emit("You have no kits yet: KSAVE keeps the pads as one.")
+		return
+	lib_kit = (lib_kit + 1) % all.size()
+	_browsed = "kit"
+	said.emit("Kit %d of %d: \"%s\" (KLOAD puts it on the pads)." % [lib_kit + 1, all.size(), all[lib_kit]])
+	refresh()
+
+
+func load_kit() -> void:
+	var all := PadLibrary.kits()
+	if lib_kit < 0 or lib_kit >= all.size():
+		said.emit("Browse a kit first: KITS.")
+		return
+	stop_all()
+	var filled := PadLibrary.load_kit(all[lib_kit], bank)
+	if filled == 0:
+		said.emit("That kit would not load (its samples are gone?).")
+		return
+	said.emit("Kit \"%s\" is on the pads (%d sounds)." % [all[lib_kit], filled])
+	refresh()
+
+
+func delete_browsed() -> void:
+	var is_kit := _browsed == "kit"
+	var all := PadLibrary.kits() if is_kit else PadLibrary.samples()
+	var at := lib_kit if is_kit else lib_sample
+	if _browsed == "" or at < 0 or at >= all.size():
+		said.emit("Browse a sample (LIB) or a kit (KITS) first.")
+		return
+	if not _del_armed:
+		_del_armed = true
+		said.emit("Press DEL again to delete %s \"%s\" for good." % ["kit" if is_kit else "sample", all[at]])
+		return
+	_del_armed = false
+	var ok := PadLibrary.delete_kit(all[at]) if is_kit else PadLibrary.delete_sample(all[at])
+	if is_kit:
+		lib_kit = mini(lib_kit, PadLibrary.kits().size() - 1)
+	else:
+		lib_sample = mini(lib_sample, PadLibrary.samples().size() - 1)
+	said.emit("Deleted \"%s\"." % all[at] if ok else "Could not delete it.")
+	refresh()
+
+
 func step_fit() -> void:
 	var beat := 60.0 / maxf(DAW.state.tempo if DAW.state != null else 120.0, 20.0)
 	var now := float(bank.params[selected]["fit"])
@@ -698,6 +822,9 @@ func refresh() -> void:
 		_mode_words.text = "%s %s  ·  PAD %d" % [Harmony.SHARP_NAMES[bank.root], bank.mode.to_upper(), bank.scale_pad + 1]
 	else:
 		_mode_words.text = "SRC %s  ·  NOTE %d" % [PadCapture.SOURCES[source], bank.first_note]
+	var browsed := _browsed_words()
+	if browsed != "":
+		_mode_words.text = browsed
 	Lettering.fit(_mode_words, WAVE.x * 0.4, roundi(0.026 / PIXEL), 12)
 	(keys["SCALE"] as EqWall.WallKey).lit = bank.scale_on
 	(keys["KEYS"] as EqWall.WallKey).lit = keys_on

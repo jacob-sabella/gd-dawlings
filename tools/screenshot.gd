@@ -94,6 +94,8 @@ var _platter := false
 ## turned back N notches and left settling, so its readout says where it stands (docs/spatial_loop.md
 ## part two, slice 28). Not settled: a shot of the crank, not of the song played back.
 var _crank := 0
+## `--pads-demo`: the sampling station's pads loaded with a synthesized kit and struck in a pattern.
+var _pads_demo := false
 ## `--sections N`: at frame 8 MAKE SECTIONS pressed on the section blocks (the demo's markers made
 ## regions), the playhead put into the second, and the blocks gone to unless SHOT_CAM frames them;
 ## N above 0 also takes block N in a stand-in hand and holds it at the front of the row, so the
@@ -369,6 +371,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _samples = int(args[i + 1])
 			"--platter":
 				_platter = true
+			"--pads-demo":
+				_pads_demo = true
 			"--crank":
 				if i + 1 < args.size(): _crank = int(args[i + 1])
 			"--sections":
@@ -638,6 +642,36 @@ func _slot_the_platter() -> void:
 	print("SHOT_PLATTER ", studio.items.made_ids(), " platter at ", at.origin, " facing ", at.basis.z)
 	if _cam.size() != 6:
 		studio.go_to_station(&"platter")
+
+
+func _play_the_pads() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
+	if studio == null or studio.tv == null or studio.tv.deck == null:
+		return
+	var deck := studio.tv.deck
+	if _frames == 8:
+		# Sixteen sounds of 3000 frames: pitched sines for the low half, noise bursts for the rest.
+		var sound := PackedVector2Array()
+		sound.resize(48000)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 7
+		for slice in 16:
+			for i in 3000:
+				var env := exp(-i / (500.0 + 90.0 * (slice % 4)))
+				var v := 0.0
+				if slice % 4 == 0:
+					v = sin(i * (0.04 + 0.002 * slice)) * env
+				elif slice % 4 == 2:
+					v = rng.randf_range(-1, 1) * env * 0.6
+				else:
+					v = sin(i * (0.1 + 0.01 * slice)) * env * 0.7
+				sound[slice * 3000 + i] = Vector2(v, v)
+		deck.bank.set_sample(sound)
+		deck.refresh()
+	if _frames >= 30 and _frames % 9 == 0:
+		var step := (_frames - 30) / 9
+		var pattern := [0, 8, 2, 8, 0, 5, 2, 12, 0, 8, 2, 10, 1, 5, 2, 15]
+		deck.strike(pattern[step % pattern.size()], 70 + (step * 37) % 55)
 
 
 ## `--crank N`: five steps of history, and the deck's crank turned back N of them, held there.
@@ -1030,6 +1064,8 @@ func _process(_delta: float) -> void:
 		_make_the_sections()
 	if _frames == 8 and _bricks > 0:
 		_make_the_bricks()
+	if _pads_demo:
+		_play_the_pads()
 	if _frames == 8 and _crank > 0:
 		_turn_the_crank()
 	if _frames == 10 and _stations > 0:

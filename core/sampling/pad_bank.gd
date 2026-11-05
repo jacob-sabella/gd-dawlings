@@ -187,6 +187,54 @@ func set_sample(sound: PackedVector2Array) -> void:
 	chop_equal()
 
 
+## The sample made of `sounds` (sixteen, one a pad; an empty one is an empty pad), laid end to end,
+## each pad's slice its own sound. The pads' settings stay as they are.
+func assemble(sounds: Array) -> void:
+	revision += 1
+	_made.clear()
+	var all := PackedVector2Array()
+	_clear_slices()
+	for i in mini(sounds.size(), PADS):
+		var sound: PackedVector2Array = sounds[i]
+		if sound.is_empty():
+			continue
+		slices[i] = Vector2i(all.size(), all.size() + sound.size())
+		all.append_array(sound)
+	frames = all
+
+
+## Pad `pad`'s slice replaced by `sound` (its trim reset), the other pads' slices as they were.
+func put(pad: int, sound: PackedVector2Array) -> void:
+	if pad < 0 or pad >= PADS or sound.is_empty():
+		return
+	var sounds: Array = []
+	for i in PADS:
+		var s := slices[i]
+		if i == pad:
+			sounds.append(sound)
+		elif s.y > s.x and s.y <= frames.size():
+			sounds.append(frames.slice(s.x, s.y))
+		else:
+			sounds.append(PackedVector2Array())
+	assemble(sounds)
+	params[pad]["start"] = 0.0
+	params[pad]["end"] = 1.0
+	params[pad]["fit"] = 0.0
+
+
+## Pad `pad`'s own slice as it is, trimmed to the pad's IN and OUT.
+func slice_frames(pad: int) -> PackedVector2Array:
+	if pad < 0 or pad >= PADS:
+		return PackedVector2Array()
+	var s := slices[pad]
+	if s.y <= s.x or s.y > frames.size():
+		return PackedVector2Array()
+	var total := s.y - s.x
+	var from := s.x + int(float(params[pad]["start"]) * total)
+	var to := s.x + maxi(int(float(params[pad]["end"]) * total), int(float(params[pad]["start"]) * total) + 1)
+	return frames.slice(from, mini(to, s.y))
+
+
 func seconds() -> float:
 	return frames.size() / float(RATE)
 

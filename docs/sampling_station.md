@@ -88,3 +88,12 @@ trolley, and a sample is still a cassette on the rack as well as a pad.
    WAV in the project's media, named by what is in it, and guests fetch it (FileSend.shared makes
    it servable) and cut it the same. A guest's pads play locally; the samples are the host's.
 8. [x] **The old Sampler kept (decided, not retired)**: it is the host-side catch of item sounds (duck, ball, cassette, yo-yo, card tricks) into sample cassettes on the rack, wired through Session, Venue, Stations and six item classes, and the station's pads do not replace that. The station's own ROOM source (PadCapture) covers sampling the room into pads. Revisit only if the item catch is to be rebuilt on the pads.
+
+## The library (2026-11-04)
+
+Your samples and kits live in `user://sampling/samples/*.wav` and `user://sampling/kits/*.json` (`PadLibrary`),
+folders you can open and rename in. On the pads' last key row: SAVE keeps the selected pad's sound
+(named after the video and the pad), LIB steps through your samples, LOAD puts the one shown on the selected
+pad, KSAVE keeps all sixteen pads and their settings as a kit, KITS steps through kits, KLOAD puts one on the
+pads, DEL (twice) deletes what was browsed last. A kit holds its sounds by name, so one sample serves any
+number of kits, and the same sound is never kept twice.
