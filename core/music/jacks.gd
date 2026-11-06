@@ -649,8 +649,6 @@ static func source_name(source: StringName, item: Item = null) -> String:
 		return item.item_title().to_lower()
 	if source == Jack.HARP:
 		return "chord harp"
-	if source == MarbleRun.SOURCE:
-		return "marble run"
 	if Jack.is_world(source):
 		var title := str(Weather.spec_of(Stations.here).get("title", "")) if Stations.here != null \
 				and is_instance_valid(Stations.here) else ""
@@ -706,8 +704,6 @@ static func plug_refusal(source: StringName, item: Item, sink: StringName, from:
 	if Jack.is_world(source):
 		# The weather is the room's, anyone's to plug, onto a track only: everyone hears it already.
 		if player > 0:
-			if source == MarbleRun.SOURCE:
-				return "the marble run goes onto a track: everyone hears its bells already"
 			return "the weather goes onto a track: everyone hears it already"
 		var onto := Jack.track_of(sink)
 		if onto > 0 and not takes_midi(onto):

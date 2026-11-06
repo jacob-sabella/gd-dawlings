@@ -4,7 +4,7 @@ extends ControlAffordance
 ## One of the world's sockets on the modular's patch (docs/spatial_loop.md part two, slice 53; idea
 ## #31), out in the room where what it carries is made: on the weather's switch (`world:weather`, or
 ## `world:drips` by the cave's pools), by the venue's instrument's plaque (`world:venue`), on a strip
-## beside each of the looper's rings (`world:ring_N`), and on the marble run's tray (`world:marbles`).
+## beside each of the looper's rings (`world:ring_N`).
 ## A jack socket (PatchCable.JACK_MESH) on a small pale plate lettered MODULAR and what it is (pale as the
 ## wall's outputs are, since it is one), beside the
 ## station's track jack (JackSocket), which it is independent of: the rain can record onto a track

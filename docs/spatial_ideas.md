@@ -80,7 +80,7 @@ view), and nothing moves the room around the reader.
     drums trigger their synth, your chord hand drives their harp.
 34. **A string across the room.** Stretch a string between any two points; its length sets the
     pitch, snapped to the key. A giant bass string across the room, or five by the window.
-35. **A marble run.** Build a run from blocks; marbles roll in time with the song and each block
+35. **A marble run** (built, then removed 2026-11-06). Build a run from blocks; marbles roll in time with the song and each block
     they hit plays its note. The marbles never touch mix state.
 36. **Your fingertips are notes.** Thumb to each finger plays the current chord's notes (index
     the root, middle the third, and so on). No prop; hand tracking.

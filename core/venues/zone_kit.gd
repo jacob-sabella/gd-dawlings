@@ -26,7 +26,7 @@ const BOOTH_DOOR_SIDE := Vector3(1, 0, 0)
 ## riser (a step: low enough to walk up onto) and the hand drums and the looper's stand on it, the table, the keyboard stand, the mic stand and,
 ## when the
 ## venue builds one with walls, the booth's four walls, less its doorway. The lattice's zone
-## is open floor; you walk into it, round the marble run's tray at its face toward the desk.
+## is open floor; you walk into it.
 static func solids(zones: Dictionary, booth_walls: bool) -> Array:
 	var out: Array = []
 	var drums: AABB = zones[&"drums"]
@@ -44,10 +44,6 @@ static func solids(zones: Dictionary, booth_walls: bool) -> Array:
 	var looper := Venue.looper_at(drums)
 	out.append({"c": Vector2(looper.origin.x, looper.origin.z), "h": Vector2.ONE * Looper.STAND_FOOT,
 			"a": looper.basis.get_euler().y, "top": RISER_HEIGHT + Looper.TOP, "station": Looper.STATION})
-	# The marble run's tray at the lattice's face toward the desk (slice 49), the station's own; the
-	# lattice itself is open floor.
-	if zones.has(&"matrix"):
-		out.append(MarbleRun.tray_solid(MarbleRun.frame_in(zones[&"matrix"])))
 	out.append(_print(zones[&"bricks"], Vector2(TABLE_TOP.x, TABLE_TOP.z) * 0.5, TABLE_HEIGHT))
 	# The stand's feet are half a metre deep and its decks a little over a metre up.
 	out.append(_print(zones[&"synth"], Vector2(0.25, STAND_WIDTH * 0.5), 1.05))

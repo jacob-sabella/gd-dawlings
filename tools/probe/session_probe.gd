@@ -255,17 +255,6 @@ const STRING_ID := &"probe_string"
 const STRING_A := Vector3(-0.6, 1.2, 5.0)
 const STRING_B := Vector3(-0.6, 1.2, 7.0)
 const STRING_SONG := 780.0
-## A marble run (slice 49): at 62.56 the guest asks two blocks of the lattice (the room's verb
-## `marble`): a ramp at MARBLE_TOP facing right and a bell in the cell it rolls into, and one cell
-## outside the lattice, which the host refuses to it in words. The host answers as the studio does
-## (MarbleRun.answer) and publishes the room's row `marbles`; by 62.62 its row has both and not the
-## third, and it publishes its rings over MARBLE_BAR (`marbles_probe`, [beat, cell, note] each). By
-## 62.68 the guest's mirror of the room has both blocks, and its own rings over that bar, from its
-## copy of the host's song, are the host's, bell for bell.
-const MARBLE_TOP := Vector3i(4, 9, 5)
-const MARBLE_BELL := Vector3i(5, 9, 5)
-const MARBLE_OUTSIDE := Vector3i(4, 12, 5)
-const MARBLE_BAR := 7.0
 ## A theremin (slice 50): from 62.72 the guest plays a theremin of its own (Theremin, its SCALE switch
 ## FREE) with two hands of the probe's: the volume hand half way up over the loop, the pitch hand
 ## gliding in from THEREMIN_FROM's distance from the rod to THEREMIN_TO's by 62.84, past the bend's
@@ -614,8 +603,6 @@ func _host(port: int) -> void:
 			FifthsWheel.answer(args[0], args[1])
 		if verb == RoomString.VERB:
 			_answer_string(args, from)
-		if verb == MarbleRun.VERB:
-			_answer_marble(args, from)
 		if verb == &"open_tablet":
 			var room: Dictionary = Session.room.duplicate(true)
 			room["tablets"][&"tablet_2"] = [args[0], args[1], args[2], args[3], args[4], 0.0]
@@ -1114,10 +1101,6 @@ func _host(port: int) -> void:
 	_check_string_tied()
 	await _until(62.5)
 	_check_string_take()
-	# A marble run (slice 49): the guest's blocks at 62.56 are in my room's row by 62.62, its one outside
-	# the lattice refused; my rings over MARBLE_BAR published for the guest to set its own beside.
-	await _until(62.62)
-	_check_and_publish_the_marbles()
 	# A theremin (slice 50): the guest's glide from 62.72, sent at 62.86, is a take on TAKE_TRACK by 62.92.
 	await _until(62.92)
 	_check_theremin_take()
@@ -2852,7 +2835,6 @@ func _guest(port: int) -> void:
 	await _loop_a_layer()
 	await _press_the_music_box()
 	await _tie_and_pluck_a_string()
-	await _build_a_marble_run()
 	await _play_a_theremin()
 	await _play_the_grains()
 	await _tap_the_lyrics()
@@ -4691,63 +4673,6 @@ func _tie_and_pluck_a_string() -> void:
 	gm.heard_source = Callable()
 	gm.target_track = 0
 	string.queue_free()
-
-
-## Host: the guest's block (slice 49), answered as the studio answers it (MarbleRun.answer): the room's
-## row `marbles` with it, published, or the refusal told to the guest.
-func _answer_marble(args: Array, from: int) -> void:
-	var rows: Dictionary = (Session.room.get(MarbleRun.ROW, {}) as Dictionary).duplicate()
-	var refusal := MarbleRun.answer(rows, args[0], args[1], args[2])
-	if refusal != "":
-		Session.tell(from, refusal)
-		return
-	var room: Dictionary = Session.room.duplicate(true)
-	room[MarbleRun.ROW] = rows
-	Session.publish_room(room)
-
-
-## The bells the marbles ring over MARBLE_BAR in `rows`, in this side's song: [beat, cell, note] each.
-func _marble_rings(rows: Dictionary) -> Array:
-	var from := DAW.state.bar_to_seconds(MARBLE_BAR)
-	return MarbleRun.rings(rows, [], DAW.state, from, DAW.state.bar_to_seconds(MARBLE_BAR + 1.0)).map(
-			func(r: Dictionary) -> Array: return [snappedf(float(r["beat"]), 0.0001), r["cell"], int(r["note"])])
-
-
-## Host: the guest's two blocks (slice 49) are in my room's row, its third outside the lattice not;
-## and my rings over MARBLE_BAR published (`marbles_probe`) for the guest to set its own beside.
-func _check_and_publish_the_marbles() -> void:
-	var asks := _room_asks.filter(func(a: Array) -> bool: return a[0] == MarbleRun.VERB)
-	var rows: Dictionary = Session.room.get(MarbleRun.ROW, {})
-	check("the guest's three blocks reached me as the room's asks (%d)" % asks.size(),
-			asks.size() == 3 and asks.all(func(a: Array) -> bool: return a[2] == _other_id()))
-	check("and its two in the lattice are my room's blocks, the one outside not (%s)" % [rows],
-			rows.size() == 2 and rows.get(MARBLE_TOP) == [&"ramp", 1] and rows.get(MARBLE_BELL) == [&"bell", 1])
-	var room: Dictionary = Session.room.duplicate(true)
-	room["marbles_probe"] = _marble_rings(rows)
-	Session.publish_room(room)
-	check("over MARBLE_BAR my run rings its bell once, a sixteenth into the bar (%s)" % [room["marbles_probe"]],
-			(room["marbles_probe"] as Array).size() == 1 and room["marbles_probe"][0][1] == MARBLE_BELL)
-
-
-## Guest: two blocks of the lattice asked of the host at 62.56 (slice 49), and one outside it, which
-## it refuses to me in words; by 62.68 my mirror of the room has the two, and my own rings over
-## MARBLE_BAR, from my copy of the host's song, are the host's.
-func _build_a_marble_run() -> void:
-	await _until(62.56)
-	var seq := Session.ask_room(MarbleRun.VERB, [MARBLE_TOP, &"ramp", 1])
-	Session.ask_room(MarbleRun.VERB, [MARBLE_BELL, &"bell", 1])
-	Session.ask_room(MarbleRun.VERB, [MARBLE_OUTSIDE, &"bell", 0])
-	check("my blocks are asked of the host (seq %d)" % seq, seq > 0)
-	await _until(62.68)
-	var rows: Dictionary = Session.room.get(MarbleRun.ROW, {})
-	check("and by 62.68 the room's blocks are my two (%s)" % [rows],
-			rows.size() == 2 and rows.get(MARBLE_TOP) == [&"ramp", 1] and rows.get(MARBLE_BELL) == [&"bell", 1])
-	check("the one outside the lattice was refused to me, in words",
-			_notices.any(func(t) -> bool: return String(t).begins_with("That cell is outside the lattice")))
-	var theirs: Array = Session.room.get("marbles_probe", [])
-	var mine := _marble_rings(rows)
-	check("my run rings the host's bells over MARBLE_BAR, bell for bell (%s / %s)" % [mine, theirs],
-			not mine.is_empty() and mine == theirs)
 
 
 ## The grain cloud's sound on both halves (slice 55): two seconds of a tone swelling from silence, at

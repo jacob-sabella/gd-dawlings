@@ -709,14 +709,6 @@ func _ready() -> void:
 	await _test_a_string_is_tied_from_the_spool_to_anything_the_ray_meets()
 	await _test_a_string_is_cut_by_a_pull_or_its_knot()
 	await _test_a_guests_string_is_predicted_and_a_too_long_one_refused()
-	_test_a_marble_rings_each_bell_on_its_path_at_its_sixteenth()
-	_test_two_marble_runs_ring_the_same_from_the_same_clock()
-	_test_a_block_placed_changes_the_marbles_path()
-	await _test_the_marble_runs_jack_records_its_bells()
-	await _test_a_marble_is_drawn_a_cell_per_beat_at_motion_0()
-	_test_a_ray_picks_the_cell_a_block_goes_in()
-	await _test_a_desk_builds_a_marble_run_from_the_tray()
-	await _test_a_guests_marble_block_is_predicted_and_refused_outside_the_lattice()
 	_test_a_theremins_pitch_is_the_hands_distance_from_its_rod()
 	_test_a_theremin_holds_one_note_bent_and_hands_on_past_the_bend()
 	_test_a_theremins_guide_letters_its_scale_and_lights_the_nearest_ring()
@@ -11110,9 +11102,9 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	at = walk_until_still.call(doorway, Vector3(-1, 0, 0))
 	check("and its door lets you in (x %.2f, booth %.2f..%.2f)" % [at.x, booth.position.x, booth.end.x],
 			at.x < booth.end.x - 0.5 and at.x > booth.position.x)
-	check("the lattice's zone is open floor, but for the marble run's tray at its face (slice 49)",
+	check("the lattice's zone is open floor",
 			ZoneKit.solids(zones, true).all(func(f):
-			return f.get("station") == MarbleRun.STATION or not Rect2(zones[&"matrix"].position.x, zones[&"matrix"].position.z,
+			return not Rect2(zones[&"matrix"].position.x, zones[&"matrix"].position.z,
 					zones[&"matrix"].size.x, zones[&"matrix"].size.z).has_point(f["c"])))
 	check("the grid's booth, only neon edges, has no walls you cannot see",
 			GridVenue.new().zone_solids().size() == ZoneKit.solids(zones, true).size() - 4 + GridVenue.NEAR_PALMS.size())
@@ -18805,7 +18797,7 @@ func _test_each_venue_has_a_toy_of_its_own() -> void:
 	# Each flies as what it is: a snowball lands and stays, a neon ball bounces; a beach ball is
 	# all air; a starfish is not round, so a hoop is not there for it.
 	# Across the open middle of the live room, a long throw for the air to tell on: from just out of
-	# the control room's rear, past the looper, to short of the bricks and the marble run.
+	# the control room's rear, past the looper, to short of the bricks.
 	var stand := studio.items.global_transform * Vector3(0.4, 1.5, Studio.ROOM_BACK + 0.7)
 	var aim := studio.items.global_transform * Vector3(4.0, 0, Studio.ROOM_BACK + 3.9)
 	var flights := {}
@@ -27200,13 +27192,13 @@ func _test_every_venue_stands_every_station_clear() -> void:
 			var tag := "%s:%d" % [id, v]
 			var here := Stations.ids(venue)
 			# And the venue's own instrument where it has one (slice 42).
-			var stood: Array[StringName] = [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics"]
+			var stood: Array[StringName] = [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"theremin", &"grains", &"modular", &"lyrics"]
 			if VENUE_SETS.has(id):
 				stood.append(VenueInstrument.STATION)
 			# And its weather's switch where this arrangement has weather (slice 44).
 			if WEATHERS.any(func(w: Array) -> bool: return w[0] == id and w[1] == v):
 				stood.append(Weather.STATION)
-			check("%s: the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, the hand drums, the looper, the music box, the string spool, the marble run, the theremin, the grain cloud, the modular wall, the lyric board and any instrument and weather of its own stand here (%s)" % [tag, here],
+			check("%s: the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, the hand drums, the looper, the music box, the string spool, the theremin, the grain cloud, the modular wall, the lyric board and any instrument and weather of its own stand here (%s)" % [tag, here],
 					here == stood)
 			for station: StringName in here:
 				var r := Stations.row(station)
@@ -27246,10 +27238,10 @@ func _test_every_venue_stands_every_station_clear() -> void:
 	check("in the Rig Roulette room the harp stands inside the walls (%s)" % in_room.origin,
 			absf(in_room.origin.x) + ChordHarp.FOOT.x < roulette.room_width * 0.5
 			and roulette.back_of_house().has_point(Vector2(in_room.origin.x, in_room.origin.z)))
-	check("and there is no bricks table, so no wheel, no booth, so no sampler and no lyric board, and no zones, so no music box, no string spool, no theremin, no grain cloud and no marble run: it stands only the harp, the bells and the cassette rack (%s)" % [Stations.ids(roulette)],
+	check("and there is no bricks table, so no wheel, no booth, so no sampler and no lyric board, and no zones, so no music box, no string spool, no theremin and no grain cloud: it stands only the harp, the bells and the cassette rack (%s)" % [Stations.ids(roulette)],
 			Stations.ids(roulette) == [&"harp", &"bells", &"cassette_rack"] and Stations.spot(roulette, &"wheel") == null
 			and Stations.spot(roulette, &"sampler") == null and Stations.spot(roulette, MusicBox.STATION) == null
-			and Stations.spot(roulette, RoomString.STATION) == null and Stations.spot(roulette, MarbleRun.STATION) == null
+			and Stations.spot(roulette, RoomString.STATION) == null
 			and Stations.spot(roulette, Theremin.STATION) == null and Stations.spot(roulette, GrainCloud.STATION) == null
 			and Stations.spot(roulette, LyricBoard.STATION) == null and Stations.seat(roulette, &"wheel") == null)
 	roulette.free()
@@ -27802,12 +27794,6 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 			node = studio.lyric_board
 			if node == null or not node.transform.is_equal_approx(spot) or studio.lyric_board.tap_key == null \
 					or studio.lyric_board.edit_key == null or studio.lyric_board.now_line == null:
-				return false
-		&"marbles":
-			# The marble run in the lattice (slice 49), its tray's four blocks and BALL key, and its jack.
-			node = studio.marbles
-			if node == null or not node.transform.is_equal_approx(MarbleRun.frame_at(spot)) or studio.marbles.keys.size() != 4 \
-					or studio.marbles.ball_key == null or studio.marbles.jack == null:
 				return false
 		&"drums":
 			# The ring's plaque at its middle, and each drum, an item of the room, at its place round it.
@@ -30626,8 +30612,8 @@ func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
 	var card := WelcomeCard.new()
 	var pages := card.pages()
 	var names := card.page_names()
-	check("the pages: START, PLAY · HELD on two (the drum pads, slice 41, ran it on), PLAY · CONTROL ROOM, PLAY · LIVE ROOM on three (the string spool, slice 48, and the modular room ran it on), PLAY · THIS VENUE (slice 42's instrument), TOGETHER and ROOM (%s)" % [names],
-			names == PackedStringArray(["START", "PLAY · HELD 1/2", "PLAY · HELD 2/2", "PLAY · CONTROL ROOM", "PLAY · LIVE ROOM 1/3", "PLAY · LIVE ROOM 2/3", "PLAY · LIVE ROOM 3/3", "PLAY · THIS VENUE", "TOGETHER", "ROOM"]))
+	check("the pages: START, PLAY · HELD on two (the drum pads, slice 41, ran it on), PLAY · CONTROL ROOM, PLAY · LIVE ROOM on two, PLAY · THIS VENUE (slice 42's instrument), TOGETHER and ROOM (%s)" % [names],
+			names == PackedStringArray(["START", "PLAY · HELD 1/2", "PLAY · HELD 2/2", "PLAY · CONTROL ROOM", "PLAY · LIVE ROOM 1/2", "PLAY · LIVE ROOM 2/2", "PLAY · THIS VENUE", "TOGETHER", "ROOM"]))
 	var said := func(p: Dictionary) -> String:
 		return " ".join(p["lines"].map(func(l: Array) -> String: return "%s %s" % [l[0], l[1]]))
 	var start: String = said.call(pages[0])
@@ -30639,11 +30625,10 @@ func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
 	var held_sub: String = pages[names.find("PLAY · HELD 1/2")]["sub"]
 	check("PLAY · HELD says where each kind is kept: the bells by the harp, not all on the shelf (%s)" % held_sub,
 			held_sub.contains("shelf") and held_sub.contains("beside the harp") and held_sub.contains("always on you"))
-	var live := {"lines": (pages[names.find("PLAY · LIVE ROOM 1/3")]["lines"] as Array)
-			+ (pages[names.find("PLAY · LIVE ROOM 2/3")]["lines"] as Array)
-			+ (pages[names.find("PLAY · LIVE ROOM 3/3")]["lines"] as Array)}
-	check("each PLAY line of a stood station is its title and its desk line, and goes there, over all three pages",
-			live["lines"].map(func(l): return l[2]) == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics"]
+	var live := {"lines": (pages[names.find("PLAY · LIVE ROOM 1/2")]["lines"] as Array)
+			+ (pages[names.find("PLAY · LIVE ROOM 2/2")]["lines"] as Array)}
+	check("each PLAY line of a stood station is its title and its desk line, and goes there, over both pages",
+			live["lines"].map(func(l): return l[2]) == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"theremin", &"grains", &"modular", &"lyrics"]
 			and live["lines"][0][0] == "CHORD HARP" and live["lines"][0][1] == Stations.row(&"harp")["desk"])
 	var sizes: Array = []
 	for i in pages.size():
@@ -30839,11 +30824,6 @@ func _test_going_to_a_station_holds_its_controls_in_view() -> void:
 					# The looper's whole stack of rings, as many as the post could stand, the pad and
 					# its plaque's keys (slice 46): the desk sees the layers turn, shine and go dashed.
 					points.append_array(_looper_looks(studio.looper))
-				if station == MarbleRun.STATION and studio.marbles != null:
-					# The marble run's tray (slice 49): each of its five keys and its jack, what a desk clicks there.
-					for key in studio.marbles.keys + [studio.marbles.ball_key]:
-						points.append(key.global_position)
-					points.append(studio.marbles.jack.global_position)
 				if station == MusicBox.STATION and studio.music_box != null:
 					# The music box's cylinder, its top under the comb and its front's lowest cell, and its
 					# four keys' outer corners (slice 47): what a desk clicks there.
@@ -30951,7 +30931,7 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 	var arrived := true
 	var facing := true
 	var toasts := true
-	for n in 23:
+	for n in 22:
 		said.clear()
 		studio._unhandled_input(key)
 		visits.append(studio.station)
@@ -30965,8 +30945,8 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 		var r := Stations.row(studio.station)
 		toasts = toasts and said.size() == 1 and said[0].begins_with("%s, %s: " % [r["title"], Stations.where(r)]) \
 				and said[0].contains(r["desk"]) and not said[0].contains("in the this")
-	check("I twenty-two times walks to the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the TV, the hand drums, the looper, the music box, the string spool, the marble run, the theremin, the grain cloud, the modular wall, the lyric board and the studio's tubular bells, and a twenty-third comes back round (%s)" % [visits],
-			visits == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics", &"venue", &"harp"])
+	check("I twenty-one times walks to the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the TV, the hand drums, the looper, the music box, the string spool, the theremin, the grain cloud, the modular wall, the lyric board and the studio's tubular bells, and a twenty-second comes back round (%s)" % [visits],
+			visits == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"theremin", &"grains", &"modular", &"lyrics", &"venue", &"harp"])
 	check("each time the walker ends at the seat, on walkable floor, facing the station", arrived and facing)
 	check("and a toast says its title, where it is (in the control room, in the live room, in this venue) and its desk line", toasts)
 	key.shift_pressed = true
@@ -31027,7 +31007,7 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	studio.ergonomics.motion_scale = 0.0
 	var board := studio.station_board
 	check("a headset has the station board, by the desk (%s)" % [board.rows() if board != null else null],
-			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv", &"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics", &"venue"])
+			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv", &"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"theremin", &"grains", &"modular", &"lyrics", &"venue"])
 	# Home is the mix position, in front of the desk, not the room's origin inside the console;
 	# and from there the board is out of the way ahead (the desk is what is in view) and a few
 	# steps behind.
@@ -46759,629 +46739,6 @@ func _test_a_guests_string_is_predicted_and_a_too_long_one_refused() -> void:
 	_as_session(Session.Role.SOLO, 1)
 	_offline()
 
-
-# --- a marble run (docs/spatial_loop.md part two, slice 49) -------------------------------------
-
-## A mouse whose ray is wherever the test says (`at`), for a desk's clicks into the lattice.
-class _AimMouse extends MouseInteractor:
-	var at := Transform3D.IDENTITY
-
-	func aim() -> Transform3D:
-		return at
-
-	func catch_point() -> Vector3:
-		return at.origin
-
-
-## The run the suite rolls marbles through, in the lattice's cells: a ramp at the top rolling right
-## into a bell, a drop, a bell rolling away into a splitter facing right; the even bars' marbles go on
-## right into a bell and out into an empty cell, the odd bars' left down a drop into a bell rolling
-## left and out.
-func _marble_rows() -> Dictionary:
-	var rows := {}
-	for b: Array in [[Vector3i(2, 8, 2), &"ramp", 1], [Vector3i(3, 8, 2), &"bell", 1], [Vector3i(4, 8, 2), &"drop", 0],
-			[Vector3i(4, 7, 2), &"bell", 0], [Vector3i(4, 7, 3), &"split", 1], [Vector3i(5, 7, 3), &"bell", 1],
-			[Vector3i(3, 7, 3), &"drop", 0], [Vector3i(3, 6, 3), &"bell", 3]]:
-		MarbleRun.answer(rows, b[0], b[1], b[2])
-	return rows
-
-
-## docs/spatial_loop.md part two, slice 49: a marble is let go at the run's top each bar and walks the
-## blocks a cell a sixteenth; each bell it rolls through rings at that sixteenth, on the scale tone of
-## its height, in A minor and after the bracket in D minor. A splitter sends the even bars' marbles one
-## way and the odd bars' the other; an empty cell is where a marble falls out; a ring of ramps ends after
-## MOST_STEPS; a BALL marble rolls from its beat.
-func _test_a_marble_rings_each_bell_on_its_path_at_its_sixteenth() -> void:
-	_offline()
-	var spans := _weather_song()
-	var s := DAW.state
-	var rows := _marble_rows()
-	check("the run's top is its highest block, the ramp", MarbleRun.top_of(rows) == Vector3i(2, 8, 2)
-			and MarbleRun.top_of({}) == MarbleRun.NONE)
-	var even := MarbleRun.path(rows, 0)
-	var odd := MarbleRun.path(rows, 1)
-	check("an even bar's marble: right, the bell, down the drop, away, the splitter, right into the bell and out (%s)" % [even],
-			even == [Vector3i(2, 8, 2), Vector3i(3, 8, 2), Vector3i(4, 8, 2), Vector3i(4, 7, 2), Vector3i(4, 7, 3),
-					Vector3i(5, 7, 3), Vector3i(6, 7, 3)])
-	check("an odd bar's: the splitter sends it the other way, down the drop into the bell rolling left and out (%s)" % [odd],
-			odd == [Vector3i(2, 8, 2), Vector3i(3, 8, 2), Vector3i(4, 8, 2), Vector3i(4, 7, 2), Vector3i(4, 7, 3),
-					Vector3i(3, 7, 3), Vector3i(3, 6, 3), Vector3i(2, 6, 3)])
-	var h := Harmony.at(s, 0.1)
-	var got: Array = MarbleRun.rings(rows, [], s, 0.0, s.bar_to_seconds(3.0)).map(func(r: Dictionary) -> Array:
-			return [snappedf(float(r["beat"]), 0.001), r["cell"], r["note"], r["marble"]])
-	var want: Array = [[0.25, Vector3i(3, 8, 2), VenueInstrument.scale_tone(h, MarbleRun.LOW, 8), 0],
-			[0.75, Vector3i(4, 7, 2), VenueInstrument.scale_tone(h, MarbleRun.LOW, 7), 0],
-			[1.25, Vector3i(5, 7, 3), VenueInstrument.scale_tone(h, MarbleRun.LOW, 7), 0],
-			[4.25, Vector3i(3, 8, 2), VenueInstrument.scale_tone(h, MarbleRun.LOW, 8), 1],
-			[4.75, Vector3i(4, 7, 2), VenueInstrument.scale_tone(h, MarbleRun.LOW, 7), 1],
-			[5.5, Vector3i(3, 6, 3), VenueInstrument.scale_tone(h, MarbleRun.LOW, 6), 1]]
-	check("over two bars the bells ring at their sixteenths, each its height's scale tone (%s)" % [got], got == want)
-	var classes := _scale_classes(h)
-	check("in A minor, from the tonic nearest C5 (%s)" % [got.map(func(g: Array) -> int: return g[2])],
-			got.all(func(g: Array) -> bool: return classes.has(posmod(int(g[2]), 12))) and int(got[0][2]) > int(got[1][2]))
-	var d_minor := _scale_classes(Harmony.at(s, float(spans[1][0]) + 0.01))
-	var later := MarbleRun.rings(rows, [], s, spans[1][0], spans[1][1])
-	var in_d := func(r: Dictionary) -> bool: return d_minor.has(posmod(int(r["note"]), 12)) and int(r["note"]) == MarbleRun.note_of(s, float(r["song"]), r["cell"])
-	check("after the bracket, in D minor (%d)" % later.size(), later.size() == 24 and later.all(in_d))
-	var placed := func(r: Dictionary) -> bool: return is_equal_approx(float(r["song"]), s.seconds_at_beat(float(r["beat"]))) and r["source"] == MarbleRun.SOURCE and is_equal_approx(float(r["length"]), MarbleRun.LENGTH)
-	check("each at the song position of its beat, with the run's source, a bell's length", later.all(placed))
-	var ring_of_ramps := {}
-	for b: Array in [[Vector3i(0, 0, 0), 1], [Vector3i(1, 0, 0), 0], [Vector3i(1, 0, 1), 3], [Vector3i(0, 0, 1), 2]]:
-		MarbleRun.answer(ring_of_ramps, b[0], &"ramp", b[1])
-	check("four ramps in a ring go round until MOST_STEPS (%d)" % MarbleRun.path(ring_of_ramps, 0).size(),
-			MarbleRun.path(ring_of_ramps, 0).size() == MarbleRun.MOST_STEPS)
-	var edge := {}
-	MarbleRun.answer(edge, Vector3i(11, 3, 0), &"ramp", 1)
-	check("a ramp at the lattice's edge rolls it out of the lattice: its path is that one cell",
-			MarbleRun.path(edge, 0) == [Vector3i(11, 3, 0)])
-	var ball: Array = MarbleRun.rings(rows, [10.0], s, s.seconds_at_beat(10.0), s.seconds_at_beat(12.0)).map(
-			func(r: Dictionary) -> float: return snappedf(float(r["beat"]), 0.001))
-	check("a BALL marble on beat 10 rolls from there: its bells at 10.25, 10.75 and 11.25 (%s)" % [ball],
-			ball == [10.25, 10.75, 11.25])
-	check("and the schedule read in pieces is the same as whole",
-			MarbleRun.rings(rows, [10.0], s, 0.0, 7.3) + MarbleRun.rings(rows, [10.0], s, 7.3, 20.0)
-			== MarbleRun.rings(rows, [10.0], s, 0.0, 20.0))
-	check("nothing rings in an empty lattice", MarbleRun.rings({}, [10.0], s, 0.0, 20.0).is_empty())
-	# BALL twice in a row: the second goes the other way through the splitter from the first.
-	var first := MarbleRun.ball_beat([], 9.6)
-	var second := MarbleRun.ball_beat([first], 10.3)
-	check("BALL asks the next beat, and BALL again the next (%.1f, %.1f)" % [first, second], first == 10.0 and second == 11.0)
-	var lasts := {}
-	for r: Dictionary in MarbleRun.rings(rows, [first, second], s, s.seconds_at_beat(10.0), s.seconds_at_beat(14.0)):
-		lasts[int(r["marble"])] = r["cell"]
-	check("the two BALL marbles go opposite ways through the splitter: into the bell right of it and the one left (%s)" % [lasts],
-			lasts.get(MarbleRun.ball_number(first)) == Vector3i(5, 7, 3) and lasts.get(MarbleRun.ball_number(second)) == Vector3i(3, 6, 3))
-	check("a BALL whose next beat would go the way the last one went, still rolling, waits a beat; one asked before the last has come, the beat after it; one long after, the next (%.1f, %.1f, %.1f)"
-			% [MarbleRun.ball_beat([10.0], 11.5), MarbleRun.ball_beat([12.0], 11.5), MarbleRun.ball_beat([10.0], 19.5)],
-			MarbleRun.ball_beat([10.0], 11.5) == 13.0 and MarbleRun.ball_beat([12.0], 11.5) == 13.0 and MarbleRun.ball_beat([10.0], 19.5) == 20.0)
-
-
-## Two runs stepped through the same eight bars at 60 and 23 frames a second ring the same bells as the
-## schedule says, and a seek rings nothing between.
-func _test_two_marble_runs_ring_the_same_from_the_same_clock() -> void:
-	_offline()
-	_weather_song()
-	var s := DAW.state
-	var rows := _marble_rows()
-	var a := MarbleRun.new()
-	var b := MarbleRun.new()
-	var heard := {"seconds": 0.0, "playing": true, "valid": true}
-	for run: MarbleRun in [a, b]:
-		run.rows = rows.duplicate()
-		run.balls = [9.0]
-		run.heard_source = func() -> Dictionary: return heard
-	var got_a: Array = []
-	var got_b: Array = []
-	a.rang.connect(func(r: Dictionary) -> void: got_a.append([snappedf(float(r["song"]), 0.0001), r["note"], r["cell"]]))
-	b.rang.connect(func(r: Dictionary) -> void: got_b.append([snappedf(float(r["song"]), 0.0001), r["note"], r["cell"]]))
-	var end := s.bar_to_seconds(9.0)
-	for step: Array in [[a, 1.0 / 60.0], [b, 1.0 / 23.0]]:
-		var run: MarbleRun = step[0]
-		heard["seconds"] = 0.0
-		run.follow(heard)
-		var t := 0.0
-		while t < end:
-			t = minf(t + float(step[1]), end)
-			heard["seconds"] = t
-			run.follow(heard, float(step[1]))
-	var want: Array = MarbleRun.rings(rows, [9.0], s, 0.0, end).map(func(r: Dictionary) -> Array:
-			return [snappedf(float(r["song"]), 0.0001), r["note"], r["cell"]])
-	check("two machines ring the same %d bells over eight bars, as the schedule says" % got_a.size(),
-			got_a.size() == 27 and got_a == got_b and got_a == want)
-	var before := a.rung
-	heard["seconds"] = end + 6.0
-	a.follow(heard, 1.0 / 60.0)
-	heard["seconds"] = end + 6.01
-	a.follow(heard, 1.0 / 60.0)
-	check("a seek rings nothing between (%d)" % (a.rung - before), a.rung == before)
-	heard["playing"] = false
-	heard["seconds"] = end + 9.0
-	a.follow(heard, 1.0)
-	check("nor does a stopped song", a.rung == before)
-	a.free()
-	b.free()
-
-
-## A block put in changes the path from there; one taken out ends it there. The room's word: a cell
-## outside the lattice is refused in words, as are a kind not known, a facing not one of four and a
-## block past MOST; taking out an empty cell is nothing. The verbs' shapes.
-func _test_a_block_placed_changes_the_marbles_path() -> void:
-	var rows := _marble_rows()
-	var was := MarbleRun.path(rows, 0)
-	check("put in a cell, a block answers nothing back", MarbleRun.answer(rows, Vector3i(6, 7, 3), &"drop", 0) == "")
-	var now := MarbleRun.path(rows, 0)
-	check("a drop where the even marble fell out takes it on down (%s)" % [now.slice(5)],
-			now.size() == was.size() + 1 and now[6] == Vector3i(6, 7, 3) and now[7] == Vector3i(6, 6, 3))
-	MarbleRun.answer(rows, Vector3i(4, 7, 2), &"", 0)
-	check("a block taken out: the marble falls out of the run there (%s)" % [MarbleRun.path(rows, 0)],
-			MarbleRun.path(rows, 0) == [Vector3i(2, 8, 2), Vector3i(3, 8, 2), Vector3i(4, 8, 2), Vector3i(4, 7, 2)]
-			and not rows.has(Vector3i(4, 7, 2)))
-	MarbleRun.answer(rows, Vector3i(4, 7, 2), &"bell", 1)
-	check("put back turned right, it rolls right instead (%s)" % [MarbleRun.path(rows, 0).slice(3)],
-			MarbleRun.path(rows, 0)[4] == Vector3i(5, 7, 2))
-	MarbleRun.answer(rows, Vector3i(7, 11, 7), &"ramp", 0)
-	check("a block higher than the rest is the run's new top", MarbleRun.path(rows, 0)[0] == Vector3i(7, 11, 7))
-	var size := rows.size()
-	var outside := MarbleRun.answer(rows, Vector3i(12, 0, 0), &"ramp", 0)
-	check("a cell outside the lattice is refused, in words (%s)" % outside,
-			outside == "That cell is outside the lattice: a block goes in one of its 12 by 12 by 12 cells."
-			and MarbleRun.answer(rows, Vector3i(0, -1, 0), &"bell", 0) != "" and MarbleRun.answer(rows, Vector3i(-1, 0, 0), &"", 0) != ""
-			and rows.size() == size)
-	check("so is a kind not known, and a facing not one of four",
-			MarbleRun.answer(rows, Vector3i(0, 0, 0), &"cannon", 0).begins_with("There is no block called cannon")
-			and MarbleRun.answer(rows, Vector3i(0, 0, 0), &"ramp", 4) == "A block faces one of four ways." and rows.size() == size)
-	check("taking out an empty cell is nothing", MarbleRun.answer(rows, Vector3i(0, 0, 0), &"", 0) == "" and rows.size() == size)
-	var full := {}
-	for n in MarbleRun.MOST:
-		MarbleRun.answer(full, Vector3i(n % 12, (n / 12) % 12, 0), &"ramp", 0)
-	var past := MarbleRun.answer(full, Vector3i(0, 0, 5), &"bell", 0)
-	check("the lattice holds %d blocks and refuses another, in words, though a block in its place may change (%s)" % [MarbleRun.MOST, past],
-			full.size() == MarbleRun.MOST and past.begins_with("The lattice holds 144 blocks")
-			and MarbleRun.answer(full, Vector3i(0, 0, 0), &"bell", 2) == "" and full[Vector3i(0, 0, 0)] == [&"bell", 2])
-	check("the room's verbs: a block [cell, kind, facing], a ball [beat]",
-			Session.room_ask_is_valid(MarbleRun.VERB, [Vector3i(1, 2, 3), &"ramp", 1])
-			and Session.room_ask_is_valid(MarbleRun.VERB, [Vector3i(1, 2, 3), &"", 0])
-			and not Session.room_ask_is_valid(MarbleRun.VERB, [Vector3(1, 2, 3), &"ramp", 1])
-			and not Session.room_ask_is_valid(MarbleRun.VERB, [Vector3i(1, 2, 3), "ramp", 1])
-			and Session.room_ask_is_valid(MarbleRun.BALL_VERB, [8.0]) and not Session.room_ask_is_valid(MarbleRun.BALL_VERB, [8]))
-	var balls := MarbleRun.answer_ball([], 8.0)
-	for n in 10:
-		balls = MarbleRun.answer_ball(balls, 12.0 + n)
-	check("the room keeps the last %d BALL marbles, and none for a beat that cannot be one (%s)" % [MarbleRun.MOST_BALLS, balls],
-			balls.size() == MarbleRun.MOST_BALLS and balls[0] == 14.0 and balls[-1] == 21.0
-			and MarbleRun.answer_ball(balls, -1.0) == balls and MarbleRun.answer_ball(balls, NAN) == balls)
-
-
-## The run's jack is the world's: onto a track only, anyone's to plug, refused into a bandmate. Plugged
-## into track 5 while the song records, the host takes down exactly the bells the schedule rings, at
-## their song positions on the pitched channel, and nothing on the armed track; unplugged, nothing.
-func _test_the_marble_runs_jack_records_its_bells() -> void:
-	_offline()
-	_as_session(Session.Role.SOLO, 1)
-	var studio := Studio.new()
-	studio.medium = Presentation.Medium.SCREEN
-	add_child(studio)
-	await get_tree().physics_frame
-	studio.set_venue(&"studio", false, 0)
-	_weather_song()
-	var run := studio.marbles
-	for cell: Vector3i in _marble_rows():
-		var b: Array = _marble_rows()[cell]
-		studio.ask_marble(cell, b[0], b[1])
-	check("the studio stands the run in the lattice with the room's blocks (%d)" % run.block_count(),
-			run != null and run.get_parent() == studio.venue and run.block_count() == 8 and studio.marbles_row.size() == 8)
-	var sinks := Jacks.sinks(MarbleRun.SOURCE)
-	check("its jack steps through unplugged and the tracks, and no bandmate",
-			sinks[0] == &"" and sinks.has(Jack.track_sink(5)) and not sinks.any(func(x: StringName) -> bool: return Jack.player_of(x) > 0)
-			and Jack.is_world(MarbleRun.SOURCE) and not Jack.is_item(MarbleRun.SOURCE))
-	var refused := Jacks.plug_refusal(MarbleRun.SOURCE, null, Jack.player_sink(2), 3, 0, &"", [1, 2, 3])
-	check("anyone may plug it onto a track; into a bandmate it is refused, in words (%s)" % refused,
-			studio._plug_refusal(MarbleRun.SOURCE, Jack.track_sink(5), 2) == ""
-			and refused == "the marble run goes onto a track: everyone hears its bells already")
-	var said: Array = []
-	var listen := func(t: String) -> void: said.append(t)
-	Session.notice.connect(listen)
-	studio._on_plug_asked(MarbleRun.SOURCE, Jack.track_sink(5))
-	Session.notice.disconnect(listen)
-	check("plugged into track 5, its socket and its notice say so (%s)" % [said],
-			studio.jacks.sink_of(MarbleRun.SOURCE) == Jack.track_sink(5) and run.jack.sink == Jack.track_sink(5)
-			and said.size() == 1 and said[0].begins_with("The marble run's jack is in 5 ") and said[0].contains("bell"))
-	for t: MixState.TrackState in DAW.state.tracks.values():
-		t.rec_arm = false
-	DAW.state.track(2).rec_arm = true
-	var heard := {"seconds": 0.0, "playing": true, "recording": true, "valid": true}
-	var rec := studio.hit_recorder
-	rec.heard_source = func() -> Dictionary: return heard
-	run.heard_source = rec.heard_source
-	var armed := DAW.state.track(2).items.size()
-	var five := DAW.state.track(5).items.size()
-	var from := DAW.state.bar_to_seconds(2.0)
-	var to := DAW.state.bar_to_seconds(6.0)
-	heard["seconds"] = from
-	rec.follow(heard)
-	run.follow(heard)
-	var t := from
-	while t < to:
-		t = minf(t + 1.0 / 45.0, to)
-		heard["seconds"] = t
-		run.follow(heard, 1.0 / 45.0)
-	heard["recording"] = false
-	rec.follow(heard)
-	var want: Array = MarbleRun.rings(run.rows, [], DAW.state, from, to).map(func(r: Dictionary) -> Array:
-			return [int(r["note"]), float(r["song"])])
-	var taken: Array = DAW.state.track(5).items.filter(func(it: MixState.ItemState) -> bool:
-			return absf(it.start - float(rec.last_take.get("start", -1.0))) < 0.001)
-	var notes: Array = MidiTake.unpack_relative(taken[0].notes, taken[0].start) if taken.size() == 1 else []
-	var got: Array = notes.map(func(x: Array) -> Array: return [int(x[2]), float(x[0])])
-	got.sort_custom(func(p: Array, q: Array) -> bool: return p[1] < q[1])
-	var same := got.size() == want.size()
-	for n in mini(got.size(), want.size()):
-		same = same and got[n][0] == want[n][0] and absf(float(got[n][1]) - float(want[n][1])) < 0.002
-	check("it records exactly the %d bells the marbles ring onto track 5, at their song positions, on the pitched channel, none on the armed track (%s / %s)" % [want.size(), got.slice(0, 3), want.slice(0, 3)],
-			taken.size() == 1 and same and want.size() == 12
-			and notes.all(func(x: Array) -> bool: return int(x[4]) == InstrumentItem.MELODIC_CHANNEL)
-			and DAW.state.track(2).items.size() == armed)
-	studio._on_plug_asked(MarbleRun.SOURCE, &"")
-	heard["recording"] = true
-	heard["seconds"] = to
-	rec.follow(heard)
-	run.follow(heard)
-	for n in 120:
-		heard["seconds"] = to + n * 4.0 / 120.0
-		run.follow(heard, 1.0 / 30.0)
-	heard["recording"] = false
-	rec.follow(heard)
-	check("unplugged, nothing is taken down", DAW.state.track(5).items.size() == five + 1
-			and DAW.state.track(2).items.size() == armed and studio.jacks.sink_of(MarbleRun.SOURCE) == &"")
-	studio.queue_free()
-	await get_tree().process_frame
-	Session.start_solo()
-	_offline()
-
-
-## At full motion a marble glides from cell to cell and falls a little as it fades from its last; at
-## motion 0 it is still in the cell it was in on the beat, a step per beat, and a rung bell hangs still.
-func _test_a_marble_is_drawn_a_cell_per_beat_at_motion_0() -> void:
-	_offline()
-	_weather_song()
-	var s := DAW.state
-	var rows := {}
-	for x in 11:
-		MarbleRun.answer(rows, Vector3i(x, 5, 0), &"ramp", 1)
-	MarbleRun.answer(rows, Vector3i(5, 5, 0), &"bell", 1)
-	var cells := MarbleRun.path(rows, 0)
-	var centre := func(n: int) -> Vector3: return MarbleRun.cell_centre(cells[n]) + Vector3(0, MarbleRun.MARBLE_Y, 0)
-	var at := func(beat: float, moves: float) -> Array: return MarbleRun.marbles_at(rows, [], s, beat, moves)
-	var glide: Array = at.call(0.125, 1.0)
-	check("at full motion, half a sixteenth on, it is half way from the top to the next cell (%s)" % [glide],
-			glide.size() == 1 and (glide[0][0] as Vector3).is_equal_approx((centre.call(0) as Vector3).lerp(centre.call(1), 0.5)))
-	var falling: Array = at.call(11.5 * 0.25, 1.0)
-	check("and at its last cell it falls a little as it fades", falling.size() == 1
-			and (falling[0][0] as Vector3).y < (centre.call(11) as Vector3).y and float(falling[0][1]) < 1.0)
-	var still: Array = []
-	for beat in [0.0, 0.3, 0.99, 1.0, 1.6, 2.2, 2.99]:
-		var shown: Array = at.call(beat, 0.0)
-		still.append(shown[0][0] if shown.size() == 1 else null)
-	check("at motion 0 it is in the cell it was in on the beat, still, a step per beat: the top, then the fifth cell, then the ninth (%s)" % [still],
-			still.slice(0, 3).all(func(p) -> bool: return p != null and (p as Vector3).is_equal_approx(centre.call(0)))
-			and still.slice(3, 5).all(func(p) -> bool: return p != null and (p as Vector3).is_equal_approx(centre.call(4)))
-			and still.slice(5).all(func(p) -> bool: return p != null and (p as Vector3).is_equal_approx(centre.call(8))))
-	check("and once its path is walked it is gone", (at.call(3.0, 0.0) as Array).is_empty() and (at.call(3.2, 1.0) as Array).is_empty())
-	var run := MarbleRun.new()
-	var moves := [0.0]
-	run.motion = func() -> float: return moves[0]
-	run.rows = rows
-	add_child(run)
-	run.show_rows(rows)
-	var heard := {"seconds": s.seconds_at_beat(1.5), "playing": true, "valid": true}
-	run.heard_source = func() -> Dictionary: return heard
-	run.follow(heard)
-	var drawn := run.drawn(heard["seconds"])
-	check("the run draws it so (%s)" % [drawn], drawn.size() == 1 and (drawn[0][0] as Vector3).is_equal_approx(centre.call(4))
-			and run._marbles.multimesh.visible_instance_count == 1)
-	run.ring({"cell": Vector3i(5, 5, 0), "note": 72, "velocity": 84, "song": 0.0, "beat": 0.0})
-	var bell := run.block_at(Vector3i(5, 5, 0)).bell
-	var swings: Array = []
-	for n in 4:
-		run._tend_bells(0.05, NAN)
-		swings.append(bell.rotation.x)
-	check("a rung bell hangs still at motion 0 (%s)" % [swings], swings.all(func(r: float) -> bool: return is_zero_approx(r)))
-	moves[0] = 1.0
-	run.ring({"cell": Vector3i(5, 5, 0), "note": 72, "velocity": 84, "song": 0.0, "beat": 0.0})
-	swings.clear()
-	for n in 4:
-		run._tend_bells(0.05, NAN)
-		swings.append(absf(bell.rotation.x))
-	check("and swings at full motion (%s)" % [swings], swings.any(func(r: float) -> bool: return r > 0.05))
-	run.queue_free()
-	await get_tree().process_frame
-
-
-## A ray picks the cell a block goes in: on the working layer where it comes down to it, beside the face
-## of the first block it meets, nothing outside the lattice or past a block at its edge.
-func _test_a_ray_picks_the_cell_a_block_goes_in() -> void:
-	var rows := {}
-	var down := Vector3.DOWN
-	var over := func(cell: Vector3i) -> Vector3: return MarbleRun.cell_centre(cell) + Vector3(0, 4.0, 0)
-	var floor_hit := MarbleRun.pick(rows, over.call(Vector3i(3, 0, 2)), down, 0)
-	check("straight down onto an empty lattice: the floor's cell, on the layer (%s)" % [floor_hit],
-			floor_hit["valid"] and floor_hit["cell"] == Vector3i(3, 0, 2) and floor_hit["layer"])
-	check("on layer 4, the cell standing on it", MarbleRun.pick(rows, over.call(Vector3i(3, 0, 2)), down, 4)["cell"] == Vector3i(3, 4, 2))
-	MarbleRun.answer(rows, Vector3i(3, 0, 2), &"ramp", 0)
-	var on_top := MarbleRun.pick(rows, over.call(Vector3i(3, 0, 2)), down, 0)
-	check("down onto a block: the cell on top of it (%s)" % [on_top],
-			on_top["valid"] and on_top["cell"] == Vector3i(3, 1, 2) and on_top["against"] == Vector3i(3, 0, 2))
-	var side := MarbleRun.pick(rows, MarbleRun.cell_centre(Vector3i(3, 0, 2)) + Vector3(0, 0, 2.0), Vector3.FORWARD, 0)
-	check("level at its face toward you, from in front: the cell in front of it (%s)" % [side],
-			side["valid"] and side["cell"] == Vector3i(3, 0, 1))
-	check("from in front at an edge block, there is no cell before it",
-			not MarbleRun.pick({Vector3i(3, 0, 0): [&"ramp", 0]}, MarbleRun.cell_centre(Vector3i(3, 0, 0)) + Vector3(0, 0, 2.0), Vector3.FORWARD, 0)["valid"])
-	var aslant := MarbleRun.pick(rows, Vector3(0, 1.6, 1.1), (MarbleRun.cell_centre(Vector3i(8, 0, 6)) - Vector3(0, MarbleRun.CELL * 0.5, 0) - Vector3(0, 1.6, 1.1)).normalized(), 0)
-	check("from a standing eye at the tray, aslant down to the floor's cell it points at (%s)" % [aslant],
-			aslant["valid"] and aslant["cell"] == Vector3i(8, 0, 6))
-	check("a ray that never enters the lattice picks nothing",
-			not MarbleRun.pick(rows, Vector3(0, 1.6, 1.1), Vector3.BACK, 0)["valid"]
-			and not MarbleRun.pick(rows, Vector3(0, 1.6, 1.1), Vector3.ZERO, 0)["valid"])
-
-
-## At a desk: a click on a tray key gives the mouse that block, and each click into the lattice puts one
-## where the cursor picks, the wheel turning it and Shift and the wheel raising the layer; a ghost says
-## what and where; a click on a placed block picks it up to move; the wheel over one turns it, Backspace
-## takes it out, Esc puts a carried one back. BALL with the song stopped rolls one here alone, never
-## taken down. In a headset a block is taken from the tray and let go in a cell, a placed one pulled out
-## of the lattice is taken out, and a tap leaves it in the hand for a press where it goes.
-func _test_a_desk_builds_a_marble_run_from_the_tray() -> void:
-	var rig: Array = await _looper_studio(Session.Role.SOLO, 1)
-	var studio: Studio = rig[0]
-	DAW.state.markers.clear()
-	DAW.state.markers[0.0] = "[A minor]"
-	DAW.state.position_seconds = 0.0
-	var run := studio.marbles
-	var r := Stations.row(MarbleRun.STATION)
-	check("the marble run is a station of the live room, mounted in the lattice, with a desk line and a folded plaque",
-			run != null and r["zone"] == &"matrix" and r["area"] == Stations.LIVE and String(r["desk"]).contains("Backspace")
-			and run.find_child("Plaque", true, false) != null and not Stations.plaque_open(run.find_child("Plaque", true, false)))
-	if run == null:
-		studio.queue_free()
-		await get_tree().process_frame
-		_offline()
-		return
-	var notices: Array[String] = []
-	var listen := func(t: String) -> void: notices.append(t)
-	Session.notice.connect(listen)
-	var mouse := _AimMouse.new()
-	var to_world := run.global_transform
-	var aim_down := func(cell: Vector3i) -> void:
-		mouse.at = _down_from(to_world * (MarbleRun.cell_centre(cell) + Vector3(0, 3.5, 0)))
-	var bell_key: MarbleRun.TrayKey = run.keys[3]
-	check("the tray's keys are the four kinds and BALL, lettered", run.keys.map(func(k: MarbleRun.TrayKey) -> StringName: return k.kind) == MarbleRun.KINDS
-			and run.keys.map(func(k: MarbleRun.TrayKey) -> String: return k.legend.text) == ["RAMP", "DROP", "SPLITTER", "BELL"]
-			and run.ball_key.legend.text == "BALL" and bell_key.hint().contains("click to take one"))
-	bell_key.grab_begin(mouse, bell_key.global_position)
-	check("a click on BELL gives the mouse a bell, and says what to do with it (%s)" % [notices.slice(-1)],
-			run.carrying() and run.hand == mouse and mouse.tool.is_valid() and run.carried_by_mouse()
-			and notices[-1].begins_with("BELL: click a cell for one"))
-	aim_down.call(Vector3i(3, 0, 2))
-	mouse._was_pressed = true
-	mouse._use_tool(false)
-	check("the click that took it puts nothing in", run.rows.is_empty() and run.carrying())
-	run._show_ghost()
-	check("its ghost shows where it would go, and the BELL key's card what it is (%s)" % bell_key.readout(),
-			run.ghost_text() == "BELL  AWAY  A4 · LAYER 1" and run._ghost.visible and run._layer_grid.visible
-			and bell_key.readout() == run.ghost_text() and not run._ghost_letter.visible)
-	mouse._use_tool(true)
-	mouse._use_tool(false)
-	check("a click on the lattice's floor puts it there, facing away, and the mouse keeps a bell for the next",
-			studio.marbles_row.get(Vector3i(3, 0, 2)) == [&"bell", 0] and run.block_at(Vector3i(3, 0, 2)) != null and run.carrying())
-	var placed_bell: MarbleRun.Block = run.block_at(Vector3i(3, 0, 2))
-	if placed_bell != null:
-		placed_bell._process(0.0)
-	check("the bell's card names its note, and no letter floats over it (%s)" % [placed_bell.title() if placed_bell else "none"],
-			placed_bell != null and placed_bell.title() == "BELL  A4" and not placed_bell.letter.visible)
-	run.turn_carried(1)
-	mouse._use_tool(true)
-	mouse._use_tool(false)
-	check("turned with the wheel, the next goes on top of it, facing right (%s)" % [studio.marbles_row],
-			studio.marbles_row.get(Vector3i(3, 1, 2)) == [&"bell", 1])
-	run.move_layer(3)
-	aim_down.call(Vector3i(6, 0, 6))
-	mouse._use_tool(true)
-	mouse._use_tool(false)
-	check("on the layer Shift and the wheel raised, the cell standing on it", studio.marbles_row.get(Vector3i(6, 3, 6)) == [&"bell", 1])
-	run.move_layer(-3)
-	mouse.at = Transform3D(Basis.IDENTITY, to_world * Vector3(0, 1.6, 1.0))
-	mouse.at.basis = Basis.looking_at(to_world.basis * Vector3.BACK)
-	var had := studio.marbles_row.size()
-	mouse._use_tool(true)
-	mouse._use_tool(false)
-	check("a click pointing out of the lattice puts nothing in, and says where to point (%s)" % [notices.slice(-1)],
-			studio.marbles_row.size() == had and run.carrying() and notices[-1].begins_with("Point into the lattice"))
-	studio._on_escape()
-	check("Esc puts the bell back on the tray", not run.carrying() and not mouse.tool.is_valid()
-			and notices[-1] == "The block is back on the tray.")
-	var block := run.block_at(Vector3i(3, 0, 2))
-	block.grab_begin(mouse, block.global_position)
-	check("a click on a placed block picks it up, hidden from its cell (%s)" % [notices.slice(-1)],
-			run.carrying() and run.lifted == Vector3i(3, 0, 2) and not block.visible and notices[-1].begins_with("BELL picked up"))
-	aim_down.call(Vector3i(8, 0, 1))
-	mouse._was_pressed = true
-	mouse._use_tool(false)
-	mouse._use_tool(true)
-	check("and a click on another cell moves it there", not studio.marbles_row.has(Vector3i(3, 0, 2))
-			and studio.marbles_row.get(Vector3i(8, 0, 1)) == [&"bell", 0] and not run.carrying())
-	mouse._use_tool(false)
-	block = run.block_at(Vector3i(8, 0, 1))
-	block.nudge(mouse, 1, false)
-	check("the wheel over a placed block turns it (%s)" % [studio.marbles_row.get(Vector3i(8, 0, 1))],
-			studio.marbles_row.get(Vector3i(8, 0, 1)) == [&"bell", 1])
-	var key := InputEventKey.new()
-	key.keycode = KEY_BACKSPACE
-	key.pressed = true
-	var desk_hand := studio.get_node("MouseHand") as MouseInteractor
-	desk_hand.hovered = block
-	studio._unhandled_input(key)
-	desk_hand.hovered = null
-	check("Backspace over it takes it out (%s)" % [notices.slice(-1)], not studio.marbles_row.has(Vector3i(8, 0, 1))
-			and notices[-1] == "The bell is out of the lattice.")
-	# BALL with the song stopped: one rolls here alone, never taken down.
-	var rows := _marble_rows()
-	for cell: Vector3i in rows:
-		studio.ask_marble(cell, rows[cell][0], rows[cell][1])
-	studio._on_plug_asked(MarbleRun.SOURCE, Jack.track_sink(5))
-	var five := DAW.state.track(5).items.size()
-	var heard := {"seconds": 0.0, "playing": false, "valid": true}
-	run.heard_source = func() -> Dictionary: return heard
-	var rung := run.rung
-	var previews: Array = []
-	run.rang.connect(func(x: Dictionary) -> void: previews.append(x.get("preview", false)))
-	run.ball_key.grab_begin(mouse, run.ball_key.global_position)
-	for n in 40:
-		run.follow(heard, 0.05)
-	check("BALL with the song stopped rolls a marble here alone, ringing its bells, a preview nobody takes down (%d rang)" % (run.rung - rung),
-			run.rung - rung == 3 and previews.all(func(p) -> bool: return p == true) and DAW.state.track(5).items.size() == five
-			and notices[-1].begins_with("A marble rolls from the top here alone"))
-	studio._on_plug_asked(MarbleRun.SOURCE, &"")
-	# A headset's hand: taken from the tray, let go in a cell.
-	var hand := _AimHand.new()
-	hand.at = Transform3D(Basis.IDENTITY, run.keys[0].global_position)
-	run.keys[0].grab_begin(hand, run.keys[0].global_position)
-	check("a hand takes a ramp, and is told in its own words (%s)" % [notices.slice(-1)],
-			run.carrying() and run.hand == hand and notices[-1].begins_with("RAMP: let it go in the cell your hand is in"))
-	hand.at.origin = to_world * MarbleRun.cell_centre(Vector3i(9, 2, 1))
-	hand._was_pressed = true
-	hand._use_tool(false)
-	check("carried into a cell and let go, the ramp is there, facing as the last block turned, and the hand empty", studio.marbles_row.get(Vector3i(9, 2, 1)) == [&"ramp", 1]
-			and not run.carrying() and not hand.tool.is_valid())
-	block = run.block_at(Vector3i(9, 2, 1))
-	block.grab_begin(hand, block.global_position)
-	var kept := studio.marbles_row.size()
-	# Pulled back out of the lattice, the hand still faces it: its ray comes down on the floor.
-	var outside := to_world * Vector3(1.0, 1.0, 0.8)
-	var into := Transform3D(Basis.looking_at(to_world * MarbleRun.cell_centre(Vector3i(6, 0, 6)) - outside), outside)
-	var to_local := to_world.affine_inverse()
-	check("pulled out, the hand's ray points into the lattice, at its floor",
-			MarbleRun.pick(run.rows, to_local * into.origin, to_local.basis * -into.basis.z, 0).get("valid", false))
-	hand.at = into
-	run._show_ghost()
-	check("and its ghost says letting go there takes it out (%s)" % run.ghost_text(), run.ghost_text() == "RAMP · let go here to take it out")
-	hand._was_pressed = true
-	hand._use_tool(false)
-	check("a placed one taken and let go outside the lattice is out of it, wherever its ray points (%s)" % [studio.marbles_row],
-			not studio.marbles_row.has(Vector3i(9, 2, 1)) and studio.marbles_row.size() == kept - 1 and not run.carrying()
-			and notices[-1] == "The ramp is out of the lattice.")
-	hand.at = Transform3D(Basis.IDENTITY, run.keys[2].global_position)
-	run.keys[2].grab_begin(hand, run.keys[2].global_position)
-	hand.at = into
-	hand._was_pressed = true
-	hand._use_tool(false)
-	check("a splitter carried off the tray and let go outside, its ray into the lattice, is back on the tray (%s)" % [notices.slice(-1)],
-			studio.marbles_row.size() == kept - 1 and not run.carrying() and not hand.tool.is_valid()
-			and notices[-1] == "The block is back on the tray.")
-	# A headset's stick turns the block its hand carries, over nothing.
-	var xr := XRInteractor.new()
-	add_child(xr)
-	run.take(xr, MarbleRun.BELL)
-	var was := run.carry_facing
-	check("a headset's stick, over nothing, turns the bell its hand carries (%d to %d)" % [was, run.carry_facing],
-			run.carrying() and xr.hovered == null and xr.flick(0.9, 1.0 / 72.0) == 1 and run.carry_facing == posmod(was + 1, 4))
-	xr.flick(0.0, 1.0 / 72.0)
-	check("and back the other way", xr.flick(-0.9, 1.0 / 72.0) == -1 and run.carry_facing == was)
-	xr.flick(0.0, 1.0 / 72.0)
-	run.drop()
-	check("and put back, the stick is the hand's again", not xr.tool.is_valid() and not xr.tool_stick.is_valid()
-			and xr.flick(0.9, 1.0 / 72.0) == 0)
-	xr.free()
-	hand.at.origin = run.keys[1].global_position
-	run.keys[1].grab_begin(hand, run.keys[1].global_position)
-	hand._was_pressed = true
-	hand._use_tool(false)
-	check("a tap on the tray leaves a drop in the hand", run.carrying() and run.carry_kind == &"drop")
-	var tapped_at := hand.at
-	hand.at = into
-	check("and after the tap its ray picks where a press puts it, from outside the lattice too",
-			run.target_for(hand).get("valid", false) and not run.target_for(hand).get("hand", false))
-	hand.at = tapped_at
-	hand.at.origin = to_world * MarbleRun.cell_centre(Vector3i(10, 4, 3))
-	hand._use_tool(true)
-	hand._use_tool(false)
-	check("and a press where it goes puts it there", studio.marbles_row.get(Vector3i(10, 4, 3)) == [&"drop", 1] and not run.carrying())
-	Session.notice.disconnect(listen)
-	hand.free()
-	mouse.free()
-	studio.queue_free()
-	await get_tree().process_frame
-	Session.start_solo()
-	_offline()
-
-
-## The blocks are the room's: a guest's block is asked of the host, which keeps it, and refuses one
-## outside the lattice in words to them; the rows are kept across a publish and a change of venue, and a
-## room applied shows them. A guest's own block shows at once and is rolled back by the host's answer
-## without it; one outside the lattice is refused there and never asked. A guest's BALL is the room's
-## row too.
-func _test_a_guests_marble_block_is_predicted_and_refused_outside_the_lattice() -> void:
-	var rig: Array = await _looper_studio(Session.Role.HOST, 1)
-	var studio: Studio = rig[0]
-	var told: Array = []
-	var tell := func(peer: int, text: String) -> void: told.append([peer, text])
-	studio._on_room_asked(MarbleRun.VERB, [Vector3i(4, 5, 6), &"bell", 2], 2)
-	check("the host keeps a guest's block, and its room says so (%s)" % [studio.room_state()[MarbleRun.ROW]],
-			studio.marbles_row.get(Vector3i(4, 5, 6)) == [&"bell", 2] and studio.room_state()[MarbleRun.ROW].has(Vector3i(4, 5, 6))
-			and studio.marbles.block_at(Vector3i(4, 5, 6)) != null)
-	studio._on_room_asked(MarbleRun.VERB, [Vector3i(4, 12, 6), &"bell", 2], 2)
-	check("and refuses one outside the lattice", studio.marbles_row.size() == 1)
-	studio._on_room_asked(MarbleRun.BALL_VERB, [16.0], 2)
-	check("a guest's BALL is the room's row, the run's marbles", studio.marble_balls == [16.0] and studio.marbles.balls == [16.0]
-			and studio.room_state()[MarbleRun.BALLS] == [16.0])
-	studio._publish_room()
-	var published: Dictionary = Session.room.duplicate(true)
-	studio._show_marbles({})
-	check("(gone here)", studio.marbles.block_count() == 0)
-	studio.apply_room(published)
-	check("a room applied shows them again", studio.marbles_row.has(Vector3i(4, 5, 6)) and studio.marbles.block_count() == 1)
-	studio.set_venue(&"loft", false, 0)
-	check("a change of venue keeps the room's blocks, stood in the new venue's lattice",
-			studio.marbles != null and studio.marbles.get_parent() == studio.venue and studio.marbles.block_count() == 1
-			and studio.marbles.balls == [16.0])
-	studio.set_venue(&"studio", false, 0)
-
-	_as_session(Session.Role.GUEST, 2)
-	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-	Session._register(1, "Ada", 0)
-	Session._register(2, "Grace", 1)
-	Session.room_seq = 0
-	studio._predictions.clear()
-	studio.ask_marble(Vector3i(1, 1, 1), &"drop", 0)
-	check("a guest's block stands at once and is asked of the host", studio.marbles.block_at(Vector3i(1, 1, 1)) != null
-			and studio._predictions.size() == 1 and studio._predictions[0]["verb"] == MarbleRun.VERB and Session.room_seq == 1)
-	var host_rows := {Vector3i(4, 5, 6): [&"bell", 2]}
-	studio.apply_room({MarbleRun.ROW: host_rows.duplicate(), "acks": {2: 0}})
-	check("a room from before the host heard it keeps it, beside the host's",
-			studio.marbles.block_at(Vector3i(1, 1, 1)) != null and studio.marbles.block_at(Vector3i(4, 5, 6)) != null)
-	studio.apply_room({MarbleRun.ROW: host_rows.duplicate(), "acks": {2: Session.room_seq}})
-	check("the host's answer without it takes it out: refused", studio.marbles.block_at(Vector3i(1, 1, 1)) == null
-			and studio.marbles_row == host_rows and studio._predictions.is_empty())
-	var notices: Array[String] = []
-	var listen := func(t: String) -> void: notices.append(t)
-	Session.notice.connect(listen)
-	var seq := Session.room_seq
-	studio.ask_marble(Vector3i(0, 0, -1), &"ramp", 0)
-	check("a guest's block outside the lattice is refused there, in words, and never asked (%s)" % [notices],
-			Session.room_seq == seq and notices == ["That cell is outside the lattice: a block goes in one of its 12 by 12 by 12 cells."])
-	studio.ask_marble_ball(20.0)
-	Session.notice.disconnect(listen)
-	check("a guest's BALL is shown at once and asked", studio.marble_balls.has(20.0) and Session.room_seq == seq + 1
-			and studio._predictions.any(func(p: Dictionary) -> bool: return p["verb"] == MarbleRun.BALL_VERB))
-	Session.room_seq = 0
-	studio._predictions.clear()
-	Session.start_solo()
-	studio.queue_free()
-	await get_tree().process_frame
-	_as_session(Session.Role.SOLO, 1)
-	_offline()
-
-
-# --- the theremin (docs/spatial_loop.md part two, slice 50) -------------------------------------
 
 ## A theremin for the suite, at the origin on this player's keys: its hands `readings` (an Array the
 ## test fills with {at, by}), its clock at 90 s, stepped only by the test (`_theremin_for`).

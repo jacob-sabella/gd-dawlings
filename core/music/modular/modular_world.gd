@@ -16,7 +16,6 @@ extends Node
 ## - `world:ring_1` to `world:ring_8`: each of the looper's layers, lowest ring first, as its own
 ##   notes' velocities over the loop (the loudest note sounding, 0 between them), and a gate each note
 ##   begins: its notes, not a meter, so it is the same on every machine (`ring_level`).
-## - `world:marbles`: a gate each bell a marble rings (MarbleRun.rings), a pulse likewise.
 ##
 ## `events(from, to)` is every one of them from song position `from` up to `to`, in order, and pure:
 ## the same span, the same rows, the same events, on every machine. `levels_at` is where each level
@@ -43,10 +42,9 @@ const WEATHER_TOP := 0.42
 var heard_source: Callable = Callable()
 ## The song (its tempo, meter, brackets and tracks): DAW.state by default.
 var state_source: Callable = Callable()
-## The venue's weather (a Weather), its marble run (a MarbleRun), and whether it has an instrument
+## The venue's weather (a Weather), and whether it has an instrument
 ## to strike: each a Callable the studio gives, null or false where there is none.
 var weather: Callable = Callable()
-var marbles: Callable = Callable()
 var has_venue: Callable = Callable()
 ## The venue's instrument's strikes, [song, velocity] each, in song order.
 var strikes: Array = []
@@ -80,13 +78,8 @@ func _weather() -> Weather:
 	return w as Weather if w is Weather and is_instance_valid(w) else null
 
 
-func _marbles() -> MarbleRun:
-	var m: Variant = marbles.call() if marbles.is_valid() else null
-	return m as MarbleRun if m is MarbleRun and is_instance_valid(m) else null
-
-
-## The sockets this venue has something behind: the weather or the drips, the venue's instrument, a
-## ring for each of the looper's layers, and the marble run.
+## The sockets this venue has something behind: the weather or the drips, the venue's instrument, and a
+## ring for each of the looper's layers.
 func present() -> Array[StringName]:
 	var out: Array[StringName] = []
 	var w := _weather()
@@ -97,8 +90,6 @@ func present() -> Array[StringName]:
 	var s := state()
 	for i in mini(LooperRings.layers(s).size(), LooperRings.MOST):
 		out.append(Modular.ring_socket(i + 1))
-	if _marbles() != null:
-		out.append(&"world:marbles")
 	return out
 
 
@@ -122,12 +113,6 @@ func events(from: float, to: float) -> Array:
 	if has_venue.is_valid() and has_venue.call():
 		_pulses(&"world:venue", strikes, from, to, out)
 	out.append_array(ring_events(s, from, to))
-	var m := _marbles()
-	if m != null:
-		var rung: Array = []
-		for r: Dictionary in MarbleRun.rings(m.rows, m.balls, s, maxf(from - Modular.WORLD_GATE, 0.0), to):
-			rung.append([float(r["song"]), int(r["velocity"])])
-		_pulses(&"world:marbles", rung, from, to, out)
 	return ordered(out)
 
 
@@ -153,12 +138,6 @@ func levels_at(at: float) -> Array:
 	var layers := LooperRings.layers(s)
 	for i in mini(layers.size(), LooperRings.MOST):
 		out.append([at, Modular.Event.WORLD, Modular.ring_socket(i + 1), ring_level(s, int(layers[i]["index"]), at)])
-	var m := _marbles()
-	if m != null:
-		var rung: Array = []
-		for r: Dictionary in MarbleRun.rings(m.rows, m.balls, s, maxf(at - Modular.WORLD_GATE, 0.0), at + 0.000001):
-			rung.append([float(r["song"]), int(r["velocity"])])
-		out.append([at, Modular.Event.WORLD, &"world:marbles", pulse_at(rung, at)])
 	return out
 
 

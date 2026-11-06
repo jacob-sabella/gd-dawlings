@@ -226,17 +226,6 @@ const ALL := [
 		"hands": "press the spool for an end · press where it goes, carry it, let go where it ends · its length is its note · brush it to pluck · tilt to bend · pull it hard to cut",
 	},
 	{
-		# The marble run (MarbleRun, slice 49): mounted in the lattice zone, its tray at the cube's face
-		# toward the desk, looked past into the lattice. Its frame's top is just over the tray's board,
-		# its foot its plaque's keys under the board, folded, so a seat brought in close (studio:2's
-		# glass) still holds both.
-		"id": &"marbles", "title": "MARBLE RUN", "area": LIVE, "zone": &"matrix", "air": 0.5,
-		"spot": &"marbles_spot", "at": MarbleRun.LOOK,
-		"frame": [MarbleRun.FRAME_TOP, MarbleRun.FRAME_FOOT],
-		"desk": "click a block on the tray (RAMP DROP SPLITTER BELL), then click cells: on the lattice's floor, or a block's face for the cell beside it · Shift + wheel raises the layer, the wheel turns it · click a placed block to move it, Backspace takes it out, Esc puts it back · a marble rolls from the top block each bar, BALL for one now · each bell rings its height's note · its jack records them",
-		"hands": "take a block from the tray and let it go in a cell · the stick turns it · pull one out of the lattice to take it out · a marble rolls from the top block each bar · each bell rings its height's note",
-	},
-	{
 		# The theremin (Theremin, slice 50): free-standing in front of the drum riser's outer end, facing
 		# the desk, its player between it and the control room, so a trolley in a studio. Its `air` is a
 		# metre round where its hands play (`air_at`), toward it and either side. Its frame's top is the

@@ -49,11 +49,9 @@ static func jack_title(id: StringName) -> String:
 	return String(id).replace(".", " ").to_upper()
 
 
-## A world socket's name: `THE WEATHER`, `THE DRIPS`, `THE VENUE'S INSTRUMENT`, `LOOPER RING 3`,
-## `THE MARBLE RUN`.
+## A world socket's name: `THE WEATHER`, `THE DRIPS`, `THE VENUE'S INSTRUMENT`, `LOOPER RING 3`.
 static func world_title(id: StringName) -> String:
 	var name := String(id).trim_prefix("world:")
 	if name.begins_with("ring_"):
 		return "LOOPER RING %s" % name.trim_prefix("ring_")
-	return {"weather": "THE WEATHER", "drips": "THE DRIPS", "venue": "THE VENUE'S INSTRUMENT",
-			"marbles": "THE MARBLE RUN"}.get(name, name.to_upper())
+	return {"weather": "THE WEATHER", "drips": "THE DRIPS", "venue": "THE VENUE'S INSTRUMENT"}.get(name, name.to_upper())

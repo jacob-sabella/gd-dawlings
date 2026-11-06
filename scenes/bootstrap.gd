@@ -280,19 +280,6 @@ func _ready() -> void:
 		var bass: RoomString = studio.room_strings.values()[0] if not studio.room_strings.is_empty() else null
 		if bass != null:
 			bass.pluck(96)
-	# `--marbles`: a run in the marble run's lattice (docs/spatial_loop.md part two, slice 49), for a
-	# shot of it: a ramp at the top rolling along a row of bells, down a drop, back through two more
-	# into a splitter, and from there down either side's drops through falling bells, each block asked
-	# as the tray asks it.
-	if args["marbles"] and studio.marbles != null:
-		for b: Array in [[Vector3i(2, 8, 2), &"ramp", 1], [Vector3i(3, 8, 2), &"bell", 1], [Vector3i(4, 8, 2), &"bell", 1],
-				[Vector3i(5, 8, 2), &"drop", 0], [Vector3i(5, 7, 2), &"bell", 0], [Vector3i(5, 7, 3), &"bell", 0],
-				[Vector3i(5, 7, 4), &"split", 1], [Vector3i(6, 7, 4), &"drop", 0], [Vector3i(6, 6, 4), &"bell", 1],
-				[Vector3i(7, 6, 4), &"bell", 1], [Vector3i(8, 6, 4), &"drop", 0], [Vector3i(8, 5, 4), &"bell", 2],
-				[Vector3i(8, 5, 3), &"bell", 2], [Vector3i(8, 5, 2), &"ramp", 2], [Vector3i(4, 7, 4), &"drop", 0],
-				[Vector3i(4, 6, 4), &"bell", 3], [Vector3i(3, 6, 4), &"bell", 3], [Vector3i(2, 6, 4), &"drop", 0],
-				[Vector3i(2, 5, 4), &"bell", 2], [Vector3i(2, 5, 3), &"bell", 2], [Vector3i(2, 5, 2), &"ramp", 2]]:
-			studio.ask_marble(b[0], b[1], b[2])
 	# `--theremin`: the theremin played (docs/spatial_loop.md part two, slice 50), for a shot of it and
 	# its guide: two hands of the shot's own, the pitch hand 30 cents sharp of A4 out from the rod at
 	# the rule, so its ring is lit with the bar out to the hand, and the volume hand half way up over
@@ -423,7 +410,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "public": false, "join": "", "online": false, "join_code": "", "noray_server": "", "relay": false, "xr": OS.has_feature("android"), "xr_sim": false, "ar": OS.has_feature("android"),
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
-		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "perf": false, "play": false, "slap": false, "rings": 0, "pegs": false, "strings": false, "marbles": false, "theremin": false, "grains": false, "grains_band": false, "lyrics": false, "modular": false, "rack_preset": "acid_line", "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
+		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "perf": false, "play": false, "slap": false, "rings": 0, "pegs": false, "strings": false, "theremin": false, "grains": false, "grains_band": false, "lyrics": false, "modular": false, "rack_preset": "acid_line", "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 		"ghost": {}, "tablets": [], "plugins": [], "welcome": false,
@@ -578,8 +565,6 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 			"--pegs": out["pegs"] = true
 			# `--strings`: strings across the room, a bass one ringing, for a shot of them (slice 48).
 			"--strings": out["strings"] = true
-			# `--marbles`: a run in the marble run's lattice, for a shot of it (slice 49).
-			"--marbles": out["marbles"] = true
 			# `--theremin`: the theremin played by two hands of the shot's own, for a shot of it (slice 50).
 			"--theremin": out["theremin"] = true
 			# `--grains`: the grain cloud played by a hand of the shot's own (slice 54), for a shot of it.

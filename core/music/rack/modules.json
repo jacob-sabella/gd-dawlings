@@ -1103,7 +1103,7 @@
             "type": "world",
             "title": "WORLD",
             "group": "Source",
-            "blurb": "The room itself as a source: the weather, the venue's instrument, the looper's rings and the marble run, each a level and a gate.",
+            "blurb": "The room itself as a source: the weather, the venue's instrument, the looper's rings, each a level and a gate.",
             "ins": [],
             "outs": [
                 "weather",

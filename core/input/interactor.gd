@@ -58,7 +58,7 @@ var pointing := false
 ## each press and let-go of this hand's button, and while it is set the button grabs, uses and
 ## catches nothing (a held control is let go). Unset (an invalid Callable), the hand presses as ever.
 var tool: Callable = Callable()
-## The stick, while `tool` is set and wants it (slice 49: a marble run's block in hand, MarbleRun):
+## The stick, while `tool` is set and wants it (a block or tool in hand):
 ## (hand, notches, fine) -> bool, true if it took them, asked by a headset hand's stick
 ## (XRInteractor) before whatever it hovers or holds, as the studio sends a mouse's wheel to what the
 ## mouse carries. The tool that sets it unsets it with itself.

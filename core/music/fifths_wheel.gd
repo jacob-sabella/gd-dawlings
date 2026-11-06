@@ -568,7 +568,7 @@ static func answer(bar: int, inside: String) -> String:
 
 ## The song's own key, from its first bar (the session panel's SONG KEY): `root` (a pitch class) in
 ## `mode` (one of Harmony.SCALES), written at bar 1 as SET writes, keeping any chords the bracket
-## there already had. Everything that plays to the song's key (the bells, the harp, the marble run,
+## there already had. Everything that plays to the song's key (the bells, the harp,
 ## the music box, the strings, the pads in scale mode, locked keys) plays in it, up to the next key
 ## change on the timeline. Here on the host (or alone); asked of the host from a guest.
 static func set_song_key(root: int, mode: String) -> void:

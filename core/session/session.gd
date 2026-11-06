@@ -1717,11 +1717,6 @@ const ROOM_VERBS := {&"tv": [TYPE_STRING, TYPE_BOOL, TYPE_FLOAT], &"open_tablet"
 		# A string across the room tied or cut (slice 48): the room's `strings` row {id: [a, b,
 		# maker]}, its ends in the venue's frame; a and b the same point to cut it (RoomString.answer).
 		&"string": [TYPE_STRING_NAME, TYPE_VECTOR3, TYPE_VECTOR3],
-		# A marble run's block put in a cell or taken out (slice 49): the room's `marbles` row {cell:
-		# [kind, facing]}, an empty kind to take it out (MarbleRun.answer); and its BALL key, a marble
-		# let go on a beat, the room's `marble_balls` row (MarbleRun.answer_ball).
-		&"marble": [TYPE_VECTOR3I, TYPE_STRING_NAME, TYPE_INT],
-		&"marble_ball": [TYPE_FLOAT],
 		# The modular room's rack (RackPatch.answer): its patch, edited. The room's `rack` row.
 		&"rack": [TYPE_STRING_NAME, TYPE_ARRAY],
 		# Look to solo (LookSolo, docs/spatial_loop.md part three, G): the track looked at, held or

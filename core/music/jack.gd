@@ -27,8 +27,7 @@ extends RefCounted
 ## The weather is a source that is no item (part two, slice 44): `weather`, the rain or snow on a
 ## venue's glass, and `drips`, the cave's (Weather). Every machine schedules the same drops from the
 ## song clock, so its jack goes onto a track only, where the host records them; never into a
-## bandmate, who hears the same drops already. So is the marble run's `marbles` (MarbleRun, slice 49),
-## its bells rung by marbles every machine rolls from the clock and the room's blocks.
+## bandmate, who hears the same drops already.
 
 enum Kind { NOTE_ON, NOTE_OFF, TRIGGER, CC, CHORD }
 
@@ -38,9 +37,8 @@ const KEYS := "keys:"
 const CHORD := "chord:"
 ## The chord harp, the room's to play (ChordHarp.SOURCE).
 const HARP := &"harp"
-## The world's sources: the weather's (Weather.SOURCE, Weather.DRIPS) and the marble run's
-## (MarbleRun.SOURCE).
-const WORLD: Array[StringName] = [&"weather", &"drips", &"marbles"]
+## The world's sources: the weather's (Weather.SOURCE, Weather.DRIPS).
+const WORLD: Array[StringName] = [&"weather", &"drips"]
 ## The longest a source or a sink's name may be: an item's id is short, and a peer's ask is
 ## bounded before the host stores it.
 const NAME_MOST := 32
@@ -103,7 +101,7 @@ static func is_item(source: StringName) -> bool:
 			and not is_world(source)
 
 
-## Whether `source` is the world's (WORLD: the weather, the drips, the marbles): no item, onto a
+## Whether `source` is the world's (WORLD: the weather, the drips): no item, onto a
 ## track only.
 static func is_world(source: StringName) -> bool:
 	return WORLD.has(source)

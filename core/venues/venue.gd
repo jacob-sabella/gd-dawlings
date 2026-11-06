@@ -785,21 +785,6 @@ func lyrics_spot() -> Variant:
 	return Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(c.x, floor_y, c.z) + LyricBoard.IN_BOOTH)
 
 
-## Where the marble run stands (MarbleRun, docs/spatial_loop.md part two, slice 49), in studio space:
-## the lattice zone's cube of cells, on the floor at its tray (MarbleRun.spot_in), which stands at the
-## cube's face toward the control room off to one side of its middle, +Z out of that face toward the
-## desk and the cells behind it; so whoever comes back from the desk meets it with the whole lattice
-## behind it and the rooms beyond still seen past it. Its seat is in front, between the lattice and
-## the control room (in front of the glass in studio:2, which brings it in close). Mounted in the
-## zone, not a trolley: the lattice is the venue's. Null where there is no lattice (the Rig Roulette
-## room).
-func marbles_spot() -> Variant:
-	var at := zones()
-	if not at.has(&"matrix"):
-		return null
-	return MarbleRun.spot_in(at[&"matrix"])
-
-
 ## Where the cassette rack stands (CassetteRack, docs/spatial_loop.md part two, slice 23), in
 ## studio space: on its trolley (WHEELED) wherever that has been pushed, else on the floor beside the
 ## prop shelf, RACK_GAP clear of it on the side away from the control room, its back in line with the

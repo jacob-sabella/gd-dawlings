@@ -5000,7 +5000,7 @@ none.
     spool close, its folded plaque, the bass string passing it to the riser (`SHOT_CAM
     "2.7,-0.3,1.8,-1.0,1.05,4.4"`).
 
-49. [x] **A marble run.** The proving idea, #35. In the lattice zone, which no kept idea uses:
+49. [removed 2026-11-06] **A marble run.** (Removed with the simple toys; this is its history.) The proving idea, #35. In the lattice zone, which no kept idea uses:
     `MarbleRun` (core/music/marble_run.gd, station `marbles`, zone `matrix`). Blocks go in the
     lattice's cells (0.25 m) as room rows (`marbles` {cell: [kind, facing]}, asked with `marble`
     [cell, kind, facing]): ramps in four directions, drops, splitters, and bell blocks whose note is

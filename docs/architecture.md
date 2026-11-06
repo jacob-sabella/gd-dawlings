@@ -494,7 +494,7 @@ not colour, says which is which). Where each station stands is still the venue's
 | Neighbourhood | Where | What |
 | --- | --- | --- |
 | MIXING | the control room, a ring round the seat | desk, timeline, rack, deck and platter, patch stand, patch wall, EQ wall, stage table, station board |
-| RHYTHM | straight ahead turned round from the desk | drum riser with the hand drums and the looper; the lattice and its marble run; the venue's instrument on the back wall behind the riser |
+| RHYTHM | straight ahead turned round from the desk | drum riser with the hand drums and the looper; the open lattice floor; the venue's instrument on the back wall behind the riser |
 | HARMONY & STRINGS | front right | the bricks table (fifths wheel, chord ledge, section blocks); harp, music box and string spool in a row facing it; handbells across its far end |
 | SYNTH & SOUND DESIGN | back right | the keyboard stand and modular rack; theremin, grain cloud and sampler round a middle in front of it |
 | VOCALS | back left | the booth (3.4 x 3.1 m, a 1.2 m door), the lyric board, room for a talk box |
@@ -2277,42 +2277,9 @@ lattice's front corner).
   the string is drawn with its note and length, or TOO LONG or TOO SHORT. Esc, or the reel pressed
   again, drops the end.
 
-A marble run (slice 49). `MarbleRun` (`core/music/marble_run.gd`) is the lattice zone's 12 by 12 by
-12 cells of 0.25 m with blocks in them (tools/blender/marble_blocks.py: a grooved ramp, a funnelled
-drop, a splitter with a brass vane, a bell block with a bell under an arch), station `marbles` (LIVE,
-mounted on the `matrix` zone at `Venue.marbles_spot`: a tray on a post at the cube's face toward the
-desk, off its middle, whose foot is a `ZoneKit.solids` entry marked with its station).
-
-- **The blocks are a room row.** `marbles` {cell: [kind, facing]} (Vector3i cells), asked with
-  `marble` [cell, kind, facing], an empty kind to take one out (`Session.ROOM_VERBS`).
-  `MarbleRun.answer` is the rule (a cell inside the lattice, one of four kinds and four facings, at
-  most 144): the host keeps it (`Studio._answer_marble`, the refusal told to whoever asked), and a
-  guest refuses it in words at once where the host would, else predicts it (`ask_marble`,
-  `_predict`, `apply_room`). The row is the studio's, so a venue change stands the same run again.
-  `marble_balls` (the beats of the last eight BALL marbles, asked with `marble_ball` [beat]) is a
-  row beside it.
-- **The marbles are a pure function of the song clock, like the weather.** A marble is let go at
-  the run's top (`top_of`) on every bar's downbeat, and at each BALL beat. It walks the blocks a
-  cell a sixteenth (`path`: a ramp or a bell on the way it faces, a drop down, a splitter its way
-  on even marbles and the other on odd ones), never physics, until an empty cell or the lattice's
-  edge, or MOST_STEPS. `rings(rows, balls, state, from, to)` is every bell entered in the span, its
-  note the scale tone of its height (`VenueInstrument.scale_tone` of `Harmony.at`). Every machine
-  with the same rows and song rings the same bells, and nothing crosses the wire but the rows.
-- **Its jack is a world source.** `marbles` is in `Jack.WORLD`, onto a track only. On the host each
-  ring while the song records is a note on the plugged track (`HitRecorder.note`), heard or not.
-  Marbles never touch mix state otherwise. With the song stopped, BALL rolls a preview here alone at
-  the song's tempo, never recorded.
-- **A block is a tool in the hand.** A tray key sets `Interactor.tool`, as the spool's reel does.
-  A mouse keeps the block for click after click; each goes in the cell `pick` finds (a grid walk
-  of the ray: beside the face of the first block it meets, else on the working layer, which Shift
-  and the wheel raise). The wheel turns what is carried, or the block under the cursor, Backspace
-  takes one out and Esc puts the carried one back. A hand lets the block go in the cell it is in,
-  and a placed block taken and let go outside the lattice is taken out. A ghost of the carried
-  block, its cell's edges and words (`BELL  RIGHT  C5 · LAYER 1`) show where it would go.
-- **Sound and drawing.** A ring is a Foley emitter at its block (`Foley.venue_bar`, the chime,
-  pitched to its note), and its bell swings. Marbles are a MultiMesh: with motion they glide from
-  cell to cell and fall as they fade from the last one. At `Ergonomics` motion 0 a marble shows the
-  cell it was in on the beat, a step per beat, and the bells hang still.
+The marble run (slice 49) was removed on 2026-11-06, with the other simple toys: only expressive
+instruments stay. Its history is in docs/spatial_loop.md. The lattice zone is open floor again, and the
+rack's WORLD module still has a `marbles` output that nothing drives.
 
 A theremin (slice 50). `Theremin` (`core/music/theremin.gd`) is a walnut cabinet on a stand with a
 splayed foot, an upright chrome pitch rod on its right and a level volume loop on its left

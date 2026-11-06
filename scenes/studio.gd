@@ -299,21 +299,12 @@ var strings_row := {}
 var room_strings := {}
 ## How many strings this player has tied, for the next one's id.
 var _strings_tied := 0
-## The marble run in the lattice (MarbleRun, docs/spatial_loop.md part two, slice 49), its tray at the
-## lattice's face toward the desk, stood again with each venue at its `marbles_spot`. Null where there
-## is no lattice and in AR.
-var marbles: MarbleRun
-## The room's rows `marbles` {cell: [kind, facing]} (MarbleRun.answer) and `marble_balls`, the beats
-## BALL let marbles go on (MarbleRun.answer_ball). The room's, not the venue's, so they are kept across
-## a change of venue and stood again in the next.
-var marbles_row := {}
-var marble_balls: Array = []
 ## The modular room's rack over the synth zone's keyboard stand (RackWall, docs/architecture.md), a
 ## surface hung again with each venue at its `modular_spot`; null in AR. Its voice (RackVoice, the
 ## engine), the room's row `rack` {patch, track} (RackPatch), and the computer keys as its keys.
 var rack_wall: RackWall
 var rack_voice: RackVoice
-## What the weather, the rings, the marbles and the venue's instrument play into the rack's WORLD module.
+## What the weather, the rings and the venue's instrument play into the rack's WORLD module.
 var modular_world: ModularWorld
 var modular_annex: ModularAnnex
 var rack_row := {"patch": RackPatch.preset(&"keys_voice"), "track": 0}
@@ -718,7 +709,6 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_stand_the_spool()
 	_stand_the_theremin()
 	_stand_the_grains()
-	_stand_the_marbles()
 	_stand_the_lyrics()
 	_stand_the_venue_instrument()
 	_stand_the_modular()
@@ -2736,7 +2726,6 @@ func room_state() -> Dictionary:
 			"sampler": sampler.armed_by if sampler != null and is_instance_valid(sampler) else 0,
 			"weather": weather_listening, "bricks": _bricks_row(), "looper": looper_row.duplicate(),
 			"music_box": music_box_row.duplicate(), RoomString.ROW: strings_row.duplicate(),
-			MarbleRun.ROW: marbles_row.duplicate(), MarbleRun.BALLS: marble_balls.duplicate(),
 			RackPatch.ROW: rack_row.duplicate(true), GrainCloud.ROW: grains_key,
 			"tv": tv.row() if tv != null and is_instance_valid(tv) else {}, "pads": pads_row.duplicate(true)}
 
@@ -2858,7 +2847,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			&"put_item", &"home_item", &"throw_item", &"wear_item", &"pocket_item", &"slot_item", &"give":
 				pending_items[p["args"][0]] = true
 			&"patch", &"on_air", &"plug", &"rope", &"make", &"paste", &"sampler", &"weather", &"bricks", \
-					&"looper", &"looper_layer", &"music_box", &"string", &"marble", &"marble_ball", \
+					&"looper", &"looper_layer", &"music_box", &"string", \
 					&"rack", &"tv": pass
 			&"open_tablet", &"open_track_rack": pending_open[p["id"]] = true
 			&"close_tablet", &"close_track_rack": pending_close[p["args"][0]] = true
@@ -2989,19 +2978,6 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			if p["verb"] == RoomString.VERB:
 				RoomString.answer(rows, p["args"][0], p["args"][1], p["args"][2], Session.local_peer_id)
 		_show_strings(rows)
-	if state.has(MarbleRun.ROW):
-		# The host's blocks, with this guest's own it has not heard back about on top.
-		var blocks: Dictionary = (state[MarbleRun.ROW] as Dictionary).duplicate()
-		for p in _predictions:
-			if p["verb"] == MarbleRun.VERB:
-				MarbleRun.answer(blocks, p["args"][0], p["args"][1], p["args"][2])
-		_show_marbles(blocks)
-	if state.has(MarbleRun.BALLS):
-		var held: Array = (state[MarbleRun.BALLS] as Array).duplicate()
-		for p in _predictions:
-			if p["verb"] == MarbleRun.BALL_VERB:
-				held = MarbleRun.answer_ball(held, p["args"][0])
-		_show_marble_balls(held)
 	if state.has(RackPatch.ROW):
 		# The host's rack, with this guest's own edits it has not heard back about on top.
 		var row: Dictionary = (state[RackPatch.ROW] as Dictionary).duplicate(true)
@@ -3243,12 +3219,6 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"string":
 			# A guest's string tied or cut: the room's row, or told why not.
 			_answer_string(args[0], args[1], args[2], from)
-		&"marble":
-			# A guest's block in the lattice, or taken out: the room's row, or told why not.
-			_answer_marble(args[0], args[1], args[2], from)
-		&"marble_ball":
-			# A guest's BALL: a marble on that beat, for everyone.
-			_answer_marble_ball(args[0])
 		&"rack":
 			# A guest's edit of the rack, or its track: the room's row, or told why not.
 			_answer_rack(String(args[0]), args[1], from)
@@ -5344,14 +5314,6 @@ func _follow_theremin() -> void:
 	Session.guest_midi.reach(Theremin.SOURCE, near)
 
 
-# --- the marble run (docs/spatial_loop.md part two, slice 49) ------------------------------
-#
-# The blocks are the room's row `marbles` {cell: [kind, facing]}: a guest's block put in or taken out
-# is the room's ask `marble` [cell, kind, facing] (an empty kind to take it out), shown at once here;
-# the host's is done. BALL is the room's ask `marble_ball` [beat], kept in the row `marble_balls`.
-# Every machine rolls the same marbles from its own song clock and the rows, so nothing else crosses
-# the wire: the host alone records the bells, onto the track the run's jack goes into.
-
 ## The lyric board (LyricBoard), in the venue's own frame at its spot in the booth: a child of the venue,
 ## so it goes with it. Its notices are toasts, and its EDIT is `edit_lyrics`.
 func _stand_the_lyrics() -> void:
@@ -5386,94 +5348,6 @@ func edit_lyrics() -> void:
 		Session.notice.emit("M opens the session panel: its LYRICS box has the song's lyrics.")
 		return
 	lyrics_edit_asked.emit()
-
-
-## The marble run (MarbleRun), in the venue's own frame at its spot in the lattice: a child of the
-## venue, so it goes with it. Then the room's blocks and BALL marbles stood again in this venue.
-func _stand_the_marbles() -> void:
-	marbles = null
-	var spot: Variant = Stations.spot(venue, MarbleRun.STATION)
-	if spot == null:
-		return
-	marbles = MarbleRun.new()
-	marbles.transform = MarbleRun.frame_at(spot)
-	marbles.rows = marbles_row.duplicate()
-	marbles.balls = marble_balls.duplicate()
-	marbles.block_asked.connect(ask_marble)
-	marbles.ball_asked.connect(ask_marble_ball)
-	marbles.told.connect(func(text: String) -> void: Session.notice.emit(text))
-	marbles.rang.connect(_on_marble_rang)
-	venue.add_child(marbles)
-
-
-## Block `kind` facing `way` in `cell` (an empty kind takes it out): done on the host, asked by a guest
-## and shown at once, or refused here in words where the host would refuse it.
-func ask_marble(cell: Vector3i, kind: StringName, way: int) -> void:
-	if Session.is_authority():
-		_answer_marble(cell, kind, way, Session.local_peer_id)
-		return
-	var rows := marbles_row.duplicate()
-	var refusal := MarbleRun.answer(rows, cell, kind, way)
-	if refusal != "":
-		Session.notice.emit(refusal)
-		return
-	if _predict(MarbleRun.VERB, [cell, kind, way]) > 0:
-		_show_marbles(rows)
-
-
-## The room's word on a block asked by `from`: the row, told to the room, or why not, to them.
-func _answer_marble(cell: Vector3i, kind: StringName, way: int, from: int) -> void:
-	var rows := marbles_row.duplicate()
-	var refusal := MarbleRun.answer(rows, cell, kind, way)
-	if refusal != "":
-		Session.tell(from, refusal)
-		return
-	_show_marbles(rows)
-	_publish_room_soon()
-
-
-## The room's blocks as `rows` has them, here.
-func _show_marbles(rows: Dictionary) -> void:
-	marbles_row = rows.duplicate()
-	if marbles != null and is_instance_valid(marbles):
-		marbles.show_rows(rows)
-
-
-## BALL pressed here with the song playing: a marble on beat `beat`, for everyone.
-func ask_marble_ball(beat: float) -> void:
-	Session.notice.emit("A marble on the next beat, from the top of the run.")
-	if Session.is_authority():
-		_answer_marble_ball(beat)
-	elif _predict(MarbleRun.BALL_VERB, [beat]) > 0:
-		_show_marble_balls(MarbleRun.answer_ball(marble_balls, beat))
-
-
-## The room's word on a BALL marble: kept with the others, told to the room.
-func _answer_marble_ball(beat: float) -> void:
-	_show_marble_balls(MarbleRun.answer_ball(marble_balls, beat))
-	_publish_room_soon()
-
-
-## The room's BALL marbles as `held` has them, here.
-func _show_marble_balls(held: Array) -> void:
-	marble_balls = held.duplicate()
-	if marbles != null and is_instance_valid(marbles):
-		marbles.balls = held.duplicate()
-
-
-## A bell rang in the run (MarbleRun.rang): its jack's lead shows it, and the host records it onto the
-## track the jack goes into, heard or not. Every machine rings the same bell, so only one takes it
-## down; a preview, rolled here alone with the song stopped, is nobody's take.
-func _on_marble_rang(r: Dictionary) -> void:
-	if jacks == null or r.get("preview", false):
-		return
-	var track := Jack.track_of(jacks.sink_of(MarbleRun.SOURCE))
-	if track <= 0:
-		return
-	jacks.heard_from(MarbleRun.SOURCE, int(r["velocity"]))
-	if Session.is_authority() and hit_recorder != null and Jacks.takes_midi(track):
-		hit_recorder.note(track, int(r["note"]), int(r["velocity"]), InstrumentItem.MELODIC_CHANNEL,
-				float(r["length"]), float(r["song"]))
 
 
 # --- the modular room's rack (docs/architecture.md, "The modular room") ----------------------
@@ -5532,7 +5406,6 @@ func _build_rack() -> void:
 	# always was, the same on every machine; only the host's engine sounds it.
 	modular_world = ModularWorld.new()
 	modular_world.weather = func() -> Variant: return weather
-	modular_world.marbles = func() -> Variant: return marbles
 	modular_world.has_venue = func() -> bool: return venue_instrument != null and is_instance_valid(venue_instrument)
 	add_child(modular_world)
 	modular_world.fired.connect(func(events: Array) -> void: rack_voice.play_world(events))
@@ -7276,16 +7149,12 @@ static func plugged_text(source: StringName, item: Item, was: StringName, sink: 
 			plays = "what you play plays"
 		return "%s go%s into %s: %s on their keys." % [the, "" if Jack.keys_player(source) > 0 else "es",
 				Session.name_of(player), plays]
-	if sink != &"" and source == MarbleRun.SOURCE:
-		return "%s's jack is in %s: every bell a marble rings is recorded there while the song records, heard or not." % [the, Jacks.sink_name(sink)]
 	if sink != &"" and Jack.is_world(source):
 		return "%s's jack is in %s: every drop is recorded there while the song records, heard or not." % [the, Jacks.sink_name(sink)]
 	if sink != &"":
 		return "%s's jack is in %s: its hits are recorded there, armed or not." % [the, Jacks.sink_name(sink)]
 	if Jack.player_of(was) == Session.local_peer_id and Session.local_peer_id != 0:
 		return "%s is unplugged from you." % the
-	if source == MarbleRun.SOURCE:
-		return "%s is unplugged: its bells are recorded nowhere." % the
 	if Jack.is_world(source):
 		return "%s is unplugged: its drops are recorded nowhere." % the
 	if not Jack.is_item(source):
@@ -7857,13 +7726,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				_on_escape()
 			# Backspace over a voice on the stage table, or anything of its tag: that track back to
 			# centre, 0 dB and full width, as a double-click on it does.
-			# Over a block in the marble run's lattice (or with one picked up), it is taken out.
 			KEY_BACKSPACE:
 				var hand := get_node_or_null("MouseHand") as MouseInteractor
 				var under: Node = (hand.held if hand.held != null else hand.hovered) if hand != null else null
-				if marbles != null and is_instance_valid(marbles) and hand != null and marbles.take_out_under(under):
-					pass
-				elif stage != null and hand != null:
+				if stage != null and hand != null:
 					stage.reset_under(under)
 			# [ and ] over a section block on the bricks table: it a place earlier or later, as one
 			# rearrangement of the song; again with the cursor still, the same block on. Held, it
@@ -7886,15 +7752,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		# still zooms.
 		var hand := get_node_or_null("MouseHand") as MouseInteractor
 		var notches := 1 if event.button_index == MOUSE_BUTTON_WHEEL_DOWN else -1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 0
-		# A marble run's block in the mouse's hand: the wheel turns it, Shift and the wheel move the
-		# layer it goes on, wherever the cursor is.
-		if notches != 0 and not event.ctrl_pressed and marbles != null and is_instance_valid(marbles) \
-				and marbles.carried_by_mouse():
-			if event.shift_pressed:
-				marbles.move_layer(-notches)
-			else:
-				marbles.turn_carried(-notches)
-			return
 		if notches != 0 and not event.ctrl_pressed and hand != null and hand.pockets != null \
 				and (hand.carrying != null or not hand.pockets.items().is_empty()):
 			if hand.cycle_pockets(notches):
@@ -8093,10 +7950,6 @@ func _follow_viewport_shape() -> void:
 ## Escape on a keyboard, the menu button or two fists in a headset: let go of what has focus, send
 ## anything pinned to the face back where it belongs, and sit back down at the desk.
 func _on_escape() -> void:
-	# A marble run's block in the mouse's hand goes back, and that is all Esc does.
-	if marbles != null and is_instance_valid(marbles) and marbles.carried_by_mouse():
-		marbles.drop("The block is back in its cell." if marbles.lifted != MarbleRun.NONE else "The block is back on the tray.")
-		return
 	# An end of string in the mouse's hand goes back on the spool, and that is all Esc does.
 	if spool != null and is_instance_valid(spool) and spool.carrying():
 		spool.drop("The end is back on the spool.")
