@@ -23,14 +23,14 @@ const PAD_GAP := 0.014
 const KEY := Vector2(0.13, 0.05)
 ## The pages of keys: a tab each, and the keys of each page by row.
 const PAGES := {
-	"CUT": [["SAMPLE", "SRC", "CHOP", "SCALE", "KEY", "MODE"], ["IN-", "IN+", "OUT-", "OUT+"]],
+	"CUT": [["SAMPLE", "SRC", "CHOP", "SCALE", "KEY", "MODE"], ["IN-", "IN+", "OUT-", "OUT+", "DEV", "TRIM"]],
 	"PLAY": [["TRIG", "REV", "CHOKE", "LOCK", "FIT"], ["TUNE-", "TUNE+", "VOL-", "VOL+", "PAN<", "PAN>"]],
 	"SHAPE": [["ATK", "REL", "FILT"], ["SEND", "FX", "PUNCH"]],
 	"MIDI": [["KEYS", "LEARN", "CH", "SEQ"]],
 	"STORE": [["SAVE", "LIB", "LOAD", "DEL"], ["KSAVE", "KITS", "KLOAD"]],
 }
 const PAGE_SAYS := {
-	"CUT": "cut a sample and choose where it comes from; trim the selected pad",
+	"CUT": "cut a sample and choose where it comes from (SRC, and DEV for which input); trim the selected pad",
 	"PLAY": "how the selected pad plays: its pitch, volume, pan, direction, choke group and length",
 	"SHAPE": "the selected pad's fade in and out, filter and effect",
 	"MIDI": "the computer keys, MIDI keyboard learn and channel, and the track's notes",
@@ -79,6 +79,8 @@ var engaged := false
 var keys_on := true
 ## Where SAMPLE takes from (PadCapture.SOURCES), the catcher for the sources that are not the TV.
 var source := 0
+## SAMPLE from a live source drops the quiet at the start and end of what it caught.
+var trim_on := true
 var capture: PadCapture
 ## MIDI learn: the next hardware note names the selected pad (the bank's first note moves to fit).
 var learning := false
@@ -198,7 +200,7 @@ func _build() -> void:
 func _build_keys(wave_x: float, wave_y: float) -> void:
 	var rows := [
 		[["SAMPLE", "press at the start and again at the end of what to sample: from the TV's sound, or the source SRC names", sample],
-		["SRC", "where SAMPLE takes from: the TV, the MIX itself (resampling), the ROOM's sounds, or the audio interface IN", step_source],
+		["SRC", "where SAMPLE takes from: the TV, the MIX itself (resampling), the ROOM's sounds, or an audio input IN (a microphone, an interface, a phone linked in)", step_source],
 		["CHOP", "cut it by its hits, or into 16, 8 or 4 equal slices", step_chop],
 		["SCALE", "spread the last pad struck across all sixteen, in a key", toggle_scale],
 		["KEY", "the scale's root, a semitone up", func() -> void: step_root(1)],
@@ -215,6 +217,8 @@ func _build_keys(wave_x: float, wave_y: float) -> void:
 		["IN+", "trim the selected pad's start earlier", func() -> void: _edit("start", -0.05)],
 		["OUT-", "trim the selected pad's end earlier", func() -> void: _edit("end", -0.05)],
 		["OUT+", "trim the selected pad's end later", func() -> void: _edit("end", 0.05)],
+		["DEV", "which input IN samples from: the default, then each microphone, interface or source this machine has", step_device],
+		["TRIM", "cut the quiet off the ends of what a live source catches (lit: on)", toggle_trim],
 		["ATK", "the selected pad's fade in: none, then longer", func() -> void: _cycle("atk")],
 		["REL", "the selected pad's fade out: none, then longer", func() -> void: _cycle("rel")],
 		["FILT", "the selected pad's filter: low pass closing, none, high pass opening", func() -> void: _cycle("filt")],
@@ -336,6 +340,8 @@ func sample() -> void:
 func _sample_live() -> void:
 	if capture.recording:
 		var sound := capture.stop()
+		if trim_on:
+			sound = PadCapture.trimmed(sound)
 		if sound.size() < int(PadBank.SHORTEST * PadBank.RATE):
 			said.emit("Nothing caught: is anything playing?")
 		else:
@@ -354,6 +360,22 @@ func step_source() -> void:
 	marked = NAN
 	source = (source + 1) % PadCapture.SOURCES.size()
 	said.emit("Sampling from: " + PadCapture.SOURCES[source])
+	refresh()
+
+
+## DEV: IN's next input.
+func step_device() -> void:
+	if capture.recording:
+		capture.stop()
+	var named := capture.step_device()
+	source = PadCapture.SOURCES.find("IN")
+	said.emit("Sampling from the input: " + named)
+	refresh()
+
+
+func toggle_trim() -> void:
+	trim_on = not trim_on
+	said.emit("Trim the quiet off a live catch: " + ("on" if trim_on else "off"))
 	refresh()
 
 
@@ -804,9 +826,23 @@ func _process(_delta: float) -> void:
 		if pads[i].lit and now >= _lit_until[i]:
 			pads[i].lit = false
 	if capture != null and capture.recording and Engine.get_process_frames() % 6 == 0:
-		_wave_words.text = "CATCHING %s  %.1f s … SAMPLE to end" % [capture.source, capture.seconds()]
+		_wave_words.text = "CATCHING %s  %.1f s  %s … SAMPLE to end" % [_source_name(), capture.seconds(), _meter(capture.level())]
 	elif not is_nan(marked) and tv != null and Engine.get_process_frames() % 6 == 0:
 		_wave_words.text = "SAMPLING  %.1f s … SAMPLE to end" % absf(tv.position() - marked)
+
+
+## The source as the screen says it: IN names the input it is set to.
+func _source_name() -> String:
+	var name: String = PadCapture.SOURCES[source]
+	if name == "IN":
+		return "IN · " + PadCapture.device_label(capture.device)
+	return name
+
+
+## A level as a row of bars: how loud the input is right now.
+static func _meter(level: float) -> String:
+	var bars := clampi(roundi(sqrt(clampf(level, 0.0, 1.0)) * 8.0), 0, 8)
+	return "[" + "#".repeat(bars) + "-".repeat(8 - bars) + "]"
 
 
 ## SEQ: the armed track's recorded notes, struck as the song's playhead crosses them (not recorded
@@ -872,7 +908,7 @@ func refresh(announce := true) -> void:
 	if _wave_words == null:
 		return
 	if capture != null and capture.recording:
-		_wave_words.text = "CATCHING %s … SAMPLE to end" % capture.source
+		_wave_words.text = "CATCHING %s … SAMPLE to end" % _source_name()
 	elif not is_nan(marked):
 		_wave_words.text = "SAMPLING … SAMPLE to end"
 	elif bank.frames.is_empty():
@@ -885,7 +921,7 @@ func refresh(announce := true) -> void:
 	if bank.scale_on:
 		_mode_words.text = "%s %s  ·  PAD %d" % [Harmony.SHARP_NAMES[bank.root], bank.mode.to_upper(), bank.scale_pad + 1]
 	else:
-		_mode_words.text = "SRC %s  ·  NOTE %d" % [PadCapture.SOURCES[source], bank.first_note]
+		_mode_words.text = "SRC %s  ·  NOTE %d" % [_source_name(), bank.first_note]
 	var browsed := _browsed_words()
 	if browsed != "":
 		_mode_words.text = browsed
@@ -900,6 +936,8 @@ func refresh(announce := true) -> void:
 	(keys["CH"] as EqWall.WallKey).lit = channel > 0
 	(keys["FIT"] as EqWall.WallKey).lit = float(bank.params[selected]["fit"]) > 0.0
 	(keys["LOCK"] as EqWall.WallKey).lit = bool(bank.params[selected]["lock"])
+	(keys["TRIM"] as EqWall.WallKey).lit = trim_on
+	(keys["DEV"] as EqWall.WallKey).lit = PadCapture.SOURCES[source] == "IN"
 	(keys["SRC"] as EqWall.WallKey).lit = PadCapture.SOURCES[source] != "TV"
 	(keys["SEND"] as EqWall.WallKey).lit = float(bank.params[selected]["send"]) > 0.0
 	(keys["FILT"] as EqWall.WallKey).lit = float(bank.params[selected]["filt"]) != 0.0

@@ -89,6 +89,25 @@ trolley, and a sample is still a cassette on the rack as well as a pad.
    it servable) and cut it the same. A guest's pads play locally; the samples are the host's.
 8. [x] **The old Sampler kept (decided, not retired)**: it is the host-side catch of item sounds (duck, ball, cassette, yo-yo, card tricks) into sample cassettes on the rack, wired through Session, Venue, Stations and six item classes, and the station's pads do not replace that. The station's own ROOM source (PadCapture) covers sampling the room into pads. Revisit only if the item catch is to be rebuilt on the pads.
 
+## Sampling your own sounds (2026-11-06)
+
+The pads are not only for the TV. SRC steps TV, MIX, ROOM and IN, and **IN is any audio input this
+machine has**: a microphone, an audio interface, a webcam's mic, or any source the sound server
+offers (a phone or another device linked in as a source shows up in the list the same way).
+
+- **DEV** (CUT page) steps through the inputs, the default first, by the names the sound server
+  gives people ("Scarlett Solo (3rd Gen.) Pro", "MPC Sample"); it also switches SRC to IN.
+- SAMPLE starts catching, SAMPLE again ends it (up to 30 s); the screen shows what it is catching
+  from, the length, and a level meter (`[###-----]`) so you can see the input is alive.
+- **TRIM** (lit by default) cuts the quiet off both ends of a live catch, so a mic take starts at the
+  hit and the pads chop what you played, not the silence round it.
+- The input is read directly, never played back out of the speakers, so a mic does not feed back.
+- A guest samples from **their own** machine's inputs; what they catch is theirs, on their pads. The
+  host's pads row replaces a guest's sample only when the host changes its own.
+
+Checked on this machine's six real inputs (`PadCapture.devices`, then `start("IN")` on each): every
+one opened and delivered audio in real time.
+
 ## The library (2026-11-04)
 
 Your samples and kits live in `user://sampling/samples/*.wav` and `user://sampling/kits/*.json` (`PadLibrary`),

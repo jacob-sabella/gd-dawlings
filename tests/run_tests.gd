@@ -7628,6 +7628,50 @@ func _test_the_pads_fit_the_tempo_listen_to_a_channel_and_punch_in() -> void:
 	tv.queue_free()
 
 
+func _test_the_pads_sample_from_a_chosen_input_and_trim_its_quiet() -> void:
+	# A microphone take: a second of near-silence, a hit, a second of near-silence.
+	var take := PackedVector2Array()
+	take.resize(48000 * 3)
+	for i in take.size():
+		var hush := sin(i * 0.05) * 0.002
+		take[i] = Vector2(hush, hush)
+	for i in 4800:
+		var v := sin(i * 0.3) * 0.7
+		take[48000 + i] = Vector2(v, v)
+	var cap := PadCapture.new()
+	add_child(cap)
+	cap.take(take)
+	cap.take(take)
+	check("a loud hit shows on the level", cap.level() > 0.6)
+	check("the level reads again from nothing", cap.level() == 0.0)
+	var cut := PadCapture.trimmed(take)
+	check("the quiet either side of the hit is cut off (%d frames)" % cut.size(),
+			cut.size() > 4800 and cut.size() < 4800 + 2000)
+	var hush_only := PackedVector2Array()
+	hush_only.resize(1000)
+	check("a take of only quiet is left whole", PadCapture.trimmed(hush_only).size() == 1000)
+	var all := PadCapture.devices()
+	check("the default input is always first", all[0]["id"] == "")
+	var first := cap.device
+	for i in all.size():
+		cap.step_device()
+	check("stepping the inputs comes round to where it began", cap.device == first)
+	cap.queue_free()
+	var tv := TvSurface.new()
+	add_child(tv)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var deck := tv.deck
+	check("DEV and TRIM are keys of the CUT page", "DEV" in deck._page_keys["CUT"] and "TRIM" in deck._page_keys["CUT"])
+	deck.source = 0
+	deck.step_device()
+	check("DEV sets the source to the input", PadCapture.SOURCES[deck.source] == "IN")
+	check("a live catch is trimmed by default", deck.trim_on)
+	deck.toggle_trim()
+	check("TRIM turns off", not deck.trim_on)
+	tv.queue_free()
+
+
 func _test_the_pads_trim_filter_shape_lock_and_follow_the_song() -> void:
 	var bank := PadBank.new()
 	var sound := PackedVector2Array()
