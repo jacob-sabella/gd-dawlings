@@ -73,9 +73,6 @@ var strings_heard: Callable = Callable()
 ## modular's (GuestMidi.through_modular).
 var modular_heard: Callable = Callable()
 var modular_control_heard: Callable = Callable()
-## (peer, event) -> void: a bandmate's grain event (Session.grains_played, docs/spatial_loop.md part
-## two, slice 55), for the studio's grain cloud to play from its own sound on a voice of theirs.
-var grains_heard: Callable = Callable()
 
 ## Pointing on purpose (docs/spatial_loop.md part two, slice 35): Z held at a desk, the index held
 ## level or the stick clicked in a headset (Interactor.pointing). Then what this participant
@@ -119,13 +116,11 @@ func _enter_tree() -> void:
 	Session.item_hit.connect(_on_item_hit)
 	Session.note_played.connect(_on_note_played)
 	Session.control_played.connect(_on_control_played)
-	Session.grains_played.connect(_on_grains_played)
 	Session.participant_left.connect(_on_participant_left)
 
 
 func _exit_tree() -> void:
 	Session.participant_left.disconnect(_on_participant_left)
-	Session.grains_played.disconnect(_on_grains_played)
 	Session.item_carried.disconnect(_on_item_carried)
 	Session.item_flown.disconnect(_on_item_flown)
 	Session.item_used.disconnect(_on_item_used)
@@ -736,12 +731,6 @@ func _on_note_played(kind: int, pitch: int, velocity: int, from: int, _song: flo
 	var keytar := items.items.get(&"keytar") as KeytarItem
 	if keytar != null:
 		keytar.heard(kind, pitch, velocity)
-
-
-## Somebody's grain event (Session.grains_played, slice 55): to the grain cloud, a bandmate's.
-func _on_grains_played(e: PackedFloat32Array, from: int, _song: float) -> void:
-	if grains_heard.is_valid() and from != Session.local_peer_id:
-		grains_heard.call(from, e)
 
 
 ## Somebody's control (Session.control_played): a harp's goes to the harp, as its notes do, and

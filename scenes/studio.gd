@@ -278,13 +278,6 @@ var music_box_row: Array = MusicBox.DEFAULT_ROW.duplicate()
 ## stood again with each venue at its `string_spool_spot`, on its trolley. Null where there are no zones
 ## and in AR.
 var spool: RoomString.Spool
-## The grain cloud in the aisle between the drum riser and the lattice (GrainCloud, docs/spatial_loop.md
-## part two, slice 54; Venue.default_grains_spot), stood again with each venue at its `grains_spot`, on
-## its trolley, its bowl the room's holder `bowl`. Null where there are no zones and in AR.
-var grain_cloud: GrainCloud
-## The room's row `grains_key`: the cloud's KEY switch, on to follow the chord's root. The room's, not
-## the venue's, so it is kept across a change of venue.
-var grains_key := false
 ## The room's row `strings`: {id: [a, b, maker]}, each string's ends in the venue's frame and who tied
 ## it (RoomString.answer). The room's, not the venue's, so it is kept across a change of venue and
 ## stood again in the next.
@@ -701,7 +694,6 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_stand_the_looper()
 	_stand_the_music_box()
 	_stand_the_spool()
-	_stand_the_grains()
 	_stand_the_lyrics()
 	_stand_the_venue_instrument()
 	_stand_the_modular()
@@ -913,36 +905,6 @@ func _stand_the_music_box() -> void:
 	venue.add_child(music_box)
 
 
-## The grain cloud (GrainCloud), in the venue's own frame at its spot in the aisle: a child of the venue,
-## so it goes with it, its trolley the studio's. Its bowl is the room's holder `bowl` (`_hold_the_bowl`);
-## its KEY switch the room's row `grains_key`. What it plays is this player's alone. None where there are
-## no zones.
-func _stand_the_grains() -> void:
-	grain_cloud = null
-	var spot: Variant = Stations.spot(venue, GrainCloud.STATION)
-	if spot == null:
-		if items != null:
-			items.holders.erase(GrainCloud.HOLDER)
-		return
-	grain_cloud = GrainCloud.new()
-	grain_cloud.transform = spot
-	grain_cloud.find_file = _platter_file
-	grain_cloud.fetching = func(source: String) -> bool:
-		return Session.role == Session.Role.GUEST and Session.files != null \
-				and Session.files.fetch_state(source) == FileSend.FETCHING
-	grain_cloud.key_on = grains_key
-	grain_cloud.key_pressed.connect(_on_grains_key_pressed)
-	# Slice 55: each event played goes to the band and into a take, stamped with the song as this
-	# player hears it; a bandmate's are played here from the same sound; and the host renders a take
-	# from this cloud's sound.
-	grain_cloud.played.connect(_on_grains_played)
-	if not Session.participant_left.is_connected(_forget_grains_player):
-		Session.participant_left.connect(_forget_grains_player)
-	Session.grain_takes.sound = grains_sound
-	venue.add_child(grain_cloud)
-	_hold_the_bowl()
-
-
 ## The venue's own instrument's mount (VenueInstrument), in the venue's own frame at its spot: a child
 ## of the venue, so it goes with it, its plaque and the set's jack on it. Its bars are the room's
 ## items, dressed as its set here (`_dress_venue_bars`) and at home on it (`_item_homes`). None in a
@@ -990,7 +952,6 @@ func _hold_the_rack() -> void:
 		items.holders.clear()
 		_hold_the_platter()
 		_hold_the_ledge()
-		_hold_the_bowl()
 		return
 	cassette_rack.items = items
 	if sampler != null and is_instance_valid(sampler):
@@ -1006,7 +967,6 @@ func _hold_the_rack() -> void:
 			item.snap_home()
 	_hold_the_platter()
 	_hold_the_ledge()
-	_hold_the_bowl()
 
 
 ## The ledge's slots and its bin as the room's holders (slice 31), where the bricks table has it; a
@@ -1046,16 +1006,6 @@ func _hold_the_platter() -> void:
 		return
 	var at: Array[Transform3D] = [deck_trolley.transform * Platter.ON_CART * Platter.SLOT_POSE]
 	items.set_holder(Platter.HOLDER, at)
-
-
-## The grain cloud's bowl as a holder of one slot (slice 54), in the room's frame (the venue's), where
-## the cloud stands now: again whenever its trolley is pushed, so a cassette in it rides with it.
-func _hold_the_bowl() -> void:
-	if items == null or grain_cloud == null or not is_instance_valid(grain_cloud):
-		return
-	grain_cloud.items = items
-	var at: Array[Transform3D] = [grain_cloud.slot_in(grain_cloud.transform)]
-	items.set_holder(GrainCloud.HOLDER, at)
 
 
 ## Where made item number `n` lies with nowhere else to be: the rack's tray; a chord brick, the
@@ -1985,10 +1935,6 @@ const LIVE_TROLLEYS := {
 	# The spool's round foot: above it a click is the reel or its plaque.
 	&"strings": ["StringSpoolTrolley", Vector2(0, RoomString.SPOOL_FOOT_Z), RoomString.SPOOL_FOOT, 9.0,
 			[[Vector3(RoomString.SPOOL_FOOT.x * 2.0, 0.12, RoomString.SPOOL_FOOT.y * 2.0), Vector3(0, 0.06, RoomString.SPOOL_FOOT_Z)]]],
-	# The grain cloud's plinth, to the foot of its plaque: above it a click is its plaque, its KEY
-	# switch, the bowl or the cloud.
-	&"grains": ["GrainCloudTrolley", Vector2(0, GrainCloud.FOOT_Z), GrainCloud.FOOT, 9.0,
-			[[Vector3(GrainCloud.FOOT.x * 2.0, 0.3, GrainCloud.FOOT.y * 2.0), Vector3(0, 0.15, GrainCloud.FOOT_Z)]]],
 	# The case's bottom edge, a little proud of it: above that a click on the case knocks on it.
 	&"tour_case": ["TourCaseTrolley", Vector2.ZERO, Vector2(TourCase.CASE_WIDTH, TourCase.CASE_DEPTH) * 0.5, 7.5,
 			[[Vector3(TourCase.CASE_WIDTH + 0.08, 0.1, TourCase.CASE_DEPTH + 0.08), Vector3(0, 0.05, 0)]]],
@@ -2163,11 +2109,6 @@ func _carry_live(id: StringName) -> void:
 			var at: Variant = venue.string_spool_spot()
 			if spool != null and is_instance_valid(spool) and at != null:
 				spool.transform = at
-		&"grains":
-			var at: Variant = venue.grains_spot()
-			if grain_cloud != null and is_instance_valid(grain_cloud) and at != null:
-				grain_cloud.transform = at
-				_hold_the_bowl()
 		&"tour_case":
 			if tour_case != null:
 				tour_case.transform = _venue_to_set(venue.tour_case_spot())
@@ -2694,7 +2635,7 @@ func room_state() -> Dictionary:
 			"sampler": sampler.armed_by if sampler != null and is_instance_valid(sampler) else 0,
 			"weather": weather_listening, "bricks": _bricks_row(), "looper": looper_row.duplicate(),
 			"music_box": music_box_row.duplicate(), RoomString.ROW: strings_row.duplicate(),
-			RackPatch.ROW: rack_row.duplicate(true), GrainCloud.ROW: grains_key,
+			RackPatch.ROW: rack_row.duplicate(true),
 			"tv": tv.row() if tv != null and is_instance_valid(tv) else {}, "pads": pads_row.duplicate(true)}
 
 
@@ -2930,9 +2871,6 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	if state.has("weather") and not _predictions.any(func(p): return p["verb"] == Weather.VERB):
 		# Once its press is answered, the host's word: LISTEN or OFF.
 		_show_weather(bool(state["weather"]))
-	if state.has(GrainCloud.ROW) and not _predictions.any(func(p): return p["verb"] == GrainCloud.VERB):
-		# Once its press is answered, the host's word: KEY on or off.
-		_show_grains_key(bool(state[GrainCloud.ROW]))
 	if state.has("looper") and not _predictions.any(func(p): return p["verb"] == Looper.VERB or p["verb"] == Looper.LAYER_VERB):
 		# Once its slaps and layers are answered, the host's word: who is looping, from which bar.
 		_show_looper(state["looper"])
@@ -3172,9 +3110,6 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"weather":
 			# A guest's press on the weather's switch: LISTEN or OFF, for everyone.
 			_set_weather(args[0])
-		&"grains_key":
-			# A guest's press on the grain cloud's KEY: on or off, for everyone.
-			_set_grains_key(args[0])
 		&"looper":
 			# A guest's slap on the looper's pad: armed for them, or refused while somebody else loops.
 			_answer_looper(args[0], args[1], from)
@@ -3768,7 +3703,6 @@ func _build_anchors() -> void:
 	add_child(presence)
 	presence.harp = harp
 	presence.strings_heard = _on_string_heard
-	presence.grains_heard = _on_grains_heard
 	_lend_fingertips()
 	_lend_chord_hand()
 
@@ -4875,60 +4809,6 @@ func _on_item_used_here(item: Item, down: bool) -> void:
 	var peer := presence.peer_at(aim.origin, -aim.basis.z)
 	if peer != 0:
 		give_item(item, peer)
-
-
-# --- the grain cloud (docs/spatial_loop.md part two, slice 54) -------------------------------
-#
-# Its KEY switch is the room's row `grains_key`: a guest's press is the room's ask `grains_key` [on],
-# shown at once here; the host's is done. What this player's cloud plays goes to the band and, while the
-# song records, into a take (Session.send_grains, GrainTakes); a bandmate's plays here (GrainCloud.hear).
-
-## An event this player's grain cloud played (slice 55): to the band, and into a take while the song
-## records (Session.send_grains), at the song as this player hears it, moved on by the cloud's figure.
-func _on_grains_played(e: PackedFloat32Array) -> void:
-	Session.send_grains(e, Session.grain_takes.song())
-
-
-## A bandmate's grain event (Presence.grains_heard): played from this grain cloud's sound.
-func _on_grains_heard(peer: int, e: PackedFloat32Array) -> void:
-	if grain_cloud != null and is_instance_valid(grain_cloud):
-		grain_cloud.hear(peer, e)
-
-
-func _forget_grains_player(peer: int) -> void:
-	if grain_cloud != null and is_instance_valid(grain_cloud):
-		grain_cloud.forget(peer)
-
-
-## The grain cloud's sound here (mono at GrainVoice.RATE), empty while it has none: what the host
-## renders a take on it from (GrainTakes.sound).
-func grains_sound() -> PackedFloat32Array:
-	if grain_cloud == null or not is_instance_valid(grain_cloud) or grain_cloud.source != GrainCloud.Source.READY:
-		return PackedFloat32Array()
-	return grain_cloud.voice.source
-
-
-## A hand here pressed the grain cloud's KEY: on to follow the chord's root, off for its own pitch.
-func _on_grains_key_pressed(on: bool) -> void:
-	if Session.is_authority():
-		_set_grains_key(on)
-	elif _predict(GrainCloud.VERB, [on]) > 0:
-		_show_grains_key(on)
-	Session.notice.emit("Grain cloud: KEY on. Its grains follow the chord's root, for everyone's cloud." if on
-			else "Grain cloud: KEY off. Its grains are at the sound's own pitch.")
-
-
-## The room's word on KEY: shown here and told to the room.
-func _set_grains_key(on: bool) -> void:
-	_show_grains_key(on)
-	_publish_room_soon()
-
-
-## KEY shown as the room has it, on this cloud and any stood later.
-func _show_grains_key(on: bool) -> void:
-	grains_key = on
-	if grain_cloud != null and is_instance_valid(grain_cloud):
-		grain_cloud.key_on = on
 
 
 # --- the weather (docs/spatial_loop.md part two, slice 44) ----------------------------------
@@ -8738,7 +8618,7 @@ func toggle_signal_view() -> void:
 
 ## The room's sound sources, as SignalGraph.build takes them: every instrument item and the venue's
 ## set (onto its jack's track, armed or not, else the armed track), the harp and the
-## modular (the armed track), the mic (its voice track), and the sampler, the grain cloud and the
+## modular (the armed track), the mic (its voice track), and the sampler and the
 ## platter, heard in one player's ears only.
 func signal_sources() -> Array:
 	var out: Array = []
@@ -8771,7 +8651,7 @@ func signal_sources() -> Array:
 		row.call(ChordHarp.SOURCE, "HARP", harp, SignalGraph.NOTES, to[0], to[1])
 	if rack_wall != null:
 		row.call(Modular.SOURCE, "MODULAR", rack_wall, SignalGraph.NOTES, armed)
-	for local in [[&"sampler", "SAMPLER", sampler], [&"grains", "GRAIN CLOUD", grain_cloud], [&"platter", "PLATTER", platter]]:
+	for local in [[&"sampler", "SAMPLER", sampler], [&"platter", "PLATTER", platter]]:
 		if local[2] != null:
 			row.call(local[0], local[1], local[2], SignalGraph.LOCAL_SOURCE, 0)
 	return out

@@ -76,9 +76,9 @@ const BINS: Array[StringName] = [&"bin", &"ledge_bin"]
 const IN_ORDER: Array[StringName] = [&"ledge"]
 const SLOT_EXACT := 0.03
 ## What each holder takes, by kind, and what to call them when it refuses another: the rack and the
-## platter and the grain cloud's bowl cassettes, the ledge chord bricks. A holder not here (a bin)
+## platter cassettes, the ledge chord bricks. A holder not here (a bin)
 ## takes any made item.
-const HOLDS := {&"rack": [&"cassette"], &"platter": [&"cassette"], &"ledge": [&"brick"], &"bowl": [&"cassette"]}
+const HOLDS := {&"rack": [&"cassette"], &"platter": [&"cassette"], &"ledge": [&"brick"]}
 const HOLDS_SAID := {&"cassette": "cassettes", &"brick": "chord bricks"}
 
 ## A hand here put `item` somewhere: `put_item` [id, x, z, yaw] or `home_item` [id], already

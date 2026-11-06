@@ -142,11 +142,6 @@ signal jack_played(source: StringName, kind: int, pitch: int, velocity: int, fro
 signal control_played(kind: int, value: int, from: int, song: float, source: StringName)
 ## The host's track spectra have arrived (`spectra`), on a guest.
 signal spectra_heard()
-## A grain event from `from`'s grain cloud (`send_grains`, docs/spatial_loop.md part two, slice 55):
-## `event` (GrainVoice.event, checked by the host) made at song position `song` (-1 for not known),
-## for the cloud here to play from the same sound on a voice of theirs.
-signal grains_played(event: PackedFloat32Array, from: int, song: float)
-
 ## What a `note_played` is.
 enum Note { OFF, ON, PEDAL_UP, PEDAL_DOWN }
 
@@ -271,10 +266,6 @@ var host_audio: GuestAudio = null
 var files: FileSend = null
 ## This player's own sound into their Discord voice channel. See core/audio/discord_feed.gd.
 var discord: DiscordFeed = null
-## Takes played on the grain cloud, recorded as audio from its events: a player's own, and on the
-## host each player's, rendered and put in when they end (docs/spatial_loop.md part two, slice 55).
-## See core/session/grain_takes.gd.
-var grain_takes: GrainTakes = null
 ## The ENet channel a guest's recording travels on: its own, so a take in flight never queues a
 ## fader move or a hold behind it.
 const AUDIO_TAKE_CHANNEL := 3
@@ -290,16 +281,8 @@ const CONTROLS_CHANNEL := 6
 ## The host's track spectra (Spectra, the EQ wall's), five times a second: unreliable and ordered,
 ## a lost one overtaken by the next, on a channel of their own so they never wait behind a key.
 const SPECTRA_CHANNEL := 7
-## A gesture streamed as it moves (`send_grains`, the grain cloud's events): reliable, so every grain
-## arrives in order to be heard where it was made, and on a channel of its own, so a retransmit holds
-## back only the gestures behind it and never a note (KEYS_CHANNEL) or the room.
-const GESTURE_CHANNEL := 8
 ## How often a knob's turn may be streamed, a second: the studio holds a turn to this.
 const KNOBS_PER_SECOND := 30.0
-## Host: how many grain events have been refused (bytes that are not one); and how many this machine
-## has sent. For the suite and the probe.
-var grains_refused := 0
-var grains_sent := 0
 var rooms_published := 0
 ## The controls a player's keys carry (`send_control`): the pitch wheel, the mod wheel (1) and
 ## expression (11). The host passes these and refuses any other. A take carries the same
@@ -443,9 +426,6 @@ func _ready() -> void:
 	discord = DiscordFeed.new()
 	discord.name = "DiscordFeed"
 	add_child(discord)
-	grain_takes = GrainTakes.new()
-	grain_takes.name = "GrainTakes"
-	add_child(grain_takes)
 	layout = LayoutProfile.new()
 	local_name = _default_name()
 	local_look = GhostLook.load_from(look_path)
@@ -1093,8 +1073,6 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	# A take still arriving is kept: what was sung before the line dropped is still a take.
 	_finish_take(peer_id)
 	participants.erase(peer_id)
-	if grain_takes != null:
-		grain_takes.forget(peer_id)
 	participant_left.emit(peer_id)
 	# Whatever they had their hand on is free the moment they are gone. A fader held by an
 	# absent person cannot be moved by anybody, which is a broken desk.
@@ -1697,8 +1675,6 @@ const ROOM_VERBS := {&"tv": [TYPE_STRING, TYPE_BOOL, TYPE_FLOAT], &"open_tablet"
 		&"sampler": [TYPE_BOOL],
 		# The weather's switch (slice 44): LISTEN or OFF, the room's `weather` row (Weather.listening).
 		&"weather": [TYPE_BOOL],
-		# The grain cloud's KEY switch (slice 54): on or off, the room's `grains_key` row (GrainCloud.key_on).
-		&"grains_key": [TYPE_BOOL],
 		# A scratch on the DJ platter, for the sampler (slice 27): the cassette in its slot by id,
 		# and the scratch's path (Varispeed.path), which the host renders from its own render.
 		&"scratch": [TYPE_STRING_NAME, TYPE_PACKED_FLOAT32_ARRAY],
@@ -2193,80 +2169,6 @@ func _pass_control(kind: int, value: int, song: float, source: StringName, from:
 @rpc("authority", "call_remote", "unreliable_ordered", CONTROLS_CHANNEL)
 func _control(kind: int, value: int, from: int, song: float, source: StringName) -> void:
 	control_played.emit(kind, value, from, song, source)
-
-
-## A grain event from this player's grain cloud as it plays it (docs/spatial_loop.md part two, slice
-## 55): `e` (GrainVoice.event) made at song position `song` (-1 for not known, GrainTakes.song), to
-## everyone, through the host, which refuses what is not an event (`_pass_grains`). Fourteen bytes
-## (GrainVoice.pack), reliable and ordered on GESTURE_CHANNEL: a lost one is sent again and arrives
-## where it was played, and holds back only the gestures behind it, never a note. Into a take on the
-## cloud first, this player's (GrainTakes.played), whether or not anyone is here to hear it.
-func send_grains(e: PackedFloat32Array, song := -1.0) -> void:
-	if not GrainVoice.is_event(e):
-		return
-	if not is_finite(song) or song < 0.0:
-		song = -1.0
-	if grain_takes != null:
-		grain_takes.played(e, song)
-	if not _connected():
-		return
-	grains_sent += 1
-	var bytes := GrainVoice.pack(e)
-	if role == Role.HOST:
-		_pass_grains(bytes, song, local_peer_id)
-	else:
-		_grains_up.rpc_id(1, bytes, song)
-
-
-@rpc("any_peer", "call_remote", "reliable", GESTURE_CHANNEL)
-func _grains_up(bytes: PackedByteArray, song: float) -> void:
-	var from := multiplayer.get_remote_sender_id()
-	if role != Role.HOST or not _is_member(from):
-		return
-	_pass_grains(bytes, song, from)
-
-
-## Host: `from`'s grain event, refused unless its bytes are one (GrainVoice.unpack), heard here (unless
-## it is the host's own) and into their take, and passed on to everyone else. Whether it passed.
-func _pass_grains(bytes: PackedByteArray, song: float, from: int) -> bool:
-	var e := GrainVoice.unpack(bytes)
-	if e.is_empty():
-		grains_refused += 1
-		return false
-	if not is_finite(song) or song < 0.0:
-		song = -1.0
-	if from != local_peer_id:
-		grains_played.emit(e, from, song)
-		grain_takes.heard_event(from, e, song)
-	for peer in _audience():
-		if peer != from:
-			_grains.rpc_id(peer, bytes, from, song)
-	return true
-
-
-@rpc("authority", "call_remote", "reliable", GESTURE_CHANNEL)
-func _grains(bytes: PackedByteArray, from: int, song: float) -> void:
-	var e := GrainVoice.unpack(bytes)
-	if e.is_empty():
-		return
-	grains_played.emit(e, from, song if is_finite(song) and song >= 0.0 else -1.0)
-
-
-## A take on the grain cloud (slice 55) marked to the host, `begun` at song position `start` or ended
-## at `end` onto `tracks` (none: abandoned): on GESTURE_CHANNEL, behind and before the take's events,
-## so the host takes exactly the events between the two (GrainTakes.heard_mark). Nothing else of the
-## take is sent: the host renders it from what reached it.
-func send_grain_take(take_id: int, begun: bool, start: float, end: float, tracks: Array) -> void:
-	if role != Role.GUEST or not _connected():
-		return
-	_grain_take_up.rpc_id(1, take_id, begun, start, end, tracks)
-
-
-@rpc("any_peer", "call_remote", "reliable", GESTURE_CHANNEL)
-func _grain_take_up(take_id: int, begun: bool, start: float, end: float, tracks: Array) -> void:
-	var from := multiplayer.get_remote_sender_id()
-	if role == Role.HOST and _is_member(from):
-		grain_takes.heard_mark(from, take_id, begun, start, end, tracks)
 
 
 ## `value` kept in bounds for a control of `kind`: the pitch wheel -8192 to 8191, a controller 0

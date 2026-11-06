@@ -68,7 +68,7 @@ static func data_of(state: MixState, track: int, index: int) -> Dictionary:
 
 
 ## What makes a clip's sound when it is not a file, for what plays a cassette by hand (the DJ
-## platter, slice 27; the grain cloud, slice 54): a Callable for a worker that answers [stereo
+## platter, slice 27): a Callable for a worker that answers [stereo
 ## frames, their rate]. A MIDI clip through the built-in instrument (EarCue.midi_frames, at `rate`),
 ## a demo part as the song plays it there (EarCue.demo_samples, at DemoSong.RATE, from the song's
 ## tempo map and meter read now, on the main thread). An invalid Callable for a clip with neither.
@@ -154,8 +154,6 @@ func readout() -> String:
 	var where := super()
 	if slot_in == &"rack":
 		where = "on the rack, slot %d" % (slot_n + 1)
-	elif slot_in == GrainCloud.HOLDER:
-		where = "in the grain cloud's bowl"
 	if is_sample():
 		var heard := "a sample, %s, %.2f s, %s" % [str(clip.get("source", "")), length(), where]
 		return heard if hearing.is_empty() else "%s · %s" % [heard, hearing]
@@ -173,7 +171,7 @@ func pastes() -> bool:
 
 func hint() -> String:
 	if state == State.HELD and carried_by != null:
-		return "hold L to hear it · click a timeline lane, a channel strip or a stage voice to paste it there · click a bandmate to hand it over · click a rack slot to shelve it, or the BIN to bin it · click the grain cloud's bowl to play it as grains · Q puts it down"
+		return "hold L to hear it · click a timeline lane, a channel strip or a stage voice to paste it there · click a bandmate to hand it over · click a rack slot to shelve it, or the BIN to bin it · Q puts it down"
 	return _hint("click to pick up · pull a clip off the timeline for another")
 
 

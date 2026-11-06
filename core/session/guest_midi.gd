@@ -370,9 +370,6 @@ func _on_role_changed() -> void:
 		return
 	# Out of the session: a take in progress has nowhere to go any more.
 	_take = null
-	# A grain take running here (GrainTakes, slice 55) is dropped too, not carried on unplaced.
-	if Session.grain_takes != null:
-		Session.grain_takes.cancel()
 	_release_all()
 	synth.stop()
 	if has_instruments():

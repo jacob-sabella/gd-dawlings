@@ -255,23 +255,12 @@ const STRING_ID := &"probe_string"
 const STRING_A := Vector3(-0.6, 1.2, 5.0)
 const STRING_B := Vector3(-0.6, 1.2, 7.0)
 const STRING_SONG := 780.0
-## The grain cloud recorded and heard (slice 55): from 64.08 the guest's cloud plays GRAINS events, one
-## a frame (Session.send_grains, stamped with the song it hears from GRAINS_SONG plus the cloud's
-## figure), while it records onto TAKE_TRACK, both halves' clouds sounding the same tone
-## (`_probe_grain_sound`, standing in for a sample both have). Its first event begins its take, marked
-## to the host on the gestures' channel; its clock stopped at 64.3 ends it. By 64.4 the host has
-## heard every event from the guest, in order, and has one audio take named `grains` on TAKE_TRACK at
-## the guest's first event's song, rendered from its own sound, and publishes the WAV's start, frames
-## and digest (the room's row `grains_probe`); by 64.46 the guest finds them equal to its own render
-## of its take.
 ## The lyrics in the booth (slice 56): at 64.52 the guest's own board (a LyricBoard of its own, not in
 ## a room) writes two untimed lines, which is a set_lyrics intent to the host; at 64.6, hearing the
 ## song from LYRIC_SONG, it TAPs, which is a second intent stamping the first line. By 64.7 the
 ## host's lyrics are those two lines, the first stamped at LYRIC_SONG as the guest heard it and the
 ## second still untimed. The session ends at 64.76.
-const GRAINS_SONG := 960.0
 const LYRIC_SONG := 980.0
-const GRAINS := 12
 ## The host's own take, on the built-in engine: a track, a stretch of song with nothing in it,
 ## and how far from the beat a click may land.
 const HOST_TAKE_TRACK := 3
@@ -345,9 +334,6 @@ var _audio_placed := {}
 var _placed_all: Array = []
 ## Host: what guests asked of the room, as [verb, args, from].
 var _room_asks: Array = []
-## Host: the grain events heard (slice 55), [event, from, song] each; and the grain takes placed.
-var _grains_heard: Array = []
-var _grains_placed: Array = []
 ## Host: where the guest said something was while pushing it.
 var _motions: Array = []
 ## Guest: how many times the host's room arrived.
@@ -509,10 +495,6 @@ func _host(port: int) -> void:
 	Session.audio_take_placed.connect(func(info: Dictionary):
 		_audio_placed = info
 		_placed_all.append(info))
-	# The grain cloud's sound both halves hear, and what the guest's grains do here (slice 55).
-	Session.grain_takes.sound = _probe_grain_sound
-	Session.grain_takes.placed.connect(func(info: Dictionary): _grains_placed.append(info))
-	Session.grains_played.connect(func(e: PackedFloat32Array, from: int, song: float): _grains_heard.append([e, from, song]))
 	Session.local_name = "Ada"
 	var restore := NAN
 	var tempo_restore := NAN
@@ -1092,10 +1074,6 @@ func _host(port: int) -> void:
 	# How much of the time before the end the work took: the end has moved twelve times as it grew.
 	if DAW.backend is GodotBackend:
 		print("engine: %s" % ("native lanes" if (DAW.backend as GodotBackend).lanes != null else "players"))
-	# The grain cloud recorded (slice 55): the guest's grains from 64.08, its take ended at 64.3, are
-	# an audio take on TAKE_TRACK by 64.4, which I render from my own sound.
-	await _until(64.4)
-	_check_the_grain_take()
 	# The lyrics in the booth (slice 56): the guest's two lines from 64.52 and its TAP at 64.6.
 	await _until(64.7)
 	_check_the_guests_tap()
@@ -2497,7 +2475,6 @@ func _undo_takes() -> void:
 
 func _guest(port: int) -> void:
 	Session.local_name = "Grace"
-	Session.grain_takes.sound = _probe_grain_sound
 	# On the host's own machine, which would ordinarily mean not listening: the host's speakers
 	# are already in the room. Asked for here, because the probe is what is listening.
 	Session.listen_choice = 1
@@ -2819,7 +2796,6 @@ func _guest(port: int) -> void:
 	await _loop_a_layer()
 	await _press_the_music_box()
 	await _tie_and_pluck_a_string()
-	await _play_the_grains()
 	await _tap_the_lyrics()
 	await _until(64.88)
 	print("notices: ", _notices)
@@ -4658,73 +4634,6 @@ func _tie_and_pluck_a_string() -> void:
 	string.queue_free()
 
 
-## The grain cloud's sound on both halves (slice 55): two seconds of a tone swelling from silence, at
-## GrainVoice.RATE, every place in it different, standing in for a sample both machines have.
-func _probe_grain_sound() -> PackedFloat32Array:
-	var out := PackedFloat32Array()
-	out.resize(2 * GrainVoice.RATE)
-	for i in out.size():
-		out[i] = sin(float(i) * 0.05) * 0.6 * float(i) / out.size()
-	return out
-
-
-## Host: the guest's take on the grain cloud (slice 55), as my DAW has it: every event heard from the
-## guest in order, and one audio take named `grains` on TAKE_TRACK at its first event's song; its
-## start, frames and digest published for the guest.
-func _check_the_grain_take() -> void:
-	var heard := _grains_heard.filter(func(g: Array) -> bool: return g[1] == _other_id())
-	var ticks: Array = heard.map(func(g: Array) -> int: return int((g[0] as PackedFloat32Array)[GrainVoice.TICK]))
-	check("the guest's grain events reached me, every one, in order (%s)" % [ticks],
-			heard.size() == GRAINS and range(ticks.size()).all(func(i: int) -> bool: return ticks[i] == ticks[0] + i))
-	var near := DAW.state.track(TAKE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
-			return it.start > GRAINS_SONG - 0.1 and it.start < GRAINS_SONG + 1.0)
-	check("and its take is one audio take named grains on track %d at its first event's song (%s)" % [TAKE_TRACK,
-			near.map(func(it: MixState.ItemState) -> String: return "%s %.3f %.3f" % [it.name, it.start, it.length])],
-			near.size() == 1 and near[0].name == GrainTakes.NAME and near[0].source.ends_with(".wav")
-			and _grains_placed.size() == 1 and not heard.is_empty() and absf(near[0].start - float(heard[0][2])) < 1e-3)
-	if _grains_placed.size() != 1:
-		return
-	var info: Dictionary = _grains_placed[0]
-	var bytes := FileAccess.get_file_as_bytes(info["path"])
-	var frames := (bytes.size() - AudioTake.HEADER_BYTES) / 2
-	check("rendered from my own sound: %d frames, %.3f s from %.3f" % [frames, info["seconds"], info["start"]],
-			frames > 0 and info["peer"] == _other_id())
-	var room: Dictionary = Session.room.duplicate(true)
-	room["grains_probe"] = [info["start"], frames, _digest(bytes.slice(AudioTake.HEADER_BYTES))]
-	Session.publish_room(room)
-
-
-## Guest: the grain cloud played (slice 55) from 64.08, GRAINS events a frame apart stamped with the
-## song I hear from GRAINS_SONG, recording onto TAKE_TRACK; the clock stopped at 64.3 ends the take.
-## By 64.46 the host's WAV of it is my own render of it, at my first event's song.
-func _play_the_grains() -> void:
-	await _until(64.08)
-	var gm := Session.guest_midi
-	var gt := Session.grain_takes
-	gm.target_track = TAKE_TRACK
-	gm.heard_source = _given_clock(GRAINS_SONG, true)
-	for n in GRAINS:
-		Session.send_grains(GrainVoice.event(777 + n, 0.2 + n * 0.05, 0.03 + n * 0.01, 12.0 + n * 3.0, 0.1), gt.song())
-		await get_tree().process_frame
-	check("recording, my grains are a take of my own (%d events)" % (gt.mine.events.size() if gt.mine != null else -1),
-			gt.mine != null and gt.mine.events.size() == GRAINS)
-	await _until(64.3)
-	gm.heard_source = _given_clock(GRAINS_SONG + 2.0, false)
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	check("the song stopped, my take is ended and kept, from my first event's song (%.3f)" % (gt.last_mine.lands() if gt.last_mine != null else -1.0),
-			gt.mine == null and gt.last_mine != null and gt.last_mine.events.size() == GRAINS
-			and absf(gt.last_mine.lands() - GRAINS_SONG - GrainVoice.latency_seconds()) < 0.25)
-	gm.heard_source = Callable()
-	gm.target_track = 0
-	await _until(64.46)
-	var theirs: Array = Session.room.get("grains_probe", [])
-	var mine := GrainTake.pcm(GrainTake.at_take_rate(gt.last_mine.render(_probe_grain_sound()))) if gt.last_mine != null else PackedByteArray()
-	check("and the host's audio take of it is my own render: at my first event's song, as long, the same samples (%s)" % [theirs],
-			theirs.size() == 3 and gt.last_mine != null and absf(float(theirs[0]) - gt.last_mine.lands()) < 1e-6
-			and int(theirs[1]) == mine.size() / 2 and theirs[2] == _digest(mine))
-
-
 ## Host: the guest's lyrics (slice 56), as my song has them: its two lines, the first stamped by its
 ## TAP at the song it heard, LYRIC_SONG, and the second still untimed.
 func _check_the_guests_tap() -> void:
@@ -4748,14 +4657,6 @@ func _tap_the_lyrics() -> void:
 	var why := board.tap()
 	check("and TAP, the song playing, stamps the first (%s)" % why, why.is_empty())
 	board.queue_free()
-
-
-## The MD5 of `bytes`, hex.
-static func _digest(bytes: PackedByteArray) -> String:
-	var ctx := HashingContext.new()
-	ctx.start(HashingContext.HASH_MD5)
-	ctx.update(bytes)
-	return ctx.finish().hex_encode()
 
 
 ## Host: the guest's press on the weather's switch (slice 44) reached me from the guest, and my

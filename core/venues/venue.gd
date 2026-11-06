@@ -678,7 +678,7 @@ func default_string_spool_spot() -> Variant:
 
 ## The synth and sound design neighbourhood (Neighbourhoods) round the synth zone's keyboard stand
 ## and the modular wall over it: its middle SYNTH_MIDDLE out from the zone's middle into the room;
-## the grain cloud on the middle's side toward the control room and the sampler on the side away from it, each SYNTH_RING from the middle, facing it.
+## the sampler on the side away from the control room, SAMPLER_RING from the middle, facing it.
 const SYNTH_MIDDLE := 1.7
 const SYNTH_RING := 1.3
 const SAMPLER_RING := 1.1
@@ -693,25 +693,6 @@ func synth_middle() -> Variant:
 	var c := (at[&"synth"] as AABB).get_center()
 	var side := 1.0 if c.x >= 0.0 else -1.0
 	return [Vector3(c.x - side * SYNTH_MIDDLE, 0, c.z), side]
-
-
-## Where the grain cloud stands (GrainCloud, docs/spatial_loop.md part two, slice 54), in studio
-## space: on its trolley (WHEELED) wherever that has been pushed, else in the synth neighbourhood on
-## its middle's side toward the control room, facing the middle. Null where there is no synth zone
-## (the Rig Roulette room).
-func grains_spot() -> Variant:
-	return _spot_of(GrainCloud.STATION)
-
-
-## Where the venue stands the grain cloud until it is pushed somewhere else; null where it has no
-## synth zone.
-func default_grains_spot() -> Variant:
-	var m: Variant = synth_middle()
-	if m == null:
-		return null
-	var mid: Vector3 = m[0]
-	var away := _away(mid)
-	return Transform3D(Basis(Vector3.UP, 0.0 if away > 0.0 else PI), mid - Vector3(0, 0, away * SYNTH_RING))
 
 
 ## Where the modular room's wall hangs (RackWall, docs/spatial_loop.md part two, slice 51), in studio
@@ -787,8 +768,8 @@ func default_cassette_rack_spot() -> Transform3D:
 
 ## Where the sampler stands (Sampler, docs/spatial_loop.md part two, slice 26), in studio space: on
 ## its trolley (WHEELED) wherever that has been pushed, else in the synth neighbourhood on its
-## middle's side away from the control room, SAMPLER_RING out, facing the middle: the pads, the
-## grain cloud and the modular one turn apart. Null where there is no synth zone (the Rig Roulette
+## middle's side away from the control room, SAMPLER_RING out, facing the middle: the pads and
+## the modular one turn apart. Null where there is no synth zone (the Rig Roulette
 ## room has no zones).
 func sampler_spot() -> Variant:
 	return _spot_of(&"sampler")
@@ -1038,7 +1019,7 @@ func floor_at(p: Vector2) -> float:
 ## for it at all. The fifths wheel is not here: it is mounted on the bricks table, which is the
 ## venue's and does not move.
 const WHEELED: Array[StringName] = [&"harp", &"bells", &"cassette_rack", &"sampler", &"tour_case",
-		&"prop_shelf", &"hoop", &"music_box", &"strings", &"grains"]
+		&"prop_shelf", &"hoop", &"music_box", &"strings"]
 
 
 ## Where the venue stands wheeled piece `id` (WHEELED) until it is pushed somewhere else, in
@@ -1063,8 +1044,6 @@ func default_spot(id: StringName) -> Variant:
 			return default_music_box_spot()
 		&"strings":
 			return default_string_spool_spot()
-		&"grains":
-			return default_grains_spot()
 	return null
 
 
@@ -1368,9 +1347,6 @@ func wheeled_solids() -> Array:
 	var spool_at: Variant = string_spool_spot()
 	if spool_at != null:
 		out.append(RoomString.spool_solid(spool_at))
-	var grains_at: Variant = grains_spot()
-	if grains_at != null:
-		out.append(GrainCloud.solid(grains_at))
 	return out
 
 

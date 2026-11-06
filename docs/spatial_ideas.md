@@ -57,7 +57,7 @@ view), and nothing moves the room around the reader.
     (from the chord bricks): strum or pluck, no wrong notes, recorded as MIDI.
 23. **A theremin** (built, then removed 2026-11-06). One hand pitch, the other volume; optionally snapped to the song's scale,
     with a visible pitch guide so it is playable, not only a novelty.
-24. **A sample as a cloud of grains.** Reach into the cloud and it plays grains from where your
+24. **A sample as a cloud of grains** (built, then removed 2026-11-06). Reach into the cloud and it plays grains from where your
     hand is; spread the fingers to widen the spray. Granular synthesis made intuitive.
 25. **A modular synth wall.** A modular synth patched with cables, on the existing patchbay and
     cable physics.

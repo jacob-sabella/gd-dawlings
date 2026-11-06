@@ -9,7 +9,7 @@ extends RefCounted
 ## A row (`ALL`) is a station: `id`; `title`, as its plaque and the card letter it; `area`, the
 ## part of the world it is in (CONTROL, LIVE or VENUE, one PLAY page each); `zone`, the
 ## Venue.ZONES zone it is mounted in, or empty for one that stands on the floor by itself; `air`,
-## the free radius it needs round where it is played (m), and, where a row says it (`air_at`), the point in its frame that air is round; `spot`, the Venue method that places it
+## the free radius it needs round where it is played (m); `spot`, the Venue method that places it
 ## (a Transform3D, or null where the venue has no room for it); `at`, the point in that frame a
 ## player looks at while playing it; and two lines of help, `desk` (mouse and keys) and `hands`
 ## (hands and buttons); and `frame`, what of it a player should see from where they stand, its
@@ -223,19 +223,6 @@ const ALL := [
 		"foot": RoomString.SPOOL_FOOT, "foot_z": RoomString.SPOOL_FOOT_Z, "top": RoomString.SPOOL_TOP,
 		"desk": "click the spool for an end · click where it goes, then where it ends: anything the cursor meets, across the room for a bass, a hand's width for a high note · click a string to pluck · wiggle to wobble · Alt + mouse up or down bends · drag it hard off its line, or click a knot, to cut",
 		"hands": "press the spool for an end · press where it goes, carry it, let go where it ends · its length is its note · brush it to pluck · tilt to bend · pull it hard to cut",
-	},
-	{
-		# The grain cloud (GrainCloud, slice 54): free-standing in the aisle between the drum riser and
-		# the lattice, behind the string spool, its back to the lattice, so a trolley in a studio. Its
-		# `air` is round the cloud's middle (`air_at`), where the hands play, toward it and either side.
-		# Its frame's top is the cloud's top, its foot its plaque's on the plinth's side toward the
-		# desk, opened.
-		"id": &"grains", "title": "GRAIN CLOUD", "area": LIVE, "zone": &"", "air": GrainCloud.AIR,
-		"spot": &"grains_spot", "at": GrainCloud.LOOK, "air_at": GrainCloud.AIR_AT,
-		"frame": [GrainCloud.FRAME_TOP, GrainCloud.FRAME_FOOT],
-		"foot": GrainCloud.FOOT, "foot_z": GrainCloud.FOOT_Z, "top": GrainCloud.TOP,
-		"desk": "click the bowl with a cassette in your hand (a sample, or any clip pulled off the timeline) and the cloud is its sound · hold the button on the cloud to play grains from there: across is where in the sound, up is longer grains · the wheel widens the spray, Shift + wheel is more grains a second · KEY on its front follows the chord's root · the band hears it · while the song records, your grains go onto the armed track as audio",
-		"hands": "let a cassette go over the bowl · reach into the cloud: across is where in the sound, up is longer grains, further in is more of them · spread your fingers, or squeeze the grip, to widen the spray · KEY follows the chord's root · the band hears it · while the song records, your grains go onto the armed track as audio",
 	},
 	{
 		# The modular room (RackWall, slice 51): its help lines say where the world's sockets are

@@ -808,7 +808,7 @@ things. One undo step per gesture (12) goes before every slice whose gesture wri
 Controls beside the keys (13, 14) go before anything that bends. Hits that play back as hits (16) go
 before the hand percussion, the drums and the looper. The stage table (18) goes before what stands
 on it: depth, leaning in, clapping to mute and the sidechain rope. Items made while playing (23) go
-before cassettes, samples, the ear, the platter's scratch, chord bricks and the grain cloud. Section
+before cassettes, samples, the ear, the platter's scratch, chord bricks (and, until it was removed, the grain cloud). Section
 blocks (29, 30) go before chord bricks, which drop onto them. Chord shapes (32) go before the chord
 hand on a cable (33) and the talk box (58). Instruments that stand still (38) and strikes on the
 fast path (39) go before the drums, the pads, the venues' instruments and the looper. The weather,
@@ -820,7 +820,7 @@ a real room (60) is last, when every station exists. Every slice leaves the suit
 - **Every instrument that stands somewhere is a station, and the stations are one list.** `Stations`
   (core/music/stations.gd, static) has a row per station: `id`, `title`, `area` (`control`, `live`
   or `venue`), `zone` (the Venue.ZONES zone it is mounted in, or empty), `air` (the free radius it
-  needs round where it is played: 0.5 m for most, 1 m for the grain cloud), the Venue method that
+  needs round where it is played: 0.5 m for most), the Venue method that
   places it (`spot`), and two lines of help, `desk` (mouse and keys) and `hands` (hands and
   buttons). Slice 10 starts it with the harp, the bells and the wheel. Each later slice appends its
   own row. Four things are made from the list, so no slice can forget them: the help card's PLAY
@@ -986,7 +986,7 @@ a real room (60) is last, when every station exists. Every slice leaves the suit
   holder, n]}`, asked with the room verb `slot_item` [id, holder, n] and predicted as `put_item` is.
   Holders are `ItemRoom.holders` {holder: [Transform3D per slot]}, filled by whatever builds the
   furniture: the cassette rack (`rack`, 12), the bricks ledge (`ledge`, 16), the platter (`platter`,
-  1) and the grain cloud's bowl (`bowl`, 1). An item let go within 8 cm of a free slot goes into it,
+  1); the grain cloud's bowl (`bowl`) went with it. An item let go within 8 cm of a free slot goes into it,
   a taken slot refuses and says so, and `apply` lays a slotted item there on every machine. Only
   made items take slots. Let-go keeps the meaning it has on XRInteractor's grip (put down, slot or
   throw): pasting is a press, never a let-go.
@@ -996,7 +996,7 @@ a real room (60) is last, when every station exists. Every slice leaves the suit
   track's part sounds (DemoSong.role_of the track's name). So a demo item packs as its `part` (the
   role) and its window. ItemState gains `part` (empty for every other item), and GodotBackend plays
   an item's own `part` where it has one, before its track's. A demo cassette pasted onto another
-  track plays the part it was pulled from. At the ear and in the grain cloud it is
+  track plays the part it was pulled from. At the ear it is
   DemoSong.render_window of that part. On Reaper there are no parts, and pasting one is refused with
   the reason (`a demo part plays only on the built-in engine`).
 - **Every sound has a path and a budget.** MonitorSynth's header puts Godot's mixer at 30 to 50 ms
@@ -1009,7 +1009,7 @@ a real room (60) is last, when every station exists. Every slice leaves the suit
   of the tracking's own. The modular is played from the keys, so its arithmetic is C in the helper,
   as the tine's is, with the same arithmetic in GDScript for recording and for bandmates, checked
   equal through the helper's `--render` as the tine is. Where the helper cannot run, all of these
-  play through Godot, and the tag says so. The grain cloud and the platter's scratch are textures
+  play through Godot, and the tag says so. The platter's scratch is a texture
   heard by one player, through Godot at its figure, said on their tags. The talk box is a sung voice
   through a mic: the mic's input latency, 11 ms for a 512-point analysis, and Godot's output, about
   60 ms, said on its tag. Its player hears it late, and the take is placed by the voice's own
@@ -1068,7 +1068,7 @@ a real room (60) is last, when every station exists. Every slice leaves the suit
   drops and marbles, so only switches and rows cross the wire.
 - **Every switch a bandmate can see is a room row, and a choice about your own playing rides on what
   it is about.** The music box's TRACK, LENGTH, root and SCALE, the looper's arm (who is recording
-  and from which bar), the sampler's REC, the weather switch, and the grain cloud's KEY switch are
+  and from which bar), the sampler's REC, and the weather switch are
   room rows, asked and predicted. "Snap hand percussion" is the player's own: each hit carries its
   `snap` flag, and the host's HitRecorder snaps a guest's hit by it.
 - **Gestures do not collide.** Two bare fists held for ESCAPE_HOLD are the way out (XRRig), so a
@@ -1161,7 +1161,7 @@ motion decision, slices 21, 46 and 57), 35 (no controller pad marking, tracking 
 17, 38, 41 and 60), 36 (slices too big, a step per marker, verbs miscounted: slice 11 is now 13 and
 14, slice 34 is now 38 and 40, MAKE SECTIONS is one edit, and the verbs decision lists eight).
 
-Taken in part. 13: the grain cloud, the platter's scratch and the talk box stay on Godot's mixer, at
+Taken in part. 13: (the grain cloud, since removed, and) the platter's scratch and the talk box stay on Godot's mixer, at
 a figure shown on their tags. They are textures or heard by one player, and a native granular voice
 or vocoder would be a second implementation of each for little gain. 15: a guest still cannot lean
 in. It would need a stream per track from the host, and that is not part two. 29: on Reaper a
@@ -2547,7 +2547,7 @@ none.
     (`duck_squeeze_3.wav`) and mints a sample cassette into the rack. A rhythm squeezed while
     recording is already recorded, as hits on the armed or jacked track (HitRecorder), and plays
     back as hits (slice 16). To make a sample a track of audio, paste its cassette (slice 24).
-    Sample cassettes go to the ear (25), onto tracks (24) and into the grain cloud (54). Touches
+    Sample cassettes go to the ear (25), onto tracks (24) and (until it was removed) into the grain cloud (54). Touches
     sampler.gd (new, core/music), foley.gd (`take_of(use)`), session.gd (`take` on item_used),
     cassette_item.gd, item_room.gd, studio.gd, venue.gd, stations.gd. The suite checks: a squeeze
     after REC writes one WAV equal to Foley's stream for that take and mints a cassette, and REC is
@@ -5674,7 +5674,7 @@ none.
     of the keyboard stand and into the VCF's CV on the wall. `--world` steps the weather's socket
     once at launch. The notice saying where it went shows even with `--no-hud`.
 
-54. [x] **A sample as a cloud of grains: playing it.** The proving idea, #24, first half.
+54. [removed 2026-11-06] **A sample as a cloud of grains: playing it.** (Removed with the simple toys; this is its history.) The proving idea, #24, first half.
     `GrainCloud` (core/music/grain_cloud.gd, station `grains`, a cloud a metre across over a plinth
     in the live room). Put a sample cassette (26) or a clip cassette (23) in its bowl (holder
     `bowl`) and the cloud is that sound: a file's audio, a MIDI clip's render, or a demo part's
@@ -5773,7 +5773,7 @@ none.
     the string spool, its plaque on the side toward the desk. `--grains` puts a cassette of the
     song's first clip in the bowl and holds a hand of the shot's own in the cloud.
 
-55. [x] **The grain cloud, recorded and heard.** #24 finished. A player's grain events (hand place,
+55. [removed 2026-11-06] **The grain cloud, recorded and heard.** (Removed with the simple toys; this is its history.) #24 finished. A player's grain events (hand place,
     spread and length, 30 a second, stamped with `song`) go to bandmates by `Session.send_grains`,
     reliable on GESTURE_CHANNEL (its own, so a lost one is resent and never holds a note back), a
     few bytes each. Bandmates render the same grains from the same sample. A bandmate without the
@@ -6035,7 +6035,7 @@ and its number.
   instrument: heard live on this machine's MONITOR, and onto a track only when it is recorded: its
   jack's track whether armed or not, else the armed track), `voice` (the mic: the track's live input,
   heard through the DAW's monitoring), `playback` (a station whose sound is notes on a track, as the
-  music box's pegs are) or `local` (heard in your own ears only: the sampler, the grain cloud and
+  music box's pegs are) or `local` (heard in your own ears only: the sampler and
   the platter, which reach a track as a cassette pasted onto it). The graph knows no node in the
   room; the view puts each stage somewhere.
 - **A break is a stage with a reason, and the reasons are words.** `Stage.halt` is one of
@@ -6158,7 +6158,7 @@ and its number.
     (Venue.glasses_spot), a personal kind; X at a desk. `SignalView` as decided; the studio places
     stages (`_signal_place`) and lists the sources (`signal_sources`): every instrument item, the
     venue's set, the harp, the theremin, the modular, the looper, the mic, the music box, and the
-    sampler, the grain cloud and the platter as local. Hover card and hint on the glasses; the F1
+    sampler and the platter as local. Hover card and hint on the glasses; the F1
     ROOM page names X and Y. Touches signal_glasses_item.gd (new), item_room.gd, venue.gd,
     signal_view.gd (new), studio.gd, welcome_card.gd. The suite checks: the glasses toggle the view
     for the wearer only (a bandmate wearing them, in the room's state, changes nothing here; nothing

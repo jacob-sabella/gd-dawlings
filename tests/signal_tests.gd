@@ -177,8 +177,8 @@ func graph_breaks() -> void:
 			shaker.reason == SignalGraph.NOT_ARMED and shaker.words.contains("MONITOR"))
 	var jacked: SignalGraph.Trace = why.call(SignalGraph.source_id("bell1"))
 	check("one jacked into a track goes onto it armed or not", jacked.heard())
-	var grains: SignalGraph.Trace = why.call(SignalGraph.source_id("grains"))
-	check("a station heard in your ears only says so", grains.reason == SignalGraph.LOCAL)
+	var platter: SignalGraph.Trace = why.call(SignalGraph.source_id("platter"))
+	check("a station heard in your ears only says so", platter.reason == SignalGraph.LOCAL)
 	s.track(6).mute = true
 	s.track(6).rec_arm = false
 	var first: SignalGraph.Trace = why.call(SignalGraph.source_id("kick_in"))
@@ -186,13 +186,13 @@ func graph_breaks() -> void:
 
 
 ## The sources graph_breaks traces: the mic on Lead Vox (10), the shaker with nothing armed, a bell
-## jacked into Strings (12), the grain cloud, and something played onto Bass DI (6).
+## jacked into Strings (12), the platter, and something played onto Bass DI (6).
 func _sources(s: MixState) -> Array:
 	return [
 		{"id": "mic", "title": "MIC", "track": 10, "kind": SignalGraph.VOICE},
 		{"id": "shaker", "title": "SHAKER", "track": HitRecorder.armed_track(), "kind": SignalGraph.NOTES},
 		{"id": "bell1", "title": "BELL", "track": 12, "kind": SignalGraph.NOTES, "jacked": true},
-		{"id": "grains", "title": "GRAIN CLOUD", "track": 0, "kind": SignalGraph.LOCAL_SOURCE},
+		{"id": "platter", "title": "PLATTER", "track": 0, "kind": SignalGraph.LOCAL_SOURCE},
 		{"id": "kick_in", "title": "PADS", "track": 6, "kind": SignalGraph.NOTES},
 	]
 

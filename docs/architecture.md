@@ -496,7 +496,7 @@ not colour, says which is which). Where each station stands is still the venue's
 | MIXING | the control room, a ring round the seat | desk, timeline, rack, deck and platter, patch stand, patch wall, EQ wall, stage table, station board |
 | RHYTHM | straight ahead turned round from the desk | drum riser with the hand drums and the looper; the open lattice floor; the venue's instrument on the back wall behind the riser |
 | HARMONY & STRINGS | front right | the bricks table (fifths wheel, chord ledge, section blocks); harp, music box and string spool in a row facing it; handbells across its far end |
-| SYNTH & SOUND DESIGN | back right | the keyboard stand and modular rack; grain cloud and sampler round a middle in front of it |
+| SYNTH & SOUND DESIGN | back right | the keyboard stand and modular rack; the sampler round a middle in front of it |
 | VOCALS | back left | the booth (3.4 x 3.1 m, a 1.2 m door), the lyric board, room for a talk box |
 | TAPE & TOYS | front left | prop shelf and cassette rack on the wall, hoop and Tour case across the middle from them; the items' homes |
 
@@ -2328,83 +2328,8 @@ and DaisySP (MIT) are submodules under `vendor/`, compiled into the helper.
   Controls take the pointer only at the rack (`Studio.at_modular`, the nearest station's seat) or
   when it is visited.
 
-A sample as a cloud of grains (slice 54). `GrainCloud` (`core/music/grain_cloud.gd`) is a plaster
-plinth with a turned brass bowl on its cap and two brass posts up to a rail under the cloud's front
-edge (tools/blender/grain_cloud.py), and over it a cloud a metre across, half a metre tall and 40 cm
-deep. Station `grains` (LIVE, free-standing, a `Venue.WHEELED` trolley at `Venue.grains_spot`: by
-default in the aisle between the drum riser and the lattice, behind the string spool, its back
-GRAINS_GAP off the lattice and facing across the aisle, `Venue.default_grains_spot`; in the loft,
-whose aisle is the harp's, on the open floor beside the desk, `LoftVenue.default_grains_spot`). Its
-plaque hangs on the plinth's side toward the desk, since the cloud stands side on to it; its row has
-`air` round `air_at`, the cloud's middle, which the clearance test samples.
-
-- **The bowl is a holder.** `bowl`, one slot (`ItemRoom.HOLDS` takes cassettes), laid by
-  `Studio._hold_the_bowl` wherever the trolley stands. The cassette in it is the cloud's sound, made
-  on a worker as the platter makes its own: a file's (a sample's or an audio clip's, fetched by a
-  guest with FileSend, the tag FETCHING meanwhile), a MIDI clip's render or a demo part's window
-  (`CassetteItem.sound_work`), mono at `GrainVoice.RATE` (24 kHz, `mono_of`), at most SOURCE_MOST
-  (30 s). Its length lies left to right as COLUMNS of motes (a MultiMesh), each as bright as its
-  stretch is loud (`envelope_of`); an empty bowl's motes are faint and grey and its tag says PUT A
-  SAMPLE IN THE BOWL.
-- **The hand's place is the law.** `at_for` across (where in the sound), `length_for` up (SHORTEST
-  20 ms to LONGEST 200 ms), `density_for` in, away from the player (SPARSEST 4 to DENSEST 60 a
-  second, each step the same proportion), `place_for` the inverse. The spray is a bare hand's
-  thumb-to-little-finger span (`spread_of_span`), a controller's grip travel, or the desk's wheel,
-  up to SPREAD_MOST (30%) of the sound either way. `local_hands` is every confident tracked palm and
-  sure controller (or `hands`, a Callable, for the suite and `--grains`); the nearest the middle of
-  those in the cloud plays it.
-- **Events, never the hand.** Thirty times a second (`GrainVoice.EVENT_HZ`) the hand is read into an
-  event (`GrainVoice.event`: tick, at, length, density, spread, pitch; `is_event` checks one), kept
-  in `events`, and the voice plays that. `GrainVoice.Renderer` makes a window's grains from its event
-  alone: their onsets and places drawn from a generator seeded by the event's tick, each read at its
-  pitch under a Hann window, as loud as LEVEL over the root of the overlap, at most MOST (32)
-  sounding, carried window to window. `GrainVoice.render(sound, events)` is the same Renderer over a
-  list, so what the voice played (`kept`, while `keeping`) equals the render of its events sample for
-  sample: what slice 55 sends to bandmates and records.
-- **Heard by its player.** On MONITOR through an AudioStreamGenerator (PREROLL queued ahead of the
-  first window), at `latency_seconds`, said on the tag (`GRAINS · MONITOR 82 ms`): a texture one
-  player makes, as decided. KEY, the room's row `grains_key` (verb `grains_key` [bool],
-  `Studio._on_grains_key_pressed`, predicted), pitches every grain by the chord's root from the key's
-  tonic, a fourth down to a tritone up (`pitch_for`, read from `ChordHand.at`).
-- **At a desk.** `GrainCloud.Face`, the cloud's front, takes only a mouse's button: held, it plays
-  from where it is held (dragged, from where it is dragged); the wheel over it is `desk_spread`, and
-  Shift with it `desk_density`, since the face has no depth. The bowl (`GrainCloud.Bowl`) takes a
-  click with a cassette in the hand. The help card's PLAY page and the hover cards say all of it.
-  Motes and sparks move by `Ergonomics.motion_scale`; the tag says in words what is playing.
-
-The grain cloud recorded and heard (slice 55). Every event the cloud plays is `GrainCloud.played`,
-and the studio sends it (`Session.send_grains(e, GrainTakes.song())`): fourteen bytes
-(`GrainVoice.pack`, `unpack`; `GrainVoice.event` puts each number on the wire's grid as it makes one,
-so the event played and the one unpacked are the same numbers), reliable and ordered on
-`Session.GESTURE_CHANNEL` beside the modular's knobs, through the host, which refuses bytes that are
-not an event (`grains_refused`) and passes the rest on (`Session.grains_played`). Its song stamp is
-what the player hears (GuestMidi.heard) moved on by `GrainVoice.latency_seconds`, -1 while the song
-is not playing.
-- **Heard by the band.** `Presence.grains_heard` gives a bandmate's events to the studio's cloud
-  (`GrainCloud.hear`), which plays them on a `GrainVoice` of theirs (`GrainCloud.theirs`,
-  `voice_of`) from its own sound, out of the air at the cloud on the gear bus (`GrainVoice.speaker`,
-  a `Foley.emitter`). It begins THEIRS_WAIT (3) windows after their first event, then each window
-  plays its own tick's event or a rest, so uneven arrival is ridden over and what is heard of them is
-  `GrainVoice.render` of their events; one later than its window is dropped, and more than
-  THEIRS_MOST waiting skips ahead. Their grains light the sparks where they play from
-  (`GrainCloud.place_for`), the tag says who plays it, and nothing plays while this cloud's sound is
-  still FETCHING or RENDERING: a guest's fetch of the bowl's file is asked once (FileSend.fetch,
-  through `Studio._platter_file`).
-- **Recorded as audio.** `Session.grain_takes` (`GrainTakes`, `core/session/grain_takes.gd`) gets
-  every event this player's cloud sends (`played`). While the song records as they hear it
-  (`GrainTakes.rolling`: past any count-in, inside any punch range) the first event begins a
-  `GrainTake` (`core/audio/grain_take.gd`: the events and each one's song) onto the keys' chosen
-  track or the armed one (`GrainTakes.track`; with neither, the player is told once); recording
-  heard to stop ends it (`finish` drops anything stamped past the end), kept as `last_mine`. A guest
-  marks the take to the host, begun and ended (`Session.send_grain_take`), on the same channel as
-  its events, so the host takes exactly the events between the marks (`heard_event`, `heard_mark`).
-  Ended, the host renders the take from its own copy of the cloud's sound (`GrainTakes.sound`, the
-  studio's `grains_sound`) and writes it as a WAV at AudioTake.RATE (`GrainTake.at_take_rate`: every
-  other sample the render's own, the one between halfway) on a worker thread, then puts it in as an
-  audio take named `grains` at its first event's song (`GrainTake.lands`), on the player's behalf.
-  The render keeps the events' spacing (a window a tick; the cloud counts the ticks of windows a
-  long frame missed), so a hand let go mid-take is a gap in it, and since the live voice plays from
-  the same events, the take is what the player heard, sample for sample.
+The grain cloud (slices 54 and 55) was removed on 2026-11-06, with the other simple toys: only
+expressive instruments stay. Its history is in docs/spatial_loop.md.
 
 Lyrics in the booth (slice 56). The song's words are one LRC text, `MixState.lyrics`, replicated as
 `/timeline/lyrics` (durable, in the snapshot; `lyrics_changed`). `Lyrics` (`core/music/lyrics.gd`)
@@ -2813,7 +2738,7 @@ studio: one MultiMesh of tube segments on arcs (the lamp shader), Label3D pools 
 tags, a bead for a trace, and on a desktop a card on a CanvasLayer. The studio supplies the places
 (`Studio.signal_place`: a track's stages at its stage voice, else its strip; the master at the
 console's master section, OUT above it), the sources (`signal_sources`: instruments onto their
-jack's track or the armed one, the mic onto its voice track, the sampler, grain cloud and platter
+jack's track or the armed one, the mic onto its voice track, the sampler and platter
 as local) and what a pointed-at thing traces from (`signal_target_of`). `signal_view_on()` is the
 local hand's worn `SignalGlassesItem` or X; neither is room state. The glasses are a personal kind
 and share the one head slot (`Interactor.worn`) with the headphones.

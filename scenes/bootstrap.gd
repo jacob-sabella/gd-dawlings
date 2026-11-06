@@ -280,35 +280,6 @@ func _ready() -> void:
 		var bass: RoomString = studio.room_strings.values()[0] if not studio.room_strings.is_empty() else null
 		if bass != null:
 			bass.pluck(96)
-	# `--grains`: the grain cloud played (docs/spatial_loop.md part two, slice 54), for a shot of it: a
-	# cassette of the song's first clip in its bowl, and a hand of the shot's own in the cloud a third of
-	# the way across, grains 120 ms long, half way in, the fingers spread half open.
-	# `--grains-band` (slice 55): a bandmate, Grace, playing it too, long grains two thirds of the way
-	# across and well in, her events fed to the cloud each frame as Session.grains_played would; alone
-	# (without `--grains`), the tag says she plays it.
-	if (args["grains"] or args["grains_band"]) and studio.grain_cloud != null and studio.items != null and DAW.state != null:
-		var cloud := studio.grain_cloud
-		for track: int in DAW.state.track_indices():
-			if DAW.state.track(track).items.is_empty():
-				continue
-			var made := studio.items.mint(CassetteItem.KIND, CassetteItem.data_of(DAW.state, track, 0))
-			if made != null:
-				studio.items.slot(made, GrainCloud.HOLDER, 0)
-			break
-		if args["grains"]:
-			cloud.hands = func() -> Array:
-				return [{"at": cloud.to_global(GrainCloud.place_for(0.34, 0.12, GrainCloud.density_of(0.5))), "by": cloud,
-						"spread": 0.5}]
-		else:
-			cloud.hands = func() -> Array: return []
-		if args["grains_band"]:
-			var grace := Session.Participant.new()
-			grace.peer_id = 2
-			grace.display_name = "Grace"
-			Session.participants[2] = grace
-			get_tree().process_frame.connect(func() -> void:
-				if is_instance_valid(cloud):
-					cloud.hear(2, GrainVoice.event(cloud.ticks + 1, 0.68, 0.17, GrainCloud.density_of(0.75), 0.06)))
 	# `--lyrics`: the song's lyrics on the vocal booth's lyric board (docs/spatial_loop.md part two, slice
 	# 56), for a shot of it: four lines timed and two left to TAP, the board held at 7 s, half way
 	# through the second line, as the song would put it there.
@@ -399,7 +370,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "public": false, "join": "", "online": false, "join_code": "", "noray_server": "", "relay": false, "xr": OS.has_feature("android"), "xr_sim": false, "ar": OS.has_feature("android"),
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
-		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "perf": false, "play": false, "slap": false, "rings": 0, "pegs": false, "strings": false, "grains": false, "grains_band": false, "lyrics": false, "modular": false, "rack_preset": "acid_line", "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
+		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "perf": false, "play": false, "slap": false, "rings": 0, "pegs": false, "strings": false, "lyrics": false, "modular": false, "rack_preset": "acid_line", "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 		"ghost": {}, "tablets": [], "plugins": [], "welcome": false,
@@ -554,10 +525,6 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 			"--pegs": out["pegs"] = true
 			# `--strings`: strings across the room, a bass one ringing, for a shot of them (slice 48).
 			"--strings": out["strings"] = true
-			# `--grains`: the grain cloud played by a hand of the shot's own (slice 54), for a shot of it.
-			"--grains": out["grains"] = true
-			# `--grains-band`: a bandmate's grains in the cloud too, fed as they would arrive (slice 55).
-			"--grains-band": out["grains_band"] = true
 			# `--lyrics`: lyrics on the booth's lyric board, held mid-song, for a shot of it (slice 56).
 			"--lyrics": out["lyrics"] = true
 			# `--modular`: the modular wall re-patched, an A held on its keys, for a shot of it (slice 51).
