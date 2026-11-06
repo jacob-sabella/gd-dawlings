@@ -678,9 +678,7 @@ func default_string_spool_spot() -> Variant:
 
 ## The synth and sound design neighbourhood (Neighbourhoods) round the synth zone's keyboard stand
 ## and the modular wall over it: its middle SYNTH_MIDDLE out from the zone's middle into the room;
-## the theremin SYNTH_RING further out, facing the stand across the middle (its player's back to the
-## modular, a metre of air round both hands); the grain cloud on the middle's side toward the control
-## room and the sampler on the side away from it, each SYNTH_RING from the middle, facing it.
+## the grain cloud on the middle's side toward the control room and the sampler on the side away from it, each SYNTH_RING from the middle, facing it.
 const SYNTH_MIDDLE := 1.7
 const SYNTH_RING := 1.3
 const SAMPLER_RING := 1.1
@@ -695,24 +693,6 @@ func synth_middle() -> Variant:
 	var c := (at[&"synth"] as AABB).get_center()
 	var side := 1.0 if c.x >= 0.0 else -1.0
 	return [Vector3(c.x - side * SYNTH_MIDDLE, 0, c.z), side]
-
-
-## Where the theremin stands (Theremin, docs/spatial_loop.md part two, slice 50), in studio space: on
-## its trolley (WHEELED) wherever that has been pushed, else in the synth neighbourhood, SYNTH_RING out
-## from its middle on the side away from the stand, facing it. Its player stands in the middle between
-## it and the stand, with a metre of free air round both hands. Null where there is no synth zone (the
-## Rig Roulette room).
-func theremin_spot() -> Variant:
-	return _spot_of(Theremin.STATION)
-
-
-## Where the venue stands the theremin until it is pushed somewhere else; null where it has no synth zone.
-func default_theremin_spot() -> Variant:
-	var m: Variant = synth_middle()
-	if m == null:
-		return null
-	var side: float = m[1]
-	return Transform3D(Basis(Vector3.UP, side * PI * 0.5), (m[0] as Vector3) - Vector3(side * SYNTH_RING, 0, 0))
 
 
 ## Where the grain cloud stands (GrainCloud, docs/spatial_loop.md part two, slice 54), in studio
@@ -1058,7 +1038,7 @@ func floor_at(p: Vector2) -> float:
 ## for it at all. The fifths wheel is not here: it is mounted on the bricks table, which is the
 ## venue's and does not move.
 const WHEELED: Array[StringName] = [&"harp", &"bells", &"cassette_rack", &"sampler", &"tour_case",
-		&"prop_shelf", &"hoop", &"music_box", &"strings", &"theremin", &"grains"]
+		&"prop_shelf", &"hoop", &"music_box", &"strings", &"grains"]
 
 
 ## Where the venue stands wheeled piece `id` (WHEELED) until it is pushed somewhere else, in
@@ -1083,8 +1063,6 @@ func default_spot(id: StringName) -> Variant:
 			return default_music_box_spot()
 		&"strings":
 			return default_string_spool_spot()
-		&"theremin":
-			return default_theremin_spot()
 		&"grains":
 			return default_grains_spot()
 	return null
@@ -1390,9 +1368,6 @@ func wheeled_solids() -> Array:
 	var spool_at: Variant = string_spool_spot()
 	if spool_at != null:
 		out.append(RoomString.spool_solid(spool_at))
-	var theremin_at: Variant = theremin_spot()
-	if theremin_at != null:
-		out.append(Theremin.solid(theremin_at))
 	var grains_at: Variant = grains_spot()
 	if grains_at != null:
 		out.append(GrainCloud.solid(grains_at))

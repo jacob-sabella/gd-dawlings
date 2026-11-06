@@ -29,8 +29,8 @@ extends RefCounted
 ## "Tilt bends" off (GuestMidi.tilt_bends) and the tilt counts for nothing, but a bend wheel the
 ## hand holds (`Interactor.bend_wheel`, the desktop's Alt-drag) still bends: that is meant.
 ##
-## With `sending` off it reads the hand and sends nothing: the theremin adds its `semitones` to its
-## own glide and sends one bend for both, since a player has one wheel.
+## With `sending` off it reads the hand and sends nothing: what owns it adds its `semitones` to a
+## bend of its own and sends one bend for both, since a player has one wheel.
 
 ## A tilt this far (degrees) from where the note began is the most it bends.
 const TIP := 45.0
@@ -65,12 +65,11 @@ var hand: Object = null:
 ## Whether the hand's tilt bends at all here: off, only its bend wheel does (the plain keys').
 var tilts := true
 ## Whether it sends the bend itself. Off, it only reads the hand: what owns it adds `semitones` to a
-## bend of its own and sends the sum as one (the theremin, whose glide is the wheel already:
-## Theremin, docs/spatial_loop.md part two, slice 50).
+## bend of its own and sends the sum as one (an instrument whose glide is the wheel already).
 var sending := true
 ## Which of an Interactor's tilt angles is read as its roll: 0 its roll (`tilt_angles().x`), 1 its
-## pitch, up and down (`.y`). The theremin's desk reads the cursor's up and down, since across its
-## rule is the pitch itself (Theremin).
+## pitch, up and down (`.y`). A desk instrument may read the cursor's up and down instead, when
+## across it is the pitch itself.
 var axis := 0
 
 ## The last frame's bend, vibrato and their sum with the hand's bend wheel (semitones).

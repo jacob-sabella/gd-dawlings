@@ -820,13 +820,13 @@ a real room (60) is last, when every station exists. Every slice leaves the suit
 - **Every instrument that stands somewhere is a station, and the stations are one list.** `Stations`
   (core/music/stations.gd, static) has a row per station: `id`, `title`, `area` (`control`, `live`
   or `venue`), `zone` (the Venue.ZONES zone it is mounted in, or empty), `air` (the free radius it
-  needs round where it is played: 0.5 m for most, 1 m for the theremin), the Venue method that
+  needs round where it is played: 0.5 m for most, 1 m for the grain cloud), the Venue method that
   places it (`spot`), and two lines of help, `desk` (mouse and keys) and `hands` (hands and
   buttons). Slice 10 starts it with the harp, the bells and the wheel. Each later slice appends its
   own row. Four things are made from the list, so no slice can forget them: the help card's PLAY
   pages, the desktop's go-to, the headset's station board, and the suite's clearance loop. The loop
   is `_test_every_venue_stands_the_harp_clear` made general, in two kinds. A free-standing station
-  (the harp, the theremin, the music box) keeps every check the harp's has: on the floor, off the
+  (the harp, the music box) keeps every check the harp's has: on the floor, off the
   footprint, clear of every zone box, every other station's solid and every item spot, with room to
   stand in front. A zone-mounted station (its `zone` set: the wheel, the section blocks and the
   ledge on the bricks table, the keyboard stand and the modular wall in the synth zone, the drum
@@ -5157,7 +5157,7 @@ none.
     plaque, the run above (`SHOT_CAM "3.35,-0.32,1.25,0.35,1.2,4.0"`). The lattice's light is dim on
     the run's top rows.
 
-50. [x] **A theremin.** The proving idea, #23, and #37 on it. `Theremin` (core/music/theremin.gd,
+50. [removed 2026-11-06] **A theremin.** (Removed with the simple toys; this is its history.) The proving idea, #23, and #37 on it. `Theremin` (core/music/theremin.gd,
     station `theremin`, free-standing at `Venue.theremin_spot` on open live-room floor, with `air` 1
     m: a metre of free air round both hands, which the synth zone does not have) has a pitch antenna
     and a volume loop. The pitch hand's distance from the antenna is the pitch, continuous over

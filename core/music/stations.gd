@@ -9,8 +9,7 @@ extends RefCounted
 ## A row (`ALL`) is a station: `id`; `title`, as its plaque and the card letter it; `area`, the
 ## part of the world it is in (CONTROL, LIVE or VENUE, one PLAY page each); `zone`, the
 ## Venue.ZONES zone it is mounted in, or empty for one that stands on the floor by itself; `air`,
-## the free radius it needs round where it is played (m), and, where a row says it (`air_at`, the
-## theremin's hands), the point in its frame that air is round; `spot`, the Venue method that places it
+## the free radius it needs round where it is played (m), and, where a row says it (`air_at`), the point in its frame that air is round; `spot`, the Venue method that places it
 ## (a Transform3D, or null where the venue has no room for it); `at`, the point in that frame a
 ## player looks at while playing it; and two lines of help, `desk` (mouse and keys) and `hands`
 ## (hands and buttons); and `frame`, what of it a player should see from where they stand, its
@@ -224,18 +223,6 @@ const ALL := [
 		"foot": RoomString.SPOOL_FOOT, "foot_z": RoomString.SPOOL_FOOT_Z, "top": RoomString.SPOOL_TOP,
 		"desk": "click the spool for an end · click where it goes, then where it ends: anything the cursor meets, across the room for a bass, a hand's width for a high note · click a string to pluck · wiggle to wobble · Alt + mouse up or down bends · drag it hard off its line, or click a knot, to cut",
 		"hands": "press the spool for an end · press where it goes, carry it, let go where it ends · its length is its note · brush it to pluck · tilt to bend · pull it hard to cut",
-	},
-	{
-		# The theremin (Theremin, slice 50): free-standing in front of the drum riser's outer end, facing
-		# the desk, its player between it and the control room, so a trolley in a studio. Its `air` is a
-		# metre round where its hands play (`air_at`), toward it and either side. Its frame's top is the
-		# pitch rod's tip, its foot its plaque's under the cabinet, opened.
-		"id": &"theremin", "title": "THEREMIN", "area": LIVE, "zone": &"", "air": 1.0,
-		"spot": &"theremin_spot", "at": Theremin.LOOK, "air_at": Theremin.AIR_AT,
-		"frame": [Theremin.FRAME_TOP, Theremin.FRAME_FOOT],
-		"foot": Theremin.FOOT, "foot_z": Theremin.FOOT_Z, "top": Theremin.TOP,
-		"desk": "rest the cursor on the lettered rule out from the tall rod: across is pitch, nearer the rod higher · the wheel over it is volume, up from silent · hold the button to play it full · SCALE on its front: free, the key's scale or the chord · wiggle to wobble · Alt + mouse up or down bends",
-		"hands": "one hand near the tall rod is the pitch, nearer is higher · the other over the loop is the volume, silent down on it · the lit ring is your note · tilt to bend · shake to wobble",
 	},
 	{
 		# The grain cloud (GrainCloud, slice 54): free-standing in the aisle between the drum riser and

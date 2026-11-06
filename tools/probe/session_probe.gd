@@ -255,19 +255,6 @@ const STRING_ID := &"probe_string"
 const STRING_A := Vector3(-0.6, 1.2, 5.0)
 const STRING_B := Vector3(-0.6, 1.2, 7.0)
 const STRING_SONG := 780.0
-## A theremin (slice 50): from 62.72 the guest plays a theremin of its own (Theremin, its SCALE switch
-## FREE) with two hands of the probe's: the volume hand half way up over the loop, the pitch hand
-## gliding in from THEREMIN_FROM's distance from the rod to THEREMIN_TO's by 62.84, past the bend's
-## two semitones so its note is handed on legato, hearing the song at THEREMIN_SONG and recording
-## onto TAKE_TRACK. At 62.84 the volume hand comes down onto the loop and it is silent; its clock
-## stops at 62.86, sending the take. By 62.92 the host has the glide on TAKE_TRACK at THEREMIN_SONG,
-## named for the theremin: its notes rising, each down before the last let go, and its bends and
-## CC 11 in the item; and heard its notes with the theremin's source. THEREMIN_TO is more than two
-## semitones past the first hand-on's note whichever frame that falls in (71 or 72, the glide's frames
-## a semitone apart), so the note is handed on twice.
-const THEREMIN_SONG := 800.0
-const THEREMIN_FROM := 69.0
-const THEREMIN_TO := 74.6
 ## The grain cloud recorded and heard (slice 55): from 64.08 the guest's cloud plays GRAINS events, one
 ## a frame (Session.send_grains, stamped with the song it hears from GRAINS_SONG plus the cloud's
 ## figure), while it records onto TAKE_TRACK, both halves' clouds sounding the same tone
@@ -1101,9 +1088,6 @@ func _host(port: int) -> void:
 	_check_string_tied()
 	await _until(62.5)
 	_check_string_take()
-	# A theremin (slice 50): the guest's glide from 62.72, sent at 62.86, is a take on TAKE_TRACK by 62.92.
-	await _until(62.92)
-	_check_theremin_take()
 
 	# How much of the time before the end the work took: the end has moved twelve times as it grew.
 	if DAW.backend is GodotBackend:
@@ -2835,7 +2819,6 @@ func _guest(port: int) -> void:
 	await _loop_a_layer()
 	await _press_the_music_box()
 	await _tie_and_pluck_a_string()
-	await _play_a_theremin()
 	await _play_the_grains()
 	await _tap_the_lyrics()
 	await _until(64.88)
@@ -4947,82 +4930,3 @@ class Clapper extends MixSource:
 
 	func describe() -> String:
 		return "A clapping test microphone"
-
-
-## Host: the guest's theremin glide (slice 50), as my DAW has it: one item on TAKE_TRACK at
-## THEREMIN_SONG named for the theremin, its notes rising from THEREMIN_FROM and each down before the
-## last let go, its bends and its CC 11 in it; and its notes heard with the theremin's source.
-func _check_theremin_take() -> void:
-	var heard := _sourced.filter(func(n: Array) -> bool: return n[3] == Theremin.SOURCE and n[0] == Session.Note.ON)
-	check("the guest's theremin reached me as notes from it, handed on (%s)" % [heard],
-			heard.size() >= 2 and int(heard[0][1]) == roundi(THEREMIN_FROM) and int(heard[0][2]) == _other_id())
-	var takes: Array = DAW.state.track(TAKE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
-			return it.start > THEREMIN_SONG - 0.1 and it.start < THEREMIN_SONG + 1.0)
-	check("and its take is an item on track %d (%d)" % [TAKE_TRACK, takes.size()], takes.size() == 1)
-	if takes.size() != 1:
-		return
-	var item: MixState.ItemState = takes[0]
-	var notes := MidiTake.unpack_relative(item.notes, item.start)
-	notes.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
-	var legato := notes.size() >= 2 and int(notes[0][2]) == roundi(THEREMIN_FROM)
-	for i in range(1, notes.size()):
-		legato = legato and int(notes[i][2]) > int(notes[i - 1][2]) and notes[i][0] <= notes[i - 1][1] + 0.001
-	check("named for the theremin, its notes rising, each down before the last let go (%s, %s)" % [item.name, notes],
-			item.name.contains("theremin") and legato)
-	var bends := 0
-	var swells: Array = []
-	for o in range(0, item.controls.size() - DawKitClip.CONTROL_WIDTH + 1, DawKitClip.CONTROL_WIDTH):
-		if int(item.controls[o + 1]) == DawKitClip.PITCH_BEND:
-			bends += 1
-		elif int(item.controls[o + 1]) == 11:
-			swells.append(int(item.controls[o + 2]))
-	check("with its glide's bends and its CC 11 from the loop, half way up (%d bends, CC 11 %s)" % [bends, swells],
-			bends >= 3 and not swells.is_empty() and swells[0] == 64)
-
-
-## Guest: a theremin of my own (slice 50) played from 62.72 by two hands of mine, its pitch hand
-## gliding in from THEREMIN_FROM to THEREMIN_TO by 62.84, onto TAKE_TRACK at THEREMIN_SONG; the volume
-## hand down at 62.84, the clock stopped at 62.86, and the take sent.
-func _play_a_theremin() -> void:
-	await _until(62.72)
-	var gm := Session.guest_midi
-	gm.reach(Theremin.SOURCE, true)
-	gm.target_track = TAKE_TRACK
-	gm.heard_source = _given_clock(THEREMIN_SONG, true)
-	var t := Theremin.new()
-	t.keys = gm
-	t.snap = Theremin.Snap.FREE
-	var at := {"pitch": THEREMIN_FROM, "volume": Theremin.VOLUME_SPAN * 0.5 + 0.001}
-	t.hands = func() -> Array:
-		return [{"at": t.to_global(Vector3(Theremin.ROD.x + Theremin.distance_for(float(at["pitch"])), Theremin.GUIDE_Y,
-				Theremin.ROD.y)), "by": self},
-				{"at": t.to_global(Theremin.LOOP + Vector3(0, Theremin.LOOP_REST + float(at["volume"]), 0)), "by": t}]
-	t.clock = func() -> float: return float(gm.heard_source.call()["seconds"])
-	add_child(t)
-	# Its first step: physics_frame is emitted before the frame's _physics_process, so the second one
-	# is the first after the theremin has read its hands. The glide begins from there.
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	var began := Time.get_ticks_msec()
-	check("my theremin holds A4 at half volume, recording (%d, %d)" % [t.note, t.expression],
-			t.note == roundi(THEREMIN_FROM) and t.expression == 64 and gm.is_recording())
-	while (Time.get_ticks_msec() - _start) / 1000.0 - _shift < 62.84:
-		var gone := (Time.get_ticks_msec() - began) / 1000.0
-		at["pitch"] = lerpf(THEREMIN_FROM, THEREMIN_TO, clampf(gone / 0.06, 0.0, 1.0))
-		await get_tree().physics_frame
-	check("and glided in past the bend's edge it handed its note on (%d hand-ons, at %d)" % [t.handed_on, t.note],
-			t.handed_on >= 2 and t.note > roundi(THEREMIN_FROM) + 2)
-	at["volume"] = -0.01
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	check("the volume hand down on the loop, it is silent", not t.sounding() and gm.held.is_empty())
-	await _until(62.86)
-	gm.heard_source = _given_clock(THEREMIN_SONG + 1.0, false)
-	await _until(62.9)
-	check("and the take went to the host from THEREMIN_SONG, with its controls (%s)" % [gm.last_take],
-			not gm.is_recording() and int(gm.last_take.get("notes", 0)) >= 2 and int(gm.last_take.get("controls", 0)) >= 3
-			and absf(float(gm.last_take.get("start", 0.0)) - THEREMIN_SONG) < 0.1)
-	gm.reach(Theremin.SOURCE, false)
-	gm.heard_source = Callable()
-	gm.target_track = 0
-	t.queue_free()

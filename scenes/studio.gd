@@ -278,12 +278,6 @@ var music_box_row: Array = MusicBox.DEFAULT_ROW.duplicate()
 ## stood again with each venue at its `string_spool_spot`, on its trolley. Null where there are no zones
 ## and in AR.
 var spool: RoomString.Spool
-## The theremin in front of the drum riser's outer end (Theremin, docs/spatial_loop.md part two,
-## slice 50; Venue.default_theremin_spot), stood again with each venue at its `theremin_spot`, on its
-## trolley. Its SCALE switch is this player's own, kept across a change of venue (`theremin_snap`).
-## Null where there are no zones and in AR.
-var theremin: Theremin
-var theremin_snap := Theremin.Snap.FREE
 ## The grain cloud in the aisle between the drum riser and the lattice (GrainCloud, docs/spatial_loop.md
 ## part two, slice 54; Venue.default_grains_spot), stood again with each venue at its `grains_spot`, on
 ## its trolley, its bowl the room's holder `bowl`. Null where there are no zones and in AR.
@@ -707,7 +701,6 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_stand_the_looper()
 	_stand_the_music_box()
 	_stand_the_spool()
-	_stand_the_theremin()
 	_stand_the_grains()
 	_stand_the_lyrics()
 	_stand_the_venue_instrument()
@@ -918,23 +911,6 @@ func _stand_the_music_box() -> void:
 	music_box.row_asked.connect(_on_music_box_asked)
 	music_box.told.connect(func(text: String) -> void: Session.notice.emit(text))
 	venue.add_child(music_box)
-
-
-## The theremin (Theremin), in the venue's own frame at its spot in front of the drum riser: a child of
-## the venue, so it goes with it, its trolley the studio's. Its notes are this player's keys; its
-## SCALE switch is theirs too, and goes from one venue's theremin to the next. None where there are
-## no zones.
-func _stand_the_theremin() -> void:
-	if theremin != null and is_instance_valid(theremin):
-		theremin_snap = theremin.snap
-	theremin = null
-	var spot: Variant = Stations.spot(venue, Theremin.STATION)
-	if spot == null:
-		return
-	theremin = Theremin.new()
-	theremin.transform = spot
-	theremin.snap = theremin_snap
-	venue.add_child(theremin)
 
 
 ## The grain cloud (GrainCloud), in the venue's own frame at its spot in the aisle: a child of the venue,
@@ -2009,10 +1985,6 @@ const LIVE_TROLLEYS := {
 	# The spool's round foot: above it a click is the reel or its plaque.
 	&"strings": ["StringSpoolTrolley", Vector2(0, RoomString.SPOOL_FOOT_Z), RoomString.SPOOL_FOOT, 9.0,
 			[[Vector3(RoomString.SPOOL_FOOT.x * 2.0, 0.12, RoomString.SPOOL_FOOT.y * 2.0), Vector3(0, 0.06, RoomString.SPOOL_FOOT_Z)]]],
-	# The theremin's splayed foot and its post, under the cabinet: above them a click is its field,
-	# its SCALE switch or its plaque.
-	&"theremin": ["ThereminTrolley", Vector2(0, Theremin.FOOT_Z), Theremin.FOOT, 9.0,
-			[[Vector3(0.58, 0.08, 0.32), Vector3(0, 0.04, 0)], [Vector3(0.07, 0.7, 0.07), Vector3(0, 0.45, 0)]]],
 	# The grain cloud's plinth, to the foot of its plaque: above it a click is its plaque, its KEY
 	# switch, the bowl or the cloud.
 	&"grains": ["GrainCloudTrolley", Vector2(0, GrainCloud.FOOT_Z), GrainCloud.FOOT, 9.0,
@@ -2191,10 +2163,6 @@ func _carry_live(id: StringName) -> void:
 			var at: Variant = venue.string_spool_spot()
 			if spool != null and is_instance_valid(spool) and at != null:
 				spool.transform = at
-		&"theremin":
-			var at: Variant = venue.theremin_spot()
-			if theremin != null and is_instance_valid(theremin) and at != null:
-				theremin.transform = at
 		&"grains":
 			var at: Variant = venue.grains_spot()
 			if grain_cloud != null and is_instance_valid(grain_cloud) and at != null:
@@ -5299,21 +5267,6 @@ func _follow_strings() -> void:
 	Session.guest_midi.reach(RoomString.SOURCE, near)
 
 
-## The theremin in this player's reach (`&"theremin"` in GuestMidi.instruments) while they stand at
-## it, the cursor rests in its field, or it sounds: so the synth is up before the first note, and a
-## phrase with rests in it is one take.
-func _follow_theremin() -> void:
-	if Session.guest_midi == null:
-		return
-	var near := false
-	if theremin != null and is_instance_valid(theremin) and theremin.is_inside_tree():
-		var me := _standing_at()
-		var at := theremin.global_position
-		near = theremin.sounding() or theremin.field.is_hovered() \
-				or Vector2(me.x - at.x, me.z - at.z).length() < ChordHarp.NEAR
-	Session.guest_midi.reach(Theremin.SOURCE, near)
-
-
 ## The lyric board (LyricBoard), in the venue's own frame at its spot in the booth: a child of the venue,
 ## so it goes with it. Its notices are toasts, and its EDIT is `edit_lyrics`.
 func _stand_the_lyrics() -> void:
@@ -7829,7 +7782,6 @@ func _process(delta: float) -> void:
 	_follow_harp()
 	_follow_wheel()
 	_follow_strings()
-	_follow_theremin()
 	_modular_owed += get_process_delta_time()
 	if _modular_owed >= 1.0 / 30.0 - 0.001:
 		_modular_owed = 0.0
@@ -8785,7 +8737,7 @@ func toggle_signal_view() -> void:
 
 
 ## The room's sound sources, as SignalGraph.build takes them: every instrument item and the venue's
-## set (onto its jack's track, armed or not, else the armed track), the harp, the theremin and the
+## set (onto its jack's track, armed or not, else the armed track), the harp and the
 ## modular (the armed track), the mic (its voice track), and the sampler, the grain cloud and the
 ## platter, heard in one player's ears only.
 func signal_sources() -> Array:
@@ -8817,8 +8769,6 @@ func signal_sources() -> Array:
 	if harp != null:
 		var to: Array = onto.call(ChordHarp.SOURCE, null)
 		row.call(ChordHarp.SOURCE, "HARP", harp, SignalGraph.NOTES, to[0], to[1])
-	if theremin != null:
-		row.call(Theremin.SOURCE, "THEREMIN", theremin, SignalGraph.NOTES, armed)
 	if rack_wall != null:
 		row.call(Modular.SOURCE, "MODULAR", rack_wall, SignalGraph.NOTES, armed)
 	for local in [[&"sampler", "SAMPLER", sampler], [&"grains", "GRAIN CLOUD", grain_cloud], [&"platter", "PLATTER", platter]]:

@@ -496,7 +496,7 @@ not colour, says which is which). Where each station stands is still the venue's
 | MIXING | the control room, a ring round the seat | desk, timeline, rack, deck and platter, patch stand, patch wall, EQ wall, stage table, station board |
 | RHYTHM | straight ahead turned round from the desk | drum riser with the hand drums and the looper; the open lattice floor; the venue's instrument on the back wall behind the riser |
 | HARMONY & STRINGS | front right | the bricks table (fifths wheel, chord ledge, section blocks); harp, music box and string spool in a row facing it; handbells across its far end |
-| SYNTH & SOUND DESIGN | back right | the keyboard stand and modular rack; theremin, grain cloud and sampler round a middle in front of it |
+| SYNTH & SOUND DESIGN | back right | the keyboard stand and modular rack; grain cloud and sampler round a middle in front of it |
 | VOCALS | back left | the booth (3.4 x 3.1 m, a 1.2 m door), the lyric board, room for a talk box |
 | TAPE & TOYS | front left | prop shelf and cassette rack on the wall, hoop and Tour case across the middle from them; the items' homes |
 
@@ -2281,49 +2281,8 @@ The marble run (slice 49) was removed on 2026-11-06, with the other simple toys:
 instruments stay. Its history is in docs/spatial_loop.md. The lattice zone is open floor again, and the
 rack's WORLD module still has a `marbles` output that nothing drives.
 
-A theremin (slice 50). `Theremin` (`core/music/theremin.gd`) is a walnut cabinet on a stand with a
-splayed foot, an upright chrome pitch rod on its right and a level volume loop on its left
-(tools/blender/theremin.py), station `theremin` (LIVE, free-standing, a `Venue.WHEELED` trolley at
-`Venue.theremin_spot`: by default in front of the drum riser's outer end in the ring's frame,
-`Venue.default_theremin_spot`, facing the desk; in the studio's side-room arrangement off the
-riser's long edge, `StudioVenue.default_theremin_spot`). Its row has `air` 1 m round `air_at`, the
-hands' place: the clearance test samples a half disc of that radius toward the station and to
-either side, clear of every solid taller than the hands' lowest and on walkable floor.
-
-- **The law is static and pure.** `pitch_for(distance)` is C6 at NEAR (0.1 m) from the rod's axis
-  down to C3 at FAR (0.6 m), log in distance (each octave the same factor), `distance_for` its
-  inverse; `expression_for(height)` is CC 11, 0 resting on the loop up to 127 VOLUME_SPAN above.
-  `target_for` is the SCALE switch: FREE, the nearest scale step (`Harmony.snap`) or the nearest
-  chord tone, inside the range. Snapped, the played pitch glides to the target (GLIDE, 50 ms).
-- **One note on the keys, bent, handed on.** It plays this player's keys (GuestMidi) with source
-  `&"theremin"`: its first note goes down after its CC 11 and bend, so it sounds where it should
-  from its first moment; within `Wobble.BEND_MOST` (two semitones) it is bent, and past that the
-  nearest note goes down, bent to the hand, before the last lets go (`handed_on`), so no frame is
-  silent and the take is legato notes, bends and CC 11, which play back on any synth. Controls go
-  at most 60 a second. The volume hand down on the loop lets it go, and the keys rest the wheel.
-- **Hands, sorted to their jobs.** `local_hands` is every confident tracked bare palm and every
-  sure tracked controller (or `hands`, a Callable, for the suite, the probe and `--theremin`);
-  `sort_hands` makes the one nearest over the loop the volume hand and, of the rest, the one
-  nearest the rod inside its field the pitch hand. A tracked hand lost for under LOST holds its
-  note; a cursor that leaves the field means it. Tilt and shake are read by a `Wobble` whose
-  `sending` is off (it only measures), and its semitones are added to the glide before the note
-  is chosen, so a tilt past the range hands on as a reach would.
-- **The guide.** Rings round the rod at GUIDE_Y at each scale step (each chord tone in CHORD), the
-  key's root rings heavier, each lettered on a rule out from the rod (the lowest and each root
-  with its octave; alternately over and under it, made smaller where the rings crowd near the
-  rod). The ring nearest the hand's own pitch is lit and its letter larger, a ring is drawn at the
-  hand's distance, and a bar runs from the lit ring to it: how far off it is, not by colour alone.
-  The hover card says it in words (`A4 +30 cents`, the volume, what SCALE snaps to).
-- **At a desk.** `Theremin.Field` is a band DESK_BAND over and under the rule (not the whole air
-  round the rod, so the booth's mic behind it stays clickable from the seat): the cursor resting in
-  it is the pitch hand, across along the lettered rule; the wheel over it is `desk_volume`, from
-  silent, shown as a ghost disc over the loop; the button held plays it full; the cursor leaving
-  puts the volume down. The mouse's wiggle wobbles and Alt bends it, as everywhere.
-  `Theremin.ModeKey`, on the cabinet's front, cycles FREE, SCALE and CHORD (the wheel or a stick
-  steps it), starting FREE as the real instrument is; the studio keeps the switch across venues
-  (`Studio.theremin_snap`).
-  `Studio._follow_theremin` reaches for its source while it sounds, its field is hovered or this
-  player stands within ChordHarp.NEAR of it.
+The theremin (slice 50) was removed on 2026-11-06, with the other simple toys: only expressive
+instruments stay. Its history is in docs/spatial_loop.md.
 
 The modular room (replaces the slice 51-53 wall). `RackWall` (`hardware/rack/rack_wall.gd`) is a
 Surface, station `modular` (LIVE, mounted in the `synth` zone), hung at `Venue.modular_spot` over
@@ -2377,7 +2336,7 @@ default in the aisle between the drum riser and the lattice, behind the string s
 GRAINS_GAP off the lattice and facing across the aisle, `Venue.default_grains_spot`; in the loft,
 whose aisle is the harp's, on the open floor beside the desk, `LoftVenue.default_grains_spot`). Its
 plaque hangs on the plinth's side toward the desk, since the cloud stands side on to it; its row has
-`air` round `air_at`, the cloud's middle, which the clearance test samples as the theremin's.
+`air` round `air_at`, the cloud's middle, which the clearance test samples.
 
 - **The bowl is a holder.** `bowl`, one slot (`ItemRoom.HOLDS` takes cassettes), laid by
   `Studio._hold_the_bowl` wherever the trolley stands. The cassette in it is the cloud's sound, made

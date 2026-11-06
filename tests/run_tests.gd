@@ -709,12 +709,6 @@ func _ready() -> void:
 	await _test_a_string_is_tied_from_the_spool_to_anything_the_ray_meets()
 	await _test_a_string_is_cut_by_a_pull_or_its_knot()
 	await _test_a_guests_string_is_predicted_and_a_too_long_one_refused()
-	_test_a_theremins_pitch_is_the_hands_distance_from_its_rod()
-	_test_a_theremin_holds_one_note_bent_and_hands_on_past_the_bend()
-	_test_a_theremins_guide_letters_its_scale_and_lights_the_nearest_ring()
-	await _test_a_desk_plays_the_theremin_across_its_rule_and_its_wheel_is_the_volume()
-	_test_a_snapped_theremin_hands_on_to_the_tone_it_glides_to()
-	await _test_a_desk_theremins_cursor_travel_is_its_pitch_and_not_a_bend()
 	_test_the_storms_density_and_drops_are_the_weather_sockets_events()
 	_test_a_drip_gates_an_env_in_the_cave()
 	_test_a_rings_level_follows_its_layers_notes_the_same_on_two_machines()
@@ -27192,13 +27186,13 @@ func _test_every_venue_stands_every_station_clear() -> void:
 			var tag := "%s:%d" % [id, v]
 			var here := Stations.ids(venue)
 			# And the venue's own instrument where it has one (slice 42).
-			var stood: Array[StringName] = [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"theremin", &"grains", &"modular", &"lyrics"]
+			var stood: Array[StringName] = [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"grains", &"modular", &"lyrics"]
 			if VENUE_SETS.has(id):
 				stood.append(VenueInstrument.STATION)
 			# And its weather's switch where this arrangement has weather (slice 44).
 			if WEATHERS.any(func(w: Array) -> bool: return w[0] == id and w[1] == v):
 				stood.append(Weather.STATION)
-			check("%s: the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, the hand drums, the looper, the music box, the string spool, the theremin, the grain cloud, the modular wall, the lyric board and any instrument and weather of its own stand here (%s)" % [tag, here],
+			check("%s: the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, the hand drums, the looper, the music box, the string spool, the grain cloud, the modular wall, the lyric board and any instrument and weather of its own stand here (%s)" % [tag, here],
 					here == stood)
 			for station: StringName in here:
 				var r := Stations.row(station)
@@ -27238,11 +27232,11 @@ func _test_every_venue_stands_every_station_clear() -> void:
 	check("in the Rig Roulette room the harp stands inside the walls (%s)" % in_room.origin,
 			absf(in_room.origin.x) + ChordHarp.FOOT.x < roulette.room_width * 0.5
 			and roulette.back_of_house().has_point(Vector2(in_room.origin.x, in_room.origin.z)))
-	check("and there is no bricks table, so no wheel, no booth, so no sampler and no lyric board, and no zones, so no music box, no string spool, no theremin and no grain cloud: it stands only the harp, the bells and the cassette rack (%s)" % [Stations.ids(roulette)],
+	check("and there is no bricks table, so no wheel, no booth, so no sampler and no lyric board, and no zones, so no music box, no string spool and no grain cloud: it stands only the harp, the bells and the cassette rack (%s)" % [Stations.ids(roulette)],
 			Stations.ids(roulette) == [&"harp", &"bells", &"cassette_rack"] and Stations.spot(roulette, &"wheel") == null
 			and Stations.spot(roulette, &"sampler") == null and Stations.spot(roulette, MusicBox.STATION) == null
 			and Stations.spot(roulette, RoomString.STATION) == null
-			and Stations.spot(roulette, Theremin.STATION) == null and Stations.spot(roulette, GrainCloud.STATION) == null
+			and Stations.spot(roulette, GrainCloud.STATION) == null
 			and Stations.spot(roulette, LyricBoard.STATION) == null and Stations.seat(roulette, &"wheel") == null)
 	roulette.free()
 
@@ -27753,12 +27747,6 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 			node = studio.spool
 			if node == null or not node.transform.is_equal_approx(spot) or studio.spool.reel == null:
 				return false
-		&"theremin":
-			# The theremin in front of the riser (slice 50), its field and its SCALE switch on it.
-			node = studio.theremin
-			if node == null or not node.transform.is_equal_approx(spot) or studio.theremin.field == null \
-					or studio.theremin.key == null:
-				return false
 		&"grains":
 			# The grain cloud in the aisle (slice 54), its face, its bowl and its KEY switch on it, and its
 			# bowl the room's holder there.
@@ -27916,10 +27904,10 @@ func _check_free_station(studio: Studio, id: StringName, spot: Transform3D, tag:
 		_check_free_air(studio, id, spot, tag)
 
 
-## A free-standing station played in the air (the theremin, slice 50): its `air` free round where its
+## A free-standing station played in the air (the grain cloud): its `air` free round where its
 ## hands play (`air_at`), toward it and to either side, a half disc on the floor walked every 5 cm out
 ## and every 15 degrees round. Free is on walkable floor, and clear of everything that stands up into
-## the hands' reach (taller than Theremin.HANDS_LOW): the venue's solids, the zones' solids and every
+## the hands' reach (taller than 0.88 m): the venue's solids, the zones' solids and every
 ## other free-standing station where it stands. Behind is where its player stands.
 func _check_free_air(studio: Studio, id: StringName, spot: Transform3D, tag: String) -> void:
 	var venue := studio.venue
@@ -27928,7 +27916,7 @@ func _check_free_air(studio: Studio, id: StringName, spot: Transform3D, tag: Str
 	var air: float = r["air"]
 	var at: Vector3 = r["air_at"]
 	var tall: Array = (venue.solids() + venue.wheeled_solids()).filter(func(f: Dictionary) -> bool:
-		return f != mine and float(f.get("top", Walker.SOLID_HEIGHT)) > Theremin.HANDS_LOW)
+		return f != mine and float(f.get("top", Walker.SOLID_HEIGHT)) > 0.88)
 	var crowded: Array = []
 	var off_floor: Array = []
 	var out := 0.05
@@ -30628,7 +30616,7 @@ func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
 	var live := {"lines": (pages[names.find("PLAY · LIVE ROOM 1/2")]["lines"] as Array)
 			+ (pages[names.find("PLAY · LIVE ROOM 2/2")]["lines"] as Array)}
 	check("each PLAY line of a stood station is its title and its desk line, and goes there, over both pages",
-			live["lines"].map(func(l): return l[2]) == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"theremin", &"grains", &"modular", &"lyrics"]
+			live["lines"].map(func(l): return l[2]) == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"grains", &"modular", &"lyrics"]
 			and live["lines"][0][0] == "CHORD HARP" and live["lines"][0][1] == Stations.row(&"harp")["desk"])
 	var sizes: Array = []
 	for i in pages.size():
@@ -30931,7 +30919,7 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 	var arrived := true
 	var facing := true
 	var toasts := true
-	for n in 22:
+	for n in 21:
 		said.clear()
 		studio._unhandled_input(key)
 		visits.append(studio.station)
@@ -30945,8 +30933,8 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 		var r := Stations.row(studio.station)
 		toasts = toasts and said.size() == 1 and said[0].begins_with("%s, %s: " % [r["title"], Stations.where(r)]) \
 				and said[0].contains(r["desk"]) and not said[0].contains("in the this")
-	check("I twenty-one times walks to the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the TV, the hand drums, the looper, the music box, the string spool, the theremin, the grain cloud, the modular wall, the lyric board and the studio's tubular bells, and a twenty-second comes back round (%s)" % [visits],
-			visits == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"theremin", &"grains", &"modular", &"lyrics", &"venue", &"harp"])
+	check("I twenty times walks to the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the TV, the hand drums, the looper, the music box, the string spool, the grain cloud, the modular wall, the lyric board and the studio's tubular bells, and a twenty-first comes back round (%s)" % [visits],
+			visits == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"grains", &"modular", &"lyrics", &"venue", &"harp"])
 	check("each time the walker ends at the seat, on walkable floor, facing the station", arrived and facing)
 	check("and a toast says its title, where it is (in the control room, in the live room, in this venue) and its desk line", toasts)
 	key.shift_pressed = true
@@ -31007,7 +30995,7 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	studio.ergonomics.motion_scale = 0.0
 	var board := studio.station_board
 	check("a headset has the station board, by the desk (%s)" % [board.rows() if board != null else null],
-			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv", &"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"theremin", &"grains", &"modular", &"lyrics", &"venue"])
+			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv", &"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"grains", &"modular", &"lyrics", &"venue"])
 	# Home is the mix position, in front of the desk, not the room's origin inside the console;
 	# and from there the board is out of the way ahead (the desk is what is in view) and a few
 	# steps behind.
@@ -46737,506 +46725,6 @@ func _test_a_guests_string_is_predicted_and_a_too_long_one_refused() -> void:
 	studio.queue_free()
 	await get_tree().process_frame
 	_as_session(Session.Role.SOLO, 1)
-	_offline()
-
-
-## A theremin for the suite, at the origin on this player's keys: its hands `readings` (an Array the
-## test fills with {at, by}), its clock at 90 s, stepped only by the test (`_theremin_for`).
-func _theremin(readings: Array) -> Theremin:
-	var t := Theremin.new()
-	t.keys = Session.guest_midi
-	t.hands = func() -> Array: return readings
-	t.clock = func() -> float: return 90.0
-	add_child(t)
-	t.set_physics_process(false)
-	return t
-
-
-## `t` stepped `seconds` at 60 frames a second: `move` (seconds since it began -> nothing) first
-## each frame, `after` (nothing -> nothing) after each, when given.
-func _theremin_for(t: Theremin, seconds: float, move := Callable(), after := Callable()) -> void:
-	for i in roundi(seconds * 60.0):
-		if move.is_valid():
-			move.call(i / 60.0)
-		t.step(1.0 / 60.0)
-		if after.is_valid():
-			after.call()
-
-
-## Where a pitch hand plays MIDI pitch `p` in a theremin's frame: out from its rod along the rule.
-static func _theremin_at(p: float) -> Vector3:
-	return Vector3(Theremin.ROD.x + Theremin.distance_for(p), Theremin.GUIDE_Y, Theremin.ROD.y)
-
-
-## Where a volume hand is `h` metres over resting on the loop, in a theremin's frame.
-static func _theremin_over_loop(h: float) -> Vector3:
-	return Theremin.LOOP + Vector3(0, Theremin.LOOP_REST + h, 0)
-
-
-## The law (idea #23): the hand's distance from the rod is its pitch, log over three octaves,
-## nearer higher; the other hand's height over the loop is its expression, silent resting on it;
-## the SCALE switch snaps free, to the scale or to the chord's tones, inside the range.
-func _test_a_theremins_pitch_is_the_hands_distance_from_its_rod() -> void:
-	check("C6 at NEAR from the rod, C3 at FAR: three octaves (%.2f, %.2f)" % [Theremin.pitch_for(Theremin.NEAR),
-			Theremin.pitch_for(Theremin.FAR)], is_equal_approx(Theremin.pitch_for(Theremin.NEAR), 84.0)
-			and is_equal_approx(Theremin.pitch_for(Theremin.FAR), 48.0) and Theremin.TOP_PITCH - Theremin.BOTTOM_PITCH == 36)
-	var octave := pow(Theremin.FAR / Theremin.NEAR, 1.0 / 3.0)
-	check("log: each octave is the same factor of distance (%.3f), so C5 is at NEAR x that and F#4 at the distances' geometric mean (%.2f, %.2f)"
-			% [octave, Theremin.pitch_for(Theremin.NEAR * octave), Theremin.pitch_for(sqrt(Theremin.NEAR * Theremin.FAR))],
-			absf(Theremin.pitch_for(Theremin.NEAR * octave) - 72.0) < 0.001
-			and absf(Theremin.pitch_for(Theremin.NEAR * octave * octave) - 60.0) < 0.001
-			and absf(Theremin.pitch_for(sqrt(Theremin.NEAR * Theremin.FAR)) - 66.0) < 0.001
-			and Theremin.pitch_for((Theremin.NEAR + Theremin.FAR) * 0.5) < 62.0)
-	var falling := true
-	for i in 50:
-		var d := lerpf(Theremin.NEAR, Theremin.FAR, i / 50.0)
-		falling = falling and Theremin.pitch_for(d) > Theremin.pitch_for(d + 0.01)
-	check("nearer is always higher, and past either end it holds there", falling
-			and is_equal_approx(Theremin.pitch_for(0.02), 84.0) and is_equal_approx(Theremin.pitch_for(1.5), 48.0))
-	check("and distance_for turns it round", [0.12, 0.3, 0.55].all(func(d: float) -> bool:
-			return absf(Theremin.distance_for(Theremin.pitch_for(d)) - d) < 0.0001))
-	check("the loop: silent resting on it, full VOLUME_SPAN over that, half at half (%d, %d, %d, %d)" % [
-			Theremin.expression_for(0.0), Theremin.expression_for(Theremin.LOOP_REST),
-			Theremin.expression_for(Theremin.LOOP_REST + Theremin.VOLUME_SPAN * 0.5),
-			Theremin.expression_for(Theremin.LOOP_REST + Theremin.VOLUME_SPAN)],
-			Theremin.expression_for(-0.1) == 0 and Theremin.expression_for(Theremin.LOOP_REST) == 0
-			and Theremin.expression_for(Theremin.LOOP_REST + Theremin.VOLUME_SPAN * 0.5) == 64
-			and Theremin.expression_for(Theremin.LOOP_REST + Theremin.VOLUME_SPAN) == 127
-			and Theremin.expression_for(2.0) == 127)
-	var h := Harmony.new()
-	var scaled := Theremin.target_for(61.3, h, Theremin.Snap.SCALE)
-	check("FREE plays the hand's own pitch; SCALE the nearest step of C major (%.1f)" % scaled,
-			is_equal_approx(Theremin.target_for(61.3, h, Theremin.Snap.FREE), 61.3)
-			and h.scale.has(posmod(roundi(scaled), 12)) and absf(scaled - 61.3) <= 1.3
-			and is_equal_approx(Theremin.target_for(64.2, h, Theremin.Snap.SCALE), 64.0))
-	check("CHORD the nearest of C E G (%.0f, %.0f), and none of them past the range (%.0f)" % [
-			Theremin.target_for(65.4, h, Theremin.Snap.CHORD), Theremin.target_for(66.0, h, Theremin.Snap.CHORD),
-			Theremin.target_for(85.6, h, Theremin.Snap.SCALE)],
-			is_equal_approx(Theremin.target_for(65.4, h, Theremin.Snap.CHORD), 64.0)
-			and is_equal_approx(Theremin.target_for(66.0, h, Theremin.Snap.CHORD), 67.0)
-			and Theremin.target_for(85.6, h, Theremin.Snap.SCALE) <= 84.0
-			and Theremin.target_for(85.6, h, Theremin.Snap.CHORD) <= 84.0)
-	var steps := Theremin.guide_pitches(h, Theremin.Snap.SCALE)
-	var tones := Theremin.guide_pitches(h, Theremin.Snap.CHORD)
-	check("the guide's pitches: the scale's 22 steps C3..C6, the chord's 10 tones; FREE is guided to the scale (%d, %d)"
-			% [steps.size(), tones.size()], steps.size() == 22 and steps[0] == 48 and steps[-1] == 84
-			and tones.size() == 10 and Array(tones).all(func(p: int) -> bool: return [0, 4, 7].has(posmod(p, 12)))
-			and Theremin.guide_pitches(h, Theremin.Snap.FREE) == steps)
-	check("its letters: the lowest and each C with its octave, the rest bare",
-			Theremin.letter_for(48, h, true) == "C3" and Theremin.letter_for(50, h, false) == "D"
-			and Theremin.letter_for(60, h, false) == "C4" and Theremin.letter_for(69, h, false) == "A")
-
-
-## Played on the keys with its source (`&"theremin"`): one note held, bent with the hand within the
-## bend's two semitones and handed on legato past them, the next note down before the last lets go
-## so no frame is silent; the other hand's height over the loop its CC 11, silent down on it; and
-## the take keeps the notes, the bends and the expression, named for the theremin.
-func _test_a_theremin_holds_one_note_bent_and_hands_on_past_the_bend() -> void:
-	_offline()
-	_as_session(Session.Role.SOLO, 1)
-	var gm := Session.guest_midi
-	var spy := _spy_on_keys()
-	var bend := DawKitClip.PITCH_BEND
-	gm.reach(Theremin.SOURCE, true)
-	var now := {"seconds": 90.0, "playing": true, "recording": true, "valid": true}
-	gm.heard_source = func() -> Dictionary: return now.duplicate()
-	gm.target_track = 4
-	DAW.state.track(4).items.clear()
-	gm.follow(now)
-	var readings: Array = []
-	var t := _theremin(readings)
-	t.snap = Theremin.Snap.FREE
-	var right := HandGestures.new()
-	_roll_hand(right, 0.0)
-	var left := HandGestures.new()
-	_roll_hand(left, 0.0)
-	readings.append({"at": _theremin_at(69.0), "by": right})
-	# A millimetre over half way, so the float sum of the loop's height and this one rounds as half.
-	readings.append({"at": _theremin_over_loop(Theremin.VOLUME_SPAN * 0.5 + 0.001), "by": left})
-	var rests := gm.rests
-	_theremin_for(t, 0.1)
-	check("a hand A4's distance from the rod (%.3f m) holds A4 on the keys, with its source (%d, %s)"
-			% [Theremin.distance_for(69.0), t.note, gm.held], t.note == 69 and gm.held.has(69) and spy.on.has(69)
-			and gm.wheel_source() == Theremin.SOURCE)
-	check("the other hand half way up over the loop is CC 11 at 64 (%d, %s)" % [t.expression, spy.controls],
-			t.expression == 64 and int(spy.controls.get(11, -1)) == 64)
-	var heard := {"silent": 0, "most": 0}
-	var count := func() -> void:
-		if gm.held.is_empty():
-			heard["silent"] += 1
-		heard["most"] = maxi(heard["most"], gm.held.size())
-	_theremin_for(t, 0.5, func(s: float) -> void:
-		readings[0]["at"] = _theremin_at(lerpf(69.0, 70.5, clampf(s / 0.4, 0.0, 1.0)))
-		now["seconds"] = 90.1 + s, count)
-	check("drawn in to 70.5 it is still A4, bent +1.5 (%d, %d wanted %d)" % [t.note, spy.controls.get(bend, 0),
-			Wobble.value_of(1.5)], t.note == 69 and t.handed_on == 0
-			and absi(int(spy.controls.get(bend, 0)) - Wobble.value_of(1.5)) <= 8)
-	_theremin_for(t, 0.6, func(s: float) -> void:
-		readings[0]["at"] = _theremin_at(lerpf(70.5, 73.3, clampf(s / 0.5, 0.0, 1.0)))
-		now["seconds"] = 90.6 + s, count)
-	check("on in to 73.3 it hands on past each two semitones: A4, B4, C#5, bent +0.3 there (%d, %d hand-ons, %d)"
-			% [t.note, t.handed_on, spy.controls.get(bend, 0)], t.note == 73 and t.handed_on == 2
-			and gm.held.keys() == [73] and absi(int(spy.controls.get(bend, 0)) - Wobble.value_of(0.3)) <= 8)
-	check("with no frame silent and never two held after a frame: legato (%s)" % [heard],
-			heard["silent"] == 0 and heard["most"] == 1 and gm.rests == rests)
-	_theremin_for(t, 0.4, func(s: float) -> void:
-		readings[1]["at"] = _theremin_over_loop(lerpf(Theremin.VOLUME_SPAN * 0.5 + 0.001, -0.01, clampf(s / 0.3, 0.0, 1.0)))
-		now["seconds"] = 91.2 + s)
-	check("the other hand let down onto the loop fades it out and lets it go (%d, %s), and the wheel rests"
-			% [t.expression, gm.held], not t.sounding() and gm.held.is_empty() and gm.rests == rests + 1)
-	now["seconds"] = 91.7
-	gm.follow(now)
-	now["recording"] = false
-	gm.follow(now)
-	var items := DAW.state.track(4).items
-	var name: String = items[0].name if items.size() == 1 else ""
-	check("the take is the theremin's (%s)" % name, name.begins_with("%s theremin " % Session.local_name))
-	var notes: Array = MidiTake.unpack_relative(items[0].notes, items[0].start) if items.size() == 1 else []
-	notes.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
-	var legato := notes.size() == 3 and notes.map(func(n: Array) -> int: return n[2]) == [69, 71, 73]
-	for i in range(1, notes.size()):
-		legato = legato and notes[i][0] <= notes[i - 1][1] + 0.001 and notes[i][0] > notes[i - 1][0]
-	check("and in it A4, B4 and C#5, each down before the last let go (%s)" % [notes], legato)
-	var rows := _control_rows(items[0].controls) if items.size() == 1 else []
-	var bends := rows.filter(func(r: Array) -> bool: return r[1] == bend)
-	var swells := rows.filter(func(r: Array) -> bool: return r[1] == 11)
-	var top: int = bends.reduce(func(m: int, r: Array) -> int: return maxi(m, int(r[2])), -8192) if not bends.is_empty() else 0
-	var drops := 0
-	for i in range(1, bends.size()):
-		if int(bends[i - 1][2]) >= Wobble.value_of(1.8) and int(bends[i][2]) <= Wobble.value_of(0.2):
-			drops += 1
-	check("its bends glide up to near the bend's edge and drop back to the next note's own at each hand-on (%d bends, the most %d, %d drops)"
-			% [bends.size(), top, drops], bends.size() >= 20 and top >= Wobble.value_of(1.8) and drops == 2)
-	var low: int = swells.reduce(func(m: int, r: Array) -> int: return mini(m, int(r[2])), 127) if not swells.is_empty() else 127
-	check("and its CC 11 is there from the first, at 64, fading to nearly nothing (%d rows, first %s, least %d)"
-			% [swells.size(), swells[0] if not swells.is_empty() else [], low],
-			swells.size() >= 5 and int(swells[0][2]) == 64 and low < 20)
-	gm.heard_source = Callable()
-	gm.target_track = 0
-	t.free()
-	right.free()
-	left.free()
-	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-
-
-## The guide: a ring round the rod at each step of the scale (the chord's tones in CHORD), each
-## lettered, the one nearest the hand lit and lettered larger, a bar from it out to the hand saying
-## how far off; SCALE glides a short way to the step, and the switch on the cabinet cycles FREE,
-## SCALE and CHORD; and the hand's tilt bends it on top of the glide (slice 15).
-func _test_a_theremins_guide_letters_its_scale_and_lights_the_nearest_ring() -> void:
-	_offline()
-	_as_session(Session.Role.SOLO, 1)
-	var gm := Session.guest_midi
-	var spy := _spy_on_keys()
-	gm.reach(Theremin.SOURCE, true)
-	var readings: Array = []
-	var t := _theremin(readings)
-	check("it starts FREE, every pitch between, as the real instrument is", t.snap == Theremin.Snap.FREE)
-	t.snap = Theremin.Snap.SCALE
-	t._process(0.0)
-	var said := t.letters()
-	var h := t.harmony_now()
-	var steps := Theremin.guide_pitches(h, Theremin.Snap.SCALE)
-	var lettered := true
-	for i in steps.size():
-		lettered = lettered and i < said.size() and said[i] == h.note_name(steps[i], i == 0 or posmod(steps[i], 12) == h.root)
-	check("in the song's %s its rings are the scale's 22 steps C3..C6, the lowest and each %s with its octave (%s)"
-			% [h.key_name, h.note_name(h.root, false), said], said.size() == 22 and steps.size() == 22 and lettered
-			and said[0] == "C3" and said[1] == "D" and said.count(h.note_name(h.root, false)) == 0)
-	var ring := t.get_node_or_null("Guide/Ring69") as MeshInstance3D
-	var torus := ring.mesh as TorusMesh if ring != null else null
-	check("A4's ring is round the rod at A4's distance", torus != null
-			and absf((torus.inner_radius + torus.outer_radius) * 0.5 - Theremin.distance_for(69.0)) < 0.0005
-			and ring.position.is_equal_approx(Vector3(Theremin.ROD.x, Theremin.GUIDE_Y, Theremin.ROD.y)))
-	var right := HandGestures.new()
-	_roll_hand(right, 0.0)
-	readings.append({"at": _theremin_at(69.3), "by": right})
-	_theremin_for(t, 0.3)
-	t._process(0.0)
-	var letter := t.get_node_or_null("Guide/Letter69") as Label3D
-	check("a hand at 69.3 lights A4's ring, its letter larger, and plays A4 snapped (%d, %.2f)" % [t.lit_pitch(), t.pitch],
-			t.lit_pitch() == 69 and t._lit.visible and letter != null and letter.scale.x > 1.5
-			and absf((t._lit.mesh as TorusMesh).inner_radius + Theremin.LIT_TUBE - Theremin.distance_for(69.0)) < 0.001
-			and t.note == 69 and absf(t.pitch - 69.0) < 0.01)
-	check("30 cents sharp, said in words and in the title (%s; %s)" % [t.pitch_words(), t.field.title()],
-			t.cents_off() == 30 and t.pitch_words() == "A4 +30 cents" and t.field.title() == "THEREMIN  A4")
-	close_to("and the bar runs from the lit ring out to the hand", t.bar_length(),
-			absf(Theremin.distance_for(69.3) - Theremin.distance_for(69.0)), 0.0005)
-	var others := t.get_node("Guide").get_children().filter(func(n: Node) -> bool:
-			return n is Label3D and n != letter and n.scale.x > 1.01)
-	check("and no other letter is lit", others.is_empty())
-	var row := float(letter.get_meta(&"y")) if letter != null else 0.0
-	check("the lit letter stands a row further out from the rule than its own, clear of its neighbours (%.3f, %.3f)"
-			% [letter.position.y if letter != null else 0.0, row], letter != null and absf(letter.position.y - row
-			- signf(row - Theremin.GUIDE_Y) * Theremin.LETTER_CAP * Theremin.LIT_LIFT) < 0.0005)
-	var shown: Array = t._letters.filter(func(l: Label3D) -> bool: return l.visible and l != letter)
-	# Where they would stand if shown: each kept by its size (`_size_letters`).
-	var kept: Array = t._letters.filter(func(l: Label3D) -> bool: return float(l.get_meta(&"size", 0.0)) > 0.0 and l != letter)
-	var apart := true
-	var crowded := ""
-	for a: Label3D in kept:
-		for b: Label3D in kept:
-			if a == b or signf(a.position.y - Theremin.GUIDE_Y) != signf(b.position.y - Theremin.GUIDE_Y) \
-					or a.position.x >= b.position.x:
-				continue
-			var half := (_letter_width(a) * a.scale.x + _letter_width(b) * b.scale.x) * 0.5
-			if b.position.x - a.position.x < half:
-				apart = false
-				crowded = "%s|%s" % [a.text, b.text]
-	check("no two letters on a side of the rule would run together where the rings crowd the rod (%s)" % crowded, apart)
-	check("but none is shown, lit or not: the field's card names the lit note (%d shown of %d)"
-			% [shown.size() + (1 if letter != null and letter.visible else 0), t._letters.size()],
-			shown.is_empty() and letter != null and not letter.visible and t._letters.size() == 22)
-	readings[0]["at"] = _theremin_at(71.2)
-	t.step(1.0 / 60.0)
-	var first := t.pitch
-	_theremin_for(t, 0.3)
-	check("moved to 71.2, SCALE glides to B4 a short way, not at once (%.2f after a frame, %.2f after 0.3 s), bent from A4"
-			% [first, t.pitch], first > 69.2 and first < 70.8 and absf(t.pitch - 71.0) < 0.02 and t.note == 69
-			and t.handed_on == 0)
-	t.snap = Theremin.Snap.CHORD
-	t._process(0.0)
-	check("CHORD rings the chord's ten tones, C E G (%s)" % [t.letters()], t.letters().size() == 10
-			and t.letters()[0] == "C3" and t.letters()[1] == "E" and t.letters()[2] == "G")
-	readings[0]["at"] = _theremin_at(69.3)
-	_theremin_for(t, 0.3)
-	check("and a hand at 69.3 is G4's (%d, %.2f)" % [t.lit_pitch(), t.pitch], t.lit_pitch() == 67 and absf(t.pitch - 67.0) < 0.02)
-	t.snap = Theremin.Snap.FREE
-	_theremin_for(t, 1.0 / 60.0)
-	t._process(0.0)
-	check("FREE plays the hand's own pitch at once (%.2f), guided to the scale still (%d rings)" % [t.pitch, t.letters().size()],
-			absf(t.pitch - 69.3) < 0.001 and t.letters().size() == 22)
-
-	# The switch on the cabinet.
-	var mouse := MouseInteractor.new()
-	add_child(mouse)
-	check("the switch says FREE (%s)" % t.key.legend.text.replace("\n", " "), t.key.legend.text == "SNAP\nFREE")
-	t.key.grab_begin(mouse, t.key.global_position)
-	t.key.grab_end(mouse)
-	check("pressed, SCALE (%s, %s)" % [t.key.legend.text.replace("\n", " "), t.key.title()], t.snap == Theremin.Snap.SCALE
-			and t.key.legend.text == "SNAP\nSCALE" and t.key.title() == "THEREMIN  SNAP  SCALE")
-	t.key.grab_begin(mouse, t.key.global_position)
-	t.key.grab_end(mouse)
-	t.key.grab_begin(mouse, t.key.global_position)
-	t.key.grab_end(mouse)
-	check("then CHORD, then round to FREE", t.snap == Theremin.Snap.FREE)
-	t.key.nudge(mouse, -1, false)
-	check("and the wheel steps it back, round to CHORD", t.snap == Theremin.Snap.CHORD and t.key.legend.text == "SNAP\nCHORD")
-
-	# The tilt: on top of the hand's place, read by its own Wobble, which sends nothing itself.
-	t.snap = Theremin.Snap.FREE
-	readings[0]["at"] = _theremin_at(69.0)
-	_theremin_for(t, 0.2)
-	_theremin_for(t, 1.0, func(s: float) -> void: _roll_hand(right, 20.0 * clampf(s / 0.2, 0.0, 1.0), right.palm()))
-	var want := Wobble.bend_for(20.0)
-	check("the pitch hand rolled 20 degrees bends A4 up %.2f, on top of where it is (%.2f, %d)" % [want, t.pitch,
-			spy.controls.get(DawKitClip.PITCH_BEND, 0)], t.note == 69 and absf(t.pitch - 69.0 - want) < 0.02
-			and absi(int(spy.controls.get(DawKitClip.PITCH_BEND, 0)) - Wobble.value_of(want)) <= 8)
-	check("its Wobble reads the hand and sends nothing of its own (%d)" % t.wobble.sends, t.wobble.sends == 0 and t.wobble.engaged())
-	t.free()
-	mouse.free()
-	right.free()
-	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-
-
-## A guide letter's width at its own size, before its scale (m).
-static func _letter_width(l: Label3D) -> float:
-	var f := l.font if l.font != null else Lettering.face()
-	return f.get_string_size(l.text, HORIZONTAL_ALIGNMENT_LEFT, -1, l.font_size).x * l.pixel_size if f != null else 0.0
-
-
-## Snapped, a glide that hands on hands on to the tone it glides to, bent back onto the glide: so
-## a take in SCALE is the scale's notes, not those between that the glide passes (E4 to G4 is not
-## an F#4, A4 to C5 not a B4).
-func _test_a_snapped_theremin_hands_on_to_the_tone_it_glides_to() -> void:
-	_offline()
-	_as_session(Session.Role.SOLO, 1)
-	var gm := Session.guest_midi
-	var spy := _spy_on_keys()
-	gm.reach(Theremin.SOURCE, true)
-	var readings: Array = []
-	var t := _theremin(readings)
-	t.snap = Theremin.Snap.SCALE
-	var h := t.harmony_now()
-	var right := HandGestures.new()
-	_roll_hand(right, 0.0)
-	readings.append({"at": _theremin_at(64.0), "by": right})
-	_theremin_for(t, 0.2)
-	var held: Array = []
-	var note_down := func() -> void:
-		if t.note >= 0 and not held.has(t.note):
-			held.append(t.note)
-	readings[0]["at"] = _theremin_at(67.0)
-	_theremin_for(t, 0.3, Callable(), note_down)
-	check("in %s, E4 glided to G4 hands on to G4 itself, not F#4 (%s, %d, %.2f)" % [h.key_name, held, t.note, t.pitch],
-			t.note == 67 and absf(t.pitch - 67.0) < 0.02 and t.handed_on == 1 and not held.has(66))
-	readings.clear()
-	_theremin_for(t, 0.4)
-	readings.append({"at": _theremin_at(69.0), "by": right})
-	_theremin_for(t, 0.2)
-	held.clear()
-	readings[0]["at"] = _theremin_at(72.0)
-	_theremin_for(t, 0.3, Callable(), note_down)
-	check("taken out and in again at A4, glided to C5 it ends on C5, not B4 bent up (%s, %d, %.2f)" % [held, t.note, t.pitch], t.note == 72
-			and absf(t.pitch - 72.0) < 0.02 and held.all(func(n: int) -> bool: return h.scale.has(posmod(n, 12))))
-	held.clear()
-	readings[0]["at"] = _theremin_at(52.0)
-	_theremin_for(t, 0.6, Callable(), note_down)
-	check("and a long glide down, a hand-on at each two semitones, holds only the scale's notes (%s, %d)" % [held, t.note],
-			t.note == 52 and held.size() >= 3 and held.all(func(n: int) -> bool: return h.scale.has(posmod(n, 12))))
-	t.snap = Theremin.Snap.FREE
-	readings[0]["at"] = _theremin_at(55.4)
-	held.clear()
-	_theremin_for(t, 0.1, Callable(), note_down)
-	check("FREE still hands on to the nearest note, between the scale's too (%s, %d)" % [held, t.note], t.note == 55
-			and absf(t.pitch - 55.4) < 0.001)
-	t.free()
-	right.free()
-	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-
-
-## At a desk the cursor's travel across the rule is the pitch, and nothing else: the mouse's wiggle
-## (its tilt everywhere else, Wobble) does not bend it as the cursor glides along the rule, so the
-## pitch heard is the cursor's, snapped in SCALE. Its wiggle up and down wobbles, and Alt's wheel
-## bends.
-func _test_a_desk_theremins_cursor_travel_is_its_pitch_and_not_a_bend() -> void:
-	_offline()
-	_as_session(Session.Role.SOLO, 1)
-	var gm := Session.guest_midi
-	var spy := _spy_on_keys()
-	gm.reach(Theremin.SOURCE, true)
-	var t := _theremin([])
-	t.snap = Theremin.Snap.SCALE
-	var mouse := MouseInteractor.new()
-	mouse.alt_override = 0
-	add_child(mouse)
-	await get_tree().physics_frame
-	var rule_at := func(p: float) -> Vector3: return t.to_global(_theremin_at(p))
-	mouse.hovered = t.field
-	mouse.hover_point = rule_at.call(60.0)
-	t.field.hover_enter(mouse)
-	t.field.nudge(mouse, 8, false)
-	_theremin_for(t, 0.2)
-	check("the cursor at C4 on the rule, the wheel up: C4 sounds (%d), and the mouse wiggles there (%s)" % [t.note,
-			mouse.wiggles()], t.note == 60 and mouse.wiggles())
-	var worst := {"off": 0.0, "roll": 0.0}
-	var sweep := func(s: float) -> void:
-		var k := clampf(s / 0.4, 0.0, 1.0)
-		mouse.hover_point = rule_at.call(lerpf(60.0, 50.0, k))
-		mouse.wiggle(Vector2(600.0 + 380.0 * k, 450.0), 1.0 / 60.0)
-	var watch := func() -> void:
-		worst["off"] = maxf(worst["off"], absf(t.pitch - t._glided))
-		worst["roll"] = maxf(worst["roll"], absf(rad_to_deg(mouse.tilt_angles().x)))
-	_theremin_for(t, 0.6, sweep, watch)
-	check("swept 380 px along the rule from C4 down to D3, the mouse rolled up to %.0f degrees, yet the heard pitch is the glide's own, never bent off it (at most %.3f)"
-			% [worst["roll"], worst["off"]], worst["roll"] > 10.0 and worst["off"] < 0.005)
-	check("and it comes to rest on D3, the scale's tone (%d, %.2f)" % [t.note, t.pitch], t.note == 50
-			and absf(t.pitch - 50.0) < 0.02 and t.harmony_now().scale.has(posmod(t.note, 12)))
-	var wobbled := {"most": 0.0}
-	_theremin_for(t, 0.8, func(s: float) -> void:
-		mouse.wiggle(Vector2(980.0, 450.0 + 14.0 * sin(TAU * 5.0 * s)), 1.0 / 60.0),
-		func() -> void: wobbled["most"] = maxf(wobbled["most"], absf(t.pitch - 50.0)))
-	check("its wiggle up and down, five times a second, wobbles it either way of D3 (%.2f), and no further than vibrato's most"
-			% wobbled["most"], wobbled["most"] > 0.05 and wobbled["most"] <= Wobble.VIBRATO_MOST + 0.02)
-	_theremin_for(t, 0.5, func(_s: float) -> void: mouse.wiggle(Vector2(980.0, 450.0), 1.0 / 60.0))
-	mouse.alt_override = 1
-	mouse.bend_by(100.0)
-	_theremin_for(t, 0.1, func(_s: float) -> void: mouse.wiggle(Vector2(980.0, 450.0), 1.0 / 60.0))
-	check("and Alt with the mouse up a semitone bends D3 up one (%.2f, %d)" % [t.pitch, t.note],
-			t.note == 50 and absf(t.pitch - 51.0) < 0.05)
-	mouse.alt_override = 0
-	mouse.hovered = null
-	t.field.hover_exit(mouse)
-	_theremin_for(t, 0.1)
-	t.free()
-	mouse.free()
-	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-
-
-## At a desk: the cursor in the field is the pitch hand, across along the lettered rule; the wheel
-## over it is the volume, from silent; the button held plays it full; a drag carries it; and the
-## cursor leaving puts the volume back down. A click at the rule lands on the field, and over its
-## band it does not, so what stands beyond is left to be clicked.
-func _test_a_desk_plays_the_theremin_across_its_rule_and_its_wheel_is_the_volume() -> void:
-	_offline()
-	_as_session(Session.Role.SOLO, 1)
-	var gm := Session.guest_midi
-	var spy := _spy_on_keys()
-	gm.reach(Theremin.SOURCE, true)
-	var t := _theremin([])
-	t.snap = Theremin.Snap.SCALE
-	var mouse := MouseInteractor.new()
-	add_child(mouse)
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	var rule_at := func(p: float) -> Vector3: return t.to_global(_theremin_at(p))
-	var eye := t.to_global(Vector3(0.3, 1.45, 1.3))
-	var hit: Dictionary = mouse._cast(eye, (rule_at.call(69.0) - eye).normalized())
-	check("from where you stand, a click at the rule's A lands on the field (%s)" % _who(hit["control"]),
-			hit["control"] == t.field)
-	var over: Dictionary = mouse._cast(eye, (t.to_global(Vector3(Theremin.ROD.x + 0.3, Theremin.GUIDE_Y + 0.3,
-			Theremin.ROD.y)) - eye).normalized())
-	check("and a click a hand over the rule goes through to what stands beyond (%s)" % _who(over["control"]),
-			over["control"] != t.field)
-	var rest := func(p: float) -> void:
-		mouse.hovered = t.field
-		mouse.hover_point = rule_at.call(p)
-	rest.call(69.0)
-	t.field.hover_enter(mouse)
-	_theremin_for(t, 0.1)
-	t._process(0.0)
-	check("the cursor resting at A on the rule lights A4 but is silent, its volume down (%d, %s)" % [t.lit_pitch(),
-			t.field.readout()], t.lit_pitch() == 69 and not t.sounding() and t.field.readout().contains("wheel up to play")
-			and t._ghost.visible)
-	t.field.nudge(mouse, 4, false)
-	_theremin_for(t, 0.1)
-	check("four notches of the wheel up: A4 at half volume (%d, %d, %.3f)" % [t.note, t.expression, t.desk_volume],
-			t.note == 69 and t.expression == 64 and is_equal_approx(t.desk_volume, 0.5)
-			and int(spy.controls.get(11, -1)) == 64 and t.field.readout().contains("volume 50%"))
-	t.field.nudge(mouse, 1, true)
-	_theremin_for(t, 0.1)
-	check("a fine notch, a little more (%d)" % t.expression, t.expression == 67)
-	_theremin_for(t, 0.3, func(_s: float) -> void: rest.call(72.2))
-	check("the cursor across nearer the rod, higher: handed on to C5 itself, the scale's tone (%d, %.2f)" % [t.note, t.pitch],
-			t.note == 72 and absf(t.pitch - 72.0) < 0.02 and t.handed_on == 1)
-	t.field.nudge(mouse, -8, false)
-	_theremin_for(t, 0.1)
-	check("the wheel back down to nothing lets it go", not t.sounding() and is_zero_approx(t.desk_volume))
-	t.field.grab_begin(mouse, rule_at.call(67.0))
-	_theremin_for(t, 0.1)
-	check("the button held at G plays G4 full (%d, %d)" % [t.note, t.expression], t.note == 67 and t.expression == 127)
-	t.field.grab_move(mouse, rule_at.call(65.0))
-	_theremin_for(t, 0.3)
-	check("dragged to F it glides there, bent from G4 (%d, %.2f)" % [t.note, t.pitch], t.note == 67
-			and absf(t.pitch - 65.0) < 0.02)
-	t.field.grab_end(mouse)
-	_theremin_for(t, 0.1)
-	check("let go with the wheel down, it is silent again", not t.sounding())
-	t.field.nudge(mouse, 4, false)
-	_theremin_for(t, 0.1)
-	mouse.hovered = null
-	t.field.hover_exit(mouse)
-	_theremin_for(t, 0.1)
-	t._process(0.0)
-	check("the cursor leaving puts the volume back down on the loop and lets it go (%.2f)" % t.desk_volume,
-			not t.sounding() and is_zero_approx(t.desk_volume) and not t._ghost.visible and gm.held.is_empty())
-	check("its hints say how, at a desk and in a headset", t.field.hint().contains("wheel is volume")
-			and t.key.hint().contains("FREE, SCALE or CHORD"))
-	InstrumentItem.hands_hint = true
-	check("(in a headset: the rod and the loop)", t.field.hint().contains("near the rod") and t.field.hint().contains("loop"))
-	InstrumentItem.hands_hint = false
-	t.free()
-	mouse.free()
-	_put_back_synth(spy)
-	Session.start_solo()
 	_offline()
 
 

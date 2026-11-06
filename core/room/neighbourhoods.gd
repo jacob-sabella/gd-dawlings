@@ -31,7 +31,7 @@ const ALL := [
 			"stations": [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"strings", &"music_box"], "pieces": [],
 			"lift": -0.4},
 	{"id": &"synth", "title": "SYNTH & SOUND DESIGN", "colour": Color(0.78, 0.66, 1.0),
-			"stations": [&"theremin", &"grains", &"sampler"], "pieces": [], "lift": 0.25},
+			"stations": [&"grains", &"sampler"], "pieces": [], "lift": 0.25},
 	{"id": &"vocals", "title": "VOCALS", "colour": Color(1.0, 0.7, 0.82),
 			"stations": [&"lyrics"], "pieces": []},
 	{"id": &"tape", "title": "TAPE & TOYS", "colour": Color(0.7, 1.0, 0.72),

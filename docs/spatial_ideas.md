@@ -55,7 +55,7 @@ view), and nothing moves the room around the reader.
     no stomping (feet are not an input).
 22. **An air harp of the current chord.** Strings in the air tuned only to the chord playing now
     (from the chord bricks): strum or pluck, no wrong notes, recorded as MIDI.
-23. **A theremin.** One hand pitch, the other volume; optionally snapped to the song's scale,
+23. **A theremin** (built, then removed 2026-11-06). One hand pitch, the other volume; optionally snapped to the song's scale,
     with a visible pitch guide so it is playable, not only a novelty.
 24. **A sample as a cloud of grains.** Reach into the cloud and it plays grains from where your
     hand is; spread the fingers to widen the spray. Granular synthesis made intuitive.
@@ -85,7 +85,7 @@ view), and nothing moves the room around the reader.
 36. **Your fingertips are notes.** Thumb to each finger plays the current chord's notes (index
     the root, middle the third, and so on). No prop; hand tracking.
 37. **Bend and wobble by tilting.** Tilting the playing hand bends pitch, shaking it adds
-    vibrato, on the keytar, harp and theremin.
+    vibrato, on the keytar and harp.
 38. **Shakers and a tambourine.** Hand percussion to hold and shake; hits snap gently to the
     beat.
 39. **A talk box.** Sing into a tube while the other hand holds a chord shape; the voice comes
