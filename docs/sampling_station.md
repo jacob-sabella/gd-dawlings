@@ -102,8 +102,10 @@ offers (a phone or another device linked in as a source shows up in the list the
 - **TRIM** (lit by default) cuts the quiet off both ends of a live catch, so a mic take starts at the
   hit and the pads chop what you played, not the silence round it.
 - The input is read directly, never played back out of the speakers, so a mic does not feed back.
-- A guest samples from **their own** machine's inputs; what they catch is theirs, on their pads. The
-  host's pads row replaces a guest's sample only when the host changes its own.
+- A guest samples from **their own** machine's inputs. The moment a guest samples or loads a sound
+  of their own, the pads are theirs: the host's pads row stops replacing them (their cuts would not
+  fit the host's sample anyway). **SYNC** (STORE page) takes the room's pads back, as the host has
+  them now.
 
 Checked on this machine's six real inputs (`PadCapture.devices`, then `start("IN")` on each): every
 one opened and delivered audio in real time.

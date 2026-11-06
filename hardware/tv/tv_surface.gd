@@ -25,6 +25,8 @@ signal searched(query: String, results: Array, error: String)
 signal pad_struck(note: int, velocity: int, seconds: float)
 ## Something the pads have to say in a toast.
 signal pads_said(words: String)
+## A guest took the room's pads back (PadDeck.rejoin), after sampling its own.
+signal pads_rejoined()
 
 const SCREEN := Vector2(1.44, 0.81)
 ## The screen's lower edge from the floor (m): over the pads (PadDeck), its middle a standing eye's.
@@ -53,6 +55,9 @@ var tube := Tube.new()
 ## The pads' sample and its slices: here, so a rebuild of the wall keeps them.
 var bank := PadBank.new()
 var deck: PadDeck
+## A guest sampled or loaded sounds of its own onto the pads: the host's pads row no longer
+## overwrites them until the guest takes the room's back (SYNC).
+var own_pads := false
 ## The song's position (s), for the key the pads' scale follows; the studio's.
 var song_position: Callable = func() -> float: return 0.0
 ## The video showing ("" for none), what it is called, and how long it is (s).

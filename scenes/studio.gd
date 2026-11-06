@@ -2786,7 +2786,8 @@ func _follow_tv(state: Dictionary) -> void:
 		tv.follow(state["tv"])
 	if state.has("pads") and state["pads"] != _pads_followed:
 		_pads_followed = (state["pads"] as Dictionary).duplicate(true)
-		_follow_pads_row(_pads_followed)
+		if not tv.own_pads:
+			_follow_pads_row(_pads_followed)
 
 
 func _follow_pads_row(row: Dictionary) -> void:
@@ -4017,6 +4018,10 @@ func _build_surfaces() -> void:
 			Session.ask_room(&"tv", [video, playing, at]))
 		tv.pads_changed.connect(_on_pads_changed)
 		tv.pads_said.connect(func(words: String) -> void: Session.notice.emit(words))
+		tv.pads_rejoined.connect(func() -> void:
+			_pads_loaded = ""
+			if not _pads_followed.is_empty():
+				_follow_pads_row(_pads_followed))
 		tv.searched.connect(_on_tv_searched)
 		studio_set.add_child(tv)
 		mount.register(tv)

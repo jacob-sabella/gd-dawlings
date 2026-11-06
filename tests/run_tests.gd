@@ -7669,6 +7669,22 @@ func _test_the_pads_sample_from_a_chosen_input_and_trim_its_quiet() -> void:
 	check("a live catch is trimmed by default", deck.trim_on)
 	deck.toggle_trim()
 	check("TRIM turns off", not deck.trim_on)
+	# A guest's own sample keeps the pads from the host's row until SYNC.
+	tv.guest = true
+	var heard := PackedVector2Array()
+	heard.resize(48000)
+	for i in 48000:
+		heard[i] = Vector2(0.5, 0.5)
+	deck.bank.set_sample(heard)
+	deck._made_here()
+	check("a guest's own sound detaches its pads from the room", tv.own_pads)
+	var rejoined := [0]
+	tv.pads_rejoined.connect(func() -> void: rejoined[0] += 1)
+	deck.rejoin()
+	check("SYNC gives the room's pads back", not tv.own_pads and rejoined[0] == 1)
+	tv.guest = false
+	deck.rejoin()
+	check("a host has no SYNC to do", rejoined[0] == 1)
 	tv.queue_free()
 
 

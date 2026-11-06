@@ -27,7 +27,7 @@ const PAGES := {
 	"PLAY": [["TRIG", "REV", "CHOKE", "LOCK", "FIT"], ["TUNE-", "TUNE+", "VOL-", "VOL+", "PAN<", "PAN>"]],
 	"SHAPE": [["ATK", "REL", "FILT"], ["SEND", "FX", "PUNCH"]],
 	"MIDI": [["KEYS", "LEARN", "CH", "SEQ"]],
-	"STORE": [["SAVE", "LIB", "LOAD", "DEL"], ["KSAVE", "KITS", "KLOAD"]],
+	"STORE": [["SAVE", "LIB", "LOAD", "DEL"], ["KSAVE", "KITS", "KLOAD", "SYNC"]],
 }
 const PAGE_SAYS := {
 	"CUT": "cut a sample and choose where it comes from (SRC, and DEV for which input); trim the selected pad",
@@ -239,7 +239,8 @@ func _build_keys(wave_x: float, wave_y: float) -> void:
 		["KSAVE", "keep all sixteen pads, with their settings, as a kit in your library", save_kit],
 		["KITS", "browse your kits (press again for the next)", step_kits],
 		["KLOAD", "put the kit KITS shows on the pads", load_kit],
-		["DEL", "delete the sample or kit just browsed (press twice)", delete_browsed]]]
+		["DEL", "delete the sample or kit just browsed (press twice)", delete_browsed],
+		["SYNC", "a guest's: take the room's pads back, as the host has them, in place of sounds of your own", rejoin]]]
 	var defs := {}
 	for row in rows:
 		for k in row:
@@ -331,6 +332,7 @@ func sample() -> void:
 		refresh()
 		return
 	bank.set_sample(PadBank.cut(tv.sound(), from, to))
+	_made_here()
 	chop = 0
 	refresh()
 
@@ -346,6 +348,7 @@ func _sample_live() -> void:
 			said.emit("Nothing caught: is anything playing?")
 		else:
 			bank.set_sample(sound)
+			_made_here()
 			chop = 0
 		refresh()
 		return
@@ -360,6 +363,27 @@ func step_source() -> void:
 	marked = NAN
 	source = (source + 1) % PadCapture.SOURCES.size()
 	said.emit("Sampling from: " + PadCapture.SOURCES[source])
+	refresh()
+
+
+## A guest's own sound is on the pads: the host's row stops replacing them (SYNC brings it back).
+func _made_here() -> void:
+	if tv != null and tv.guest and not tv.own_pads:
+		tv.own_pads = true
+		said.emit("These are your own sounds now: SYNC (STORE) gives the room's pads back.")
+
+
+## SYNC: a guest takes the room's pads back.
+func rejoin() -> void:
+	if tv == null or not tv.guest:
+		said.emit("SYNC is for a guest: your pads are the room's.")
+		return
+	if not tv.own_pads:
+		said.emit("You already have the room's pads.")
+		return
+	tv.own_pads = false
+	tv.pads_rejoined.emit()
+	said.emit("The room's pads are back.")
 	refresh()
 
 
@@ -609,6 +633,7 @@ func load_from_library() -> void:
 		said.emit("That sample would not load.")
 		return
 	bank.put(selected, sound)
+	_made_here()
 	said.emit("Pad %d plays \"%s\"." % [selected + 1, all[lib_sample]])
 	refresh()
 
@@ -646,6 +671,7 @@ func load_kit() -> void:
 	if filled == 0:
 		said.emit("That kit would not load (its samples are gone?).")
 		return
+	_made_here()
 	said.emit("Kit \"%s\" is on the pads (%d sounds)." % [all[lib_kit], filled])
 	refresh()
 
@@ -937,6 +963,7 @@ func refresh(announce := true) -> void:
 	(keys["FIT"] as EqWall.WallKey).lit = float(bank.params[selected]["fit"]) > 0.0
 	(keys["LOCK"] as EqWall.WallKey).lit = bool(bank.params[selected]["lock"])
 	(keys["TRIM"] as EqWall.WallKey).lit = trim_on
+	(keys["SYNC"] as EqWall.WallKey).lit = tv != null and tv.own_pads
 	(keys["DEV"] as EqWall.WallKey).lit = PadCapture.SOURCES[source] == "IN"
 	(keys["SRC"] as EqWall.WallKey).lit = PadCapture.SOURCES[source] != "TV"
 	(keys["SEND"] as EqWall.WallKey).lit = float(bank.params[selected]["send"]) > 0.0
