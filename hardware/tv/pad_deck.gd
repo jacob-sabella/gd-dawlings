@@ -119,6 +119,15 @@ var _wave_words: Label3D
 var _mode_words: Label3D
 
 
+## Building the deck: pads, keys, labels and pages.
+var building := PadDeckBuild.new(self)
+## Striking, releasing and playing pads, and MIDI into them.
+var voices := PadDeckVoices.new(self)
+## Saving, loading and browsing samples and kits.
+var library := PadDeckLibrary.new(self)
+## Cutting the sample and the keys that step it.
+var sampling := PadDeckSampling.new(self)
+
 func _ready() -> void:
 	AudioPorts.ensure_buses()
 	for i in VOICES:
@@ -141,415 +150,95 @@ func _ready() -> void:
 	refresh()
 
 
-func _build() -> void:
-	var panel := MeshInstance3D.new()
-	panel.name = "Console"
-	var box := BoxMesh.new()
-	box.size = Vector3(WIDE, TOP - FOOT, TvSurface.DEPTH)
-	panel.mesh = box
-	panel.position = Vector3(0, (TOP + FOOT) * 0.5, -TvSurface.DEPTH * 0.5)
-	var paint := StandardMaterial3D.new()
-	paint.albedo_color = Color(0.11, 0.115, 0.13)
-	paint.roughness = 0.6
-	panel.material_override = paint
-	add_child(panel)
-	# The pads, four by four, pad 1 at the bottom left as on an MPC.
-	var grid := PAD * 4.0 + PAD_GAP * 3.0
-	var left := -WIDE * 0.5 + 0.06
-	var bottom := FOOT + (TOP - FOOT - grid) * 0.5
-	for i in PadBank.PADS:
-		var pad := Pad.new()
-		pad.deck = self
-		pad.index = i
-		pad.name = "Pad%d" % (i + 1)
-		pad.position = Vector3(left + PAD * 0.5 + (i % 4) * (PAD + PAD_GAP),
-				bottom + PAD * 0.5 + (i / 4) * (PAD + PAD_GAP), 0.006)
-		add_child(pad)
-		pads.append(pad)
-	# The waveform on the right, the words over it, the keys under it.
-	var wave_x := WIDE * 0.5 - 0.06 - WAVE.x * 0.5
-	var wave_y := TOP - 0.05 - WAVE.y * 0.5
-	var screen := MeshInstance3D.new()
-	screen.name = "Waveform"
-	var quad := QuadMesh.new()
-	quad.size = WAVE
-	screen.mesh = quad
-	screen.position = Vector3(wave_x, wave_y, 0.002)
-	var lit := StandardMaterial3D.new()
-	lit.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_wave_texture = ImageTexture.create_from_image(Image.create(WAVE_PIXELS.x, WAVE_PIXELS.y, false, Image.FORMAT_RGB8))
-	lit.albedo_texture = _wave_texture
-	screen.material_override = lit
-	screen.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(screen)
-	_wave_words = _label(0.03, INK)
-	_wave_words.name = "SampleWords"
-	_wave_words.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_wave_words.position = Vector3(wave_x - WAVE.x * 0.5, wave_y + WAVE.y * 0.5 + 0.018, 0.002)
-	add_child(_wave_words)
-	_mode_words = _label(0.026, DIM)
-	_mode_words.name = "ModeWords"
-	_mode_words.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_mode_words.position = Vector3(wave_x + WAVE.x * 0.5, wave_y + WAVE.y * 0.5 + 0.018, 0.002)
-	add_child(_mode_words)
-	_build_keys(wave_x, wave_y)
+## `PadDeckBuild._build`.
+func _build() -> void: building._build()
 
 
-## The keys under the waveform, on pages: a row of tabs (and STOP, always there) and the page's own
-## keys in up to two rows, big enough to read. Only the page shown can be seen or pressed.
-func _build_keys(wave_x: float, wave_y: float) -> void:
-	var rows := [
-		[["SAMPLE", "press at the start and again at the end of what to sample: from the TV's sound, or the source SRC names", sample],
-		["SRC", "where SAMPLE takes from: the TV, the MIX itself (resampling), the ROOM's sounds, or an audio input IN (a microphone, an interface, a phone linked in)", step_source],
-		["CHOP", "cut it by its hits, or into 16, 8 or 4 equal slices", step_chop],
-		["SCALE", "spread the last pad struck across all sixteen, in a key", toggle_scale],
-		["KEY", "the scale's root, a semitone up", func() -> void: step_root(1)],
-		["MODE", "the next scale: the seven modes, harmonic and melodic minor, pentatonics, blues, chromatic", step_mode]],
-		[["TRIG", "how the selected pad plays: ONE through, GATE while held, LOOP until struck again", func() -> void: _edit("mode", 1.0)],
-		["REV", "play the selected pad's slice backwards", func() -> void: _edit("rev", 0.0)],
-		["CHOKE", "the selected pad's choke group: pads of one group cut each other off (0 is none)", func() -> void: _edit("choke", 1.0)],
-		["TUNE-", "the selected pad a semitone down", func() -> void: _edit("tune", -1.0)],
-		["TUNE+", "the selected pad a semitone up", func() -> void: _edit("tune", 1.0)],
-		["VOL-", "the selected pad quieter", func() -> void: _edit("vol", -0.1)],
-		["VOL+", "the selected pad louder", func() -> void: _edit("vol", 0.1)],
-		["KEYS", "the computer keys play the pads when you stand here: ZXCV ASDF QWER 1234, a MIDI keyboard's notes always", toggle_keys]],
-		[["IN-", "trim the selected pad's start later", func() -> void: _edit("start", 0.05)],
-		["IN+", "trim the selected pad's start earlier", func() -> void: _edit("start", -0.05)],
-		["OUT-", "trim the selected pad's end earlier", func() -> void: _edit("end", -0.05)],
-		["OUT+", "trim the selected pad's end later", func() -> void: _edit("end", 0.05)],
-		["DEV", "which input IN samples from: the default, then each microphone, interface or source this machine has", step_device],
-		["TRIM", "cut the quiet off the ends of what a live source catches (lit: on)", toggle_trim],
-		["ATK", "the selected pad's fade in: none, then longer", func() -> void: _cycle("atk")],
-		["REL", "the selected pad's fade out: none, then longer", func() -> void: _cycle("rel")],
-		["FILT", "the selected pad's filter: low pass closing, none, high pass opening", func() -> void: _cycle("filt")],
-		["SEND", "how much of the selected pad goes to the effect (FX)", func() -> void: _cycle("send")],
-		["LOCK", "key-lock: the selected pad's pitch changes (TUNE, SCALE) without its length changing", func() -> void: _edit("lock", 0.0)]],
-		[["PAN<", "the selected pad toward the left", func() -> void: _edit("pan", -0.25)],
-		["PAN>", "the selected pad toward the right", func() -> void: _edit("pan", 0.25)],
-		["FX", "the effect the SEND goes to: reverb, delay or both", step_fx],
-		["LEARN", "then strike a key on a MIDI keyboard: that note is the selected pad (the others follow in order)", toggle_learn],
-		["SEQ", "play the armed track's recorded notes through the pads while the song plays", toggle_follow],
-		["STOP", "silence every pad", stop_all],
-		["FIT", "stretch the selected pad's slice, pitch kept, to a sixteenth, an eighth, a beat, two or four at the song's tempo", step_fit],
-		["CH", "the MIDI channel the pads listen to: ALL, then 1 to 16 (so another controller can play the instrument)", step_channel],
-		["PUNCH", "send every pad to the effect while this is lit", toggle_punch]],
-		[["SAVE", "keep the selected pad's sound in your library of samples", save_to_library],
-		["LIB", "browse your library of samples (press again for the next)", step_library],
-		["LOAD", "put the sample LIB shows on the selected pad", load_from_library],
-		["KSAVE", "keep all sixteen pads, with their settings, as a kit in your library", save_kit],
-		["KITS", "browse your kits (press again for the next)", step_kits],
-		["KLOAD", "put the kit KITS shows on the pads", load_kit],
-		["DEL", "delete the sample or kit just browsed (press twice)", delete_browsed],
-		["SYNC", "a guest's: take the room's pads back, as the host has them, in place of sounds of your own", rejoin]]]
-	var defs := {}
-	for row in rows:
-		for k in row:
-			defs[k[0]] = k
-	var top := wave_y - WAVE.y * 0.5 - 0.016
-	var tabs := []
-	for page in PAGES:
-		tabs.append([page, PAGE_SAYS[page], func() -> void: show_page(page)])
-	tabs.append(defs["STOP"])
-	_place_row(tabs, 0, top, wave_x, "tab")
-	_page_keys.clear()
-	for page in PAGES:
-		var keys_here: Array = []
-		var lines: Array = PAGES[page]
-		for r in lines.size():
-			var row: Array = []
-			for legend in lines[r]:
-				row.append(defs[legend])
-				keys_here.append(legend)
-			_place_row(row, r + 1, top, wave_x, "page")
-		_page_keys[page] = keys_here
-	show_page(page_shown)
-	_built = true
+## The keys under the waveform, on pages: a row of tabs (and STOP, always there) and the page's own keys in up to two rows, big enough to read. Only the page shown can be seen or pressed (`PadDeckBuild._build_keys`).
+func _build_keys(wave_x: float, wave_y: float) -> void: building._build_keys(wave_x, wave_y)
 
 
-## One row of keys, `r` rows down from `top`, each as wide as fits (never wider than KEY).
-func _place_row(row: Array, r: int, top: float, wave_x: float, kind: String) -> void:
-	var width := minf(KEY.x, (WAVE.x - (row.size() - 1) * KEY_GAP) / row.size())
-	var across := row.size() * width + (row.size() - 1) * KEY_GAP
-	for i in row.size():
-		var key := EqWall.WallKey.new()
-		var legend: String = row[i][0]
-		key.name = "Key" + legend.capitalize().replace("+", "Up").replace("-", "Down").replace("<", "Left").replace(">", "Right")
-		key.legend = legend
-		key.says = row[i][1]
-		key.size = Vector2(width, KEY.y)
-		var called := "PADS  " + legend
-		key.describe_title = func() -> String: return called
-		key.position = Vector3(wave_x - across * 0.5 + width * 0.5 + i * (width + KEY_GAP),
-				top - KEY.y * 0.5 - r * (KEY.y + KEY_GAP_Y), 0.011)
-		key.pressed.connect(row[i][2])
-		add_child(key)
-		keys[legend] = key
 
 
-## Page `page` of keys shown (the tabs and STOP always are): the rest hidden and out of reach.
-func show_page(page: String) -> void:
-	if not PAGES.has(page):
-		return
-	page_shown = page
-	for legend in keys:
-		var key := keys[legend] as EqWall.WallKey
-		var here: bool = PAGES.has(legend) or legend == "STOP" or (_page_keys.get(page, []) as Array).has(legend)
-		key.visible = here
-		key.collision_layer = 2 if here else 0
-	if _built:
-		refresh()
+## Page `page` of keys shown (the tabs and STOP always are): the rest hidden and out of reach (`PadDeckBuild.show_page`).
+func show_page(page: String) -> void: building.show_page(page)
 
 
-func _label(cap: float, colour: Color) -> Label3D:
-	var l := Label3D.new()
-	l.pixel_size = PIXEL
-	l.font_size = roundi(cap / PIXEL)
-	l.modulate = colour
-	l.double_sided = false
-	Lettering.range_to_legibility(l)
-	return l
+## `PadDeckBuild._label`.
+func _label(cap: float, colour: Color) -> Label3D: return building._label(cap, colour)
 
 
 # --- what the keys do ---------------------------------------------------------------------------
 
-## SAMPLE: the first press marks where the TV is, the second cuts from there to where it is now.
-func sample() -> void:
-	if PadCapture.SOURCES[source] != "TV":
-		_sample_live()
-		return
-	if tv == null or tv.video == "" or tv.sound() == null:
-		said.emit("Play something on the TV first: SAMPLE takes what it plays.")
-		return
-	var now := tv.position()
-	if is_nan(marked):
-		marked = now
-		refresh()
-		return
-	var from := minf(marked, now)
-	var to := maxf(marked, now)
-	marked = NAN
-	if to - from < PadBank.SHORTEST:
-		refresh()
-		return
-	bank.set_sample(PadBank.cut(tv.sound(), from, to))
-	_made_here()
-	chop = 0
-	refresh()
+## SAMPLE: the first press marks where the TV is, the second cuts from there to where it is now (`PadDeckSampling.sample`).
+func sample() -> void: sampling.sample()
 
 
-## SAMPLE from the mix, the room or the interface: the first press starts catching, the second
-## ends it and the sound is the sample.
-func _sample_live() -> void:
-	if capture.recording:
-		var sound := capture.stop()
-		if trim_on:
-			sound = PadCapture.trimmed(sound)
-		if sound.size() < int(PadBank.SHORTEST * PadBank.RATE):
-			said.emit("Nothing caught: is anything playing?")
-		else:
-			bank.set_sample(sound)
-			_made_here()
-			chop = 0
-		refresh()
-		return
-	if not capture.start(PadCapture.SOURCES[source]):
-		said.emit(capture.why)
-	refresh()
 
 
-func step_source() -> void:
-	if capture.recording:
-		capture.stop()
-	marked = NAN
-	source = (source + 1) % PadCapture.SOURCES.size()
-	said.emit("Sampling from: " + PadCapture.SOURCES[source])
-	refresh()
+## `PadDeckSampling.step_source`.
+func step_source() -> void: sampling.step_source()
 
 
-## A guest's own sound is on the pads: the host's row stops replacing them (SYNC brings it back).
-func _made_here() -> void:
-	if tv != null and tv.guest and not tv.own_pads:
-		tv.own_pads = true
-		said.emit("These are your own sounds now: SYNC (STORE) gives the room's pads back.")
+## A guest's own sound is on the pads: the host's row stops replacing them (SYNC brings it back) (`PadDeckSampling._made_here`).
+func _made_here() -> void: sampling._made_here()
 
 
-## SYNC: a guest takes the room's pads back.
-func rejoin() -> void:
-	if tv == null or not tv.guest:
-		said.emit("SYNC is for a guest: your pads are the room's.")
-		return
-	if not tv.own_pads:
-		said.emit("You already have the room's pads.")
-		return
-	tv.own_pads = false
-	tv.pads_rejoined.emit()
-	said.emit("The room's pads are back.")
-	refresh()
+## SYNC: a guest takes the room's pads back (`PadDeckSampling.rejoin`).
+func rejoin() -> void: sampling.rejoin()
 
 
-## DEV: IN's next input.
-func step_device() -> void:
-	if capture.recording:
-		capture.stop()
-	var named := capture.step_device()
-	source = PadCapture.SOURCES.find("IN")
-	said.emit("Sampling from the input: " + named)
-	refresh()
+## DEV: IN's next input (`PadDeckSampling.step_device`).
+func step_device() -> void: sampling.step_device()
 
 
-func toggle_trim() -> void:
-	trim_on = not trim_on
-	said.emit("Trim the quiet off a live catch: " + ("on" if trim_on else "off"))
-	refresh()
+## `PadDeckSampling.toggle_trim`.
+func toggle_trim() -> void: sampling.toggle_trim()
 
 
-func step_chop() -> void:
-	if bank.frames.is_empty():
-		return
-	chop = (chop + 1) % CHOPS.size()
-	if CHOPS[chop] == "HITS":
-		if bank.chop_transients() <= 1:
-			said.emit("No hits to cut it at: cut into 16 instead.")
-			chop = 0
-			bank.chop_equal(16)
-	else:
-		bank.chop_equal(int(CHOPS[chop]))
-	refresh()
+## `PadDeckSampling.step_chop`.
+func step_chop() -> void: sampling.step_chop()
 
 
-## SCALE: the last pad struck across all sixteen, in the song's key where it has one.
-func toggle_scale() -> void:
-	bank.scale_on = not bank.scale_on
-	if bank.scale_on:
-		bank.scale_pad = last_pad
-		var key := Harmony.at(DAW.state, float(tv.song_position.call())) if tv != null and DAW.state != null else null
-		if key != null:
-			bank.root = key.root
-			bank.mode = key.mode
-	refresh()
+## SCALE: the last pad struck across all sixteen, in the song's key where it has one (`PadDeckSampling.toggle_scale`).
+func toggle_scale() -> void: sampling.toggle_scale()
 
 
-func step_root(by: int) -> void:
-	bank.root = posmod(bank.root + by, 12)
-	refresh()
+## `PadDeckSampling.step_root`.
+func step_root(by: int) -> void: sampling.step_root(by)
 
 
-func step_mode() -> void:
-	var at := PadBank.MODES.find(bank.mode)
-	bank.mode = PadBank.MODES[(at + 1) % PadBank.MODES.size()]
-	refresh()
+## `PadDeckSampling.step_mode`.
+func step_mode() -> void: sampling.step_mode()
 
 
 # --- the pads ---------------------------------------------------------------------------------
 
-## Pad `pad` struck at `velocity`: heard through the armed track's bus, lit while it sounds, and
-## told (`struck`) for the take. A LOOP pad struck while it loops stops; a pad in a choke group
-## cuts the others of its group off first.
-func strike(pad: int, velocity := 100) -> void:
-	if pad < 0 or pad >= PadBank.PADS:
-		return
-	var was := selected
-	selected = pad
-	if was != pad:
-		# The pad struck is the one the keys now edit: show it, without telling the room.
-		refresh(false)
-	var own := bank.params[pad]
-	if int(own["mode"]) == 2 and _voice_of(pad) >= 0:
-		release(pad, true)
-		return
-	var made: Array = bank.sound_of(bank.slice_of(pad), bank.pad_semitones(pad), pad)
-	var stream: AudioStreamWAV = made[0]
-	if stream == null:
-		return
-	if not bank.scale_on:
-		last_pad = pad
-	if int(own["choke"]) > 0:
-		for other in PadBank.PADS:
-			if other != pad and int(bank.params[other]["choke"]) == int(own["choke"]):
-				release(other, true)
-	var at := _free_voice()
-	var voice := _voices[at]
-	_voice_pad[at] = pad
-	var bus := DAW.monitor_bus(HitRecorder.armed_track())
-	voice.bus = bus if bus != &"" and AudioServer.get_bus_index(bus) >= 0 else AudioPorts.MONITOR
-	voice.stream = stream
-	voice.pitch_scale = made[1]
-	voice.volume_db = linear_to_db(maxf(velocity, 1) / 127.0)
-	voice.play()
-	_send(at, stream, made[1], velocity, float(own["send"]))
-	var held := int(own["mode"]) != 0
-	_lit_until[pad] = (1 << 60) if held else Time.get_ticks_msec() + int(stream.get_length() / float(made[1]) * 1000.0)
-	pads[pad].lit = true
-	if not _quiet:
-		struck.emit(pad, velocity)
+## Pad `pad` struck at `velocity`: heard through the armed track's bus, lit while it sounds, and told (`struck`) for the take. A LOOP pad struck while it loops stops; a pad in a choke group cuts the others of its group off first (`PadDeckVoices.strike`).
+func strike(pad: int, velocity := 100) -> void: voices.strike(pad, velocity)
 
 
-## The voice to play on: an idle one, else the one that has played longest.
-func _free_voice() -> int:
-	for i in VOICES:
-		if not _voices[i].playing:
-			_next_voice = (i + 1) % VOICES
-			return i
-	var at := _next_voice
-	_next_voice = (_next_voice + 1) % VOICES
-	return at
 
 
-## Voice `at`'s sound to the effect bus too, `amount` of it.
+## Voice `at`'s sound to the effect bus too, `amount` of it (`PadDeckVoices._send`).
 func _send(at: int, stream: AudioStream, rate: float, velocity: int, amount: float) -> void:
-	var fx := _fx_voices[at]
-	fx.stop()
-	amount = 1.0 if punch else amount
-	if amount <= 0.0:
-		return
-	_ensure_fx_bus()
-	fx.bus = FX_BUS
-	fx.stream = stream
-	fx.pitch_scale = rate
-	fx.volume_db = linear_to_db(maxf(velocity, 1) / 127.0 * amount)
-	fx.play()
+	voices._send(at, stream, rate, velocity, amount)
 
 
-func _voice_of(pad: int) -> int:
-	for i in VOICES:
-		if _voice_pad[i] == pad and _voices[i].playing:
-			return i
-	return -1
+## `PadDeckVoices._voice_of`.
+func _voice_of(pad: int) -> int: return voices._voice_of(pad)
 
 
-## Pad `pad` let go: a GATE pad stops (a LOOP pad too, when `force`; a one-shot plays out unless
-## forced, as a choke does).
-func release(pad: int, force := false) -> void:
-	if pad < 0 or pad >= PadBank.PADS:
-		return
-	var mode := int(bank.params[pad]["mode"])
-	if mode == 0 and not force:
-		return
-	if mode == 2 and not force:
-		return
-	for i in VOICES:
-		if _voice_pad[i] == pad and _voices[i].playing:
-			_voices[i].stop()
-			_fx_voices[i].stop()
-			_voice_pad[i] = -1
-	_lit_until[pad] = 0
-	pads[pad].lit = false
+## Pad `pad` let go: a GATE pad stops (a LOOP pad too, when `force`; a one-shot plays out unless forced, as a choke does) (`PadDeckVoices.release`).
+func release(pad: int, force := false) -> void: voices.release(pad, force)
 
 
-## Every pad quiet.
-func stop_all() -> void:
-	for pad in PadBank.PADS:
-		release(pad, true)
-	_held.clear()
+## Every pad quiet (`PadDeckVoices.stop_all`).
+func stop_all() -> void: voices.stop_all()
 
 
-## A pad clicked or touched: struck, and a GATE pad (which has no letting-go here) plays through.
-func click(pad: int) -> void:
-	strike(pad, 100)
-	if pad >= 0 and pad < PadBank.PADS and int(bank.params[pad]["mode"]) == 1:
-		var at := _voice_of(pad)
-		if at >= 0 and _voices[at].stream != null:
-			_lit_until[pad] = Time.get_ticks_msec() + int(_voices[at].stream.get_length() / _voices[at].pitch_scale * 1000.0)
+## A pad clicked or touched: struck, and a GATE pad (which has no letting-go here) plays through (`PadDeckVoices.click`).
+func click(pad: int) -> void: voices.click(pad)
 
 
 # --- the second row, the keyboard and MIDI ------------------------------------------------------
@@ -584,117 +273,34 @@ func _cycle(key: String) -> void:
 	refresh()
 
 
-func _browsed_words() -> String:
-	var all := PadLibrary.kits() if _browsed == "kit" else PadLibrary.samples()
-	var at := lib_kit if _browsed == "kit" else lib_sample
-	if _browsed == "" or at < 0 or at >= all.size():
-		return ""
-	return "%s %s" % ["KIT" if _browsed == "kit" else "LIB", all[at]]
 
 
-func _base_name() -> String:
-	return tv.title if tv != null and tv.title != "" else "sample"
 
 
-func save_to_library() -> void:
-	var sound := bank.slice_frames(selected)
-	if sound.is_empty():
-		said.emit("Pad %d has no sound to keep." % (selected + 1))
-		return
-	var name := PadLibrary.fresh("%s_pad%d" % [_base_name(), selected + 1], PadLibrary.samples())
-	if PadLibrary.save_sample(name, sound):
-		lib_sample = PadLibrary.samples().find(name)
-		_browsed = "sample"
-		said.emit("Kept pad %d as sample \"%s\" (%d in your library)." % [selected + 1, name, PadLibrary.samples().size()])
-	else:
-		said.emit("The sample could not be saved.")
-	refresh()
+## `PadDeckLibrary.save_to_library`.
+func save_to_library() -> void: library.save_to_library()
 
 
-func step_library() -> void:
-	var all := PadLibrary.samples()
-	_del_armed = false
-	if all.is_empty():
-		said.emit("Your library has no samples yet: SAVE keeps the selected pad.")
-		return
-	lib_sample = (lib_sample + 1) % all.size()
-	_browsed = "sample"
-	said.emit("Sample %d of %d: \"%s\" (LOAD puts it on pad %d)." % [lib_sample + 1, all.size(), all[lib_sample], selected + 1])
-	refresh()
 
 
-func load_from_library() -> void:
-	var all := PadLibrary.samples()
-	if lib_sample < 0 or lib_sample >= all.size():
-		said.emit("Browse a sample first: LIB.")
-		return
-	var sound := PadLibrary.load_sample(all[lib_sample])
-	if sound.is_empty():
-		said.emit("That sample would not load.")
-		return
-	bank.put(selected, sound)
-	_made_here()
-	said.emit("Pad %d plays \"%s\"." % [selected + 1, all[lib_sample]])
-	refresh()
+## `PadDeckLibrary.load_from_library`.
+func load_from_library() -> void: library.load_from_library()
 
 
-func save_kit() -> void:
-	var name := PadLibrary.save_kit(PadLibrary.fresh("kit", PadLibrary.kits()), bank, _base_name())
-	if name == "":
-		said.emit("There is no sample on the pads to keep as a kit.")
-		return
-	lib_kit = PadLibrary.kits().find(name)
-	_browsed = "kit"
-	said.emit("Kept the pads as kit \"%s\" (%d kits)." % [name, PadLibrary.kits().size()])
-	refresh()
+## `PadDeckLibrary.save_kit`.
+func save_kit() -> void: library.save_kit()
 
 
-func step_kits() -> void:
-	var all := PadLibrary.kits()
-	_del_armed = false
-	if all.is_empty():
-		said.emit("You have no kits yet: KSAVE keeps the pads as one.")
-		return
-	lib_kit = (lib_kit + 1) % all.size()
-	_browsed = "kit"
-	said.emit("Kit %d of %d: \"%s\" (KLOAD puts it on the pads)." % [lib_kit + 1, all.size(), all[lib_kit]])
-	refresh()
+## `PadDeckLibrary.step_kits`.
+func step_kits() -> void: library.step_kits()
 
 
-func load_kit() -> void:
-	var all := PadLibrary.kits()
-	if lib_kit < 0 or lib_kit >= all.size():
-		said.emit("Browse a kit first: KITS.")
-		return
-	stop_all()
-	var filled := PadLibrary.load_kit(all[lib_kit], bank)
-	if filled == 0:
-		said.emit("That kit would not load (its samples are gone?).")
-		return
-	_made_here()
-	said.emit("Kit \"%s\" is on the pads (%d sounds)." % [all[lib_kit], filled])
-	refresh()
+## `PadDeckLibrary.load_kit`.
+func load_kit() -> void: library.load_kit()
 
 
-func delete_browsed() -> void:
-	var is_kit := _browsed == "kit"
-	var all := PadLibrary.kits() if is_kit else PadLibrary.samples()
-	var at := lib_kit if is_kit else lib_sample
-	if _browsed == "" or at < 0 or at >= all.size():
-		said.emit("Browse a sample (LIB) or a kit (KITS) first.")
-		return
-	if not _del_armed:
-		_del_armed = true
-		said.emit("Press DEL again to delete %s \"%s\" for good." % ["kit" if is_kit else "sample", all[at]])
-		return
-	_del_armed = false
-	var ok := PadLibrary.delete_kit(all[at]) if is_kit else PadLibrary.delete_sample(all[at])
-	if is_kit:
-		lib_kit = mini(lib_kit, PadLibrary.kits().size() - 1)
-	else:
-		lib_sample = mini(lib_sample, PadLibrary.samples().size() - 1)
-	said.emit("Deleted \"%s\"." % all[at] if ok else "Could not delete it.")
-	refresh()
+## `PadDeckLibrary.delete_browsed`.
+func delete_browsed() -> void: library.delete_browsed()
 
 
 func step_fit() -> void:
@@ -803,53 +409,11 @@ func _input(event: InputEvent) -> void:
 		release(pad)
 
 
-## A MIDI note meant for the pads: whether the pads took it (a note out of their range is left for
-## the player's instrument). Velocity 0 is a note off. Pads 36-51, or in scale mode every note.
+## A MIDI note meant for the pads: whether the pads took it (a note out of their range is left for the player's instrument). Velocity 0 is a note off. Pads 36-51, or in scale mode every note (`PadDeckVoices.midi`).
 func midi(pitch: int, velocity: int, on: bool, from_channel := -1) -> bool:
-	if not engaged:
-		return false
-	if channel > 0 and from_channel >= 0 and from_channel != channel - 1:
-		return false
-	if learning and on and velocity > 0 and not bank.scale_on:
-		bank.first_note = clampi(pitch - selected, 0, 127 - PadBank.PADS + 1)
-		learning = false
-		said.emit("Pad %d is now note %d; pads %d to %d follow." % [selected + 1, pitch, 1, 16])
-		refresh()
-		return true
-	var pad := bank.pad_of_note(pitch)
-	if pad < 0 and not bank.scale_on:
-		return false
-	if on and velocity > 0:
-		if pad >= 0:
-			strike(pad, velocity)
-		else:
-			# A scale-mode note between the pads' own: the spread slice at its pitch.
-			_play_pitch(pitch, velocity)
-		_held[pitch] = pad
-	else:
-		var was: Variant = _held.get(pitch, pad)
-		_held.erase(pitch)
-		if int(was) >= 0:
-			release(int(was))
-	return true
+	return voices.midi(pitch, velocity, on, from_channel)
 
 
-func _play_pitch(pitch: int, velocity: int) -> void:
-	var play: Array = bank.play_of(pitch)
-	var made: Array = bank.sound_of(play[0], play[1], bank.scale_pad)
-	var stream: AudioStreamWAV = made[0]
-	if stream == null:
-		return
-	var at := _free_voice()
-	var voice := _voices[at]
-	var bus := DAW.monitor_bus(HitRecorder.armed_track())
-	voice.bus = bus if bus != &"" and AudioServer.get_bus_index(bus) >= 0 else AudioPorts.MONITOR
-	voice.stream = stream
-	voice.pitch_scale = made[1]
-	voice.volume_db = linear_to_db(maxf(velocity, 1) / 127.0)
-	voice.play()
-	_voice_pad[at] = -1
-	_send(at, stream, made[1], velocity, float(bank.params[bank.scale_pad]["send"]))
 
 
 func _process(_delta: float) -> void:
@@ -892,7 +456,7 @@ func _follow_song_for(armed: int) -> void:
 	var now := st.position_seconds
 	if not st.playing:
 		_last_song = now
-		_release_due(INF)
+		voices._release_due(INF)
 		return
 	var from := _last_song
 	_last_song = now
@@ -921,19 +485,11 @@ func _follow_song_for(armed: int) -> void:
 						strike(pad, int(notes[i + 3]))
 						_offs.append([item.start + notes[i + 1], pad])
 					elif bank.scale_on:
-						_play_pitch(pitch, int(notes[i + 3]))
+						voices._play_pitch(pitch, int(notes[i + 3]))
 					_quiet = false
-	_release_due(now)
+	voices._release_due(now)
 
 
-func _release_due(now: float) -> void:
-	var keep: Array = []
-	for off in _offs:
-		if float(off[0]) <= now:
-			release(int(off[1]))
-		else:
-			keep.append(off)
-	_offs = keep
 
 
 ## The waveform, the words and the pads as the bank is.
@@ -955,7 +511,7 @@ func refresh(announce := true) -> void:
 		_mode_words.text = "%s %s  ·  PAD %d" % [Harmony.SHARP_NAMES[bank.root], bank.mode.to_upper(), bank.scale_pad + 1]
 	else:
 		_mode_words.text = "SRC %s  ·  NOTE %d" % [_source_name(), bank.first_note]
-	var browsed := _browsed_words()
+	var browsed := library._browsed_words()
 	if browsed != "":
 		_mode_words.text = browsed
 	Lettering.fit(_mode_words, WAVE.x * 0.4, roundi(0.026 / PIXEL), 12)
