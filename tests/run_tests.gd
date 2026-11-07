@@ -7447,6 +7447,30 @@ func _test_the_pads_have_their_own_settings_and_answer_keys_and_midi() -> void:
 	struck.clear()
 	deck._input(key)
 	check("and nothing away from the station", struck.is_empty())
+	# A text field with focus (the YouTube box): its keys are letters, the pads stay quiet.
+	deck.engaged = true
+	deck._held.clear()
+	var box := LineEdit.new()
+	add_child(box)
+	box.grab_focus()
+	await get_tree().process_frame
+	struck.clear()
+	for letter in [KEY_Z, KEY_A, KEY_Q]:
+		var typed := InputEventKey.new()
+		typed.physical_keycode = letter
+		typed.keycode = letter
+		typed.unicode = "zaq".unicode_at([KEY_Z, KEY_A, KEY_Q].find(letter))
+		typed.pressed = true
+		get_viewport().push_input(typed)
+	check("typing in a focused text field reaches the text and strikes no pad (%s, %d)" % [box.text, struck.size()],
+			box.text == "zaq" and struck.is_empty() and deck._held.is_empty())
+	box.release_focus()
+	await get_tree().process_frame
+	deck._input(key)
+	check("and the pads take the keys again when it lets go", struck.size() == 1)
+	deck.stop_all()
+	box.queue_free()
+	deck.engaged = false
 	deck.selected = 3
 	deck._edit("mode", 1.0)
 	check("the second row edits the selected pad", int(deck.bank.params[3]["mode"]) == 1 and deck.keys["TRIG"].lit)

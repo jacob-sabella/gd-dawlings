@@ -6870,6 +6870,9 @@ func _held_while_playing(keycode: int) -> bool:
 func _unhandled_input(event: InputEvent) -> void:
 	if camera == null:
 		return
+	# A text field has the keyboard: none of the room's key shortcuts are for it.
+	if event is InputEventKey and TextFocus.held(get_viewport()):
+		return
 	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) \
 			and not god_mode and walker != null:
 		walker.look(event.relative)

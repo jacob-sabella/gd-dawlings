@@ -783,6 +783,13 @@ func _input(event: InputEvent) -> void:
 	if not engaged or not keys_on:
 		return
 	var k := event as InputEventKey
+	# A text field has the keys (a YouTube search on the TV): they are its letters, not pads.
+	if k != null and TextFocus.held(get_viewport()):
+		for pad in _held.keys():
+			if not k.pressed and pad == PAD_KEYS.find(k.physical_keycode):
+				_held.erase(pad)
+				release(pad)
+		return
 	if k == null or k.echo or k.ctrl_pressed or k.alt_pressed or k.meta_pressed:
 		return
 	var pad := PAD_KEYS.find(k.physical_keycode)
