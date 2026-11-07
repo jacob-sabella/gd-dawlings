@@ -90,8 +90,8 @@ func a_missing_mod_keeps_its_place_and_cables() -> void:
 	check("and the cables on it, but not a cable to a jack a known module lacks",
 			p["cables"].has(["keys.pitch", "pl.pitch"]) and p["cables"].has(["pl.out", "out.l"]) and p["cables"].has(["pl.out", "pl2.in"]))
 	var bad := RackPatch.sanitize({"modules": {"pl": {"type": "x.y", "at": [0, 0]}, "keys": {"type": "builtin.keys", "at": [5, 0]}},
-			"cables": [["pl.out", "keys.nope"], ["keys.nope", "pl.in"], ["pl.out", "pl.in"], ["pl.out", "gone.in"], ["pl.a.b", "keys.pitch"]]})
-	check("a cable between a missing module and a jack that is not there is dropped, as are the other broken ones", bad["cables"].is_empty())
+			"cables": [["pl.out", "pl.in"], ["pl.out", "gone.in"], ["pl.a.b", "keys.pitch"], ["pl.out", "keys.pitch"]]})
+	check("a cable onto itself, to a module that is not there, of a broken form or from an input to an output is dropped", bad["cables"].is_empty())
 	check("the engine never hears it", RackPatch.lines(p).size() > 1 and Array(RackPatch.lines(p)).all(func(l: String) -> bool:
 			return not (" pl" in l and (l.split(" ")[1].get_slice(".", 0) in ["pl", "pl2"] or l.split(" ")[-1].get_slice(".", 0) in ["pl", "pl2"])))
 			and RackPatch.playable(p)["modules"].size() == p["modules"].size() - 2)

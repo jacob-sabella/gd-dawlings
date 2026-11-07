@@ -2478,7 +2478,7 @@ func room_state() -> Dictionary:
 			"ropes": stage.ropes.duplicate() if stage != null else {},
 			"sampler": sampler.armed_by if sampler != null and is_instance_valid(sampler) else 0,
 			"weather": weather_listening, "looper": looper_row.duplicate(),
-			RackPatch.ROW: rack_row.duplicate(true),
+			RackPatch.ROW: RackGaps.published(rack_row),
 			"tv": tv.row() if tv != null and is_instance_valid(tv) else {}, "pads": pads_row.duplicate(true)}
 
 

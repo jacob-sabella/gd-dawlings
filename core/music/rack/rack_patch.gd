@@ -347,25 +347,9 @@ static func _keep_use(p: Dictionary, type: String, raw_uses: Variant) -> void:
 
 
 ## A cable into the patch for `sanitize`: as `connect_cable` has it, and also one with an end on a module
-## that is missing (its ports are unknown, so only the form of its path is checked).
+## that is missing or a port a known module has lost (`RackGaps.keep_cable`).
 static func _cable_kept(p: Dictionary, from: String, to: String) -> bool:
-	if connect_cable(p, from, to):
-		return true
-	var a := from.get_slice(".", 0)
-	var b := to.get_slice(".", 0)
-	if a == b or from.count(".") != 1 or to.count(".") != 1 or (p["cables"] as Array).size() >= MAX_CABLES:
-		return false
-	var a_gone := is_missing(p, a)
-	var b_gone := is_missing(p, b)
-	if not (a_gone or b_gone) or not (p["modules"] as Dictionary).has(a) or not (p["modules"] as Dictionary).has(b):
-		return false
-	if (not a_gone and not is_out(p, from)) or (not b_gone and not is_in(p, to)):
-		return false
-	for c in p["cables"]:
-		if c[0] == from and c[1] == to:
-			return false
-	(p["cables"] as Array).append([from, to])
-	return true
+	return connect_cable(p, from, to) or RackGaps.keep_cable(p, from, to)
 
 
 ## Whether module `id` is one no mod here provides (kept for its place and cables, never sounded).
@@ -373,14 +357,16 @@ static func is_missing(p: Dictionary, id: String) -> bool:
 	return (p["modules"] as Dictionary).get(id, {}).get("missing", false)
 
 
-## The patch as the engine can play it: without the modules nobody here provides, and the cables on them.
+## The patch as the engine can play it: without the modules nobody here provides, and the cables on them
+## or ending on a port that has gone.
 static func playable(p: Dictionary) -> Dictionary:
 	var out := empty()
 	for id in p["modules"]:
 		if not is_missing(p, id):
 			out["modules"][id] = (p["modules"][id] as Dictionary).duplicate(true)
 	for c in p["cables"]:
-		if out["modules"].has(String(c[0]).get_slice(".", 0)) and out["modules"].has(String(c[1]).get_slice(".", 0)):
+		if out["modules"].has(String(c[0]).get_slice(".", 0)) and out["modules"].has(String(c[1]).get_slice(".", 0)) \
+				and not RackGaps.dangling(p, c):
 			out["cables"].append(c.duplicate())
 	return out
 

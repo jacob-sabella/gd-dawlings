@@ -592,13 +592,32 @@ Each step ends with the suite green and no behaviour change unless stated. Steps
      patch hash changed since the last save; leaving the tree flushes. Only `Session.is_authority()` writes.
      `RackAutosave.disabled` (the test runner sets it) keeps a studio under test off the player's file.
      `studio.gd` holds one `RackAutosave` and calls `restore` once and `note` twice.
-   * **Not done here:** named saves (`<slug>.patch.json`) have no caller yet; a cable on a *known* module
-     whose port has gone is still dropped by `sanitize` (the dangling-cable stub of 6.2 needs the drawing and is
-     step 6); the room row does not yet carry `uses` (`to_dict` is used for the file only; step 6 fills it on publish).
+   * **Not done here:** named saves (`<slug>.patch.json`) have no caller yet; (both done in step 6)
    * Cost (headless, `big_rig`, 35 modules, 11 kB): `to_dict` 105 us on the main thread, text 180 us and
      the file write 130 us on the worker; `note()` 1.3 us per call. A knob sweep costs the note and nothing else.
-6. **Unavailable plate and guests.** `RackWall` draws missing modules and dangling cables; `uses`
-   filled on publish; room-row and guest tests.
+6. **Unavailable plate and guests.** Built (2026-11-07). As built:
+   * `RackGaps` (`core/music/rack/rack_gaps.gd`, static): `plate_title` ("PLUCK not installed", else
+     "<type> not installed"), `plate_note` ("dawlings.sample.pluck 0.1.0"), `plate_text` (the sentence of 6.3),
+     `end_of`/`keep_cable`/`dangling`, `problems(p)` (the list: each missing mod once, each dangling cable) and
+     `published(row)`. `RackWall._build_module` prints the title and puts the note in the tagline place.
+   * **Dangling cables (deviation from step 5, as noted there).** `sanitize` now keeps a cable one of whose ends
+     is a port a *known* module no longer has, provided the other end is a real jack, an absent module or
+     another gone port. A port that exists in the other direction, a loop, a repeat, a module that is not in the
+     patch and a path of the wrong form are still dropped. `RackPatch.playable` (so `lines` and the voice) leaves
+     dangling cables out, as it does cables on absent modules. The file and `to_dict` keep them.
+   * `RackStubs` (`hardware/rack/rack_stubs.gd`, a child of the wall): a cable with only one plug on the wall is a
+     short stub out of that plug, red for a dangling cable, grey for one to an absent module, each with a small
+     key that asks `pull_one` (the usual verb, so the host validates). `RackWall._lay_cables` calls it last.
+   * **`uses` on the room row.** `Studio.room_state` publishes `RackGaps.published(rack_row)`: the row with the
+     patch's `uses` filled for every type from the registry (`RackPatch.to_dict`). The host's own `rack_row` does
+     not carry them for known types (they are not stored); for an absent type they are carried from what the
+     file or row said, so a host who lacks a mod still passes the name on. A guest's `sanitize` keeps `uses`
+     only for the types it lacks.
+   * **Guests.** The host runs the engine from `RackPatch.playable`, so the sound with the stranger in the case is
+     the sound the guest is sent; a guest builds no engine (`rack_voice` only holds the patch). Nothing about the
+     replication path changed: the row already travelled whole. Tested in `tests/rack_gaps_tests.gd`.
+   * Not done: the unavailable DAW plugin slot (needs the chain/`PluginTablet` work of step 8); the problem list is
+     a function (`RackGaps.problems`) that nothing shows yet; the plate is not restyled beyond title and note.
 7. **Composite.** Expansion in `RackPatch.lines`; `interface` handling in `RackModuleDef`; meters.
 8. **Plugin overlays, MODS screen, notices tool.** Plugin part, catalogue built (4.3; the tablet/unit look,
    the unavailable slot and `display.skin` remain); `plugin_display` in the tablet/unit; the MODS plate;

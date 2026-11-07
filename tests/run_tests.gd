@@ -743,6 +743,10 @@ func _ready() -> void:
 	_test_a_bad_or_old_file_is_handled_and_never_a_crash()
 	await _test_an_autosave_is_written_after_a_pause_and_reloads_in_a_fresh_rack()
 	await _test_a_studio_saves_the_host_rack_and_opens_with_it()
+	_test_a_missing_mod_is_a_plate_that_names_it()
+	_test_a_dangling_cable_is_kept_stubbed_and_not_sounded()
+	await _test_the_room_row_says_which_mod_each_type_needs()
+	await _test_a_guest_without_the_mod_sees_a_named_plate_and_hears_the_host()
 	_test_plugins_are_described_by_the_registry()
 	_test_a_rack_catalogue_is_the_engines_own_description()
 	_test_a_rack_patch_checks_every_verb()
@@ -45683,6 +45687,25 @@ func _test_an_autosave_is_written_after_a_pause_and_reloads_in_a_fresh_rack() ->
 
 func _test_a_studio_saves_the_host_rack_and_opens_with_it() -> void:
 	await RackPatchFileTests.new(self).a_studio_saves_the_host_rack_and_opens_with_it()
+
+
+const RackGapsTests := preload("res://tests/rack_gaps_tests.gd")
+
+
+func _test_a_missing_mod_is_a_plate_that_names_it() -> void:
+	RackGapsTests.new(self).a_plate_names_its_mod()
+
+
+func _test_a_dangling_cable_is_kept_stubbed_and_not_sounded() -> void:
+	RackGapsTests.new(self).a_dangling_cable_is_kept_stubbed_and_not_sounded()
+
+
+func _test_the_room_row_says_which_mod_each_type_needs() -> void:
+	await RackGapsTests.new(self).the_room_row_says_which_mod_each_type_needs()
+
+
+func _test_a_guest_without_the_mod_sees_a_named_plate_and_hears_the_host() -> void:
+	await RackGapsTests.new(self).a_guest_without_the_mod_sees_a_named_plate_and_hears_the_host()
 
 
 func _test_plugins_are_described_by_the_registry() -> void:

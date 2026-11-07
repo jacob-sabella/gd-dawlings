@@ -85,6 +85,8 @@ var module_nodes := {}
 var touch_keys: Array[ModularTouch] = []
 var play_key: EqWall.WallKey
 var cables: Array[PatchCable] = []
+## The stubs of cables with only one plug here (RackStubs): dangling cables and those to absent modules.
+var _stubs := RackStubs.new()
 var touch_base := 48
 var panel: Node3D
 ## The group the palette shows.
@@ -657,9 +659,9 @@ func _move_module(id: String) -> void:
 func _build_module(id: String) -> void:
 	var m: Dictionary = patch["modules"][id]
 	var type: String = m["type"]
-	# A module no mod here provides is a plain plate (title: its type, "not installed"), in its place.
+	# A module no mod here provides is a plate naming the mod (RackGaps), in its place.
 	var absent: bool = m.get("missing", false)
-	var spec := {"title": "%s not installed" % type, "knobs": [], "ins": [], "outs": []} if absent else RackCatalogue.spec(type)
+	var spec := {"title": RackGaps.plate_title(patch, id), "knobs": [], "ins": [], "outs": []} if absent else RackCatalogue.spec(type)
 	var w := RackLayout.width_in(patch, id)
 	var col := int(m["at"][0])
 	var row := int(m["at"][1])
@@ -685,7 +687,7 @@ func _build_module(id: String) -> void:
 	if print_strip != null:
 		print_strip.position = Vector3(0, ROW_TALL - 0.064, 0.0006)
 		holder.add_child(print_strip)
-	var tag := RackSkin.tagline(type)
+	var tag := RackGaps.plate_note(patch, id) if absent else RackSkin.tagline(type)
 	if tag != "":
 		var tag_label := _letter(tag, LETTER_CAP * 0.66, Vector3(0, 0.015, 0.001), tint.lerp(Color(1, 1, 1), 0.5), wide - 0.01)
 		holder.add_child(tag_label)
@@ -1146,6 +1148,12 @@ func _lay_cables(touching := {}) -> void:
 		cables.append(cable)
 	for gone: PatchCable in standing.values():
 		_drop(gone)
+	if _stubs.get_parent() == null:
+		_stubs.pull_asked.connect(func(from: String, to: String) -> void: edit_asked.emit("pull_one", [from, to]))
+		add_child(_stubs)
+	_stubs.lay(patch, jacks, func(legend: String, at: Vector3, says: String, press: Callable) -> Node3D:
+		var k := _key(legend, Vector2(0.02, 0.02), at, says, press)
+		return k)
 
 
 func show_keys(pitch: int, gate: bool) -> void:
