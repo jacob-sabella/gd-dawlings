@@ -286,7 +286,7 @@ static func tilt_of(basis: Basis) -> Vector2:
 ## How far a hand's own frame is tipped from level, x its roll and y its pitch, as `tilt_of` reads
 ## them, in radians and unclamped: roll -PI..PI, pitch -PI/2..PI/2. A bend is measured from the
 ## roll a note began at (Wobble), so it must not saturate for a hand that starts past TILT_MOST, a
-## hand plucking the harp palm sideways (docs/spatial_loop.md part two, "A tilt is measured from
+## hand plucking a string palm sideways (docs/spatial_loop.md part two, "A tilt is measured from
 ## where the note began, unclamped").
 static func angles_of(basis: Basis) -> Vector2:
 	var along := (-basis.z).normalized()

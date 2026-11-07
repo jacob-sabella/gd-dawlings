@@ -440,7 +440,7 @@ fingers curled to the thumb and each lettered with its note. docs/spatial_loop.m
 Chord shapes (`ChordHand`, `core/music/chord_hand.gd`, one per player, made by
 `Studio._lend_chord_hand`) are the player's own chord over the song's: the static
 `ChordHand.at(seconds)` is Harmony.at with the held degree's triad (or seventh) in the key there
-put in its place, and the harp, the fingertips, a bell carried here (`InstrumentItem.harmony_at`)
+put in its place, and the fingertips, a bell carried here (`InstrumentItem.harmony_at`)
 and the wheel's follow-ups read it instead of Harmony.at. It is never shared: the shape is this
 machine's, and what it plays goes out as notes with their pitches. Three ways in. The chord hand
 (the left, or the right for a left-handed player) held up, palm toward the room and fingers up,
@@ -450,12 +450,12 @@ a point (a level index), a palm to the eyes or a hand lowered below the chest is
 controller's stick click is a mode (`XRInteractor.chord_stick`) in which the stick's direction
 latches a degree and nudges nothing. A desktop's C is a layer over whichever `KeyCatcher` has the
 keyboard (`KeyCatcher.chord_keys`, a static Callable: 1 to 7, Shift, 0, Esc), not a third catcher,
-with the mouse still pressing (`Interactor.presses_while_playing`) so a click strums the harp; a
+with the mouse still pressing (`Interactor.presses_while_playing`) so a click strums a string; a
 left `Glove` in Pose.SHAPE holds the chord up on the screen and the HUD says `CHORDS · IV F`.
 docs/spatial_loop.md part two, slice 32. The one way a shape leaves the machine is the chord hand's
 own jack, `chord:P` (slice 33): into a bandmate, `Jacks.send_chord` sends `ChordHand.own_chord` as
 a `Jack.Kind.CHORD` on each change of it, and on Q `ChordHand.take` makes it Q's chord while Q
-holds none of their own (`their_chord`, the latest taken; the harp's crown `IV from ADA`, the HUD
+holds none of their own (`their_chord`, the latest taken; the HUD
 `CHORDS · IV F FROM ADA`), let go on quality 0, an unplug or P leaving. Sent once, it is not
 lost to a replug: Q holds a CHORD that beats the room's word on the plug (`_held_chords`) until
 the next patch says yes or no, and P sends it again once the host's room answers the plug
@@ -472,7 +472,7 @@ floor without inventing a plugin to justify its legs.
 
 The room grew one station at a time, each put in whatever gap was left, until twenty stations,
 thirty-six items and forty footprints stood in one 8 x 6 m control room and a 14 x 4.5 m strip of
-live room behind it: thirteen pairs of pieces closer than 0.6 m, the harp, the bells and the music
+live room behind it: thirteen pairs of pieces closer than 0.6 m, the harp (since removed), the bells and the music
 box 12 cm apart, the sampler 3 cm off the booth's wall, and with a 0.9 m walkway the harp, the
 music box, the modular and the lyric board could not be reached at all (2026-10-28: "EVERYTHING is
 way too cramped"). The layout is now a rule rather than a residue, in three parts.
@@ -495,7 +495,7 @@ not colour, says which is which). Where each station stands is still the venue's
 | --- | --- | --- |
 | MIXING | the control room, a ring round the seat | desk, timeline, rack, deck and platter, patch stand, patch wall, EQ wall, stage table, station board |
 | RHYTHM | straight ahead turned round from the desk | drum riser with the hand drums and the looper; the open lattice floor; the venue's instrument on the back wall behind the riser |
-| HARMONY & STRINGS | front right | the bricks table (fifths wheel, chord ledge, section blocks); harp, music box and string spool in a row facing it; handbells across its far end |
+| HARMONY & STRINGS | front right | the bricks table (fifths wheel, chord ledge, section blocks); music box and string spool in a row facing it; handbells across its far end |
 | SYNTH & SOUND DESIGN | back right | the keyboard stand and modular rack; the sampler round a middle in front of it |
 | VOCALS | back left | the booth (3.4 x 3.1 m, a 1.2 m door), the lyric board, room for a talk box |
 | TAPE & TOYS | front left | prop shelf and cassette rack on the wall, hoop and Tour case across the middle from them; the items' homes |
@@ -1938,8 +1938,7 @@ it does, so two instruments never fight over one voice. A control off its rest
 (`Session.control_rest`: the wheel centred, the mod wheel down, expression full) is sent again
 at least every `GuestMidi.CONTROL_EVERY` (50 ms), and at the player's last note-off every end
 rests it by itself, so no reset has to arrive. Each receiver (`TheirKeys.control`,
-`TheirMonitor.control`, which queues it in the line with the notes, and `ChordHarp.heard_control`
-through `Presence`) plays a control only while that player has a note down, because a resend
+`TheirMonitor.control`, which queues it in the line with the notes) plays a control only while that player has a note down, because a resend
 overtaking the last note-off on its own channel would otherwise leave the wheel off rest with
 nothing to put it back; one moved before a note is sent again right behind the note-on. Controls
 sound through `MonitorSynth.control`, into the render thread's queue to `DawKitTine.control`, or
@@ -1975,8 +1974,7 @@ is `GuestMidi.control`'s to say.
 
 What moves the wheel without a keyboard is the playing hand (docs/spatial_loop.md part two, slice
 15). `Wobble` (`core/music/wobble.gd`, a RefCounted, one per playing hand on each instrument that
-bends: `KeytarItem.wobble` on the hand holding it, `ChordHarp.wobble` on the hand that plucked last,
-`FingertipNotes.wobble` on its own hand, and `MouseInteractor`'s own for the plain keys) is stepped
+bends: `KeytarItem.wobble` on the hand holding it, `FingertipNotes.wobble` on its own hand, and `MouseInteractor`'s own for the plain keys) is stepped
 each physics frame. It reads its hand's `Interactor.tilt_angles()` (`HandPose.angles_of`: roll and
 pitch in radians, unclamped, of which `tilt()` is the clamped form; a bare hand's `HandGestures
 .angles`, a controller's aim, the mouse's wiggle) and, only while one of its `sources` owns the
@@ -1993,7 +1991,7 @@ mouse moving up or down, 100 px a semitone, springing back as Alt is let go
 (`MouseInteractor.bend_by`). So nothing new crosses the wire: a tilt is a bend like any other,
 heard, sent, rested at the last note-off and kept in the take. The mouse's wiggle runs while an
 instrument or the keytar is carried, the fingers play, or the cursor rests ungrabbed on a control
-that `plays_under_cursor()` (the harp). `KeyCatcher` gives only Ctrl and Meta keys to the studio,
+that `plays_under_cursor()` (the room string). `KeyCatcher` gives only Ctrl and Meta keys to the studio,
 and a key let go always sends its note-off.
 
 A player who switches ON AIR on their tablet (the room's `on_air` list) grows a MONITOR socket
@@ -2216,7 +2214,7 @@ marked with its station), station `looper` (LIVE, mounted on the `drums` zone).
 
 A music-box sequencer (slice 47). `MusicBox` (`core/music/music_box.gd`) is a brass cylinder of 16
 steps by 8 rows on a case on a plinth of its own (tools/blender/music_box.py), station `music_box`
-(LIVE, free-standing, a `Venue.WHEELED` trolley at `Venue.music_box_spot`: beside the harp away
+(LIVE, free-standing, a `Venue.WHEELED` trolley at `Venue.music_box_spot`: in the harmony row away
 from the bells, or up the loft's aisle).
 
 - **The pattern is one MIDI item, read back, never kept.** Its pegs are the notes of the first MIDI
@@ -2259,7 +2257,7 @@ lattice's front corner).
 - **Its length is its note.** `raw_pitch` is 76 - 48 log(l / 0.3) / log(40) (E5 to E1 over the
   allowed lengths), `pitch_in` snaps it to the key (`Harmony.snap`), never under E1. It is
   lettered at its middle and retuned as the key changes.
-- **Played as the harp is.** A fingertip whose path goes past the line within TOUCH (`tips`, by
+- **Played as a plucked string is.** A fingertip whose path goes past the line within TOUCH (`tips`, by
   default `HandGestures.local_tips`) or a grab (a click, a pinch's ray, a trigger) plucks it on
   this player's keys with source `&"string"`, ringing RING (2.5 s). It shakes in its shader (a glow
   instead at motion 0), and one `Wobble` for all strings bends what rings by the plucking hand's
@@ -2369,7 +2367,7 @@ the control room", "in this venue"), not the card page's title.
 
 Pitched items are instruments of the same kind whose note is a function of song position
 (`InstrumentItem.note_at`, `channel`, `note_seconds`). The four handbells (`HandbellItem`,
-`bell1`..`bell4`, on a stand beside the chord harp at `Venue.bell_spot`) ring their number's
+`bell1`..`bell4`, on a stand at `Venue.bell_spot`) ring their number's
 chord tone, voiced at 72, on `InstrumentItem.MELODIC_CHANNEL` (10, 0-based), 0.8 s long. Each hit
 reads `InstrumentItem.clock` (the studio's `HitRecorder.stamp`) once: that one position pitches
 the sound, which is started before `play` returns, is what HitRecorder records it at (`hit`'s
@@ -2386,7 +2384,7 @@ Every instrument has an output jack (`JackSocket`, `core/music/jack_socket.gd`, 
 a send and not a PipeWire link: `room_state()["jacks"]`, {source: sink}, kept by the studio's
 `Jacks` (`core/music/jacks.gd`) and asked with the `plug` room verb, predicted and rolled back
 like the tablet's `patch`. `Jack` (`core/music/jack.gd`) names the ends: sources are item ids,
-`harp`, `keys:P` (player P's own keys) and `chord:P` (P's chord hand, part two slice 33), sinks
+`keys:P` (player P's own keys) and `chord:P` (P's chord hand, part two slice 33), sinks
 `track_N` and `player_P`; an empty sink is unplugged. Every hit played here goes through `Jacks.hit` (from `ItemRoom.played`): unplugged it
 is the old path, onto the armed track; into `track_N`, `HitRecorder` keeps a take of its own for
 N and records it there, armed or not, and not on the armed track as well. A press steps a socket
@@ -2401,16 +2399,15 @@ plugged instrument shows a tag in words (`-> 3 SNARE`) and a short lead ending i
 cable to the patchbay, which shows sends. docs/spatial_loop.md slice 5.
 
 A jack into a bandmate (`player_P`) is a cable between players. What the source plays goes to P's
-own keys instead of where it went: a bell its note and, `note_seconds` later, its off; the harp
-its strings (heard here from the harp itself); percussion a TRIGGER; and `keys:P` what P plays,
-as a thru (P's keys go on as before, and what came in on a cable or from the harp is not passed
+own keys instead of where it went: a bell its note and, `note_seconds` later, its off; percussion a TRIGGER; and `keys:P` what P plays,
+as a thru (P's keys go on as before, and what came in on a cable is not passed
 on, so two players plugged into each other never feed back), with its controls beside the notes
 as `Jack.Kind.CC` (`pitch` the controller, `velocity` its value; a resend of the value the cable
 already has is not sent again, but one right behind a note-on is). Each event carries the one song
 position it was played to. `Session.send_jack` takes it up to the host on `KEYS_CHANNEL`,
 reliable, and the host passes it to P alone (`jack_played`) only when both are in the room, P is
 not the sender, the room's patch sends that source into P and the sender is the source's player:
-the holder of an item (Session.holds), P for `keys:P`, anyone for the harp (`Session.jack_refusal`,
+the holder of an item (Session.holds), P for `keys:P` (`Session.jack_refusal`,
 `Session.jack_check`, the studio's `Jacks.send_refusal`). It clamps by kind: a note's or a
 trigger's pitch and velocity to 0-127, a CC's value by its controller (`control_value`, so a bend
 of -8192 arrives intact), and refuses a CC that is not one of `CONTROL_KINDS`. `chord:P` sends
@@ -2423,7 +2420,7 @@ P's notes and lands in P's take where it was played; a TRIGGER is the chord tone
 up the chord each hit, for 0.3 s; a CC moves P's wheel as the cable (`GuestMidi.control`), taken
 while the cable owns it, and so lands in P's take beside the notes. `&"cable"` is in P's `GuestMidi.instruments` while anything
 goes into P. Whoever a jack goes into may unplug it (a press on it, or Shift+P with an empty hand
-on a desktop), and is told who plugged what. The harp's socket is on its pillar; a player's keys'
+on a desktop), and is told who plugged what. A player's keys'
 is on their left wrist (`HandSkeleton.wrist`), on the left controller while that hand holds one,
 and P with an empty hand on a desktop; the chord hand's (MY CHORDS) is on the chord hand's wrist
 and controller beside it (`Studio._wear_chord_jacks`), and P in the chord layer on a desktop
@@ -2433,32 +2430,24 @@ end moves. docs/spatial_loop.md slice 6.
 
 The keytar (`KeytarItem`) has no sound of its own here. In this player's hands it sets
 `GuestMidi.keytar`, a view of `&"keytar"` in `GuestMidi.instruments`: the set of instruments in
-this player's reach that play their keys (the keytar, the harp, the fingertips, a cable, the
+this player's reach that play their keys (the keytar, the fingertips, a cable, the
 wheel; docs/spatial_loop.md). Each puts in and takes out only its own name (`GuestMidi.reach`).
 While the set is not empty their keys play on the keys' low-latency synth, go to everyone as
 notes, and are recorded as a take whatever this machine's role (`GuestMidi.plays`). Off a guest
 the synth is started when the first instrument comes into reach, before its first note, and
 stopped when the last goes. A take with no track chosen goes onto the armed one, runs across the
 gaps between notes, and is named after what played in it (`GuestMidi.take_name`:
-`Ada harp+fingertips 1`; plain keys alone are `Ada take 1`). A note given its own song position
+`Ada keytar+fingertips 1`; plain keys alone are `Ada take 1`). A note given its own song position
 (`note_on`'s `at`, for one played elsewhere) is recorded and sent at it. On a desktop the studio's own `KeyCatcher` (`keytar_keys`) is its
 piano while it is held. `Walker` reads the arrow keys while a control in the `walks_on_arrows`
 group has the keyboard. `GuestMidi.key` shows each note on its key. Someone else's notes, while
 they hold the keytar (`Presence._on_note_played`), play out of it on a `MonitorSynth` with a
 `speaker`: an AudioStreamPlayer3D on the room's bus.
 
-The chord harp (`ChordHarp`, `core/music/chord_harp.gd`) is not an item but a control, stood by
-the studio in each venue at `Venue.harp_spot` (behind the bricks table, against the live room's
-back wall). Its eight strings are `Harmony.tones(55, 8)` at the song position each strum is played
-to, so it is always in the song's chord. A grab plucks the nearest string and a held move plucks
-every string it crosses; a bare hand strums by touch through `tips` (the tracked fingertips), and
-a fingertip's poke is not also a grab. Its notes are this player's keys with source `&"harp"`
-(heard at once, sent to everyone, a take on the armed track), and the studio keeps `&"harp"` in
-`GuestMidi.instruments` while the player is near it, a hand is on it, or a string rings, so a run
-of strums is one take. `Presence` routes everyone else's harp notes by their source to
-`ChordHarp.heard`, a `MonitorSynth` speaking from the harp, keyed by (peer, pitch) rather than by
-who holds the harp, and lets go of a leaver's. The octave (two crown buttons, the wheel, the
-thumbstick) is each player's own. docs/spatial_loop.md has the decisions.
+The chord harp (`ChordHarp`, station `harp`, jack source `harp`) was removed on 2026-11-06, with its
+model and Blender script. What it did for the room lives on elsewhere: the song's chord is read
+through `ChordHand.at` and `Harmony.at`, and the harmony row's footprint it left is kept as
+`Venue.HARMONY_FOOT`. docs/spatial_loop.md keeps its slices, marked removed.
 
 Everything that stands somewhere to be played is a station, and the stations are one list:
 `Stations` (`core/music/stations.gd`, static). A row is `id`, `title`, `area` (control, live or
@@ -2466,13 +2455,13 @@ venue), `zone` (the Venue.ZONES zone it is mounted in, or empty), `air`, `spot` 
 that places it, null where the venue has no room for it), `at` (what is looked at) and two help
 lines, `desk` and `hands`; a free-standing row also gives its footprint, so `Stations.solid` is
 the venue's own solid for it. `Stations.HELD` is the same help for what is carried. Made from the
-list: the studio's stands (`_stand_the_harp`, `_stand_the_wheel` read their spots through it), the
+list: the studio's stands (`_stand_the_bell_stand`, `_stand_the_wheel` read their spots through it), the
 help card's PLAY pages (`WelcomeCard.pages`, one an area, running on to numbered pages that each
 fit 1600x900 less margins), the desktop's go-to (`Studio.cycle_stations` on I and Shift-I, and
 `go_to_station`, which eases the walker to `Stations.seat` facing the station, looking where
 `Stations.look_from` holds its `frame` (its controls' top first) in view from that seat, and moves
 the body so Esc walks home), each station's plaque (`Stations.plaque`: title and hands line at 30 mm), and
-the suite's clearance loop, in two kinds: free-standing rows take the harp's checks, zone-mounted
+the suite's clearance loop, in two kinds: free-standing rows take the bells' checks, zone-mounted
 ones are checked inside their zone. The help card holds the keyboard focus while open, so the
 walker stands still; F2 still opens the 2D view, which puts the card away. docs/spatial_loop.md part two, slice 10.
 
@@ -2706,7 +2695,7 @@ react.
 from MixState whenever it is wanted (`build(state, sources)`, about 15 times a second while the
 view is on): a stage for each place a sound passes (a source, a track's playback and input, each
 plugin, its fader, each send, the master, OUT), ids like `t6:fx0`, `t6:fader`, `t6:send1`,
-`src:harp`. Each stage has a level (`peak_db`, `rms_db`, `gr_db`), says whether it was measured or
+`src:<id>`. Each stage has a level (`peak_db`, `rms_db`, `gr_db`), says whether it was measured or
 estimated (`level_words()`: "−6.0 dBFS", "≈ −9.1 dBFS", "not measured"), the next stage and any
 branches (sends), and, where the sound stops, `halt` (one of fifteen reasons, each with a heading
 in `HEADINGS`), `why` in words and a `fix` ({label, verb, args, step}). `trace(from)` follows `next`

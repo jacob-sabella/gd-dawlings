@@ -5,13 +5,13 @@ extends RefCounted
 ## (docs/spatial_loop.md, foundation B). Static, pure: nothing here holds a patch. The room's
 ## patch is `Jacks`, and the plug on an instrument is `JackSocket`.
 ##
-## A source is what plays: an item's id (`shaker`, `bell2`, a Tour spill's `cowbell2`), `harp`,
+## A source is what plays: an item's id (`shaker`, `bell2`, a Tour spill's `cowbell2`),
 ## `keys:P`, player P's own keys, or `chord:P`, player P's chord hand (part two, slice 33). A
 ## sink is where it goes: `track_N`, recorded onto track N as MIDI, or `player_P`, into player
 ## P's instrument (slice 6). The empty sink is unplugged, which is what every source is until
 ## somebody plugs it: it then does exactly what it did before there were jacks.
 ##
-## A jack sends what its source is. A pitched source (the harp, a player's keys, a bell) sends
+## A jack sends what its source is. A pitched source (a player's keys, a bell) sends
 ## NOTE_ON and NOTE_OFF of its own pitches, and CC, its controls beside them: `pitch` the
 ## controller (DawKitClip.PITCH_BEND, 1 or 11, Session.CONTROL_KINDS) and `velocity` its value,
 ## -8192 to 8191 for the bend (docs/spatial_loop.md slice 14). Unpitched percussion sends TRIGGER,
@@ -35,8 +35,6 @@ const TRACK := "track_"
 const PLAYER := "player_"
 const KEYS := "keys:"
 const CHORD := "chord:"
-## The chord harp, the room's to play (ChordHarp.SOURCE).
-const HARP := &"harp"
 ## The world's sources: the weather's (Weather.SOURCE, Weather.DRIPS).
 const WORLD: Array[StringName] = [&"weather", &"drips"]
 ## The longest a source or a sink's name may be: an item's id is short, and a peer's ask is
@@ -87,17 +85,17 @@ static func chord_player(source: StringName) -> int:
 	return _number_after(source, CHORD)
 
 
-## The player a source is part of, their keys or their chord hand, or 0 for the harp or an item:
+## The player a source is part of, their keys or their chord hand, or 0 for an item:
 ## who alone may plug it and send down it.
 static func own_player(source: StringName) -> int:
 	var keys := keys_player(source)
 	return keys if keys > 0 else chord_player(source)
 
 
-## Whether `source` is an instrument item's (an id), not the harp nor a player's keys or chord
+## Whether `source` is an instrument item's (an id), not a player's keys or chord
 ## hand nor the weather: what can go onto a track, where HitRecorder takes its hits down.
 static func is_item(source: StringName) -> bool:
-	return source != HARP and not String(source).begins_with(KEYS) and not String(source).begins_with(CHORD) \
+	return not String(source).begins_with(KEYS) and not String(source).begins_with(CHORD) \
 			and not is_world(source)
 
 

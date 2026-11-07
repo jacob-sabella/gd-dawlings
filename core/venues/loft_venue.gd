@@ -405,7 +405,7 @@ func _column_spots() -> Array[Vector2]:
 
 ## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 43): eight steam pipes
 ## dropping from a header along the brick of the right-hand wall, between its two columns (the back
-## wall is the gallery's, its stair and the harp and the bells under it).
+## wall is the gallery's, its stair and the bells under it).
 func instrument() -> Dictionary:
 	return {"kind": &"pipes", "spot": side_wall_instrument(1.0, PIPES_ALONG, 0.024)}
 

@@ -238,7 +238,7 @@ func personal() -> bool:
 	return false
 
 
-## Something that plays while the cursor is over it, with no hand on it: the harp's strings, which
+## Something that plays while the cursor is over it, with no hand on it: a room string, which
 ## a wiggle of the mouse over a ringing one wobbles (MouseInteractor.wiggle; docs/spatial_loop.md
 ## part two, slice 15). False for everything that is only worked by a grab.
 func plays_under_cursor() -> bool:

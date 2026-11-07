@@ -59,17 +59,14 @@ var _carry_claims: Dictionary = {}
 var _item_holders: Dictionary = {}
 ## {peer: Transform3D}: where the item in their hand is, relative to their head, as last heard.
 var _carry_at: Dictionary = {}
-## The room's chord harp (ChordHarp), set by the studio as each venue stands one: everyone's harp
-## notes are heard out of it.
-var harp: ChordHarp = null
 ## (peer, kind, pitch, velocity) -> void: a bandmate's note from a string across the room
 ## (RoomString, docs/spatial_loop.md part two, slice 48), for the studio to sound from the string
-## that plays it here. Routed by source alone, as the harp's are.
+## that plays it here. Routed by source alone.
 var strings_heard: Callable = Callable()
 ## (peer, kind, pitch, velocity) -> void and (peer, kind, value) -> void: a bandmate's note and
 ## control through the modular wall (docs/spatial_loop.md part two, slice 52), for the studio to
-## play through the room's patch on a voice of theirs at the wall. Routed by source alone, as the
-## harp's are: everything a player's keys sound while they stand at the wall goes out as the
+## play through the room's patch on a voice of theirs at the wall. Routed by source alone:
+## everything a player's keys sound while they stand at the wall goes out as the
 ## modular's (GuestMidi.through_modular).
 var modular_heard: Callable = Callable()
 var modular_control_heard: Callable = Callable()
@@ -116,11 +113,9 @@ func _enter_tree() -> void:
 	Session.item_hit.connect(_on_item_hit)
 	Session.note_played.connect(_on_note_played)
 	Session.control_played.connect(_on_control_played)
-	Session.participant_left.connect(_on_participant_left)
 
 
 func _exit_tree() -> void:
-	Session.participant_left.disconnect(_on_participant_left)
 	Session.item_carried.disconnect(_on_item_carried)
 	Session.item_flown.disconnect(_on_item_flown)
 	Session.item_used.disconnect(_on_item_used)
@@ -513,17 +508,8 @@ func _on_role_changed() -> void:
 	_my_claims.clear()
 	_carry_claims.clear()
 	_carry_at.clear()
-	# In a session or out of one, nobody else's harp notes are still coming.
-	if is_instance_valid(harp):
-		harp.forget()
 	_apply_holds()
 	_sync_avatars()
-
-
-## Somebody left: whatever they had sounding out of the harp is let go, their note-offs with them.
-func _on_participant_left(peer_id: int) -> void:
-	if is_instance_valid(harp):
-		harp.forget(peer_id)
 
 
 ## Every control another participant holds is refused to this participant's hands, and every
@@ -707,15 +693,10 @@ func _on_item_used(id: StringName, down: bool, from: int, take := -1) -> void:
 
 ## Somebody's keys: if the keytar is in their hands, it plays them, out of the keytar. Only
 ## what their keys play as keys (`source` `&"keytar"`, or plain keys): a note from another
-## instrument of theirs is heard from that instrument. The harp's are routed by their source
-## alone, never by who holds it: a pluck's hold is over long before its string stops ringing,
-## and the holds go on a channel of their own with no order against the notes'.
+## instrument of theirs is heard from that instrument. A room string's
+## and the modular's are routed by their source alone, never by who holds anything.
 func _on_note_played(kind: int, pitch: int, velocity: int, from: int, _song: float,
 		source := &"") -> void:
-	if source == ChordHarp.SOURCE:
-		if is_instance_valid(harp) and from != Session.local_peer_id:
-			harp.heard(from, kind, pitch, velocity)
-		return
 	if source == RoomString.SOURCE:
 		if strings_heard.is_valid() and from != Session.local_peer_id:
 			strings_heard.call(from, kind, pitch, velocity)
@@ -733,13 +714,10 @@ func _on_note_played(kind: int, pitch: int, velocity: int, from: int, _song: flo
 		keytar.heard(kind, pitch, velocity)
 
 
-## Somebody's control (Session.control_played): a harp's goes to the harp, as its notes do, and
+## Somebody's control (Session.control_played): the modular's goes to the wall, and
 ## their keys' to the keytar in their hands. Their keys' own are played where their keys are
 ## (TheirKeys, TheirMonitor) too.
 func _on_control_played(kind: int, value: int, from: int, _song: float, source := &"") -> void:
-	if source == ChordHarp.SOURCE and is_instance_valid(harp) and from != Session.local_peer_id:
-		harp.heard_control(from, kind, value)
-		return
 	if source == Modular.SOURCE:
 		if modular_control_heard.is_valid() and from != Session.local_peer_id:
 			modular_control_heard.call(from, kind, value)

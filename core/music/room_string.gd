@@ -20,7 +20,7 @@ extends ControlAffordance
 ## and says why not to whoever asked), and a guest predicts with it. Every machine stands the same
 ## strings from the row (Studio._show_strings); nothing of a pluck crosses the wire but its notes.
 ##
-## PLAYED as the harp is. A fingertip brushing through it (`tips`: a tip whose path goes past the
+## PLAYED, not only plucked. A fingertip brushing through it (`tips`: a tip whose path goes past the
 ## string within TOUCH of it) or a grab (a click, a pinch's ray, a trigger) plucks it; a fingertip's
 ## poke is its brush, not a grab as well. Its notes are this player's keys (`keys`,
 ## GuestMidi) with source SOURCE: heard at once on the keys' own synth, sent to everyone, and taken
@@ -114,7 +114,7 @@ var b := Vector3(1, 0, 0)
 var maker := 0
 ## Where its notes are played: this player's keys. Session.guest_midi unless told otherwise.
 var keys: GuestMidi = null
-## () -> {id: Vector3}: this player's tracked fingertips, in global space (ChordHarp.tips). Not
+## () -> {id: Vector3}: this player's tracked fingertips, in global space. Not
 ## set, every local tracked hand's index and middle tips (HandGestures.local_tips).
 var tips: Callable = Callable()
 ## (seconds) -> Harmony: the harmony a pluck at that song position is snapped to. Not set, the
@@ -303,6 +303,14 @@ static func _wall_hit(o: Vector3, d: Vector3, rooms: Array) -> float:
 static func spool_solid(at: Transform3D) -> Dictionary:
 	var middle := at * Vector3(0, 0, SPOOL_FOOT_Z)
 	return {"c": Vector2(middle.x, middle.z), "h": SPOOL_FOOT, "a": at.basis.get_euler().y, "top": SPOOL_TOP}
+
+
+## The hand a strumming tip's key names (HandGestures.local_tips keys it [hand, finger]): its
+## HandGestures, or null for a key of the suite's own.
+static func _tip_hand(id: Variant) -> Object:
+	if id is Array and not (id as Array).is_empty() and (id as Array)[0] is int:
+		return instance_from_id(int((id as Array)[0])) as HandGestures
+	return null
 
 
 ## The hand an end is tied with, for a hand `by` that took it: a fingertip's poke presses only what
@@ -621,7 +629,7 @@ func _brush(delta: float) -> void:
 			if from.dot(went) < 0.0 and to.dot(went) > 0.0 \
 					and Geometry2D.get_closest_point_to_segment(Vector2.ZERO, from, to).length() <= TOUCH:
 				var speed := (p - was).length() / maxf(delta, 0.001)
-				pluck(maxi(InstrumentItem.velocity_for(speed), SOFTEST), ChordHarp.tip_hand(tip))
+				pluck(maxi(InstrumentItem.velocity_for(speed), SOFTEST), _tip_hand(tip))
 		_tips_was[tip] = p
 	for tip in _tips_was.keys():
 		if not seen.has(tip):

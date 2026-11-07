@@ -21,10 +21,9 @@ const GUEST_TEMPO := 133.5
 ## A send level neither the stand-in nor the rig starts at.
 const GUEST_SEND := 0.345
 const GUEST_MARK := 1.25
-## The key the host writes before the harps are strummed, from the playhead's bar: one chord, so
-## either half reads the same strings wherever the playhead is in it.
-const HARP_KEY := "[D minor: Dm]"
-const HARP_STRINGS := [57, 62, 65, 69, 74, 77, 81, 86]
+## The key the host writes from the playhead's bar: one chord, so either half reads the same
+## harmony wherever the playhead is in it.
+const KEY_MARKER := "[D minor: Dm]"
 ## The track the guest records onto.
 const TAKE_TRACK := 7
 ## The track the guest's microphone records onto, in the same take as its keys.
@@ -34,19 +33,15 @@ const AUDIO_TRACK := 8
 const SENT_TRACK := 12
 ## The track the host plugs bell 1 into, for the guest to see in the room.
 const PLUG_TRACK := 5
-## Cables (docs/spatial_loop.md slice 6): the track the host's keys take down what comes into them,
-## the song position the guest's harp strum into the host is played to (a given clock, the
-## song not playing), and the chord tones the guest's four shaker hits play on the host's keys:
-## D minor's, voiced at Jacks.TRIGGER_CENTRE.
-const CABLE_TRACK := 9
-const CABLE_SONG := 300.0
+## Cables (docs/spatial_loop.md slice 6): the chord tones the guest's four shaker hits play on the
+## host's keys: D minor's, voiced at Jacks.TRIGGER_CENTRE.
 const CABLE_TONES := [62, 65, 69, 74]
 const SENT_AT := 30.0
 ## The fifths wheel (docs/spatial_loop.md slice 9): the bar the guest's SET names, well past
 ## everything else the probe writes or plays at, and what it writes there. Its second bar is C.
 const WHEEL_BAR := 420
 const WHEEL_INSIDE := "E minor: Em C G D"
-## Where the guest's head is in its play space when it travels to the harp (slice 11): off the
+## Where the guest's head is in its play space when it travels to a station (slice 11): off the
 ## centre, as a person stands, so the probe sees the offset kept.
 const TRAVEL_OFFSET := Vector3(0.25, 1.6, -0.15)
 ## One undo step per gesture (slice 12): the track the guest drags pan and volume on at once,
@@ -347,8 +342,6 @@ var _use_takes: Array = []
 ## instrument's [kind, pitch, from, source] in `_sourced`.
 var _notes: Array = []
 var _sourced: Array = []
-## The other half's harp notes, from when the strums begin: [kind, pitch, from, song].
-var _harped: Array = []
 ## The other half's item hits, as Session.item_hit gives them: [item, velocity, from, song, snap,
 ## take, zone].
 var _item_hits: Array = []
@@ -364,7 +357,7 @@ var _plane_holders: Array = []
 var _jacks: Jacks = null
 var _jacked: Array = []
 var _cabled: Array = []
-## The head this half publishes (`_keep_publishing`), until the guest travels (`_travel_to_the_harp`).
+## The head this half publishes (`_keep_publishing`), until the guest travels (`_travel_to_the_bells`).
 var _head := Transform3D.IDENTITY
 ## What this half publishes it points at, and where (`_keep_publishing`); the guest's ruler time
 ## from 60.82 (slice 35).
@@ -638,8 +631,8 @@ func _host(port: int) -> void:
 	Session.guest_midi.note_on(67, 80)
 	Session.guest_midi.note_off(67)
 	# And one from an instrument of the host's: it says so (GuestMidi.instruments).
-	Session.guest_midi.note_on(71, 70, 0, 0.0, false, &"harp")
-	Session.guest_midi.note_off(71, 0, 0.0, false, &"harp")
+	Session.guest_midi.note_on(71, 70, 0, 0.0, false, &"fingertips")
+	Session.guest_midi.note_off(71, 0, 0.0, false, &"fingertips")
 	await _until(4.0)
 	check("the host is refused a control the guest holds",
 			_refused.size() == 1 and _refused[0][0] == KEY and _refused[0][1] == guest_id)
@@ -734,17 +727,11 @@ func _host(port: int) -> void:
 		await _until(39.0 if _reaper_resource != "" else 17.5)
 		_check_sent_files()
 
-	# The harp (docs/spatial_loop.md slice 3): the song put in D minor from the playhead's bar,
-	# the guest strums at 41, the host hears it as harp notes of that chord, and strums back at 43.
+	# The song put in D minor from the playhead's bar, for the bells to ring from.
 	await _until(40.0)
-	_harped.clear()
 	var bar := floorf(DAW.state.bar_at(DAW.state.position_seconds) + Harmony.BAR_SLACK)
-	DAW.add_marker(DAW.state.bar_to_seconds(bar + 1.0), HARP_KEY)
-	var harp := _harp()
+	DAW.add_marker(DAW.state.bar_to_seconds(bar + 1.0), KEY_MARKER)
 	_check_bells()
-	await _until(43.0)
-	_check_strum(_other_id(), "the guest's strum reached me")
-	_strum(harp)
 
 	# The guest rings bell 2 at 44 (docs/spatial_loop.md slice 4): its hit arrives with the song
 	# position it was played to, and my bell 2 rings D minor's third there, as the guest's did.
@@ -805,35 +792,6 @@ func _host(port: int) -> void:
 			== hits.map(func(j: Array) -> float: return j[4]))
 	check("each let go (%d)" % _cabled.filter(func(c: Array) -> bool: return c[0] == Session.Note.OFF).size(),
 			_cabled.filter(func(c: Array) -> bool: return c[0] == Session.Note.OFF).size() == 4)
-	# The guest's harp, plugged into me, strummed at 50.2: in my take on CABLE_TRACK, recording to a
-	# given clock from 49.8 to 53.
-	await _until(49.8)
-	var gm := Session.guest_midi
-	var saved_roll := gm.roll_every
-	gm.roll_every = 0.0
-	gm.target_track = CABLE_TRACK
-	gm.record_with_host = true
-	DAW.state.track(CABLE_TRACK).items.clear()
-	gm.heard_source = _given_clock(CABLE_SONG - 1.0, true)
-	_jacked.clear()
-	await _until(53.0)
-	gm.heard_source = _given_clock(CABLE_SONG + 2.2, false)
-	await _until(53.6)
-	var strings := _jacked.filter(func(j: Array) -> bool: return j[0] == Jack.HARP and j[1] == Jack.Kind.NOTE_ON)
-	var takes: Array = DAW.state.track(CABLE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
-		return it.name.contains("cable"))
-	var notes: Array = MidiTake.unpack_relative(takes[-1].notes, takes[-1].start) if not takes.is_empty() else []
-	notes.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
-	var landed := notes.size() == strings.size() and strings.size() == ChordHarp.STRINGS
-	for i in mini(notes.size(), strings.size()):
-		landed = landed and int(notes[i][2]) == int(strings[i][2]) and absf(float(notes[i][0]) - float(strings[i][4])) < 0.002
-	check("the guest's harp strum came down its jack as D minor's strings (%s)" % [strings.map(func(j: Array) -> int: return j[2])],
-			strings.map(func(j: Array) -> int: return j[2]) == HARP_STRINGS)
-	check("and is in my take on track %d, each where the guest plucked it (%d notes, %s)" % [CABLE_TRACK, notes.size(),
-			takes.map(func(it: MixState.ItemState) -> String: return it.name)], takes.size() == 1 and landed)
-	gm.heard_source = Callable()
-	gm.target_track = 0
-	gm.roll_every = saved_roll
 	Session.release_hold(bell1.network_key())
 
 	# Slice 12: where history is before the guest's two-value drag, and my own fader in the middle
@@ -851,13 +809,13 @@ func _host(port: int) -> void:
 	check("the guest's SET reached me as an ask with its bar (%s)" % [sets], sets.size() == 1
 			and sets[0][1] == [WHEEL_BAR, WHEEL_INSIDE] and sets[0][2] == _other_id())
 	_check_wheel("my")
-	# The guest travelled to the harp at 53.8, in a headset (slice 11): its head, which its ghost
-	# stands at, is at the harp's seat in my room's venue.
-	var seat: Variant = _harp_seat()
+	# The guest travelled to the bells at 53.8, in a headset (slice 11): its head, which its ghost
+	# stands at, is at the bells' seat in my room's venue.
+	var seat: Variant = _bells_seat()
 	var guest_head: Transform3D = Session.participants[_other_id()].head if Session.participants.has(_other_id()) \
 			else Transform3D.IDENTITY
 	var wanted: Vector3 = (seat as Transform3D) * TRAVEL_OFFSET if seat != null else Vector3.INF
-	check("the guest's travel put its ghost at the harp's seat (%.3f m off)" % guest_head.origin.distance_to(wanted),
+	check("the guest's travel put its ghost at the bells' seat (%.3f m off)" % guest_head.origin.distance_to(wanted),
 			guest_head.origin.distance_to(wanted) < 0.05)
 
 	# One undo step per gesture (slice 12): the guest's two-value drag, 54.55 to about 54.9,
@@ -966,7 +924,7 @@ func _host(port: int) -> void:
 	# A DJ platter (slice 27): the guest's turns of its platter, 59.6 to 59.68, are seeks of mine.
 	await _until(59.74)
 	_check_platter_seek()
-	# And my playhead back in the harp's D minor, where the chord hand (slice 33) is held at 60.66:
+	# And my playhead back in D minor, where the chord hand (slice 33) is held at 60.66:
 	# the platter left it at bar 7, in the intro's A minor, whose IV is Dm and not Gm.
 	DAW.seek(_ring_song())
 
@@ -1003,16 +961,15 @@ func _host(port: int) -> void:
 	_take_back_the_bricks()
 
 	# A chord hand down a jack (part two, slice 33): a chord hand of mine to take the guest's chord,
-	# its chord:G plugged into me at 60.62, IV held at 60.66; my harp retuned to it by 60.7 and
-	# strummed, and let go once the guest unplugs it at 60.74.
+	# its chord:G plugged into me at 60.62, IV held at 60.66; taken by 60.7, and
+	# let go once the guest unplugs it at 60.74.
 	await _until(60.6)
 	var chords := ChordHand.new()
 	add_child(chords)
 	await _until(60.7)
-	_check_chord_into_me(chords, harp)
+	_check_chord_into_me(chords)
 	await _until(60.8)
-	check("unplugged, the guest's chord is let go, and my harp is D minor's again (%s)" % [harp.tuning()],
-			not chords.plays_theirs() and harp.tuning() == PackedInt32Array(HARP_STRINGS))
+	check("unplugged, the guest's chord is let go", not chords.plays_theirs())
 	chords.queue_free()
 
 	# Point, mark and listen together (slice 35): the guest's ruler point and its sticky note, by
@@ -2581,8 +2538,8 @@ func _guest(port: int) -> void:
 	Session.release_hold(PLANE)
 	check("the host's keys reached me as played (%s)" % [_notes],
 			_notes == [[Session.Note.ON, 67, 80, 1], [Session.Note.OFF, 67, 0, 1]])
-	check("and the host's harp note, saying it was the harp's (%s)" % [_sourced],
-			_sourced == [[Session.Note.ON, 71, 1, &"harp"], [Session.Note.OFF, 71, 1, &"harp"]])
+	check("and the host's fingertips note, saying it was the fingertips' (%s)" % [_sourced],
+			_sourced == [[Session.Note.ON, 71, 1, &"fingertips"], [Session.Note.OFF, 71, 1, &"fingertips"]])
 	check("and the host answered my throw, put-down and patch", int((Session.room.get("acks", {}) as Dictionary)
 			.get(Session.local_peer_id, 0)) == 7)
 
@@ -2647,13 +2604,8 @@ func _guest(port: int) -> void:
 		check("and I know its name and file, not where it is (%s, %s)" % [DAW.project_title(), DAW.project_file_name()],
 				not DAW.project_title().is_empty() and DAW.project_file_name() == "dawlings_probe_%d.dawproject" % _port)
 
-	# The harp: I strum at 41, and hear the host's strum back from 43.
 	await _until(40.0)
-	_harped.clear()
-	var harp := _harp()
 	_check_bells()
-	await _until(41.0)
-	_strum(harp)
 	# A bell rung, as the studio sends one: its one song position goes with it.
 	await _until(44.0)
 	_room.played.connect(func(item: InstrumentItem, velocity: int, _struck: bool, at: float, zone: StringName) -> void:
@@ -2668,9 +2620,6 @@ func _guest(port: int) -> void:
 	# My shaker, on its shelf, into track 3: asked as the studio asks (Jacks).
 	await _until(44.5)
 	Session.ask_room(&"plug", [&"shaker", &"track_3"])
-	await _until(45.0)
-	_check_strum(1, "the host's strum reached me")
-	_harped.clear()
 
 	# The host's room says where both jacks go: mine, and the bell the host plugged at 46.
 	await _until(47.5)
@@ -2682,8 +2631,7 @@ func _guest(port: int) -> void:
 			and jacks.patch.size() == 2)
 	jacks.free()
 
-	# Cables (docs/spatial_loop.md slice 6): my shaker in my hand into the host's keys, and the harp
-	# too; my jacks follow the host's room, as the studio's do.
+	# Cables (docs/spatial_loop.md slice 6): my shaker in my hand into the host's keys; my jacks follow the host's room, as the studio's do.
 	_wear_jacks()
 	_jacks.set_patch(Session.room.get("jacks", {}))
 	Session.room_changed.connect(func() -> void: _jacks.set_patch(Session.room.get("jacks", {})))
@@ -2692,11 +2640,10 @@ func _guest(port: int) -> void:
 	Session.claim_hold(shaker.network_key())
 	await _until(48.3)
 	Session.ask_room(&"plug", [&"shaker", Jack.player_sink(1)])
-	Session.ask_room(&"plug", [Jack.HARP, Jack.player_sink(1)])
 	# Four hits, as the studio sends them (Jacks.hit), each with the song position it was played to.
 	await _until(48.8)
-	check("the host's room has my shaker and the harp into the host (%s)" % [_jacks.patch],
-			_jacks.sink_of(&"shaker") == Jack.player_sink(1) and _jacks.sink_of(Jack.HARP) == Jack.player_sink(1))
+	check("the host's room has my shaker into the host (%s)" % [_jacks.patch],
+			_jacks.sink_of(&"shaker") == Jack.player_sink(1))
 	for i in 4:
 		_jacks.hit(shaker, 90, _ring_song() + 1.0 + i * 0.1)
 	# The host's bell 1, rung at 49 into me: its own note on my keys, and its off.
@@ -2707,21 +2654,13 @@ func _guest(port: int) -> void:
 			and is_equal_approx(rung[0][2], _ring_song() + 2.0)
 			and absf(rung[1][2] - (_ring_song() + 2.0 + HandbellItem.RING_SECONDS)) < 0.001)
 	check("and the cable is in my keys' reach while it is plugged into me", Session.guest_midi.instruments.has(Jacks.CABLE))
-	# The harp, strummed into the host's take, to a clock of my own: its strings ring out by 52.
-	await _until(50.2)
-	Session.guest_midi.heard_source = _given_clock(CABLE_SONG + 0.2, false)
-	_strum(harp)
-	check("my strum went down the jack, not onto my keys", not Session.guest_midi.held.has(HARP_STRINGS[0]))
-	await _until(52.5)
-	Session.guest_midi.heard_source = Callable()
-
 	# The fifths wheel's SET, as the wheel sends a guest's (docs/spatial_loop.md slice 9): a room
 	# ask carrying the bar I chose.
 	await _until(53.7)
 	Session.ask_room(FifthsWheel.VERB, [WHEEL_BAR, WHEEL_INSIDE])
-	# And to the harp, in a headset: the host sees my ghost there by 55.
+	# And to the bells, in a headset: the host sees my ghost there by 55.
 	await _until(53.8)
-	await _travel_to_the_harp()
+	await _travel_to_the_bells()
 
 	# While the session is still on: once the host leaves, my own project is back.
 	await _until(54.5)
@@ -2787,7 +2726,7 @@ func _guest(port: int) -> void:
 	await _crank_the_history()
 	await _rearrange_the_sections()
 	await _press_the_bricks()
-	await _drive_their_harp()
+	await _drive_their_chord_hand()
 	await _point_and_note()
 	await _hear_the_spectra()
 	await _carve_the_clash()
@@ -3152,21 +3091,21 @@ func _keep_publishing(head: Transform3D, pointing: String) -> void:
 	add_child(timer)
 
 
-## The harp's seat in the room's venue (Session.room), in the session's frame, as both halves
+## The bells' seat in the room's venue (Session.room), in the session's frame, as both halves
 ## stand it: Stations.seat with nothing to say where a person fits, since neither half here stands
-## a studio's furniture round it. Null where the venue stands no harp.
-func _harp_seat() -> Variant:
+## a studio's furniture round it. Null where the venue stands no bells.
+func _bells_seat() -> Variant:
 	var venue := Venue.make(Session.room.get("venue", Venue.IDS[0]))
-	var seat: Variant = Stations.seat(venue, &"harp")
+	var seat: Variant = Stations.seat(venue, &"bells")
 	venue.free()
 	return seat
 
 
 ## Going to a station in a headset (docs/spatial_loop.md slice 11), as the studio does it: a
-## simulated rig in the session's frame (RoomAnchor, handed over whole) travels to the harp's
+## simulated rig in the session's frame (RoomAnchor, handed over whole) travels to the bells'
 ## seat, and from then on the head this half publishes is the one Presence would, wherever the
 ## travel put it.
-func _travel_to_the_harp() -> void:
+func _travel_to_the_bells() -> void:
 	var anchor := RoomAnchor.new()
 	add_child(anchor)
 	anchor.adopt_virtual_frame(1.2)
@@ -3174,8 +3113,8 @@ func _travel_to_the_harp() -> void:
 	rig.simulated = true
 	add_child(rig)
 	rig.head.position = TRAVEL_OFFSET
-	var seat: Variant = _harp_seat()
-	check("the room's venue stands a harp to go to", seat != null)
+	var seat: Variant = _bells_seat()
+	check("the room's venue stands bells to go to", seat != null)
 	if seat == null:
 		return
 	rig.travel(seat as Transform3D)
@@ -3186,7 +3125,7 @@ func _travel_to_the_harp() -> void:
 	_head = presence.head_in_session()
 	presence.free()
 	var wanted := (seat as Transform3D) * TRAVEL_OFFSET
-	check("my travel put my head at the harp's seat, as I stood in my play space (%.3f m)" % _head.origin.distance_to(wanted),
+	check("my travel put my head at the bells' seat, as I stood in my play space (%.3f m)" % _head.origin.distance_to(wanted),
 			_head.origin.distance_to(wanted) < 0.05 and rig.away and rig.veil() == 0.0)
 
 
@@ -3244,7 +3183,7 @@ static func _first_send(state: MixState) -> Array:
 
 
 ## The guest's SET, as `whose` markers have it: a marker of brackets alone at WHEEL_BAR's start,
-## the harmony from there by it (its second bar C), and the bar before it still the harp's D minor.
+## the harmony from there by it (its second bar C), and the bar before it still D minor.
 func _check_wheel(whose: String) -> void:
 	var s := DAW.state
 	var at := s.bar_to_seconds(WHEEL_BAR + 1.0)
@@ -3271,8 +3210,6 @@ func _other_id() -> int:
 ## `_sourced`.
 func _on_note_played(kind: int, pitch: int, velocity: int, from: int, song: float,
 		source := &"") -> void:
-	if source == ChordHarp.SOURCE:
-		_harped.append([kind, pitch, from, song])
 	if source == &"":
 		_notes.append([kind, pitch, velocity, from])
 	else:
@@ -3992,40 +3929,26 @@ func _given_clock(from_seconds: float, recording: bool) -> Callable:
 ## Where the guest rings its bell: a quarter second past the host's D minor marker.
 func _ring_song() -> float:
 	for t in DAW.state.markers:
-		if str(DAW.state.markers[t]) == HARP_KEY:
+		if str(DAW.state.markers[t]) == KEY_MARKER:
 			return float(t) + 0.25
 	return -1.0
 
 
 ## Host: the guest's chord hand, plugged into me (part two, slice 33), holding IV of D minor: my
-## chord hand takes Gm from them, my harp's strings and crown are theirs, and a strum plays Gm's
-## tones on my keys.
-func _check_chord_into_me(chords: ChordHand, harp: ChordHarp) -> void:
+## chord hand takes Gm from them, and it plays Gm's tones.
+func _check_chord_into_me(chords: ChordHand) -> void:
 	var source := Jack.chord_source(_other_id())
 	var key := Harmony.at(DAW.state, DAW.state.position_seconds)
-	var gm_tones := ChordHand.with_chord(key, "Gm").tones(ChordHarp.LOWEST, ChordHarp.STRINGS)
 	check("the guest's chord hand is plugged into me (%s)" % [_jacks.patch],
 			_jacks.sink_of(source) == Jack.player_sink(1))
 	check("and its chord came down the jack: IV of D minor, Gm, from the guest (%s from %d)"
 			% [chords.their_chord(key), chords.their_player()],
 			chords.their_chord(key) == "Gm" and chords.their_player() == _other_id() and chords.plays_theirs())
-	harp._process(0.016)
-	check("my harp's strings are Gm's, and its crown says whose (%s, %s)" % [harp.tuning(), harp._chord_label.text],
-			harp.tuning() == gm_tones and harp._chord_label.text == "iv from %s" % Session.name_of(_other_id()).to_upper())
-	var ons: Array = []
-	var heard := func(kind: int, pitch: int, _v: int, _song: float, from: StringName) -> void:
-		if kind == Session.Note.ON and from == ChordHarp.SOURCE:
-			ons.append(pitch)
-	Session.guest_midi.note.connect(heard)
-	_strum(harp)
-	Session.guest_midi.note.disconnect(heard)
-	check("and my strum plays Gm's tones on my keys (%s)" % [ons], ons == Array(gm_tones))
-	harp._physics_process(ChordHarp.RING + 0.01)
 
 
 ## Guest: my chord hand's jack into the host at 60.62, as P in the chord layer asks it; IV held at
 ## 60.66, sent down it as Jacks.send_chord does each frame; unplugged at 60.74.
-func _drive_their_harp() -> void:
+func _drive_their_chord_hand() -> void:
 	await _until(60.62)
 	var chords := ChordHand.new()
 	add_child(chords)
@@ -4733,42 +4656,6 @@ func _take_back_the_note() -> void:
 	var at := DAWBackend.marker_key(DAW.state.markers, NOTE_AT)
 	if not is_nan(at):
 		DAW.remove_marker(at)
-
-
-## A chord harp of my own, on my keys, as the studio stands one.
-func _harp() -> ChordHarp:
-	var harp := ChordHarp.new()
-	add_child(harp)
-	return harp
-
-
-## A strum across all eight strings, low to high, through the grab contract a mouse uses. Its
-## strings ring out by themselves, RING later, and their note-offs go too.
-func _strum(harp: ChordHarp) -> void:
-	var hand := Node.new()
-	add_child(hand)
-	harp.grab_begin(hand, harp.to_global(Vector3(ChordHarp.string_x(0), 1.0, 0)))
-	harp.grab_move(hand, harp.to_global(Vector3(ChordHarp.string_x(ChordHarp.STRINGS - 1) + 0.01, 1.0, 0)))
-	harp.grab_end(hand)
-	hand.queue_free()
-
-
-## The strum heard from `from`: eight harp notes on, low to high, each the string's tone of the
-## chord at the song position it was played to (the playhead, the song stopped), and each let go.
-func _check_strum(from: int, label: String) -> void:
-	var ons := _harped.filter(func(n: Array) -> bool: return n[0] == Session.Note.ON and n[2] == from)
-	var offs := _harped.filter(func(n: Array) -> bool: return n[0] == Session.Note.OFF and n[2] == from)
-	var pitches := ons.map(func(n: Array) -> int: return int(n[1]))
-	var tuned := true
-	for i in ons.size():
-		var song: float = ons[i][3]
-		var at := song if song >= 0.0 else DAW.state.position_seconds
-		var wanted := Harmony.at(DAW.state, at).tones(ChordHarp.LOWEST, ChordHarp.STRINGS)
-		tuned = tuned and i < wanted.size() and wanted[i] == int(ons[i][1])
-	check("%s as harp notes of the chord, low to high (%s)" % [label, pitches],
-			ons.size() == ChordHarp.STRINGS and tuned)
-	check("the chord the host wrote, D minor's strings", pitches == HARP_STRINGS)
-	check("and each rang out and was let go (%d)" % offs.size(), offs.size() == ChordHarp.STRINGS)
 
 
 ## Waits until `seconds` into the probe by this process's clock, never before. A timer made at the end

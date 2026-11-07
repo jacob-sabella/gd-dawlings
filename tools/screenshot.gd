@@ -61,13 +61,13 @@ var _plug := ""
 ## of that mask's fingers held down (HandPose's bits: 1 J, 2 K, 4 L, 8 ;), for a shot of the glove
 ## playing them (docs/spatial_loop.md slice 8).
 var _fingertips := -1
-## `--chords 4`: at frame 10 the harp gone to, the chord layer turned on as C turns it, and that
+## `--chords 4`: at frame 10 the bells gone to, the chord layer turned on as C turns it, and that
 ## key of the number row pressed (1 to 7 the degrees, 0 the song's chord), for a shot of the
-## desktop's chord glove over the harp (docs/spatial_loop.md part two, slice 32).
+## desktop's chord glove over the bells (docs/spatial_loop.md part two, slice 32).
 var _chords := -1
-## `--chord-from 4`: at frame 10 the harp gone to, and Lin's (peer 7) chord hand plugged into this
+## `--chord-from 4`: at frame 10 the bells gone to, and Lin's (peer 7) chord hand plugged into this
 ## player holding that degree of the song's key (1 to 7), taken as it comes down the jack
-## (Jacks.received), for a shot of the harp's crown naming the sender (part two, slice 33). Lin is
+## (Jacks.received), for a shot of the sender named (part two, slice 33). Lin is
 ## in the room from then, standing where --visitor puts them if it is given.
 var _chord_from := -1
 ## `--stations 2`: I pressed that many times at frame 10, as a desktop player goes to the
@@ -116,17 +116,10 @@ var _help_page := ""
 ## turned by that yaw (radians), rolled that many degrees right side down, its thumb pinching the
 ## fingers in that mask (HandPose's bits), from frame 5: reported on a tracker of its own, drawn by
 ## a HandSkeleton and read by a HandGestures, whose readings are lettered over it
-## (docs/spatial_loop.md slice 7). Its index and middle tips strum the harp, as a tracked hand's do.
+## (docs/spatial_loop.md slice 7). Its index and middle tips pluck a room string, as a tracked hand's do.
 var _posed_hand: Array = []
 var _posed_gestures: HandGestures
 var _posed_label: Label3D
-## `--harp-bend 20`: with `--posed-hand`, the harp string nearest the hand plucked by it at frame
-## HARP_PLUCK_FRAME, at its posed roll, and the hand then tipped that many degrees further over the
-## next four frames, so the string rings bent and bows by it (docs/spatial_loop.md part two, slice
-## 15). Late, so it still rings at a shot at frame 38 or so: a shot's frames are slow, and the ring
-## is ChordHarp.RING of physics time, which catches up.
-const HARP_PLUCK_FRAME := 30
-var _harp_bend := NAN
 var _posed_tracker: XRHandTracker
 var _posed_place: Array = []
 ## `--fist-shake`: with `--posed-hand`, the hand put round the studio's shaker instead, palm down
@@ -383,8 +376,6 @@ func _ready() -> void:
 				_plaque_rows = true
 			"--help-page":
 				if i + 1 < args.size(): _help_page = args[i + 1]
-			"--harp-bend":
-				if i + 1 < args.size(): _harp_bend = float(args[i + 1])
 			"--posed-hand":
 				if i + 1 < args.size(): _posed_hand = Array(args[i + 1].split(",")).map(func(v): return float(v))
 			"--fist-shake":
@@ -800,25 +791,6 @@ func _tie_the_rope() -> void:
 					camera.unproject_position(rope.global_position) if camera != null else Vector2.ZERO, rope.readout()])
 
 
-## `--harp-bend`: the string nearest the posed hand plucked by it, at HARP_PLUCK_FRAME; then the hand
-## tipped further, a quarter of the way a frame.
-func _bend_the_harp() -> void:
-	var studio := get_tree().current_scene.get_node_or_null("Studio")
-	var harp: ChordHarp = studio.get("harp") if studio != null else null
-	if harp == null or _posed_tracker == null:
-		return
-	var roll: float = _posed_hand[4] if _posed_hand.size() > 4 else 0.0
-	if _frames == HARP_PLUCK_FRAME:
-		var x := harp.to_local(_posed_place[0] as Vector3).x
-		harp.pluck([ChordHarp.nearest(x)], 96, _posed_gestures)
-	elif _frames > HARP_PLUCK_FRAME:
-		_tip_posed_hand(roll + _harp_bend * clampf((_frames - HARP_PLUCK_FRAME) / 4.0, 0.0, 1.0))
-	if OS.get_cmdline_user_args().has("--shot-debug"):
-		print("HARP_BEND frame %d at %d ms: ringing %s, wheel %s, engaged %s, %.2f st" % [_frames,
-				Time.get_ticks_msec(), harp.ringing(), harp.keys.wheel_source() if harp.keys != null else "-",
-				harp.wobble != null and harp.wobble.engaged(), harp.wobble.semitones if harp.wobble != null else 0.0])
-
-
 func _parse_res(spec: String) -> Vector2i:
 	var parts := spec.split("x")
 	if parts.size() != 2:
@@ -1033,8 +1005,6 @@ func _process(_delta: float) -> void:
 
 	if _frames == 5 and _posed_hand.size() >= 3:
 		_pose_a_hand()
-	if _frames >= HARP_PLUCK_FRAME and not is_nan(_harp_bend):
-		_bend_the_harp()
 	if _fist_hand != null and is_instance_valid(_fist_hand) and _frames >= FIST_FRAME:
 		# Closed round it, then up and shaken across at 4 Hz.
 		_posed_curls = [0.5, 0.8, 0.8, 0.8, 0.8]
@@ -1045,10 +1015,6 @@ func _process(_delta: float) -> void:
 		_posed_label.text = _posed_gestures.describe()
 		if _fist_hand != null and is_instance_valid(_fist_hand) and _fist_hand.fist_holding:
 			_posed_label.text += "\nHOLDING %s, CLOSED HAND" % (_fist_hand.carrying as Item).item_title()
-		var studio_harp: ChordHarp = get_tree().current_scene.get_node_or_null("Studio").get("harp") \
-				if get_tree().current_scene.get_node_or_null("Studio") != null else null
-		if studio_harp != null and studio_harp.wobble != null and studio_harp.wobble.engaged():
-			_posed_label.text += "\nBEND %s semitones" % Wobble.words(studio_harp.wobble.semitones)
 		if _posed_gestures.tracked:
 			_posed_label.global_position = _posed_gestures.joints[HandPose.PALM] + Vector3(0, 0.16, 0)
 
@@ -1097,7 +1063,7 @@ func _process(_delta: float) -> void:
 	if _frames == 10 and _chords >= 0:
 		var chords_at := get_tree().current_scene.get_node_or_null("Studio") as Studio
 		if chords_at != null and chords_at.chord_hand != null:
-			chords_at.go_to_station(&"harp")
+			chords_at.go_to_station(&"bells")
 			chords_at.toggle_chords()
 			chords_at.chord_hand.pick(_chords - 1)
 			print("SHOT_CHORDS ", chords_at.chord_hand.hud_text())
@@ -1111,7 +1077,7 @@ func _process(_delta: float) -> void:
 				lin.colour_index = 2
 				Session.participants[7] = lin
 				Session.roster_changed.emit()
-			from_studio.go_to_station(&"harp")
+			from_studio.go_to_station(&"bells")
 			var source := Jack.chord_source(7)
 			from_studio.jacks.plug(source, Jack.player_sink(Session.local_peer_id))
 			var key := Harmony.at(DAW.state, DAW.state.position_seconds)

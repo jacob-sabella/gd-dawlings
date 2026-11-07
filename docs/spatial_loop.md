@@ -216,7 +216,7 @@ What is built is the NOTE path a chord hand would use.
    `_test_a_pitch_two_instruments_hold_sounds_until_both_let_go`,
    `_test_one_take_spans_two_strums_and_lands_notes_at_their_at`,
    `_test_the_panel_shows_the_keys_for_a_harp_in_reach`), and one probe check on each side.
-3. [x] **A chord harp, and the thumbstick.** The proving idea, #22: `ChordHarp`
+3. [removed 2026-11-06] **A chord harp, and the thumbstick.** (Removed with the simple toys; this is its history.) The proving idea, #22: `ChordHarp`
    (core/music/chord_harp.gd, a ControlAffordance) stands at `Venue.harp_spot()`. Its default in
    venue.gd is against the live room's back wall behind the bricks table, the side away from the
    shelf, mirror, wardrobe, door and tour case. Its walker solid is appended inside `solids()`'s
@@ -3302,7 +3302,7 @@ none.
     and the slice adds no wire; slice 33's `chord:P` is what tells the room the shape.
     shots/spatial32.png is the desktop's chord glove holding up iv over the harp, its strings in Dm.
 
-33. [x] **Your chord hand drives their harp.** #33 finished. A `chord:P` jack source has a socket on
+33. [x] **Your chord hand drives their harp.** (The harp is [removed 2026-11-06]; the chord hand's jack stays and drives their fingertips and bells.) #33 finished. A `chord:P` jack source has a socket on
     the chord hand's wrist, beside keys:P (`wrist_mount`), and at a desk P steps it while the chord
     layer is on. `Jack.Kind.CHORD` goes down Session.send_jack on each shape's change: `pitch` the
     chord's root pitch class, `velocity` its quality's index in Harmony's qualities, 0 for none, and

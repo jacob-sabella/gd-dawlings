@@ -167,7 +167,7 @@ static func chords_on() -> bool:
 
 
 ## A click somewhere, while this has the keys and lets go on a click: they go back, unless the
-## chord layer is on, when a click is the harp's strum. The click itself goes on to whatever it
+## chord layer is on, when a click is a pluck. The click itself goes on to whatever it
 ## was on.
 func _input(event: InputEvent) -> void:
 	var click := event as InputEventMouseButton

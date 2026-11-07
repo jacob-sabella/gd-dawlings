@@ -18,7 +18,7 @@ extends Node
 ## are still taken as a take, but sound on nothing here. Taking the permission away lets go of
 ## whatever they hold.
 ##
-## Only plain keys (no `source`): the harp, the strings and the modular have their own voices.
+## Only plain keys (no `source`): the strings and the modular have their own voices.
 
 ## {peer id: {pitch: the plugin it went on}}: let go on the plugin it began on, though the guest's
 ## track has moved on since.

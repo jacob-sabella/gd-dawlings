@@ -36,6 +36,8 @@ const WALL_HEIGHT := 3.6
 const ROOM_BACK := 4.0
 const ROOM_FRONT := ROOM_BACK - ROOM_DEPTH
 const ROOM_MID := (ROOM_FRONT + ROOM_BACK) * 0.5
+## How near the string spool a player stands for their keys to be the strings' (m).
+const STRINGS_NEAR := 1.6
 ## The stand that carries the timeline. Its top sits just under the panel's lower edge, which
 ## is why it is a constant rather than a number in two places: move the timeline and this has
 ## to follow or the panel floats again, one centimetre higher.
@@ -218,9 +220,6 @@ var _told_fingertips := false
 ## chord layer (C).
 var chord_hand: ChordHand
 var _told_chords := false
-## The chord harp against the live room's back wall (ChordHarp), stood again with each venue at
-## its `harp_spot`. Null in AR, where the room is a real one.
-var harp: ChordHarp
 ## The circle-of-fifths wheel on the bricks table (FifthsWheel), stood again with each venue at
 ## its `wheel_spot`: where the song's key and chords are written from the room. Null in AR.
 var wheel: FifthsWheel
@@ -267,7 +266,7 @@ var looper_row: Array = []
 ## How many bars this player's next layer is where no loop range is set (the looper's LENGTH): their
 ## own, kept across a change of venue.
 var looper_length := Looper.LENGTH_DEFAULT
-## The music box beside the harp (MusicBox, docs/spatial_loop.md part two, slice 47), stood again with
+## The music box in the harmony row (MusicBox, docs/spatial_loop.md part two, slice 47), stood again with
 ## each venue at its `music_box_spot`, on its trolley. Null where there are no zones and in AR.
 var music_box: MusicBox
 ## The room's row `music_box`: [track, length, root, chromatic] (MusicBox.row). The room's, not the
@@ -684,7 +683,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_hang_the_roulette_door()
 	# Before anything stands at its spot: the spots of what is wheeled about are its trolley's.
 	_wheel_in_live_pieces()
-	_stand_the_harp()
+	_stand_the_bell_stand()
 	_stand_the_wheel()
 	_stand_the_sections()
 	_stand_the_ledge()
@@ -737,16 +736,9 @@ func _hang_the_roulette_door() -> void:
 	venue.add_child(door)
 
 
-## The chord harp, in the venue's own frame at its spot: a child of the venue, so it goes with
-## it, and the venue's `solids` keep people out of it. Whatever the old one still had ringing
-## was let go as it went (`_exit_tree`).
-func _stand_the_harp() -> void:
-	harp = ChordHarp.new()
-	harp.transform = Stations.spot(venue, &"harp")
-	venue.add_child(harp)
-	if presence != null:
-		presence.harp = harp
-	# The handbells' stand beside it (the bells themselves are items: their homes are its seats).
+## The handbells' stand, in the venue's own frame at its spot: a child of the venue, so it goes with
+## it (the bells themselves are items: their homes are its seats).
+func _stand_the_bell_stand() -> void:
 	_bell_stand = HandbellItem.stand()
 	_bell_stand.transform = Stations.spot(venue, &"bells")
 	venue.add_child(_bell_stand)
@@ -889,7 +881,7 @@ func _stand_the_looper() -> void:
 	looper.rings.told.connect(func(text: String) -> void: Session.notice.emit(text))
 
 
-## The music box (MusicBox), in the venue's own frame at its spot beside the harp: a child of the venue,
+## The music box (MusicBox), in the venue's own frame at its spot in the harmony row: a child of the venue,
 ## so it goes with it, its trolley the studio's. Its row is the room's (`music_box_row`); its pegs are
 ## its track's item in the mix, so they stand again with it. None where there are no zones.
 func _stand_the_music_box() -> void:
@@ -1027,21 +1019,6 @@ func _follow_wheel() -> void:
 	var near := wheel != null and is_instance_valid(wheel) and wheel.is_inside_tree() \
 			and (wheel.touched() or wheel.sounding())
 	Session.guest_midi.reach(FifthsWheel.SOURCE, near)
-
-
-## The harp in this player's reach (`&"harp"` in GuestMidi.instruments) while they stand near
-## it, a hand of theirs is on it or over it, or a string they plucked still rings: so the synth
-## is up before the first pluck, and the strums with gaps between them are one take.
-func _follow_harp() -> void:
-	if Session.guest_midi == null:
-		return
-	var near := false
-	if harp != null and is_instance_valid(harp) and harp.is_inside_tree():
-		var me := _standing_at()
-		var at := harp.global_position
-		near = harp.touched() or harp.ringing() \
-				or Vector2(me.x - at.x, me.z - at.z).length() < ChordHarp.NEAR
-	Session.guest_midi.reach(ChordHarp.SOURCE, near)
 
 
 ## Where this player stands, in global space: the walker on a desktop, the head in a headset.
@@ -1903,7 +1880,7 @@ func _build_patch_stand() -> void:
 
 # --- what stands out in the venue on its own ------------------------------------------------
 #
-# The harp, the bells' stand, the cassette rack, the sampler, the Tour case, the prop shelf and
+# The bells' stand, the cassette rack, the sampler, the Tour case, the prop shelf and
 # the hoop stand on the floor by themselves, the way the rack and the deck's cart do, so they are
 # pushed about the same way: a trolley each, saved where it was left (`floor/<id>`) and shared
 # with the room like the rest. What is built into a venue -- its walls and doors, the riser, the
@@ -1921,8 +1898,6 @@ func _build_patch_stand() -> void:
 ## grips it is taken hold of by: boxes [size, centre] of its own lowest structure -- a plinth,
 ## feet, a base -- under whatever on it is played or picked up.
 const LIVE_TROLLEYS := {
-	&"harp": ["HarpTrolley", Vector2(0, ChordHarp.FOOT_Z), ChordHarp.FOOT, 9.0,
-			[[Vector3(0.7, 0.3, 0.4), Vector3(0, 0.15, ChordHarp.FOOT_Z)]]],
 	&"bells": ["BellStandTrolley", Vector2.ZERO, HandbellItem.STAND * 0.5, 10.0,
 			[[Vector3(HandbellItem.STAND.x, 0.3, HandbellItem.STAND.y), Vector3(0, 0.15, 0)]]],
 	&"cassette_rack": ["CassetteRackTrolley", Vector2.ZERO, CassetteRack.FOOT, 9.0,
@@ -2086,9 +2061,6 @@ func _carry_live(id: StringName) -> void:
 	match id:
 		&"mini_table":
 			_rehome_items()
-		&"harp":
-			if harp != null and is_instance_valid(harp):
-				harp.transform = venue.harp_spot()
 		&"bells":
 			if _bell_stand != null and is_instance_valid(_bell_stand):
 				_bell_stand.transform = venue.bell_stand_spot()
@@ -3701,7 +3673,6 @@ func _build_anchors() -> void:
 	presence.head_node = head
 	presence.frame = room_anchor
 	add_child(presence)
-	presence.harp = harp
 	presence.strings_heard = _on_string_heard
 	_lend_fingertips()
 	_lend_chord_hand()
@@ -3766,7 +3737,7 @@ func toggle_chords() -> void:
 	chord_hand.set_layer(not chord_hand.layer)
 	if chord_hand.layer and not _told_chords:
 		_told_chords = true
-		Session.notice.emit("Chords: 1 to 7 play the key's I to vii° on the harp, the fingertips (J K L ;) and the bells you hold; Shift adds the seventh, 0 the song's own. A click strums the harp. C or Esc ends it.")
+		Session.notice.emit("Chords: 1 to 7 play the key's I to vii° on the fingertips (J K L ;) and the bells you hold; Shift adds the seventh, 0 the song's own. C or Esc ends it.")
 
 
 ## T on a desktop: the fingertips' keys on, or back to the studio. Said the first time.
@@ -4182,7 +4153,7 @@ func _refresh_looms_if_moved(delta: float) -> void:
 # --- desktop camera -----------------------------------------------------------------------
 
 ## The items' homes off the shelf: the headphones on their hook under it, the handbells on their
-## stand by the harp, the mic in the booth's stand, where the venue has one, the session in
+## stand by the bricks table, the mic in the booth's stand, where the venue has one, the session in
 ## miniature on the side table by the seat, the hand drums in their ring on the drum riser, and the venue's
 ## instrument's bars on its mount.
 func _item_homes() -> Dictionary:
@@ -4786,7 +4757,7 @@ func press_brick(brick: ChordBrick, track: int, seconds: float) -> void:
 			Session.notice.emit("Asked %s to put %s in [%s]." % [Session.name_of(1), section, asked[1]])
 			return
 		var named := FifthsWheel.write(asked[0], asked[1])
-		Session.notice.emit("%s is in [%s] now: the harp, the bells and the fingertips follow it there." % [section, asked[1]]
+		Session.notice.emit("%s is in [%s] now: the bells and the fingertips follow it there." % [section, asked[1]]
 				if named != "" else "Those bricks do not read as a key and chords.")
 		return
 	var why := ChordBrick.write_refusal(s, track)
@@ -5138,7 +5109,7 @@ func _follow_strings() -> void:
 		return
 	var near := spool != null and is_instance_valid(spool) and spool.is_inside_tree() \
 			and (spool.carrying() or spool.reel.is_hovered() \
-			or Vector2(_standing_at().x - spool.global_position.x, _standing_at().z - spool.global_position.z).length() < ChordHarp.NEAR)
+			or Vector2(_standing_at().x - spool.global_position.x, _standing_at().z - spool.global_position.z).length() < STRINGS_NEAR)
 	for id in room_strings:
 		var s: RoomString = room_strings[id]
 		if s != null and is_instance_valid(s) and (s.touched() or s.ringing()):
@@ -5526,7 +5497,7 @@ func _modular_play(on: bool) -> void:
 
 ## Whether this player is at the rack: with it visited or brought, or standing in front of the
 ## stand (MODULAR_NEAR to MODULAR_FAR out, MODULAR_SIDE either side) where the rack's own seat is
-## the nearest station's, so standing at the harp, the music box or the bells beside it plays them
+## the nearest station's, so standing at the music box or the bells beside it plays them
 ## and not the patch.
 func at_modular() -> bool:
 	if rack_wall == null or not is_instance_valid(rack_wall) or not rack_wall.visible \
@@ -6970,9 +6941,9 @@ static func plugged_text(source: StringName, item: Item, was: StringName, sink: 
 	var the := "Your keys" if Jack.keys_player(source) > 0 else "The " + Jacks.source_name(source, item)
 	var player := Jack.player_of(sink)
 	if Jack.chord_player(source) > 0:
-		# A chord hand (part two, slice 33): no notes, a chord for their harp and fingertips.
+		# A chord hand (part two, slice 33): no notes, a chord for their fingertips and bells.
 		if player > 0:
-			return "Your chord hand goes into %s: the chord you hold is theirs, on their harp, fingertips and bells." \
+			return "Your chord hand goes into %s: the chord you hold is theirs, on their fingertips and bells." \
 					% Session.name_of(player)
 		return "Your chord hand is unplugged."
 	if player > 0:
@@ -7025,7 +6996,7 @@ func _tell_plugged(source: StringName, was: StringName, sink: StringName, by: in
 			plays = "what they play plays"
 		var said := "%s on your keys" % plays
 		if Jack.chord_player(source) > 0:
-			said = "the chord they hold is yours, on the harp, your fingertips and your bells, while you hold none"
+			said = "the chord they hold is yours, on your fingertips and your bells, while you hold none"
 		Session.tell(into, "%s plugged %s into you: %s. %s"
 				% [Session.name_of(by), what, said, unplug_how(_medium_of(into), Jack.own_player(source) == 0)])
 	var out := Jack.player_of(was)
@@ -7035,7 +7006,7 @@ func _tell_plugged(source: StringName, was: StringName, sink: StringName, by: in
 
 ## How a player at `medium` (Presentation.Medium) takes out a jack that goes into them, in words:
 ## at a desk Shift+P with an empty hand, in a headset a press on the INTO ME jack on their left
-## wrist; and, `own_jack` (an item or the harp, not a bandmate's keys, whose socket is on the
+## wrist; and, `own_jack` (an item, not a bandmate's keys, whose socket is on the
 ## bandmate), a press on its own jack as well.
 static func unplug_how(medium: int, own_jack: bool) -> String:
 	var how := "Shift+P with an empty hand" if medium == Presentation.Medium.SCREEN \
@@ -7659,7 +7630,6 @@ func _process(delta: float) -> void:
 	_follow_lean()
 	_follow_ear()
 	_follow_keytar()
-	_follow_harp()
 	_follow_wheel()
 	_follow_strings()
 	_modular_owed += get_process_delta_time()
@@ -8617,7 +8587,7 @@ func toggle_signal_view() -> void:
 
 
 ## The room's sound sources, as SignalGraph.build takes them: every instrument item and the venue's
-## set (onto its jack's track, armed or not, else the armed track), the harp and the
+## set (onto its jack's track, armed or not, else the armed track), the
 ## modular (the armed track), the mic (its voice track), and the sampler and the
 ## platter, heard in one player's ears only.
 func signal_sources() -> Array:
@@ -8646,9 +8616,6 @@ func signal_sources() -> Array:
 				var source := (item as InstrumentItem).jack_source()
 				var to: Array = onto.call(source, item)
 				row.call(source, (item as InstrumentItem).item_title(), item, SignalGraph.NOTES, to[0], to[1])
-	if harp != null:
-		var to: Array = onto.call(ChordHarp.SOURCE, null)
-		row.call(ChordHarp.SOURCE, "HARP", harp, SignalGraph.NOTES, to[0], to[1])
 	if rack_wall != null:
 		row.call(Modular.SOURCE, "MODULAR", rack_wall, SignalGraph.NOTES, armed)
 	for local in [[&"sampler", "SAMPLER", sampler], [&"platter", "PLATTER", platter]]:

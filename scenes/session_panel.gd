@@ -14,7 +14,7 @@ extends CanvasLayer
 ## already is, rather than in a log nobody at a mixing desk is reading.
 
 ## "Tilt bends"'s hover card (docs/spatial_loop.md part two, slice 15).
-const TILT_BENDS_TIP := ("Tip the hand that plays from where its note began to bend it, up to two semitones, and shake it to wobble it: the keytar's neck hand, the harp's plucking hand, the fingertips. "
+const TILT_BENDS_TIP := ("Tip the hand that plays from where its note began to bend it, up to two semitones, and shake it to wobble it: the keytar's neck hand, the fingertips. "
 		+ "At a desk the mouse's wiggle is the tilt. Off, for a steady pitch from a hand that moves; Alt with the mouse moving up or down still bends.")
 ## "Snap hand percussion"'s hover card (slice 17): HitRecorder.SNAP_WINDOW and SNAP_PULL, in words.
 const SNAP_HITS_TIP := ("The shaker's and the tambourine's hits are recorded a little nearer the beat: one within 35 ms of a sixteenth is moved half way to it. "
@@ -1105,7 +1105,7 @@ func _place_mic() -> void:
 	if _hits_box.get_index() > after:
 		after += 1
 	home.move_child(_hits_box, after)
-	# An instrument in reach (a keytar in hand, the harp...) plays through GuestMidi regardless of
+	# An instrument in reach (a keytar in hand...) plays through GuestMidi regardless of
 	# whether Reaper records its own MIDI input (GuestMidi.plays): "anyone's with an instrument".
 	# Without this, a host or solo player on Reaper had no way back into "Play into" to choose
 	# where their instrument's notes land, and fell through to take_track()'s own guess (the
@@ -1866,7 +1866,7 @@ func _build_song_key(column: VBoxContainer) -> void:
 	column.add_child(row)
 	var said := _label("Song key", 14, INK)
 	said.mouse_filter = Control.MOUSE_FILTER_PASS
-	said.tooltip_text = ("The key the room plays in: the bells, the harp, the marble run, the music box, the strings, "
+	said.tooltip_text = ("The key the room plays in: the bells, the music box, the strings, "
 			+ "the pads in scale mode, and your keys when they are locked. From bar 1; a key change on the timeline changes it from there.")
 	row.add_child(said)
 	_key_root = _choice()

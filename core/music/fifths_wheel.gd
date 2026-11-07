@@ -265,7 +265,7 @@ func _build_board() -> void:
 
 ## A reading lamp on an arm out from the board's top, down onto the wheel: the board leans back
 ## from a table lit from above, so its face would otherwise be in its own shade. A SpotLight3D,
-## as the harp's, not an OmniLight.
+## not an OmniLight.
 func _lamp() -> void:
 	var warm := Color(1.0, 0.84, 0.64)
 	var top := BOARD.y - CENTRE_Y
@@ -423,7 +423,7 @@ func segment_text(ring: int, i: int) -> String:
 # --- playing it ---------------------------------------------------------------------------------
 
 ## [the song position a chord played now takes, and whether the song is playing to it], from one
-## read of the keys' clock, as the harp has it.
+## read of the keys' clock.
 func _moment() -> Array:
 	var song := keys.song() if keys != null else -1.0
 	if song >= 0.0:
@@ -568,7 +568,7 @@ static func answer(bar: int, inside: String) -> String:
 
 ## The song's own key, from its first bar (the session panel's SONG KEY): `root` (a pitch class) in
 ## `mode` (one of Harmony.SCALES), written at bar 1 as SET writes, keeping any chords the bracket
-## there already had. Everything that plays to the song's key (the bells, the harp,
+## there already had. Everything that plays to the song's key (the bells,
 ## the music box, the strings, the pads in scale mode, locked keys) plays in it, up to the next key
 ## change on the timeline. Here on the host (or alone); asked of the host from a guest.
 static func set_song_key(root: int, mode: String) -> void:
@@ -934,7 +934,7 @@ class WheelButton extends ControlAffordance:
 		mesh.size = Vector3(size.x - 0.006, size.y - 0.006, 0.014)
 		cap.mesh = mesh
 		cap.position = Vector3(0, 0, 0.007 + 0.006)
-		# A dark key with light lettering, as the harp's crown buttons: unshaded lettering reads
+		# A dark key with light lettering, as a crown's buttons: unshaded lettering reads
 		# however the table is lit.
 		cap.material_override = FifthsWheel._paint(Color(0.16, 0.12, 0.08), 0.4, 0.5)
 		add_child(cap)

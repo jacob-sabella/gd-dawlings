@@ -18,8 +18,8 @@ extends Item
 ## the brick alone when it came from anywhere else, is block chords voiced at CENTRE, four notes
 ## (Harmony.voiced), one chord a brick for its bars, from the bar under the press (a lane) or the
 ## playhead's bar, as one take named TAKE_NAME (`notes_of`). Pressed into a section block, the row's
-## harmony (`inside_of`) is written into that section's marker by the wheel's SET path, so the harp,
-## the bells and the fingertips follow it there. It stays in the hand either way, to press again.
+## harmony (`inside_of`) is written into that section's marker by the wheel's SET path, so the
+## bells and the fingertips follow it there. It stays in the hand either way, to press again.
 
 const KIND := &"brick"
 const MODEL := "res://assets/models/chord_brick.glb"

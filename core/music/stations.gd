@@ -13,8 +13,7 @@ extends RefCounted
 ## (a Transform3D, or null where the venue has no room for it); `at`, the point in that frame a
 ## player looks at while playing it; and two lines of help, `desk` (mouse and keys) and `hands`
 ## (hands and buttons); and `frame`, what of it a player should see from where they stand, its
-## top and its foot (two points in its frame, its controls' top first: the harp's crown with its
-## 8va buttons, the bells' handles, the wheel board's top edge; then its plaque's bottom, under
+## top and its foot (two points in its frame, its controls' top first: the bells' handles, the wheel board's top edge; then its plaque's bottom, under
 ## its keys, Stations.plaque_bottom). Every station's front is its frame's +Z: whoever plays it
 ## stands there, facing back along -Z.
 ##
@@ -57,7 +56,7 @@ const HELD_AREA := &"held"
 ## The areas in the order the card pages them.
 const AREAS: Array[StringName] = [CONTROL, LIVE, VENUE]
 const AREA_TITLES := {&"held": "HELD", &"control": "CONTROL ROOM", &"live": "LIVE ROOM", &"venue": "THIS VENUE"}
-## Where each area is, as a toast says a station is there ("THE HARP, in the control room: ..."):
+## Where each area is, as a toast says a station is there ("THE HANDBELLS, in the live room: ..."):
 ## not the page's title lowered, which would say "in the this venue".
 const AREA_WHERE := {&"held": "in hand", &"control": "in the control room", &"live": "in the live room",
 		&"venue": "in this venue"}
@@ -77,14 +76,6 @@ const PLAQUE_KEY_WIDE := 0.24
 const PLAQUE_KEYS_ROW := PLAQUE_KEY + 0.02
 
 const ALL := [
-	{
-		"id": &"harp", "title": "CHORD HARP", "area": LIVE, "zone": &"", "air": 0.5,
-		"spot": &"harp_spot", "at": Vector3(0, 1.05, 0),
-		"frame": [Vector3(0, 1.73, 0), Vector3(0, 0.16, 0.26)],
-		"foot": Vector2(0.35, 0.2), "foot_z": -0.06, "top": 1.73,
-		"desk": "click a string to pluck · drag across to strum · wheel or 8va for the octave · wiggle over a ringing string to wobble · Alt + mouse up or down bends",
-		"hands": "brush the strings with a fingertip, or pinch and sweep · 8va on the crown · tilt to bend · shake to wobble",
-	},
 	{
 		"id": &"bells", "title": "HANDBELLS", "area": LIVE, "zone": &"", "air": 0.5,
 		"spot": &"bell_stand_spot", "at": Vector3(0, 0.85, 0),
@@ -203,7 +194,7 @@ const ALL := [
 	},
 	{
 		# The music box (MusicBox, slice 47): a brass cylinder on a case on a plinth of its own, standing
-		# on the floor by itself beside the harp, so a trolley in a studio. Its frame's top is the
+		# on the floor by itself, so a trolley in a studio. Its frame's top is the
 		# plaque's top on the open lid, its foot the front edge of its keys on the deck.
 		"id": &"music_box", "title": "MUSIC BOX", "area": LIVE, "zone": &"", "air": 0.5,
 		"spot": &"music_box_spot", "at": MusicBox.AXIS + Vector3(0, -0.05, 0.1),
@@ -315,7 +306,7 @@ const HELD := [
 	},
 	{
 		"id": &"chord_hand", "title": "CHORD SHAPES", "area": HELD_AREA,
-		"desk": "C turns the chord layer on · 1 to 7 pick the key's I to vii° for the harp, the fingertips and a bell you carry · Shift adds the seventh · 0 the song's own · a click still strums · C or Esc ends it",
+		"desk": "C turns the chord layer on · 1 to 7 pick the key's I to vii° for the fingertips and a bell you carry · Shift adds the seventh · 0 the song's own · a click still strums · C or Esc ends it",
 		"hands": "hold your chord hand up (the left, or the right if left-handed), palm out: fingers up count I to IV, the thumb too V · palm up, one or two: vi, vii° · open flat or lowered: the song's · controller: click the stick, then push it toward a chord, up is I",
 	},
 	{
@@ -419,9 +410,8 @@ const FRAME_TOP := 8.0
 ## Where a player whose eye is at `eye` (the venue's frame) looks to play station `id`, with a
 ## view `fov` degrees tall: toward its look point, tipped up or down only as far as it takes to
 ## hold its `frame`'s top and foot inside the view (FRAME_TOP and FRAME_MARGIN in from its edges). Where both do not fit (a seat the room has
-## brought in close: the harp's, with the bricks table in front of it) the top wins, because that
-## is where its controls are: the harp's chord readout and its 8va buttons are on its crown, and
-## its plaque is for a headset, which reads it close up. The point is as far off, along the
+## brought in close) the top wins, because that
+## is where its controls are, and its plaque is for a headset, which reads it close up. The point is as far off, along the
 ## floor, as the look point. Null where the station does not stand.
 static func look_from(venue: Venue, id: StringName, eye: Vector3, fov: float) -> Variant:
 	var at: Variant = look_point(venue, id)

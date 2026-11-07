@@ -29,7 +29,7 @@ const DIM := Color(0.62, 0.64, 0.68)
 const ACCENT := Color(0.88, 0.74, 0.44)
 ## Where each kind of thing carried is kept, as PLAY · HELD says under its heading: not all on
 ## the shelf, so a desktop player looking for a bell does not look there.
-const HELD_HOMES := "Carried, not stood anywhere. The keytar, shaker and tambourine: on the prop shelf by the left wall. The handbells: on their stand beside the harp. The fingertips and the jacks: always on you."
+const HELD_HOMES := "Carried, not stood anywhere. The keytar, shaker and tambourine: on the prop shelf by the left wall. The handbells: on their stand by the bricks table. The fingertips and the jacks: always on you."
 ## The most a page may measure: a 1600x900 window less a 28 px margin on every side.
 const FIT := Vector2(1600 - 2 * 28, 900 - 2 * 28)
 ## How wide a line's words run before they wrap (px at text scale 1).
@@ -59,7 +59,7 @@ const TOGETHER := [
 	["Listen to it", "Carrying a cassette, hold L to hear its clip in your ears alone, the room 10 dB down. In a headset, hold it to your ear."],
 	["Sample it", "At the SAMPLER by the cassette rack, click REC, then squeeze, click or shake what you carry, do a yo-yo or card trick, or bounce the ball: that one sound is a WAV and a cassette on the rack, whoever's REC it was."],
 	["Scratch it", "Click a cassette into the slot of the PLATTER on the tape deck's cart, then drag round the record: its clip scratched, in your ears alone. REC first and the scratch is a sample."],
-	["A cable to a bandmate", "P steps the jack of what you carry into a track or a bandmate's keys; with an empty hand, your own keys; with chords on (C), your chord hand, to drive their harp. Shift-P unplugs."],
+	["A cable to a bandmate", "P steps the jack of what you carry into a track or a bandmate's keys; with an empty hand, your own keys; with chords on (C), your chord hand, into theirs. Shift-P unplugs."],
 	["Headphones", "H puts them on. Best when you record, so the song does not end up in your microphone."],
 	["Point", "Hold Z: bandmates see your ray and your name on what you point at. In a headset, point your index level, or hold in the other hand's stick."],
 	["Sticky notes", "O sticks a note at the ruler's time under the cursor, or the playhead. In a headset, drag one off the note pad at the desk's left end."],

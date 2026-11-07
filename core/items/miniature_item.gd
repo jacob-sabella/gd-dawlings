@@ -554,7 +554,7 @@ static func pin_spots(bearings: Array) -> Array:
 		order = turned
 	var placed := along.duplicate()
 	var back := 0.0
-	if order.size() * gap > perimeter * 0.85:
+	if order.size() * gap > perimeter * 0.75:
 		# Crowded (a pin a station, and there are twenty-odd): evenly round, in their order, turned to
 		# sit as near as they can to where each would be. Pushing on from a crowd laps the last onto
 		# the first.

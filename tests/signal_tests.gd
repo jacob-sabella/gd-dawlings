@@ -640,7 +640,6 @@ func the_glasses_are_yours_alone() -> void:
 	studio._follow_signal(0.1)
 	var sources := studio.signal_sources()
 	check("the room's sources are listed (%s)" % [sources.map(func(r): return r["id"])], sources.any(
-			func(r: Dictionary) -> bool: return r["id"] == String(ChordHarp.SOURCE)) and sources.any(
 			func(r: Dictionary) -> bool: return r["kind"] == SignalGraph.LOCAL_SOURCE))
 	var told: Array = []
 	var listen := func(text: String) -> void: told.append(text)
@@ -653,8 +652,6 @@ func the_glasses_are_yours_alone() -> void:
 			strip = s
 	var target := studio.signal_target_of(strip.find_children("*", "ControlAffordance", true, false)[0], Vector3.ZERO)
 	check("a control on a strip traces its track (%s)" % [target], target == [SignalGraph.play_id(7), "Rhodes"])
-	var harp_target := studio.signal_target_of(studio.harp.find_children("*", "ControlAffordance", true, false)[0])
-	check("a control on the harp traces the harp", not harp_target.is_empty() and harp_target[0] == "src:harp")
 	check("Y traces it", studio.trace_from(target[0], target[1]) and studio.signal_view.tracing != null
 			and studio.signal_view.tracing.reason == SignalGraph.MUTED)
 	check("and the toast says where and why, and the fix key", (told[-1] as String).contains("stops at RHODES fader")

@@ -18,7 +18,7 @@ extends InstrumentItem
 ## which, and what it will ring, is read rather than told by colour; it changes at each chord
 ## change. Carried by a hand here under a chord shape, it rings the shape's chord tone, and its tab
 ## says so (InstrumentItem.harmony_at, docs/spatial_loop.md part two, slice 32). Its home is a seat
-## on the bell stand beside the chord harp (Venue.bell_spot).
+## on the bell stand (Venue.bell_spot).
 
 const MODEL := "res://assets/models/handbell.glb"
 const STAND_MODEL := "res://assets/models/bell_stand.glb"

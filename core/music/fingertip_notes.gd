@@ -245,7 +245,7 @@ func _play(mask: int) -> void:
 
 
 ## [the song position a note played now takes, and whether the song is playing to it], from one
-## read of the keys' clock, as the harp reads it (ChordHarp._moment).
+## read of the keys' clock.
 func _moment() -> Array:
 	var song := keys.song() if keys != null else -1.0
 	if song >= 0.0:

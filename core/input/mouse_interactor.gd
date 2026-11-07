@@ -168,8 +168,8 @@ func view_scale() -> float:
 	return tan(deg_to_rad(camera.fov) * 0.5) / tan(deg_to_rad(FINGERS_FOV) * 0.5)
 
 
-## While the chord layer is on its fingers are J K L ; and its button is free: a click strums the
-## harp, and the keys stay (KeyCatcher.click_releases waits for the layer).
+## While the chord layer is on its fingers are J K L ; and its button is free: a click plucks,
+## and the keys stay (KeyCatcher.click_releases waits for the layer).
 func presses_while_playing() -> bool:
 	return KeyCatcher.chords_on()
 
@@ -196,7 +196,7 @@ func finger_pinches() -> int:
 # movement a little way and springs back, so a wiggle of the mouse is a shake of the shaker, and
 # each stroke that stops is a hit (InstrumentItem). Only while an instrument (or the keytar) is
 # carried, while the fingers play (docs/spatial_loop.md slice 7), or while the cursor rests on
-# something that plays under it with no grab (the harp's strings, `plays_under_cursor`; part two,
+# something that plays under it with no grab (a room string, `plays_under_cursor`; part two,
 # slice 15): a duck rides still while the cursor points at things. The wiggle is the desktop's
 # tilt as well (`tilt`, `tilt_angles`), so a bend and a wobble read from a tipped hand in a
 # headset are read from the mouse on a desk (Wobble).

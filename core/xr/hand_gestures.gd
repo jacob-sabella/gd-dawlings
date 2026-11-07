@@ -8,7 +8,7 @@ extends Node
 ## One per hand under the XRRig, beside its HandSkeleton, reading the same tracker. It keeps the
 ## pinch mask from frame to frame, since a pinch lets go further apart than it closes. Its hand's
 ## XRInteractor answers `finger_pinches`, `palm_up` and `tilt` from here while the hand is
-## tracked; the chord harp is strummed by its index and middle tips (`local_tips`).
+## tracked; a room string is plucked by its index and middle tips (`local_tips`).
 ##
 ## Hand poses never cross the wire: what they play does.
 
@@ -135,7 +135,7 @@ func palm_pose() -> Transform3D:
 
 
 ## This hand's index and middle fingertips, global space, while it is tracked: {&"index",
-## &"middle"}. What it strums the harp with.
+## &"middle"}. What it plucks a string with.
 func tips() -> Dictionary:
 	if not tracked:
 		return {}
@@ -143,7 +143,7 @@ func tips() -> Dictionary:
 
 
 ## Every local tracked hand's strumming tips in `tree`, {[hand, finger]: Vector3}: keyed so one
-## tip is the same key from frame to frame (ChordHarp.tips). Only this player's hands are here: a
+## tip is the same key from frame to frame (see RoomString.tips). Only this player's hands are here: a
 ## bandmate's ghost has no joints, and its strums arrive as notes.
 static func local_tips(tree: SceneTree) -> Dictionary:
 	var out := {}

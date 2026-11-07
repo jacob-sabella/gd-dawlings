@@ -4,7 +4,7 @@ extends Node3D
 ## A music-box sequencer (docs/spatial_loop.md part two, slice 47, idea #15): a brass cylinder of
 ## STEPS (16) steps round by ROWS (8) rows across, turning past a steel comb on a wooden case, on a
 ## plinth of its own. A station (Stations.ALL, `music_box`), free-standing, and so a trolley in a studio
-## (Venue.WHEELED): gone to by name, stood clear of everything else, pushed about like the harp.
+## (Venue.WHEELED): gone to by name, stood clear of everything else.
 ##
 ## Its pegs are a pattern, and the pattern is ordinary MIDI: the notes of one MIDI item on its TRACK,
 ## the first one under the box's bars (`item_of`). Pressing a cell adds a peg (DAW.insert_note at that

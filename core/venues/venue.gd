@@ -60,7 +60,7 @@ const ZONE_IDS: Array[StringName] = [&"bricks", &"matrix", &"drums", &"vocals", 
 ## the floor up to the height it needs.
 ##
 ## Spread out on 2026-10-28 ("EVERYTHING is way too cramped"): the room's pieces stood nose to
-## tail along the back wall, 3 to 12 cm apart, and the harp, the music box, the modular and the
+## tail along the back wall, 3 to 12 cm apart, and the music box, the modular and the
 ## lyric board could not be reached down a 0.9 m walkway.
 const ZONES := {
 	# A booth 3.4 x 3.1 m: a singer, a stand, the lyric board, room for a talk box, and a door
@@ -562,33 +562,30 @@ func default_tour_case_spot() -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(x, 0, shelf.origin.z + TOUR_CASE_ALONG))
 
 
-## Where the chord harp stands (ChordHarp), in studio space. On its trolley (WHEELED), wherever that
-## has been pushed; else where the venue stands it.
-func harp_spot() -> Transform3D:
-	return _spot_of(&"harp")
-
-
-## The harmony and strings neighbourhood (Neighbourhoods) round the bricks table: the chord harp,
-## the music box and the string spool in a row along the table's long side toward the middle of the
+## The harmony and strings neighbourhood (Neighbourhoods) round the bricks table: the music box
+## and the string spool in a row along the table's long side toward the middle of the
 ## room, HARMONY_AISLE out from its edge, each facing the table across the aisle their players stand
 ## in; the handbells' stand across the table's far end, facing back along it. So the table is the
 ## middle, and whoever stands at any of them has the rest round them. The row's pieces stand
-## HARMONY_GAP apart, the harp in the middle, the music box toward the control room and the spool
-## away from it.
+## HARMONY_GAP from the row's middle (where a chord harp stood, until 2026-11-06), the music box
+## toward the control room and the spool away from it.
 const HARMONY_AISLE := 1.75
 const HARMONY_GAP := 0.65
+## The footprint the row's middle keeps from the removed chord harp (half its size, and how far along
+## Z its middle was), so the row, the bells' stand and the pieces beside it stand where they did.
+const HARMONY_FOOT := Vector2(0.35, 0.2)
+const HARMONY_FOOT_Z := -0.06
 ## How far past the table's far end the bells' stand's middle is.
 const BELL_BEYOND := 1.25
 
 
-## Where the venue stands the chord harp until it is pushed somewhere else: its feet on the floor
-## under its strings, in the middle of the harmony row, facing the bricks table. In a room with no
+## The middle of the harmony row, on the floor, facing the bricks table. In a room with no
 ## table (the Rig Roulette room), against the back wall on the right, facing it.
-func default_harp_spot() -> Transform3D:
+func harmony_middle() -> Transform3D:
 	var at := zones()
 	if not at.has(&"bricks"):
 		var x := live_room_half() - 2.5
-		var z := LIVE_ROOM_BACK - 0.05 - 0.08 - (ChordHarp.FOOT.y - ChordHarp.FOOT_Z)
+		var z := LIVE_ROOM_BACK - 0.05 - 0.08 - (HARMONY_FOOT.y - HARMONY_FOOT_Z)
 		return Transform3D(Basis(Vector3.UP, PI), Vector3(x, 0, z))
 	var c := (at[&"bricks"] as AABB).get_center()
 	var side := _table_side(c)
@@ -606,17 +603,17 @@ static func _away(c: Vector3) -> float:
 	return 1.0 if c.z >= Studio.MIX_POSITION_Z else -1.0
 
 
-## A spot in the harmony row `along` metres from the harp's middle, away from the control room
-## (+) or toward it (-), facing the table as the harp does.
+## A spot in the harmony row `along` metres from its middle, away from the control room
+## (+) or toward it (-), facing the table.
 func _harmony_row(along: float) -> Transform3D:
-	var harp := default_harp_spot()
+	var middle := harmony_middle()
 	var c := (zones()[&"bricks"] as AABB).get_center()
-	return Transform3D(harp.basis, harp.origin + Vector3(0, 0, _away(c) * along))
+	return Transform3D(middle.basis, middle.origin + Vector3(0, 0, _away(c) * along))
 
 
 ## Where the handbells' stand stands (HandbellItem.stand), in studio space: on its trolley (WHEELED)
 ## wherever that has been pushed, else across the bricks table's far end from the control room,
-## facing back along it, so the bells are in reach of whoever is at the table and the harp.
+## facing back along it, so the bells are in reach of whoever is at the table.
 const BELL_SIDE := 1.0
 const BELL_GAP := 0.65
 
@@ -625,14 +622,14 @@ func bell_stand_spot() -> Transform3D:
 	return _spot_of(&"bells")
 
 
-## Where the venue stands the bells' stand until it is pushed somewhere else. Beside the harp where
-## there is no table (the Rig Roulette room), BELL_GAP clear of its plinth.
+## Where the venue stands the bells' stand until it is pushed somewhere else. Beside the harmony row's middle where
+## there is no table (the Rig Roulette room), BELL_GAP clear of it.
 func default_bell_stand_spot() -> Transform3D:
 	var at := zones()
 	if not at.has(&"bricks"):
-		var along := ChordHarp.FOOT.x + BELL_GAP + HandbellItem.STAND.x * 0.5
-		var back := ChordHarp.FOOT_Z - ChordHarp.FOOT.y + HandbellItem.STAND.y * 0.5
-		return default_harp_spot() * Transform3D(Basis.IDENTITY, Vector3(BELL_SIDE * along, 0, back))
+		var along := HARMONY_FOOT.x + BELL_GAP + HandbellItem.STAND.x * 0.5
+		var back := HARMONY_FOOT_Z - HARMONY_FOOT.y + HandbellItem.STAND.y * 0.5
+		return harmony_middle() * Transform3D(Basis.IDENTITY, Vector3(BELL_SIDE * along, 0, back))
 	var c := (at[&"bricks"] as AABB).get_center()
 	var away := _away(c)
 	return Transform3D(Basis(Vector3.UP, PI if away > 0.0 else 0.0),
@@ -646,8 +643,8 @@ func bell_spot(n: int) -> Transform3D:
 
 
 ## Where the music box stands (MusicBox, docs/spatial_loop.md part two, slice 47), in studio space: on
-## its trolley (WHEELED) wherever that has been pushed, else in the harmony row on the harp's side
-## toward the control room, HARMONY_GAP clear of it, facing the bricks table as the harp does. Null
+## its trolley (WHEELED) wherever that has been pushed, else in the harmony row on the middle's side
+## toward the control room, HARMONY_GAP clear of it, facing the bricks table. Null
 ## where there are no zones to stand it by (the Rig Roulette room).
 func music_box_spot() -> Variant:
 	return _spot_of(&"music_box")
@@ -657,11 +654,11 @@ func music_box_spot() -> Variant:
 func default_music_box_spot() -> Variant:
 	if not zones().has(&"bricks"):
 		return null
-	return _harmony_row(-(ChordHarp.FOOT.x + HARMONY_GAP + MusicBox.FOOT.x))
+	return _harmony_row(-(HARMONY_FOOT.x + HARMONY_GAP + MusicBox.FOOT.x))
 
 
 ## Where the string spool stands (RoomString.Spool, docs/spatial_loop.md part two, slice 48), in studio
-## space: on its trolley (WHEELED) wherever that has been pushed, else in the harmony row on the harp's
+## space: on its trolley (WHEELED) wherever that has been pushed, else in the harmony row on the middle's
 ## side away from the control room, HARMONY_GAP clear of it, facing the table: the whole of the middle
 ## of the live room in front of it to stretch a string across. Null where there are no zones (the Rig
 ## Roulette room).
@@ -673,7 +670,7 @@ func string_spool_spot() -> Variant:
 func default_string_spool_spot() -> Variant:
 	if not zones().has(&"bricks"):
 		return null
-	return _harmony_row(ChordHarp.FOOT.x + HARMONY_GAP + RoomString.SPOOL_FOOT.x)
+	return _harmony_row(HARMONY_FOOT.x + HARMONY_GAP + RoomString.SPOOL_FOOT.x)
 
 
 ## The synth and sound design neighbourhood (Neighbourhoods) round the synth zone's keyboard stand
@@ -950,7 +947,7 @@ const INSTRUMENT_BESIDE_LATTICE := 2.1
 ## cave's crystals, the grid's neon bars, the chalk zone's xylophone, the station's hull panels, the
 ## greenhouse's pots, the stage's cymbals and gong and the desert's ringing stones stand (the
 ## speakeasy's piano stands in the same place, by ClubVenue.piano_case's own reckoning). Clear of
-## both zones' boxes, of the harp and the bells' stand on the far side of the lattice, and of the
+## both zones' boxes, of the bells' stand on the far side of the lattice, and of the
 ## walk between.
 func back_wall_instrument(depth: float) -> Transform3D:
 	var at := zones()
@@ -1018,7 +1015,7 @@ func floor_at(p: Vector2) -> float:
 ## only where each stands until somebody moves it (`default_spot`), and null where it has no room
 ## for it at all. The fifths wheel is not here: it is mounted on the bricks table, which is the
 ## venue's and does not move.
-const WHEELED: Array[StringName] = [&"harp", &"bells", &"cassette_rack", &"sampler", &"tour_case",
+const WHEELED: Array[StringName] = [&"bells", &"cassette_rack", &"sampler", &"tour_case",
 		&"prop_shelf", &"hoop", &"music_box", &"strings"]
 
 
@@ -1026,8 +1023,6 @@ const WHEELED: Array[StringName] = [&"harp", &"bells", &"cassette_rack", &"sampl
 ## studio space; null where the venue has no room for it.
 func default_spot(id: StringName) -> Variant:
 	match id:
-		&"harp":
-			return default_harp_spot()
 		&"bells":
 			return default_bell_stand_spot()
 		&"cassette_rack":
@@ -1298,7 +1293,7 @@ func mic_spot() -> Variant:
 
 
 ## Everything the venue puts on the floor that stops a person: the zones' dressing, the prop
-## shelf and what stands about the room with it (the door, the hoop, the Tour case, the harp, the
+## shelf and what stands about the room with it (the door, the hoop, the Tour case, the
 ## bells' stand and the cassette rack).
 ## What the walker is given.
 ##
@@ -1335,7 +1330,6 @@ func wheeled_solids() -> Array:
 			"a": spot.basis.get_euler().y, "top": ZoneKit.SHELF.y})
 	out.append_array(Hoop.solids(hoop_spot()))
 	out.append_array(TourCase.solids(tour_case_spot()))
-	out.append(ChordHarp.solid(harp_spot()))
 	out.append(HandbellItem.stand_solid(bell_stand_spot()))
 	out.append(CassetteRack.solid(cassette_rack_spot()))
 	var sampler_at: Variant = sampler_spot()

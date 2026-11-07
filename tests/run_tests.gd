@@ -483,11 +483,6 @@ func _ready() -> void:
 	_test_one_players_keys_hold_many_instruments()
 	_test_a_pitch_two_instruments_hold_sounds_until_both_let_go()
 	_test_one_take_spans_two_strums_and_lands_notes_at_their_at()
-	_test_the_panel_shows_the_keys_for_a_harp_in_reach()
-	_test_a_harp_strum_plays_the_chord_and_is_one_take()
-	_test_a_fingertip_brushes_the_harp_both_ways()
-	_test_the_harp_moves_by_the_octave_and_stops_at_two()
-	_test_a_bandmates_harp_note_is_heard_from_the_harp()
 	_test_a_thumbstick_flick_nudges_one_notch()
 	await _test_every_venue_stands_every_station_clear()
 	_test_each_handbell_rings_its_chord_tone()
@@ -502,7 +497,6 @@ func _ready() -> void:
 	await _test_a_guests_plug_is_predicted_and_rolled_back()
 	_test_a_trigger_into_a_player_walks_the_chord_at_its_song()
 	_test_cable_leaves_my_keys_with_the_last_plug()
-	_test_harp_notes_into_a_player_land_in_their_take()
 	await _test_a_jack_into_a_bandmate_sends_what_its_source_plays()
 	await _test_the_host_says_who_may_send_down_a_jack()
 	_test_the_keys_jack_is_worn_on_the_wrist()
@@ -516,7 +510,6 @@ func _ready() -> void:
 	_test_a_controllers_buttons_are_the_hands_fingers()
 	_test_a_left_y_with_the_fingers_playing_takes_no_mark()
 	await _test_a_hand_whose_fingers_play_grabs_nothing()
-	_test_the_harp_is_strummed_by_the_hands_readings()
 	_test_an_open_palm_up_turns_the_fingertips_on_and_off()
 	await _test_the_desktops_fingertips_are_four_keys_and_a_glove()
 	_test_harmony_names_a_keys_chords_and_what_follows()
@@ -559,7 +552,6 @@ func _ready() -> void:
 	_test_a_shake_wobbles_and_a_drift_does_not()
 	_test_tilt_bends_off_sends_nothing()
 	_test_alt_and_the_mouse_bend_and_spring_back()
-	_test_a_wiggle_over_the_harp_wobbles_it()
 	_test_a_bend_is_shown_and_kept_in_the_take()
 	_test_hits_play_back_as_hits()
 	await _test_a_closed_bare_hand_holds_hand_percussion()
@@ -643,7 +635,7 @@ func _ready() -> void:
 	_test_the_chord_stick_latches_and_nudges_nothing()
 	await _test_the_desktops_chord_layer_is_c_and_the_number_row()
 	_test_a_chord_jack_says_its_chord_in_two_numbers()
-	await _test_a_chord_into_a_player_retunes_their_harp()
+	await _test_a_chord_into_a_player_is_their_chord()
 	await _test_my_chord_hand_sends_its_chord_down_its_jack()
 	await _test_a_replugged_chord_hand_is_not_lost_to_the_rooms_late_word()
 	await _test_the_host_says_who_may_send_a_chord()
@@ -8478,7 +8470,7 @@ func _test_you_can_say_how_tall_you_are_in_the_room() -> void:
 	_drop_floor_studio(rig)
 
 
-## Everything standing on the floor by itself is pushed about like the rack: the venue's harp,
+## Everything standing on the floor by itself is pushed about like the rack: the venue's
 ## bells' stand, cassette rack, sampler, Tour case, prop shelf and hoop, the station board's stand
 ## and the patch wall's legs. What is measured from one goes with it; it stays in the rooms you
 ## can walk and stops at what the venue has built into them; it is where it was left next time;
@@ -8498,30 +8490,6 @@ func _test_what_stands_on_its_own_is_pushed_about_too() -> void:
 				or t.get_parent() != studio.studio_set:
 			missing.append(id)
 	check("every free-standing piece is a trolley on the floor plan (%s missing)" % [missing], missing.is_empty())
-	var harp_t: Trolley = studio.live_pieces[&"harp"]
-	check("standing where the venue stands it, never moved", (venue.harp_spot() as Transform3D).is_equal_approx(
-			venue.default_harp_spot()) and studio.harp.transform.is_equal_approx(venue.harp_spot()))
-	check("and the venue's solids leave it to the trolley", not venue.solids().has(ChordHarp.solid(venue.harp_spot())))
-
-	# The harp, pulled out from the back wall and along it: the harp goes, and its station with it.
-	var seat_was: Transform3D = Stations.seat(venue, &"harp")
-	_push(harp_t, hand, Vector2(-0.8, -0.4))
-	_roll_until_still(harp_t)
-	var harp_at := Vector2(harp_t.position.x, harp_t.position.z)
-	var seat_now: Transform3D = Stations.seat(venue, &"harp")
-	check("a pushed harp moves (%.2f m)" % harp_at.distance_to(Vector2(venue.default_harp_spot().origin.x,
-			venue.default_harp_spot().origin.z)), harp_at.distance_to(Vector2(venue.default_harp_spot().origin.x,
-			venue.default_harp_spot().origin.z)) > 0.5)
-	check("and the harp on it, and its spot, are where its trolley is", studio.harp.transform.is_equal_approx(
-			venue.harp_spot()) and Vector2(venue.harp_spot().origin.x, venue.harp_spot().origin.z).distance_to(harp_at) < 0.001)
-	check("and where a player stands to play it went with it (%.2f m)" % seat_now.origin.distance_to(seat_was.origin),
-			seat_now.origin.distance_to(seat_was.origin) > 0.5 and (Stations.look_point(venue, &"harp") as Vector3)
-			.is_equal_approx(venue.harp_spot() * (Stations.row(&"harp")["at"] as Vector3)))
-	check("and the station board's row for it is still there", studio.station_board.rows().has(&"harp"))
-	check("and it is saved where it was left", Session.layout.has_transform(&"floor/harp", Presentation.Mode.STUDIO)
-			and Session.layout.transform_for(&"floor/harp", Presentation.Mode.STUDIO, Transform3D()).is_equal_approx(harp_t.transform))
-	check("and the room says where it is", (studio.room_state()["floor"] as Dictionary).has(&"harp"))
-
 	# The shelf, pushed along the wall: the things at home on it ride with it.
 	var shelf_t: Trolley = studio.live_pieces[&"prop_shelf"]
 	var tablet: Item = studio.items.items.get(&"tablet")
@@ -8543,8 +8511,19 @@ func _test_what_stands_on_its_own_is_pushed_about_too() -> void:
 
 	# The bells' stand and the cassette rack: the bells' seats and the rack's slots go with them.
 	var bells_t: Trolley = studio.live_pieces[&"bells"]
+	check("the bells' stand starts where the venue stands it", venue.bell_stand_spot().is_equal_approx(venue.default_bell_stand_spot()))
+	var seat_was: Transform3D = Stations.seat(venue, &"bells")
 	_push(bells_t, hand, Vector2(0.3, -0.5))
 	_roll_until_still(bells_t)
+	var bells_at := Vector2(bells_t.position.x, bells_t.position.z)
+	var seat_now: Transform3D = Stations.seat(venue, &"bells")
+	check("and where a player stands to play it went with it (%.2f m)" % seat_now.origin.distance_to(seat_was.origin),
+			seat_now.origin.distance_to(seat_was.origin) > 0.3 and (Stations.look_point(venue, &"bells") as Vector3)
+			.is_equal_approx(venue.bell_stand_spot() * (Stations.row(&"bells")["at"] as Vector3)))
+	check("and the station board's row for it is still there", studio.station_board.rows().has(&"bells"))
+	check("and it is saved where it was left", Session.layout.has_transform(&"floor/bells", Presentation.Mode.STUDIO)
+			and Session.layout.transform_for(&"floor/bells", Presentation.Mode.STUDIO, Transform3D()).is_equal_approx(bells_t.transform))
+	check("and the room says where it is", (studio.room_state()["floor"] as Dictionary).has(&"bells"))
 	var bell: Item = studio.items.items.get(&"bell1")
 	check("a pushed bells' stand takes the bells' homes with it", bell != null and bell.home.is_equal_approx(venue.bell_spot(1))
 			and bell.transform.is_equal_approx(bell.home)
@@ -8596,24 +8575,24 @@ func _test_what_stands_on_its_own_is_pushed_about_too() -> void:
 			not sampler_t.visible and sampler_t.collision_layer == 0 and studio.sampler == null
 			and not studio.walker.footprints().has(sampler_t.footprint_at(Vector2(sampler_t.position.x, sampler_t.position.z),
 				sampler_t.rotation.y)))
-	check("and what the venue does have room for is out", harp_t.visible and shelf_t.visible)
+	check("and what the venue does have room for is out", bells_t.visible and shelf_t.visible)
 	studio.set_venue(&"studio", false, StudioVenue.BESIDE)
 	check("a venue that hangs its own patch wall hides the legs", not legs.visible
 			and not studio.venue.get_node("PatchWall").has_meta(&"on_legs"))
 	studio.set_venue(&"studio", false, 0)
 	check("back again, the sampler is out where it was", sampler_t.visible and studio.sampler != null
 			and studio.sampler.transform.is_equal_approx(studio.venue.sampler_spot()) and legs.visible)
-	check("and the harp is where it was pushed (%s)" % harp_t.position,
-			Vector2(harp_t.position.x, harp_t.position.z).distance_to(harp_at) < 0.01
-			and studio.harp.transform.is_equal_approx(studio.venue.harp_spot()))
+	check("and the bells' stand is where it was pushed (%s)" % bells_t.position,
+			Vector2(bells_t.position.x, bells_t.position.z).distance_to(bells_at) < 0.01
+			and (studio.venue.get_node("BellStand") as Node3D).transform.is_equal_approx(studio.venue.bell_stand_spot()))
 	studio.set_venue(&"chalk", false)
 	check("in the chalk zone, where the shelf is only drawn, its trolley is walked through", shelf_t.walk_through
 			and not studio.walker.footprints().has(shelf_t.footprint_at(Vector2(shelf_t.position.x, shelf_t.position.z),
 				shelf_t.rotation.y)) and not board_t.walk_through)
 	studio.set_venue(&"studio", false, 0)
 
-	# A new studio on the same layout: the harp is where this player left it.
-	var saved_harp := harp_t.transform
+	# A new studio on the same layout: the bells' stand is where this player left it.
+	var saved_bells := bells_t.transform
 	var layout := Session.layout
 	var saved_layout: LayoutProfile = rig["saved_layout"]
 	(rig["hand"] as Node).free()
@@ -8622,11 +8601,11 @@ func _test_what_stands_on_its_own_is_pushed_about_too() -> void:
 	var again := Studio.new()
 	again.medium = Presentation.Medium.SCREEN
 	add_child(again)
-	var harp_again: Trolley = again.live_pieces.get(&"harp")
-	check("next time, a pushed piece is where it was left (%s)" % (harp_again.position if harp_again != null else null),
-			harp_again != null and Vector2(harp_again.position.x, harp_again.position.z).distance_to(
-				Vector2(saved_harp.origin.x, saved_harp.origin.z)) < 0.01
-			and again.harp.transform.is_equal_approx(again.venue.harp_spot()))
+	var bells_again: Trolley = again.live_pieces.get(&"bells")
+	check("next time, a pushed piece is where it was left (%s)" % (bells_again.position if bells_again != null else null),
+			bells_again != null and Vector2(bells_again.position.x, bells_again.position.z).distance_to(
+				Vector2(saved_bells.origin.x, saved_bells.origin.z)) < 0.01
+			and (again.venue.get_node("BellStand") as Node3D).transform.is_equal_approx(again.venue.bell_stand_spot()))
 	remove_child(again)
 	again.free()
 	Session.layout = saved_layout
@@ -8673,19 +8652,19 @@ func _test_floor_past_the_control_room_holds_a_piece_at_its_walls() -> void:
 			middle.x - reach.x, live.position.x], middle.x - reach.x >= live.position.x - 0.001
 			and middle.y - reach.y >= live.position.y - 0.001
 			and FloorPlan.on_floor(floor, middle - reach, middle + reach))
-	# The harp, pushed straight across the aisle at the bricks table it faces: it stops at the table.
-	var harp_t: Trolley = studio.live_pieces[&"harp"]
-	var from := Vector2(harp_t.position.x, harp_t.position.z)
-	_push(harp_t, hand, Vector2(3.0, 0.0))
-	_roll_until_still(harp_t)
+	# The music box, pushed across the aisle at the bricks table it faces: it stops at the table.
+	var box_t: Trolley = studio.live_pieces[&"music_box"]
+	var from := Vector2(box_t.position.x, box_t.position.z)
 	var bricks: AABB = venue.zones()[&"bricks"]
+	_push(box_t, hand, Vector2(3.0, bricks.get_center().z - from.y))
+	_roll_until_still(box_t)
 	var table := FloorPlan.footprint(Vector2(bricks.get_center().x, bricks.get_center().z),
 			Vector2(ZoneKit.TABLE_TOP.x, ZoneKit.TABLE_TOP.z) * 0.5, 0.0)
-	var at := Vector2(harp_t.position.x, harp_t.position.z)
-	var gap := FloorPlan.separation(print_of.call(harp_t), table)
+	var at := Vector2(box_t.position.x, box_t.position.z)
+	var gap := FloorPlan.separation(print_of.call(box_t), table)
 	check("a piece pushed at the bricks table stops at it (%.3f m on, table at z %.2f)" % [from.distance_to(at),
 			bricks.end.z], gap.length() < 0.002 and from.distance_to(at) > 0.2 and from.distance_to(at) < 2.0
-			and (print_of.call(harp_t)["c"] as Vector2).x < bricks.get_center().x)
+			and (print_of.call(box_t)["c"] as Vector2).x < bricks.get_center().x)
 	# And one wheeled out of the control room goes into the live room, through the way between.
 	var board_t: Trolley = studio.live_pieces[&"station_board"]
 	_push(board_t, hand, Vector2(0, 2.4), 80)
@@ -9443,7 +9422,7 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 			var standable: bool = walker.fits(Vector2(before.x, before.z))
 			# A spot on the shelf for everything but the headphones, the signal glasses, the tablet, the percussion, the
 			# keytar, the chips, the cards, the darts, the cradle, the yo-yo, the four handbells
-			# (on their stand by the harp), the session in miniature (on the desk's wing) and the hand
+			# (on their stand by the bricks table), the session in miniature (on the desk's wing) and the hand
 			# drums (in their ring on the riser, counted out by name), which have homes of their own.
 			var home_ok := duck.state == Item.State.HOME and spots.size() >= _shelf_kinds().size() - 20 \
 					and duck.position.is_equal_approx(spots[0].origin)
@@ -13074,7 +13053,7 @@ func _test_the_host_records_its_own_keys_on_the_built_in_engine() -> void:
 	check("heard through that track, as the engine monitors it (%s)" % gm.synth.bus,
 			gm.through_track and gm.synth.bus != &"" and gm.synth.bus == engine.monitor_bus(armed) and not gm.synth.allow_native)
 	gm.target_track = armed + 1
-	gm._process(0.016)
+	gm._process(0.02)
 	check("and through another, chosen", gm.synth.bus == engine.monitor_bus(armed + 1))
 	gm.target_track = 0
 	gm.through_track = false
@@ -13097,18 +13076,18 @@ func _test_the_host_records_its_own_keys_on_the_built_in_engine() -> void:
 	s.position_seconds = 30.0
 	s.playing = true
 	s.recording = true
-	gm._process(0.016)
+	gm._process(0.02)
 	check("a take begins when the host records", gm.is_recording())
 	var late := AudioServer.get_output_latency() - (gm.synth.latency_seconds() if gm.monitor and gm.synth.is_running() else 0.0)
 	s.position_seconds = 31.0
 	gm.note_on(60, 100)
-	gm._process(0.016)
+	gm._process(0.02)
 	s.position_seconds = 31.5
 	gm.note_off(60)
-	gm._process(0.016)
+	gm._process(0.02)
 	s.recording = false
 	s.playing = false
-	gm._process(0.016)
+	gm._process(0.02)
 	var items: Array = s.track(armed).items
 	check("stopped, the take is on the armed track (%d)" % items.size(), items.size() == 1 and not gm.is_recording())
 	if items.size() == 1:
@@ -13123,7 +13102,7 @@ func _test_the_host_records_its_own_keys_on_the_built_in_engine() -> void:
 	DAW.use(reaper)
 	check("where the DAW records its own inputs, the host's keys are its business", not gm.host_records()
 			and not gm.plays())
-	gm._process(0.016)
+	gm._process(0.02)
 	Session.start_solo()
 	_offline()
 	if is_instance_valid(reaper):
@@ -25606,14 +25585,14 @@ func _test_keys_play_an_instrument_plugin_without_arming_and_a_guest_plays_it_li
 	Session.shares[7] = {&"midi": {"track": 0}}
 	Session.note_played.emit(Session.Note.ON, 60, 100, 7, -1.0, &"")
 	check("a guest's key sounds on the track's plugin", play.held_count(7) == 1)
-	Session.note_played.emit(Session.Note.ON, 64, 90, 7, -1.0, &"harp")
+	Session.note_played.emit(Session.Note.ON, 64, 90, 7, -1.0, &"string")
 	check("an instrument of theirs with a voice of its own is not played here", play.held_count(7) == 1)
 	Session.note_played.emit(Session.Note.OFF, 60, 0, 7, -1.0, &"")
 	check("and is let go", play.held_count(7) == 0)
 	Session.note_played.emit(Session.Note.ON, 62, 100, 7, -1.0, &"")
 	Session.control_played.emit(DawKitClip.PITCH_BEND, 4000, 7, -1.0, &"")
 	Session.control_played.emit(1, 90, 7, -1.0, &"")
-	Session.control_played.emit(1, 20, 7, -1.0, &"harp")
+	Session.control_played.emit(1, 20, 7, -1.0, &"string")
 	check("a guest's pitch wheel and mod wheel move on the plugin (%d)" % play.moved_count(7), play.moved_count(7) == 2)
 	Session.note_played.emit(Session.Note.OFF, 62, 0, 7, -1.0, &"")
 	check("and rest at their last note-off", play.moved_count(7) == 0)
@@ -26492,7 +26471,7 @@ func _test_harmony_snaps_and_voices() -> void:
 	check("a pitch in the scale stays", am.snap(69) == 69 and am.snap(60) == 60)
 	check("one off it goes to the nearer, the lower of two (%d %d)" % [am.snap(61), am.snap(66)],
 			am.snap(61) == 60 and am.snap(66) == 65 and am.snap(68) == 67)
-	check("the harp's eight from G3 (%s)" % [am.tones(55, 8)], am.tones(55, 8) == PackedInt32Array([57, 60, 64, 69, 72, 76, 81, 84]))
+	check("eight chord tones from G3 (%s)" % [am.tones(55, 8)], am.tones(55, 8) == PackedInt32Array([57, 60, 64, 69, 72, 76, 81, 84]))
 	check("bells in Am ring A4 C5 E5 A5 (%s)" % [Harmony.voiced(am, 72, 4)],
 			Harmony.voiced(am, 72, 4) == PackedInt32Array([69, 72, 76, 81]))
 	check("fingertips in Am from A3", Harmony.voiced(am, 60, 4) == PackedInt32Array([57, 60, 64, 69]))
@@ -26655,26 +26634,26 @@ func _test_one_players_keys_hold_many_instruments() -> void:
 	var spy := _spy_on_keys()
 	check("with nothing in reach, a host on Reaper does not play its keys here",
 			not gm.has_instruments() and not gm.plays() and not spy.is_running())
-	gm.reach(&"harp", true)
-	check("a harp in reach plays them, and the synth is running before any note (%d starts)" % spy.starts,
+	gm.reach(&"string", true)
+	check("a string in reach plays them, and the synth is running before any note (%d starts)" % spy.starts,
 			gm.has_instruments() and gm.plays() and spy.is_running() and spy.starts == 1 and gm.held.is_empty())
-	check("it is not the keytar", not gm.keytar and gm.instruments.has(&"harp"))
+	check("it is not the keytar", not gm.keytar and gm.instruments.has(&"string"))
 	gm.target_track = 0
 	check("and a take with no track chosen goes on an armed one that takes the keys (%d)" % gm.take_track(),
 			gm.take_track() > 0 and DAW.state.track(gm.take_track()).rec_arm
 			and not DAW.state.input_of(gm.take_track()).begins_with("audio:"))
 	gm.keytar = true
 	check("the keytar comes too: the view writes its own name in the set, and nothing is started twice",
-			gm.keytar and gm.instruments.has(&"harp") and spy.starts == 1)
-	gm.reach(&"harp", false)
-	check("the harp going leaves the keytar's synth running (%d stops)" % spy.stops,
+			gm.keytar and gm.instruments.has(&"string") and spy.starts == 1)
+	gm.reach(&"string", false)
+	check("the string going leaves the keytar's synth running (%d stops)" % spy.stops,
 			spy.is_running() and spy.stops == 0 and gm.keytar and gm.plays())
-	gm.reach(&"harp", true)
-	gm.reach(&"harp", true)
+	gm.reach(&"string", true)
+	gm.reach(&"string", true)
 	gm.keytar = false
-	check("the keytar going leaves the harp's, and a second reach for it is the same reach",
-			spy.is_running() and spy.stops == 0 and gm.instruments.keys() == [&"harp"])
-	gm.reach(&"harp", false)
+	check("the keytar going leaves the string's, and a second reach for it is the same reach",
+			spy.is_running() and spy.stops == 0 and gm.instruments.keys() == [&"string"])
+	gm.reach(&"string", false)
 	check("the last one going stops it, and the keys are not this machine's again",
 			not spy.is_running() and spy.stops == 1 and not gm.plays() and not gm.has_instruments())
 	gm.reach(&"wheel", false)
@@ -26684,11 +26663,11 @@ func _test_one_players_keys_hold_many_instruments() -> void:
 			and spy.is_running() and spy.starts == 2)
 	gm.keytar = false
 	check("and gone, nothing", gm.instruments.is_empty() and not spy.is_running())
-	check("a take is named after what played in it", GuestMidi.take_name([&"harp"]) == "harp"
-			and GuestMidi.take_name([&"harp", &"fingertips"]) == "harp+fingertips"
+	check("a take is named after what played in it", GuestMidi.take_name([&"string"]) == "string"
+			and GuestMidi.take_name([&"string", &"fingertips"]) == "string+fingertips"
 			and GuestMidi.take_name([&"keytar"]) == "keytar")
 	check("and plain keys alone are a take, as before", GuestMidi.take_name([]) == "take"
-			and GuestMidi.take_name([&"keys"]) == "take" and GuestMidi.take_name([&"keys", &"harp"]) == "keys+harp")
+			and GuestMidi.take_name([&"keys"]) == "take" and GuestMidi.take_name([&"keys", &"string"]) == "keys+string")
 	_put_back_synth(spy)
 	Session.start_solo()
 	_offline()
@@ -26696,33 +26675,33 @@ func _test_one_players_keys_hold_many_instruments() -> void:
 		reaper.queue_free()
 
 
-## A harp's A4 dying away does not stop a fingertip's A4 still held: `held` counts by source.
+## A string's A4 dying away does not stop a fingertip's A4 still held: `held` counts by source.
 func _test_a_pitch_two_instruments_hold_sounds_until_both_let_go() -> void:
 	_offline()
 	_as_session(Session.Role.SOLO, 1)
 	var gm := Session.guest_midi
 	var spy := _spy_on_keys()
-	gm.reach(&"harp", true)
+	gm.reach(&"string", true)
 	gm.reach(&"fingertips", true)
 	var heard: Array = []
 	var shown := func(pitch: int, down: bool) -> void: heard.append([pitch, down])
 	gm.key.connect(shown)
-	gm.note_on(69, 90, 0, 0.0, false, &"harp")
+	gm.note_on(69, 90, 0, 0.0, false, &"string")
 	gm.note_on(69, 80, 0, 0.0, false, &"fingertips")
-	gm.note_off(69, 0, 0.0, false, &"harp")
-	check("the harp letting A4 go leaves the fingertips' A4 sounding", spy.on.has(69) and gm.held.has(69))
+	gm.note_off(69, 0, 0.0, false, &"string")
+	check("the string letting A4 go leaves the fingertips' A4 sounding", spy.on.has(69) and gm.held.has(69))
 	gm.note_off(69, 0, 0.0, false, &"cable")
 	check("an up from something that never had it down touches nothing", spy.on.has(69) and gm.held.has(69))
 	gm.note_off(69, 0, 0.0, false, &"fingertips")
 	check("the fingertips letting go too, it stops", not spy.on.has(69) and not gm.held.has(69))
 	check("and the key is shown up once, when the last lets go (%s)" % [heard],
 			heard == [[69, true], [69, true], [69, false]])
-	gm.note_on(72, 90, 0, 0.0, false, &"harp")
+	gm.note_on(72, 90, 0, 0.0, false, &"string")
 	gm.note_on(74, 90, 0, 0.0, false, &"fingertips")
-	gm.note_on(76, 90, 0, 0.0, false, &"harp")
+	gm.note_on(76, 90, 0, 0.0, false, &"string")
 	gm.note_on(76, 90, 0, 0.0, false, &"fingertips")
-	gm.reach(&"harp", false)
-	check("the harp going out of reach lets go of its own notes only (%s)" % [gm.held],
+	gm.reach(&"string", false)
+	check("the string going out of reach lets go of its own notes only (%s)" % [gm.held],
 			gm.held.keys() == [74, 76] and spy.on.has(74) and spy.on.has(76) and not spy.on.has(72))
 	gm.note_on(60, 100)
 	gm.note_off(60)
@@ -26735,7 +26714,7 @@ func _test_a_pitch_two_instruments_hold_sounds_until_both_let_go() -> void:
 	_offline()
 
 
-## On a host on the built-in engine: a harp in reach is one take across two strums with a gap
+## On a host on the built-in engine: a string in reach is one take across two strums with a gap
 ## between, named after what played in it; and a note given its own song position (`at`, as a
 ## cable's is) lands there, not where the song is as it arrives.
 func _test_one_take_spans_two_strums_and_lands_notes_at_their_at() -> void:
@@ -26759,22 +26738,22 @@ func _test_one_take_spans_two_strums_and_lands_notes_at_their_at() -> void:
 	DAW.state.track(armed).items.clear()
 	var heard := {"seconds": 10.0, "playing": true, "recording": true, "valid": true}
 	gm.heard_source = func() -> Dictionary: return heard
-	gm.reach(&"harp", true)
-	gm._process(0.016)
+	gm.reach(&"string", true)
+	gm._process(0.02)
 	check("recording, a take runs", gm.is_recording())
 	var strum := func(at: float, pitches: Array) -> void:
 		heard["seconds"] = at
 		for p in pitches:
-			gm.note_on(p, 90, 0, 0.0, false, &"harp")
-		gm._process(0.016)
+			gm.note_on(p, 90, 0, 0.0, false, &"string")
+		gm._process(0.02)
 		heard["seconds"] = at + 0.3
 		for p in pitches:
-			gm.note_off(p, 0, 0.0, false, &"harp")
-		gm._process(0.016)
+			gm.note_off(p, 0, 0.0, false, &"string")
+		gm._process(0.02)
 	strum.call(10.5, [57, 60, 64])
 	for t in [11.0, 12.0, 13.0]:
 		heard["seconds"] = t
-		gm._process(0.016)
+		gm._process(0.02)
 	check("between strums, the take runs on", gm.is_recording() and DAW.state.track(armed).items.is_empty())
 	strum.call(13.5, [57, 60, 64])
 	heard["seconds"] = 13.6
@@ -26784,14 +26763,14 @@ func _test_one_take_spans_two_strums_and_lands_notes_at_their_at() -> void:
 	gm.note_on(62, 100, 0, 0.0, false, &"cable", 12.25)
 	gm.note_off(62, 0, 0.0, false, &"cable", 12.75)
 	gm.note_off(69, 0, 0.0, false, &"fingertips")
-	gm._process(0.016)
+	gm._process(0.02)
 	heard["recording"] = false
-	gm._process(0.016)
+	gm._process(0.02)
 	var items: Array = DAW.state.track(armed).items
 	check("stopped, both strums are one take on the armed track (%d)" % items.size(), items.size() == 1)
 	if items.size() == 1:
 		var it: MixState.ItemState = items[0]
-		check("named after what played in it (%s)" % it.name, it.name == "Ada harp+fingertips+cable 1")
+		check("named after what played in it (%s)" % it.name, it.name == "Ada string+fingertips+cable 1")
 		var notes := MidiTake.unpack_relative(it.notes, it.start)
 		check("with every note of both strums, and the others (%d)" % notes.size(), notes.size() == 8)
 		var at := notes.filter(func(n: Array) -> bool: return n[2] == 62)
@@ -26804,311 +26783,6 @@ func _test_one_take_spans_two_strums_and_lands_notes_at_their_at() -> void:
 	gm.takes_sent = saved_sent
 	gm.roll_every = saved_roll
 	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-
-
-## The session panel's keys box (where a take goes) is there for any instrument in reach, not
-## only the keytar: a harp on a host whose Reaper records its own MIDI.
-func _test_the_panel_shows_the_keys_for_a_harp_in_reach() -> void:
-	_offline()
-	_as_session(Session.Role.HOST, 1)
-	var gm := Session.guest_midi
-	var reaper := ReaperBackend.new()
-	reaper.state = MixState.new()
-	DAW.use(reaper)
-	var spy := _spy_on_keys()
-	var panel := SessionPanel.new()
-	add_child(panel)
-	panel.open()
-	check("hidden for an ordinary host on Reaper", not panel._keys_box.visible)
-	gm.reach(&"harp", true)
-	gm.target_track = 0
-	panel._refresh_midi()
-	check("shown with a harp in reach, reading the armed track when none is chosen",
-			panel._keys_box.visible and panel._play_into.get_item_text(panel._play_into.get_item_index(0)) == "The armed track")
-	gm.reach(&"harp", false)
-	check("and hidden again once it is out of reach", not panel._keys_box.visible)
-	remove_child(panel)
-	panel.free()
-	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-	if is_instance_valid(reaper):
-		reaper.queue_free()
-
-
-## A plain hand for the harp's grab contract: the grab takes any Node, as a mouse's, a pinch's or
-## a controller's does.
-func _harp_for_test() -> ChordHarp:
-	var harp := ChordHarp.new()
-	add_child(harp)
-	return harp
-
-
-## Where along the harp's strings, in its own frame, a point to grab or touch is: just past
-## string `i` toward the high side (`side` 1) or the low (-1), at chest height.
-static func _harp_at(harp: ChordHarp, i: int, side := 1, z := 0.0, y := 1.0) -> Vector3:
-	return harp.to_global(Vector3(ChordHarp.string_x(i) + side * ChordHarp.SPACING * 0.3, y, z))
-
-
-## docs/spatial_loop.md slice 3: a strum across the harp under a heard position plays the chord
-## at that position, lowest string first; after the bar line it plays the next chord; a string
-## still ringing keeps its pitch through the change; and two strums with a gap between them are
-## one take on the armed track, with those pitches, on a host on the built-in engine.
-func _test_a_harp_strum_plays_the_chord_and_is_one_take() -> void:
-	_offline()
-	_as_session(Session.Role.HOST, 1)
-	Session.local_name = "Ada"
-	var gm := Session.guest_midi
-	var saved_heard := gm.heard_source
-	var saved_sent := gm.takes_sent
-	var saved_roll := gm.roll_every
-	gm.takes_sent = 0
-	gm.roll_every = 0.0
-	gm.target_track = 0
-	gm.record_with_host = true
-	var spy := _spy_on_keys()
-	var s := DAW.state
-	s.markers.clear()
-	s.markers[0.0] = "Intro [A minor: Am F C G]"
-	var armed := gm.take_track()
-	s.track(armed).items.clear()
-	var heard := {"seconds": s.bar_to_seconds(1.25), "playing": true, "recording": true, "valid": true}
-	gm.heard_source = func() -> Dictionary: return heard
-	var harp := _harp_for_test()
-	check("the harp plays the player's keys", harp.keys == gm)
-	gm.reach(ChordHarp.SOURCE, true)
-	gm._process(0.016)
-	var downs: Array = []
-	var shown := func(pitch: int, down: bool) -> void:
-		if down:
-			downs.append(pitch)
-	gm.key.connect(shown)
-	var hand := Node.new()
-	var strum := func() -> void:
-		harp.grab_begin(hand, _harp_at(harp, 0, -1))
-		harp.grab_move(hand, _harp_at(harp, 3))
-		harp.grab_move(hand, _harp_at(harp, 7))
-		harp.grab_end(hand)
-	strum.call()
-	check("a strum low to high plays the chord's tones from G3 up, in order (%s)" % [downs],
-			downs == [57, 60, 64, 69, 72, 76, 81, 84])
-	check("each string at least SOFTEST hard", gm.held.values().all(func(v: int) -> bool: return v >= ChordHarp.SOFTEST))
-	check("the harp's hover card says the chord, the key and the bar of the progression (%s)" % harp.readout(),
-			harp.title() == "CHORD HARP" and harp.readout() == "Am (A minor), bar 1 of 4")
-	check("the strings say their notes and the crown its chord (%s, %s)" % [harp._notes[0].text, harp._chord_label.text],
-			harp._notes[0].text == "A3" and harp._notes[7].text == "C6" and harp._chord_label.text == "Am"
-			and harp._shift_label.text == "0 OCT")
-	heard["seconds"] = s.bar_to_seconds(1.5)
-	harp._physics_process(ChordHarp.RING + 0.01)
-	gm._process(0.016)
-	check("each string rings RING and is let go (%s)" % [gm.held], gm.held.is_empty() and not harp.ringing())
-	# A string plucked in the last of Am rings on into F with its own pitch.
-	heard["seconds"] = s.bar_to_seconds(1.9)
-	harp.grab_begin(hand, _harp_at(harp, 2))
-	harp.grab_end(hand)
-	heard["seconds"] = s.bar_to_seconds(2.25)
-	harp._process(0.016)
-	check("over the bar line the strings retune at once, and the one ringing keeps its pitch (%s, %d)"
-			% [harp.tuning(), int(harp._ringing[2][0]) if harp._ringing.has(2) else -1],
-			harp.tuning() == PackedInt32Array([57, 60, 65, 69, 72, 77, 81, 84])
-			and harp._ringing.has(2) and int(harp._ringing[2][0]) == 64 and gm.held.has(64)
-			and harp._notes[2].text == "F4" and harp._chord_label.text == "F")
-	downs.clear()
-	strum.call()
-	check("the next strum plays F's tones, and the third string again stops what it rang (%s)" % [downs],
-			downs == [57, 60, 65, 69, 72, 77, 81, 84] and not gm.held.has(64))
-	check("and the card is at bar 2 of 4 (%s)" % harp.readout(), harp.readout() == "F (A minor), bar 2 of 4")
-	heard["seconds"] = s.bar_to_seconds(2.5)
-	harp._physics_process(ChordHarp.RING + 0.01)
-	gm._process(0.016)
-	heard["recording"] = false
-	gm._process(0.016)
-	var items: Array = s.track(armed).items
-	check("the strums are one take on the armed track (%d)" % items.size(), items.size() == 1)
-	if items.size() == 1:
-		var it: MixState.ItemState = items[0]
-		var notes := MidiTake.unpack_relative(it.notes, it.start)
-		var pitches := notes.map(func(n: Array) -> int: return int(n[2]))
-		check("named after the harp (%s)" % it.name, it.name == "Ada harp 1")
-		check("with both strums' notes and the one that rang over the bar (%d)" % notes.size(), notes.size() == 17)
-		var am := notes.filter(func(n: Array) -> bool: return n[0] < s.bar_to_seconds(1.5))
-		var f := notes.filter(func(n: Array) -> bool: return n[0] > s.bar_to_seconds(2.0))
-		check("Am under the first, F under the second (%s)" % [pitches],
-				am.map(func(n: Array) -> int: return int(n[2])) == [57, 60, 64, 69, 72, 76, 81, 84]
-				and f.map(func(n: Array) -> int: return int(n[2])) == [57, 60, 65, 69, 72, 77, 81, 84])
-		check("where they were heard (%.3f)" % float(am[0][0]) if not am.is_empty() else "where they were heard",
-				not am.is_empty() and is_equal_approx(float(am[0][0]), s.bar_to_seconds(1.25)))
-	gm.key.disconnect(shown)
-	hand.free()
-	harp.queue_free()
-	gm.heard_source = saved_heard
-	gm.takes_sent = saved_sent
-	gm.roll_every = saved_roll
-	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-
-
-## A bare hand strums by touch: a fingertip brushed through the strings and back plucks each one
-## twice, whichever way it goes; above the short strings only the long ones; a tip held off the
-## strings plucks nothing. And a fingertip's poke is not a grab as well.
-func _test_a_fingertip_brushes_the_harp_both_ways() -> void:
-	_offline()
-	_as_session(Session.Role.SOLO, 1)
-	var gm := Session.guest_midi
-	var spy := _spy_on_keys()
-	DAW.state.markers.clear()
-	DAW.state.markers[0.0] = "[A minor]"
-	var harp := _harp_for_test()
-	harp.position = Vector3(2.0, 0.0, -1.0)
-	harp.rotation.y = 0.7
-	var tip := {}
-	harp.tips = func() -> Dictionary: return tip
-	var plucked := {}
-	var count := func(pitch: int, down: bool) -> void:
-		if down:
-			plucked[pitch] = int(plucked.get(pitch, 0)) + 1
-	gm.key.connect(count)
-	var brush := func(z: float, y: float) -> void:
-		var x := -0.24
-		while x <= 0.24:
-			tip[1] = harp.to_global(Vector3(x, y, z))
-			harp._physics_process(1.0 / 90.0)
-			x += 0.013
-		while x >= -0.24:
-			tip[1] = harp.to_global(Vector3(x, y, z))
-			harp._physics_process(1.0 / 90.0)
-			x -= 0.013
-		tip.erase(1)
-		harp._physics_process(1.0 / 90.0)
-	brush.call(0.02, 1.0)
-	var tuned := harp.tuning()
-	check("a fingertip through the strings and back plucks each string twice (%s)" % [plucked],
-			plucked.size() == ChordHarp.STRINGS and tuned.size() == ChordHarp.STRINGS
-			and Array(tuned).all(func(p: int) -> bool: return plucked.get(p, 0) == 2))
-	plucked.clear()
-	brush.call(0.05, 1.0)
-	check("a tip held off the strings, past TOUCH, plucks nothing (%s)" % [plucked], plucked.is_empty())
-	plucked.clear()
-	brush.call(-0.01, 1.45)
-	var long := range(ChordHarp.STRINGS).filter(func(i: int) -> bool: return ChordHarp.string_top(i) >= 1.45)
-	check("above the short strings it plucks only the long ones (%s, %d long)" % [plucked, long.size()],
-			not long.is_empty() and long.size() < ChordHarp.STRINGS and plucked.size() == long.size()
-			and long.all(func(i: int) -> bool: return plucked.get(tuned[i], 0) == 2))
-	harp._physics_process(ChordHarp.RING)
-	plucked.clear()
-	var poke := PokeInteractor.new()
-	harp.grab_begin(poke, _harp_at(harp, 3))
-	harp.grab_move(poke, _harp_at(harp, 7))
-	check("a fingertip's poke plucks nothing and holds nothing (%s)" % [plucked],
-			plucked.is_empty() and harp.held_by == null)
-	var hand := Node.new()
-	harp.grab_begin(hand, _harp_at(harp, 3))
-	check("and leaves the harp free for a grab", harp.held_by == hand and plucked.size() == 1)
-	harp.grab_end(hand)
-	gm.key.disconnect(count)
-	poke.free()
-	hand.free()
-	harp.queue_free()
-	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-
-
-## The two buttons on the crown, by any hand, and a nudge (the wheel, the thumbstick) move the
-## strings an octave at a time and stop at two either way, and the crown says so in words.
-func _test_the_harp_moves_by_the_octave_and_stops_at_two() -> void:
-	_offline()
-	DAW.state.markers.clear()
-	DAW.state.markers[0.0] = "[A minor: Am]"
-	var harp := _harp_for_test()
-	var up: ChordHarp.OctaveButton = null
-	var down: ChordHarp.OctaveButton = null
-	for child in harp.get_children():
-		if child is ChordHarp.OctaveButton:
-			if child.way > 0:
-				up = child
-			else:
-				down = child
-	check("the crown has an up and a down button", up != null and down != null)
-	if up == null or down == null:
-		harp.queue_free()
-		return
-	check("named as they are lettered (%s, %s)" % [up.title(), down.title()],
-			up.title().ends_with("8va UP") and down.title().ends_with("8va DOWN"))
-	var hand := Node.new()
-	var poke := PokeInteractor.new()
-	var press := func(button: ControlAffordance, by: Node) -> void:
-		button.grab_begin(by, button.global_position)
-		button.grab_end(by)
-	press.call(up, hand)
-	check("8va UP moves the strings up an octave (%s, %s)" % [harp.tuning(), harp._shift_label.text],
-			harp.shift == 1 and harp.tuning()[0] == 69 and harp._shift_label.text == "+1 OCT"
-			and harp._notes[0].text == "A4")
-	press.call(up, poke)
-	press.call(up, hand)
-	press.call(up, hand)
-	check("a fingertip presses it too, and it stops at two (%d, %s)" % [harp.shift, harp._shift_label.text],
-			harp.shift == 2 and harp._shift_label.text == "+2 OCT" and harp.tuning()[0] == 81)
-	check("a nudge at the top is taken, so the wheel does not fall through to the camera",
-			harp.nudge(hand, 1, false) and harp.shift == 2)
-	check("a nudge down moves one octave", harp.nudge(hand, -1, false) and harp.shift == 1)
-	harp.nudge(hand, -9, false)
-	check("and a long one stops at two down (%d, %s)" % [harp.shift, harp.tuning()],
-			harp.shift == -2 and harp.tuning()[0] == 33 and harp._shift_label.text == "-2 OCT")
-	press.call(down, hand)
-	check("8va DOWN there does nothing more", harp.shift == -2)
-	check("the buttons nudge the harp as well", up.nudge(hand, 1, false) and harp.shift == -1)
-	check("and they are this player's own, never claimed across the session", up.personal() and down.personal())
-	check("a dwell presses them: a mistaken octave is cheap", up.dwell_activates() and not harp.dwell_activates())
-	hand.free()
-	poke.free()
-	harp.queue_free()
-	_offline()
-
-
-## A bandmate's harp notes are routed by their source, not the holds: heard out of the harp on a
-## synth of its own, keyed by who played them and the pitch, so their note-off still lets the note
-## go after their hold on the harp is long over; another's note of the same pitch is theirs; and
-## everything a leaver had sounding is let go.
-func _test_a_bandmates_harp_note_is_heard_from_the_harp() -> void:
-	_offline()
-	_as_session(Session.Role.HOST, 1)
-	var harp := _harp_for_test()
-	var spy := _SpySynth.new()
-	harp.room = spy
-	var presence := Presence.new()
-	presence.harp = harp
-	add_child(presence)
-	Session.note_played.emit(Session.Note.ON, 69, 90, 5, -1.0, ChordHarp.SOURCE)
-	check("a bandmate's harp note plays out of the harp (%s)" % [spy.on],
-			spy.on.has(69) and spy.get_parent() == harp and spy.speaker == harp and harp.sounding(69, 5))
-	Session.holds[harp.network_key()] = 5
-	Session.holds_changed.emit()
-	Session.holds.erase(harp.network_key())
-	Session.holds_changed.emit()
-	harp._physics_process(ChordHarp.RING)
-	check("their hold gone still leaves it sounding", spy.on.has(69))
-	Session.note_played.emit(Session.Note.OFF, 69, 0, 7, -1.0, ChordHarp.SOURCE)
-	check("someone else's note-off is not theirs", spy.on.has(69))
-	Session.note_played.emit(Session.Note.OFF, 69, 0, 5, -1.0, ChordHarp.SOURCE)
-	check("their note-off, RING after, lets it go", not spy.on.has(69) and not harp.sounding(69))
-	Session.note_played.emit(Session.Note.ON, 72, 90, 5, -1.0, ChordHarp.SOURCE)
-	Session.note_played.emit(Session.Note.ON, 72, 90, 7, -1.0, ChordHarp.SOURCE)
-	Session.note_played.emit(Session.Note.OFF, 72, 0, 5, -1.0, ChordHarp.SOURCE)
-	check("two bandmates on one pitch: one letting go leaves the other's", spy.on.has(72) and harp.sounding(72, 7))
-	Session.note_played.emit(Session.Note.ON, 76, 90, 7, -1.0, ChordHarp.SOURCE)
-	Session.participant_left.emit(7)
-	check("a leaver's notes are all let go (%s)" % [spy.on], spy.on.is_empty() and not harp.sounding(72))
-	Session.note_played.emit(Session.Note.ON, 60, 90, 1, -1.0, ChordHarp.SOURCE)
-	check("my own harp notes are not heard back from it", not spy.on.has(60))
-	Session.note_played.emit(Session.Note.ON, 62, 90, 5, -1.0, &"")
-	check("and plain keys are not the harp's", not spy.on.has(62))
-	remove_child(presence)
-	presence.free()
-	harp.queue_free()
 	Session.start_solo()
 	_offline()
 
@@ -27152,14 +26826,13 @@ func _test_a_thumbstick_flick_nudges_one_notch() -> void:
 
 
 ## docs/spatial_loop.md part two, slice 10: every station (Stations.ALL) in every venue and
-## arrangement, in its kind. A free-standing one (the harp, the bells' stand) keeps every check the
-## harp's loop had: on the floor, off the footprint, clear of the zones, of every solid in the room
+## arrangement, in its kind. A free-standing one (the bells' stand) keeps every check the
+## bells' loop had: on the floor, off the footprint, clear of the zones, of every solid in the room
 ## and of the props with homes of their own, solid itself where the room is solid, and room to
 ## stand at it. A zone-mounted one (the wheel, on the bricks table) is checked inside its zone:
 ## standing in it, its air clear of the zones' solids that rise above what it stands on, clear of
 ## every other station mounted there. Every one has a seat a person fits at, facing it. The chalk
-## zone only draws them. Standing near the harp puts it in the player's reach, and walking off
-## takes it out.
+## zone only draws them.
 func _test_every_venue_stands_every_station_clear() -> void:
 	DAW.use(OfflineBackend.new())
 	var studio := Studio.new()
@@ -27173,13 +26846,13 @@ func _test_every_venue_stands_every_station_clear() -> void:
 			var tag := "%s:%d" % [id, v]
 			var here := Stations.ids(venue)
 			# And the venue's own instrument where it has one (slice 42).
-			var stood: Array[StringName] = [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"modular", &"lyrics"]
+			var stood: Array[StringName] = [&"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"modular", &"lyrics"]
 			if VENUE_SETS.has(id):
 				stood.append(VenueInstrument.STATION)
 			# And its weather's switch where this arrangement has weather (slice 44).
 			if WEATHERS.any(func(w: Array) -> bool: return w[0] == id and w[1] == v):
 				stood.append(Weather.STATION)
-			check("%s: the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, the hand drums, the looper, the music box, the string spool, the modular wall, the lyric board and any instrument and weather of its own stand here (%s)" % [tag, here],
+			check("%s: the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, the hand drums, the looper, the music box, the string spool, the modular wall, the lyric board and any instrument and weather of its own stand here (%s)" % [tag, here],
 					here == stood)
 			for station: StringName in here:
 				var r := Stations.row(station)
@@ -27215,35 +26888,13 @@ func _test_every_venue_stands_every_station_clear() -> void:
 	check("in the chalk zone they are only drawn, like everything else there",
 			ChalkVenue.new().solids().size() == ChalkVenue.new().zone_solids().size())
 	var roulette := Venue.make(Venue.ROULETTE_ID)
-	var in_room: Transform3D = Stations.spot(roulette, &"harp")
-	check("in the Rig Roulette room the harp stands inside the walls (%s)" % in_room.origin,
-			absf(in_room.origin.x) + ChordHarp.FOOT.x < roulette.room_width * 0.5
-			and roulette.back_of_house().has_point(Vector2(in_room.origin.x, in_room.origin.z)))
-	check("and there is no bricks table, so no wheel, no booth, so no sampler and no lyric board, and no zones, so no music box and no string spool: it stands only the harp, the bells and the cassette rack (%s)" % [Stations.ids(roulette)],
-			Stations.ids(roulette) == [&"harp", &"bells", &"cassette_rack"] and Stations.spot(roulette, &"wheel") == null
+	check("and there is no bricks table, so no wheel, no booth, so no sampler and no lyric board, and no zones, so no music box and no string spool: it stands only the bells and the cassette rack (%s)" % [Stations.ids(roulette)],
+			Stations.ids(roulette) == [&"bells", &"cassette_rack"] and Stations.spot(roulette, &"wheel") == null
 			and Stations.spot(roulette, &"sampler") == null and Stations.spot(roulette, MusicBox.STATION) == null
 			and Stations.spot(roulette, RoomString.STATION) == null
 			and Stations.spot(roulette, LyricBoard.STATION) == null and Stations.seat(roulette, &"wheel") == null)
 	roulette.free()
 
-	# In reach, standing at it; out of it, walking off.
-	studio.set_venue(&"studio", false, 0)
-	var gm := Session.guest_midi
-	var spy := _spy_on_keys()
-	var front := studio.venue.harp_spot() * Vector3(0, 0, 0.9)
-	walker.global_position = Vector3(front.x, 0, front.z)
-	studio._follow_harp()
-	check("standing at the harp puts it in the player's reach", gm.instruments.has(ChordHarp.SOURCE))
-	walker.global_position = Vector3(0, 0, Studio.MIX_POSITION_Z)
-	studio._follow_harp()
-	check("walking back to the desk takes it out", not gm.instruments.has(ChordHarp.SOURCE))
-	studio.harp.pluck([0], 90)
-	studio._follow_harp()
-	check("but a string still ringing keeps it in", gm.instruments.has(ChordHarp.SOURCE))
-	studio.harp._physics_process(ChordHarp.RING)
-	studio._follow_harp()
-	check("until it stops", not gm.instruments.has(ChordHarp.SOURCE))
-	_put_back_synth(spy)
 	# A frame for what the venue changes deferred to run while the studio is still here.
 	await get_tree().process_frame
 	studio.queue_free()
@@ -27582,12 +27233,12 @@ func _check_neighbourhood(hood: StringName) -> void:
 	# Pushed along the room, a piece takes its neighbourhood's banner some of the way along its wall.
 	studio.set_venue(&"studio", false, 0)
 	if hood == &"harmony":
-		var harp: Trolley = studio.live_pieces[&"harp"]
+		var bells: Trolley = studio.live_pieces[&"bells"]
 		var before: Vector3 = studio.venue.get_node("Sign_harmony").position
 		# Past the bells at the neighbourhood's far end, so its middle moves along the wall.
-		harp.place(Vector2(harp.position.x, harp.position.z + 3.0), harp.rotation.y)
-		studio._carry_live(&"harp")
-		check("wheeling the harp three metres back, past the bells, slides the HARMONY & STRINGS banner along its wall with the neighbourhood's middle",
+		bells.place(Vector2(bells.position.x, bells.position.z + 3.0), bells.rotation.y)
+		studio._carry_live(&"bells")
+		check("wheeling the bells three metres back slides the HARMONY & STRINGS banner along its wall with the neighbourhood's middle",
 				not (studio.venue.get_node("Sign_harmony") as Node3D).position.is_equal_approx(before))
 	await get_tree().process_frame
 	studio.queue_free()
@@ -27694,10 +27345,6 @@ func _test_an_old_rooms_saved_defaults_give_way_to_the_new_room() -> void:
 func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 	var node: Node3D = null
 	match id:
-		&"harp":
-			node = studio.harp
-			if node == null or not node.transform.is_equal_approx(spot) or studio.presence.harp != studio.harp:
-				return false
 		&"bells":
 			node = studio.venue.get_node_or_null("BellStand") as Node3D
 			if node == null or not node.transform.is_equal_approx(spot):
@@ -27723,7 +27370,7 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 			if node == null or not node.transform.is_equal_approx(spot):
 				return false
 		&"music_box":
-			# The music box beside the harp (slice 47), its cylinder and its four keys on it.
+			# The music box (slice 47), its cylinder and its four keys on it.
 			node = studio.music_box
 			if node == null or not node.transform.is_equal_approx(spot) or studio.music_box.drum == null \
 					or studio.music_box.keys.size() != 4:
@@ -27819,7 +27466,7 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 	return node.get_parent() == studio.venue and node.find_child("Plaque", true, false) != null
 
 
-## A free-standing station: the harp's checks, from its own footprint (Stations.solid).
+## A free-standing station: the checks, from its own footprint (Stations.solid).
 func _check_free_station(studio: Studio, id: StringName, spot: Transform3D, tag: String) -> void:
 	var venue := studio.venue
 	var walker := studio.walker
@@ -28686,7 +28333,7 @@ func _test_cable_leaves_my_keys_with_the_last_plug() -> void:
 	var jacks := Jacks.new()
 	add_child(jacks)
 	jacks.keys = gm
-	jacks.set_patch({"bell1": "player_5", "keys:7": "player_5", "harp": "player_9"})
+	jacks.set_patch({"bell1": "player_5", "keys:7": "player_5", "bell2": "player_9"})
 	check("two plugs into me: the cable is in my keys' reach", gm.instruments.has(Jacks.CABLE) and jacks.into(5).size() == 2)
 	jacks.received(&"bell1", Jack.Kind.NOTE_ON, 69, 80, 1, 12.0)
 	check("a bell into me plays its own note on my keys (%s)" % [gm.held], gm.held.has(69) and spy.on.has(69))
@@ -28699,10 +28346,10 @@ func _test_cable_leaves_my_keys_with_the_last_plug() -> void:
 	jacks.received(&"keys:7", Jack.Kind.NOTE_OFF, 69, 0, 7, 13.5)
 	check("until that one lets go too", not gm.held.has(69) and not spy.on.has(69))
 	jacks.received(&"bell1", Jack.Kind.NOTE_ON, 72, 80, 1, 14.0)
-	jacks.set_patch({"keys:7": "player_5", "harp": "player_9"})
+	jacks.set_patch({"keys:7": "player_5", "bell2": "player_9"})
 	check("one plug out: what it had down is let go, and the cable stays for the other",
 			not gm.held.has(72) and gm.instruments.has(Jacks.CABLE))
-	jacks.set_patch({"harp": "player_9"})
+	jacks.set_patch({"bell2": "player_9"})
 	check("the last plug into me out: the cable leaves my keys' reach", not gm.instruments.has(Jacks.CABLE))
 	jacks.free()
 	_put_back_synth(spy)
@@ -28710,66 +28357,8 @@ func _test_cable_leaves_my_keys_with_the_last_plug() -> void:
 	_offline()
 
 
-## The harp's notes down a cable into this player (a host on the built-in engine, recording) play
-## those pitches on its keys and land in its take at the song position each was plucked at,
-## though they arrive later.
-func _test_harp_notes_into_a_player_land_in_their_take() -> void:
-	_offline()
-	_as_session(Session.Role.HOST, 1)
-	Session.local_name = "Ada"
-	var gm := Session.guest_midi
-	var saved_heard := gm.heard_source
-	var saved_sent := gm.takes_sent
-	var saved_roll := gm.roll_every
-	gm.takes_sent = 0
-	gm.roll_every = 0.0
-	gm.target_track = 0
-	gm.record_with_host = true
-	var spy := _spy_on_keys()
-	var armed := gm.take_track()
-	DAW.state.track(armed).items.clear()
-	var heard := {"seconds": 29.0, "playing": true, "recording": true, "valid": true}
-	gm.heard_source = func() -> Dictionary: return heard
-	var jacks := Jacks.new()
-	add_child(jacks)
-	jacks.keys = gm
-	jacks.set_patch({"harp": "player_1"})
-	gm._process(0.016)
-	check("recording, a take runs", gm.is_recording())
-	# Plucked by Grace at 29.5 and 29.55, heard here at 30.
-	heard["seconds"] = 30.0
-	jacks.received(&"harp", Jack.Kind.NOTE_ON, 57, 80, 7, 29.5)
-	jacks.received(&"harp", Jack.Kind.NOTE_ON, 60, 82, 7, 29.55)
-	gm._process(0.016)
-	check("the harp's own pitches sound on my keys", spy.on.has(57) and spy.on.has(60) and gm.held.size() == 2)
-	heard["seconds"] = 31.0
-	jacks.received(&"harp", Jack.Kind.NOTE_OFF, 57, 0, 7, 30.9)
-	jacks.received(&"harp", Jack.Kind.NOTE_OFF, 60, 0, 7, 30.95)
-	gm._process(0.016)
-	heard["recording"] = false
-	gm._process(0.016)
-	var items: Array = DAW.state.track(armed).items
-	check("stopped, they are one take on my armed track (%d)" % items.size(), items.size() == 1)
-	if items.size() == 1:
-		var it: MixState.ItemState = items[0]
-		var notes := MidiTake.unpack_relative(it.notes, it.start)
-		check("named after the cable (%s)" % it.name, it.name == "Ada cable 1")
-		check("each at the song it was plucked at and let go at, not when it arrived (%s)" % [notes],
-				notes.size() == 2 and notes[0][2] == 57 and is_equal_approx(notes[0][0], 29.5)
-				and is_equal_approx(notes[0][1], 30.9) and notes[1][2] == 60 and is_equal_approx(notes[1][0], 29.55)
-				and is_equal_approx(notes[1][1], 30.95) and notes[1][3] == 82)
-	jacks.free()
-	gm.heard_source = saved_heard
-	gm.takes_sent = saved_sent
-	gm.roll_every = saved_roll
-	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-
-
 ## What goes down a jack into a bandmate, from each kind of source: a bell its note and its off
-## (and not onto the armed track here), the shaker a TRIGGER, the harp its strings (heard here
-## from the harp, not on this player's keys), this player's keys what they play. The sockets
+## (and not onto the armed track here), the shaker a TRIGGER, this player's keys what they play. The sockets
 ## step through each bandmate; P with an empty hand plugs this player's keys and Shift+P takes
 ## out what goes into them; a cable runs to the bandmate's glove; and a leaver's jacks come out.
 func _test_a_jack_into_a_bandmate_sends_what_its_source_plays() -> void:
@@ -28800,12 +28389,9 @@ func _test_a_jack_into_a_bandmate_sends_what_its_source_plays() -> void:
 	var shaker_sinks := Jacks.sinks(&"shaker")
 	check("an item's socket steps through the tracks and then each bandmate (%s)" % [shaker_sinks.slice(-2)],
 			shaker_sinks[-1] == &"player_7" and shaker_sinks.size() == s.tracks.size() + 2)
-	check("the harp's and my keys' through bandmates only, and nobody's keys into themselves",
-			Jacks.sinks(Jack.HARP) == [&"", &"player_7"] and Jacks.sinks(Jack.keys_source(1)) == [&"", &"player_7"]
+	check("my keys' through bandmates only, and nobody's keys into themselves",
+			Jacks.sinks(Jack.keys_source(1)) == [&"", &"player_7"]
 			and Jacks.sinks(Jack.keys_source(7)) == [&""])
-	check("the harp has a jack on its pillar (%s)" % studio.harp.jack.title(), studio.harp.jack != null
-			and studio.harp.jack.title() == "CHORD HARP  JACK" and studio.harp.jack.source_id() == Jack.HARP
-			and studio.harp.jack.position.is_equal_approx(ChordHarp.JACK_AT))
 
 	# A bell at home, into Grace.
 	var bell := studio.items.items.get(&"bell1") as HandbellItem
@@ -28875,40 +28461,19 @@ func _test_a_jack_into_a_bandmate_sends_what_its_source_plays() -> void:
 	bell.jack._physics_process(1.0)
 	check("with no ghost to hold it, the short lead hangs instead", not bell.jack.cable_running() and bell.jack._lead.visible)
 
-	# The harp into Grace: its strings down the cable, not on my keys, and heard here from the harp.
 	jacks.plug(&"bell1", &"")
 	jacks.plug(&"shaker", &"")
 	var song := s.bar_to_seconds(1.3)
 	var keys_heard := {"seconds": song, "playing": true, "recording": false, "valid": true}
 	gm.heard_source = func() -> Dictionary: return keys_heard
-	studio._on_plug_asked(Jack.HARP, &"player_7")
-	sent.clear()
-	var harp := studio.harp
-	var hand := Node.new()
-	add_child(hand)
-	harp.grab_begin(hand, _harp_at(harp, 0, -1))
-	harp.grab_move(hand, _harp_at(harp, 3))
-	harp.grab_end(hand)
-	hand.free()
-	var ons := sent.filter(func(e: Array) -> bool: return e[2] == Jack.Kind.NOTE_ON)
-	check("a strum into Grace sends the strings it crossed, at its song (%s)" % [ons],
-			ons.map(func(e: Array) -> int: return e[3]) == [57, 60, 64, 69]
-			and ons.all(func(e: Array) -> bool: return e[0] == 7 and e[1] == Jack.HARP and is_equal_approx(e[5], song)))
-	check("not on my own keys, but heard here from the harp", not gm.held.has(57) and harp.sounding(57, 1))
-	harp._physics_process(ChordHarp.RING + 0.01)
-	check("each rings out, and its off goes down the cable too (%d)" % sent.size(),
-			sent.filter(func(e: Array) -> bool: return e[2] == Jack.Kind.NOTE_OFF).size() == 4 and not harp.sounding(57, 1))
-	jacks.plug(Jack.HARP, &"")
 
-	# My keys into Grace: what I play goes down the cable too; a cable's and the harp's notes do not.
+	# My keys into Grace: what I play goes down the cable too; a cable's notes do not.
 	jacks.plug(Jack.keys_source(1), &"player_7")
 	sent.clear()
 	gm.note_on(62, 90)
 	gm.note_off(62)
 	gm.note_on(64, 90, 0, 0.0, false, Jacks.CABLE, song)
 	gm.note_off(64, 0, 0.0, false, Jacks.CABLE, song + 0.1)
-	gm.note_on(65, 90, 0, 0.0, false, ChordHarp.SOURCE)
-	gm.note_off(65, 0, 0.0, false, ChordHarp.SOURCE)
 	check("my keys' notes go down their jack, on and off, at their song (%s)" % [sent], sent.size() == 2
 			and sent[0] == [7, &"keys:1", Jack.Kind.NOTE_ON, 62, 90, song] and sent[1][2] == Jack.Kind.NOTE_OFF and sent[1][3] == 62)
 	jacks.plug(Jack.keys_source(1), &"")
@@ -28924,11 +28489,11 @@ func _test_a_jack_into_a_bandmate_sends_what_its_source_plays() -> void:
 	mouse._unhandled_input(p)
 	check("and again takes them out", jacks.sink_of(&"keys:1") == &"")
 	notices.clear()
-	studio._on_room_asked(&"plug", [Jack.HARP, &"player_1"], 7)
+	studio._on_room_asked(&"plug", [&"bell1", &"player_1"], 7)
 	studio._on_room_asked(&"plug", [&"shaker", &"player_1"], 7)
-	check("Grace plugs the harp and the shaker into me, and I am told who plugged what (%s)" % [notices],
+	check("Grace plugs the bell and the shaker into me, and I am told who plugged what (%s)" % [notices],
 			jacks.into(1).size() == 2 and notices.size() == 2
-			and notices[0].begins_with("Grace plugged the chord harp into you: its notes play on your keys.")
+			and notices[0].begins_with("Grace plugged the handbell 1 into you: its notes play on your keys.")
 			and notices[1].begins_with("Grace plugged the shaker into you: its hits play chord tones on your keys."))
 	check("so the cable is in my keys' reach", gm.instruments.has(Jacks.CABLE))
 	check("a press on a jack that goes into me says it unplugs it (%s)" % shaker.jack.hint(),
@@ -28961,7 +28526,7 @@ func _test_a_jack_into_a_bandmate_sends_what_its_source_plays() -> void:
 
 
 ## The host's word on what may go down a jack: from an item's holder only, a player's keys from
-## that player only, the harp from anyone; into and from players in the room, not into
+## that player only; into and from players in the room, not into
 ## themselves, and only where the room's patch says. Whoever a jack goes into may take it out.
 func _test_the_host_says_who_may_send_down_a_jack() -> void:
 	_offline()
@@ -29004,15 +28569,11 @@ func _test_the_host_says_who_may_send_down_a_jack() -> void:
 			Session.jack_refusal(1, &"keys:7", 9) == "those are Grace's keys" and Session.jack_refusal(1, &"keys:7", 7) == "")
 	check("and Lin may not plug them", Jacks.plug_refusal(&"keys:7", null, &"player_1", 9, 0, &"", [1, 7, 9])
 			== "only Grace plugs their own keys")
-	jacks.plug(Jack.HARP, &"player_1")
-	check("the harp, from anyone in the room", Session.jack_refusal(1, &"harp", 9) == "" and Session.jack_refusal(1, &"harp", 7) == "")
-	check("but it is not plugged onto a track", Jacks.plug_refusal(Jack.HARP, null, &"track_2", 7, 0, &"", [1, 7, 9])
-			== "its notes are keys, and go onto the armed track")
-	check("nothing goes into a player not in the room (%s)" % Session.jack_refusal(12, &"harp", 7),
-			Session.jack_refusal(12, &"harp", 7) == "player 12 is not in the room")
-	check("nor comes from one", Session.jack_refusal(1, &"harp", 12) == "player 12 is not in the room")
-	check("nor into the one sending it", Session.jack_refusal(7, &"harp", 7) == "a jack goes into a bandmate, not into yourself")
-	check("nor where the patch does not send it", Session.jack_refusal(9, &"harp", 7) == "its jack does not go into player 9")
+	check("nothing goes into a player not in the room (%s)" % Session.jack_refusal(12, &"keys:7", 7),
+			Session.jack_refusal(12, &"keys:7", 7) == "player 12 is not in the room")
+	check("nor comes from one", Session.jack_refusal(1, &"keys:7", 12) == "player 12 is not in the room")
+	check("nor into the one sending it", Session.jack_refusal(7, &"keys:7", 7) == "a jack goes into a bandmate, not into yourself")
+	check("nor where the patch does not send it", Session.jack_refusal(9, &"keys:7", 7) == "its jack does not go into player 9")
 	check("each refusal counted, and none of them played (%d)" % (Session.jacks_refused - refused),
 			Session.jacks_refused == refused + 2 and played.size() == 2)
 	# The sink's owner unplugs, though the shaker is in Grace's hand; nobody else may.
@@ -29059,7 +28620,7 @@ func _test_a_late_note_after_an_unplug_is_dropped() -> void:
 	jacks.set_patch({})
 	jacks.received(&"keys:7", Jack.Kind.NOTE_ON, 69, 80, 7, 15.2)
 	check("and still once the host says it is out", gm.held.is_empty() and not gm.instruments.has(Jacks.CABLE))
-	jacks.received(&"harp", Jack.Kind.NOTE_ON, 72, 80, 9, 15.3)
+	jacks.received(&"bell2", Jack.Kind.NOTE_ON, 72, 80, 9, 15.3)
 	check("a note from a source never plugged in here is played: the room may not have said so yet",
 			gm.held.has(72))
 	jacks.set_patch({})
@@ -29076,8 +28637,8 @@ func _test_a_late_note_after_an_unplug_is_dropped() -> void:
 	_offline()
 
 
-## Somebody else plugged the harp, a shaker at home and a bell at home into Ada, and then Ada
-## plays them herself: that is no cable. The harp plays on her own keys, and the hits go into her
+## Somebody else plugged a shaker at home and a bell at home into Ada, and then Ada
+## plays them herself: that is no cable. The hits go into her
 ## take, not down a jack into herself, which the host would refuse.
 func _test_a_jack_into_whoever_plays_it_is_no_cable() -> void:
 	_offline()
@@ -29104,26 +28665,13 @@ func _test_a_jack_into_whoever_plays_it_is_no_cable() -> void:
 	jacks.send = func(to: int, source: StringName, kind: int, pitch: int, velocity: int, song: float) -> void:
 		sent.append([to, source, kind, pitch, velocity, song])
 	studio.send_item_hit = func(_id: StringName, _v: int, _song: float, _snap: bool, _take: int, _zone: StringName) -> void: pass
-	studio._on_room_asked(&"plug", [Jack.HARP, &"player_1"], 7)
 	studio._on_room_asked(&"plug", [&"shaker", &"player_1"], 7)
 	studio._on_room_asked(&"plug", [&"bell1", &"player_1"], 7)
-	check("Lin plugs the harp, the shaker and a bell into me", jacks.into(1).size() == 3)
-	check("which is no cable for me to play down", jacks.cable_into(Jack.HARP) == 0 and jacks.player_into(Jack.HARP) == 1)
+	check("Lin plugs the shaker and a bell into me", jacks.into(1).size() == 2)
 
 	var song := s.bar_to_seconds(1.3)
 	var keys_heard := {"seconds": song, "playing": true, "recording": false, "valid": true}
 	gm.heard_source = func() -> Dictionary: return keys_heard
-	var harp := studio.harp
-	var hand := Node.new()
-	add_child(hand)
-	harp.grab_begin(hand, _harp_at(harp, 0, -1))
-	harp.grab_move(hand, _harp_at(harp, 3))
-	harp.grab_end(hand)
-	hand.free()
-	check("I strum it: nothing down a jack into myself, and its strings on my own keys (%s, %s)" % [sent, gm.held],
-			sent.is_empty() and gm.held.has(57) and gm.held.has(69))
-	harp._physics_process(ChordHarp.RING + 0.01)
-	check("and they ring out on my keys too", not gm.held.has(57) and not gm.held.has(69))
 
 	var rec := studio.hit_recorder
 	var heard := {"seconds": s.bar_to_seconds(1.1), "playing": true, "recording": true, "valid": true}
@@ -29173,10 +28721,10 @@ func _test_the_wrist_unplugs_what_goes_into_me() -> void:
 	ins.label = "INTO ME"
 	skeleton.wrist.add_child(ins)
 	check("with nothing going into me it is not there", not ins._look.visible and ins.hint() == "")
-	jacks.set_patch({"keys:7": "player_5", "harp": "player_5", "bell1": "player_9"})
+	jacks.set_patch({"keys:7": "player_5", "chord:7": "player_5", "bell1": "player_9"})
 	check("something going into me: it is, and its card says what, with no tag floating over it (%s)" % ins.readout(),
 			ins._look.visible and not ins._tag.visible and ins.readout() == ins._tag.text and ins._tag.text.begins_with("<- ")
-			and ins._tag.text.contains("'S KEYS") and ins._tag.text.contains("CHORD HARP")
+			and ins._tag.text.contains("'S KEYS") and ins._tag.text.contains("CHORD HAND")
 			and not ins._tag.text.contains("BELL"))
 	check("a press says it unplugs all of it (%s)" % ins.hint(), ins.hint() == "press to unplug everything going into you"
 			and ins.title() == "INTO ME  JACK")
@@ -29552,66 +29100,6 @@ func _test_a_hand_whose_fingers_play_grabs_nothing() -> void:
 	button_holder.queue_free()
 	erg.dwell_seconds = saved_dwell
 
-
-## The harp is strummed by the hands' readings with nothing set: a tracked hand's index and middle
-## tips (HandGestures.local_tips), each one through the strings plucking each string it crosses.
-func _test_the_harp_is_strummed_by_the_hands_readings() -> void:
-	_offline()
-	_as_session(Session.Role.SOLO, 1)
-	var gm := Session.guest_midi
-	var spy := _spy_on_keys()
-	DAW.state.markers.clear()
-	DAW.state.markers[0.0] = "[A minor]"
-	var harp := _harp_for_test()
-	harp.position = Vector3(-2.0, 0.0, 1.0)
-	var gestures := HandGestures.new()
-	gestures.tracker_name = &"/user/hand_tracker/none_here"
-	add_child(gestures)
-	var plucked := {}
-	var count := func(pitch: int, down: bool) -> void:
-		if down:
-			plucked[pitch] = int(plucked.get(pitch, 0)) + 1
-	gm.key.connect(count)
-	var pass_with := func(index_z: float, middle_z: float) -> void:
-		var x := -0.24
-		while x <= 0.24:
-			var at := PackedVector3Array()
-			at.resize(XRHandTracker.HAND_JOINT_MAX)
-			for j in at.size():
-				at[j] = harp.to_global(Vector3(x, 1.0, 0.3))
-			at[HandPose.TIPS[0]] = harp.to_global(Vector3(x, 1.0, index_z))
-			at[HandPose.TIPS[1]] = harp.to_global(Vector3(x + 0.006, 0.95, middle_z))
-			gestures.tracked = true
-			gestures.joints = at
-			harp._physics_process(1.0 / 90.0)
-			x += 0.013
-		gestures.tracked = false
-		harp._physics_process(1.0 / 90.0)
-	var tips := HandGestures.local_tips(get_tree())
-	check("an untracked hand has no tips to strum with", tips.is_empty())
-	pass_with.call(0.01, 0.06)
-	var tuned := harp.tuning()
-	check("the index tip through the strings plucks each once, the middle held off plucks none (%s)" % [plucked],
-			plucked.size() == ChordHarp.STRINGS and Array(tuned).all(func(p: int) -> bool: return plucked.get(p, 0) == 1))
-	harp._physics_process(ChordHarp.RING)
-	plucked.clear()
-	pass_with.call(0.06, -0.01)
-	check("and the middle tip plucks them too (%s)" % [plucked],
-			plucked.size() == ChordHarp.STRINGS and Array(tuned).all(func(p: int) -> bool: return plucked.get(p, 0) == 1))
-	gestures.tracked = true
-	check("a tracked hand's two tips, keyed by hand and finger", HandGestures.local_tips(get_tree()).keys() \
-			.all(func(k: Array) -> bool: return k[0] == gestures.get_instance_id()) \
-			and HandGestures.local_tips(get_tree()).size() == 2)
-	gestures.tracked = false
-	gm.key.disconnect(count)
-	gestures.free()
-	harp.queue_free()
-	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-
-
-# --- fingertip notes (docs/spatial_loop.md slice 8) -----------------------------------------
 
 ## A bare hand's fingertips as notes, read off the hand's readings (HandGestures.take) by a
 ## FingertipNotes the test steps itself; the keys spied on. Returns [notes, hand, gestures, eyes].
@@ -30196,8 +29684,8 @@ func _test_the_fifths_wheel_raises_the_key_and_what_follows() -> void:
 ## docs/spatial_loop.md slice 9: SET writes at the bar after the one heard while playing, as a
 ## marker that is only brackets when there is none there, and leaves the Intro's brackets and the
 ## harmony before that bar as they were; stopped, it writes onto the section marker at the
-## playhead's bar; onto a bracket already there it replaces it; each is one undo step; and the harp
-## plays the new chord from that bar and the old one up to it.
+## playhead's bar; onto a bracket already there it replaces it; each is one undo step; and the harmony
+## has the new chord from that bar and the old one up to it.
 ## 2026-10-30: "make something where I can set the global scale for the project/scene that affects
 ## the notes on all the toys and synth": SONG KEY writes the key at bar 1 (FifthsWheel.set_song_key),
 ## which the room's instruments read, and the keys locked to it play only its notes.
@@ -30213,9 +29701,9 @@ func _test_the_song_key_is_set_for_the_room_and_locks_the_keys() -> void:
 	check("as one undo step", backend._undo.size() == depth + 1)
 	var later := Harmony.at(s, s.bar_to_seconds(40.0))
 	check("the whole song is in it (%s)" % later.key_name, later.named and later.root == 9 and later.mode == "dorian")
-	var harp := _harp_for_test()
-	check("the harp plays its tonic chord, A minor (%s)" % harp.tuning_at(1.0),
-			Array(harp.tuning_at(1.0)).all(func(p: int) -> bool: return posmod(p, 12) in [9, 0, 4]))
+	var tonic := Harmony.at(s, 1.0).chord
+	check("the song's chord there is its tonic chord, A minor (%s)" % [tonic],
+			tonic.size() > 0 and Array(tonic).all(func(p: int) -> bool: return posmod(p, 12) in [9, 0, 4]))
 	s.markers[0.0] = "Intro [C major: C F G]"
 	FifthsWheel.set_song_key(2, "minor")
 	check("a section and chords already there are kept (%s)" % s.markers[0.0], s.markers[0.0] == "Intro [D minor: C F G]")
@@ -30254,7 +29742,6 @@ func _test_the_song_key_is_set_for_the_room_and_locks_the_keys() -> void:
 	check("unlocked, C# is C# (%s)" % [spy.on.keys()], spy.on.keys() == [61])
 	gm.note_off(61)
 	_put_back_synth(spy)
-	harp.queue_free()
 	s.markers.clear()
 
 
@@ -30281,9 +29768,8 @@ func _test_the_fifths_wheel_sets_the_harmony_at_a_bar() -> void:
 			wheel._set.readout() == "[C major: C F G] at bar 11, the next one")
 	var backend := DAW.backend as OfflineBackend
 	var depth := backend._undo.size()
-	var harp := _harp_for_test()
 	var at := s.bar_to_seconds(11.0)
-	var before := harp.tuning_at(at - 0.05)
+	var before := Harmony.at(s, at - 0.05).chord
 	wheel.set_harmony()
 	check("playing in Verse 2, SET adds a marker of brackets alone at the next bar (%s)" % [s.markers],
 			s.markers.get(at, "") == "[C major: C F G]" and s.markers.size() == 3)
@@ -30295,9 +29781,10 @@ func _test_the_fifths_wheel_sets_the_harmony_at_a_bar() -> void:
 			then.key_name == "C major" and then.chord_name == "C" and next.chord_name == "F")
 	check("and the bar before is still the Intro's (%s)" % Harmony.at(s, at - 0.05).chord_name,
 			Harmony.at(s, at - 0.05).chord_name == "F" and Harmony.at(s, at - 0.05).key_name == "A minor")
-	check("the harp plays F up to the bar line and C from it (%s, %s)" % [harp.tuning_at(at - 0.05), harp.tuning_at(at + 0.05)],
-			harp.tuning_at(at - 0.05) == before and before == PackedInt32Array([57, 60, 65, 69, 72, 77, 81, 84])
-			and harp.tuning_at(at + 0.05) == PackedInt32Array([55, 60, 64, 67, 72, 76, 79, 84]))
+	var after := Harmony.at(s, at + 0.05).chord
+	check("the chord is F up to the bar line and C from it (%s, %s)" % [before, after],
+			Array(before).all(func(p: int) -> bool: return posmod(p, 12) in [5, 9, 0])
+			and Array(after).all(func(p: int) -> bool: return posmod(p, 12) in [0, 4, 7]))
 	DAW.undo()
 	check("undo takes the added marker out (%s)" % [s.markers], not s.markers.has(at) and s.markers.size() == 2
 			and Harmony.at(s, at + 0.01).key_name == "A minor")
@@ -30342,7 +29829,6 @@ func _test_the_fifths_wheel_sets_the_harmony_at_a_bar() -> void:
 	check("which undo takes back whole (%s)" % [s.markers], s.markers.size() == 3
 			and s.markers.get(bar13, "") == "NOTE try a fill here")
 	s.markers.erase(bar13)
-	harp.queue_free()
 	wheel.free()
 	gm.heard_source = saved_heard
 	_put_back_synth(spy)
@@ -30451,7 +29937,7 @@ func _test_every_venue_puts_the_wheel_on_the_bricks_table() -> void:
 
 # --- stations, the help card's pages and the HUD (docs/spatial_loop.md part two, slice 10) -----
 
-## Every row, stood or held, has a title, an area, a desk line and a hands line; the harp, the
+## Every row, stood or held, has a title, an area, a desk line and a hands line; the
 ## bells and the wheel are the first rows and stand where their venue methods say, the wheel
 ## mounted on the bricks table; and each plaque letters its title and hands line at 30 mm, read
 ## from 1.5 m.
@@ -30469,27 +29955,25 @@ func _test_every_station_says_how_to_play_it() -> void:
 	for id in ids:
 		unique[id] = true
 	check("and every id is its own", unique.size() == ids.size())
-	check("the first stations are the harp, the bells' stand and the wheel, in the live room",
-			Stations.ALL.slice(0, 3).map(func(r): return r["id"]) == [&"harp", &"bells", &"wheel"]
-			and Stations.ALL.slice(0, 3).all(func(r): return r["area"] == Stations.LIVE))
+	check("the first stations are the bells' stand and the wheel, in the live room",
+			Stations.ALL.slice(0, 2).map(func(r): return r["id"]) == [&"bells", &"wheel"]
+			and Stations.ALL.slice(0, 2).all(func(r): return r["area"] == Stations.LIVE))
 	var probe := Venue.make(&"studio")
 	check("stood ones say their air, what is looked at and the Venue method that places them",
 			Stations.ALL.all(func(r: Dictionary) -> bool: return (r["air"] > 0.0 and r["at"] is Vector3
 					and probe.has_method(r["spot"]))))
 	probe.free()
-	check("the wheel is mounted on the bricks table; the harp and the bells stand by themselves",
+	check("the wheel is mounted on the bricks table; the bells stand by themselves",
 			Stations.zoned(&"wheel") and Stations.row(&"wheel")["zone"] == &"bricks"
-			and not Stations.zoned(&"harp") and not Stations.zoned(&"bells"))
+			and not Stations.zoned(&"bells"))
 	check("held: the keytar, the shaker, the tambourine, a bell in hand, the fingertips and the jacks",
 			[&"keytar", &"shaker", &"tambourine", &"bells_held", &"fingertips", &"jacks"].all(
 				func(id): return not Stations.row(id).is_empty() and Stations.row(id)["area"] == Stations.HELD_AREA))
 	var venue := Venue.make(&"studio")
-	check("their spots are the venue's own", (Stations.spot(venue, &"harp") as Transform3D).is_equal_approx(venue.harp_spot())
-			and (Stations.spot(venue, &"bells") as Transform3D).is_equal_approx(venue.bell_stand_spot())
+	check("their spots are the venue's own", (Stations.spot(venue, &"bells") as Transform3D).is_equal_approx(venue.bell_stand_spot())
 			and (Stations.spot(venue, &"wheel") as Transform3D).is_equal_approx(venue.wheel_spot())
-			and Stations.spot(venue, &"keytar") == null and Stations.spot(null, &"harp") == null)
-	check("free-standing footprints are the venue's solids for them", Stations.solid(venue, &"harp") == ChordHarp.solid(venue.harp_spot())
-			and Stations.solid(venue, &"bells") == HandbellItem.stand_solid(venue.bell_stand_spot())
+			and Stations.spot(venue, &"keytar") == null and Stations.spot(null, &"bells") == null)
+	check("free-standing footprints are the venue's solids for them", Stations.solid(venue, &"bells") == HandbellItem.stand_solid(venue.bell_stand_spot())
 			and Stations.solid(venue, &"wheel").is_empty())
 	var seat: Transform3D = Stations.seat(venue, &"wheel")
 	var spot: Transform3D = Stations.spot(venue, &"wheel")
@@ -30497,19 +29981,19 @@ func _test_every_station_says_how_to_play_it() -> void:
 			is_equal_approx(Vector2(seat.origin.x - spot.origin.x, seat.origin.z - spot.origin.z).length(), Stations.SEAT)
 			and is_zero_approx(seat.origin.y))
 	var areas := Stations.by_area(venue)
-	check("by area: the thirteen in the live room (the lyric board the thirteenth, slice 56), none yet in the control room, and the venue's own its tubular bells",
-			(areas[Stations.LIVE] as Array).size() == 13 and (areas[Stations.CONTROL] as Array).is_empty()
+	check("by area: the twelve in the live room (the lyric board the twelfth, slice 56), none yet in the control room, and the venue's own its tubular bells",
+			(areas[Stations.LIVE] as Array).size() == 12 and (areas[Stations.CONTROL] as Array).is_empty()
 			and (areas[Stations.VENUE] as Array).size() == 1 and areas[Stations.VENUE][0]["title"] == "TUBULAR BELLS")
 	var none := Venue.make(Venue.ROULETTE_ID)
 	check("and the Rig Roulette room, which has none of its own, has nothing there", (Stations.by_area(none)[Stations.VENUE] as Array).is_empty())
 	none.free()
 	venue.free()
-	var plaque := Stations.plaque(&"harp")
+	var plaque := Stations.plaque(&"bells")
 	var title := plaque.get_node("Title") as Label3D
 	var hands := plaque.get_node("Hands") as Label3D
 	check("a plaque letters the title and the hands line, 30 mm high, legible at 1.5 m (%.3f m, to %.1f m)"
 			% [Lettering.cap_height(title), Lettering.legible_to(title)],
-			title.text.begins_with("CHORD HARP") and hands.text == Stations.row(&"harp")["hands"]
+			title.text.begins_with("HANDBELLS") and hands.text == Stations.row(&"bells")["hands"]
 			and is_equal_approx(Lettering.cap_height(title), Stations.PLAQUE_CAP)
 			and is_equal_approx(Lettering.cap_height(hands), Stations.PLAQUE_CAP)
 			and Lettering.legible_to(title) >= 1.5 and Lettering.legible_to(hands) >= 1.5)
@@ -30532,7 +30016,7 @@ func _test_every_station_says_how_to_play_it() -> void:
 	plaque.free()
 
 
-## The card's pages: START names F2, Ctrl-Z and B; the PLAY pages name the harp, the bells, the
+## The card's pages: START names F2, Ctrl-Z and B; the PLAY pages name the bells, the
 ## wheel, P and Shift-P, T, the keytar, the shaker and the tambourine; at text scale 1 every page
 ## measures inside 1600x900 less its margins; and an area padded with 40 more rows (49 in all)
 ## runs on to numbered pages that each fit.
@@ -30549,17 +30033,17 @@ func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
 	var start: String = said.call(pages[0])
 	check("START names F2, Ctrl-Z and B", start.contains("F2") and start.contains("Ctrl-Z") and start.contains("B splits"))
 	var play := " ".join(pages.filter(func(p): return p["play"]).map(func(p): return said.call(p)))
-	var named := ["CHORD HARP", "HANDBELLS", "FIFTHS WHEEL", "P steps", "Shift-P", "T, then", "KEYTAR", "SHAKER", "TAMBOURINE"]
-	check("the PLAY pages name the harp, the bells, the wheel, P and Shift-P, T, the keytar, the shaker and the tambourine (%s)"
+	var named := ["HANDBELLS", "FIFTHS WHEEL", "P steps", "Shift-P", "T, then", "KEYTAR", "SHAKER", "TAMBOURINE"]
+	check("the PLAY pages name the bells, the wheel, P and Shift-P, T, the keytar, the shaker and the tambourine (%s)"
 			% [named.filter(func(n): return not play.contains(n))], named.all(func(n): return play.contains(n)))
 	var held_sub: String = pages[names.find("PLAY · HELD 1/2")]["sub"]
-	check("PLAY · HELD says where each kind is kept: the bells by the harp, not all on the shelf (%s)" % held_sub,
-			held_sub.contains("shelf") and held_sub.contains("beside the harp") and held_sub.contains("always on you"))
+	check("PLAY · HELD says where each kind is kept: the bells by the bricks table, not all on the shelf (%s)" % held_sub,
+			held_sub.contains("shelf") and held_sub.contains("by the bricks table") and held_sub.contains("always on you"))
 	var live := {"lines": (pages[names.find("PLAY · LIVE ROOM 1/2")]["lines"] as Array)
 			+ (pages[names.find("PLAY · LIVE ROOM 2/2")]["lines"] as Array)}
 	check("each PLAY line of a stood station is its title and its desk line, and goes there, over both pages",
-			live["lines"].map(func(l): return l[2]) == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"modular", &"lyrics"]
-			and live["lines"][0][0] == "CHORD HARP" and live["lines"][0][1] == Stations.row(&"harp")["desk"])
+			live["lines"].map(func(l): return l[2]) == [&"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"modular", &"lyrics"]
+			and live["lines"][0][0] == "HANDBELLS" and live["lines"][0][1] == Stations.row(&"bells")["desk"])
 	var sizes: Array = []
 	for i in pages.size():
 		sizes.append(card.page_size(i))
@@ -30625,7 +30109,7 @@ func _test_the_hud_fits_and_says_where_the_rest_is() -> void:
 
 ## With the card open the keyboard is the card's: Right held for half a second turns one page and
 ## the walker stays where it was. A click on a page's name changes the page and keeps it open; a
-## click on the harp's PLAY line, marked under the cursor first, closes it and walks to the harp.
+## click on the bells' PLAY line, marked under the cursor first, closes it and walks to the bells.
 func _test_the_help_card_holds_the_keys_and_walks_to_a_station() -> void:
 	DAW.use(OfflineBackend.new())
 	var studio := Studio.new()
@@ -30675,18 +30159,18 @@ func _test_the_help_card_holds_the_keys_and_walks_to_a_station() -> void:
 	card.show_page(card.page_names().find("PLAY · LIVE ROOM 1/2"))
 	await get_tree().process_frame
 	await get_tree().process_frame
-	var harp_line: Array = card._lines.filter(func(l: Array) -> bool: return l[1] == &"harp")[0]
-	var over := (harp_line[0][1] as Control).get_global_rect().get_center()
+	var bells_line: Array = card._lines.filter(func(l: Array) -> bool: return l[1] == &"bells")[0]
+	var over := (bells_line[0][1] as Control).get_global_rect().get_center()
 	var motion := InputEventMouseMotion.new()
 	motion.position = over
 	card._input(motion)
-	check("the PLAY line under the cursor is marked with an arrow", (harp_line[2] as Label).text == "→")
+	check("the PLAY line under the cursor is marked with an arrow", (bells_line[2] as Label).text == "→")
 	click.position = over
 	card._input(click)
-	var seat: Transform3D = Stations.seat(studio.venue, &"harp", walker.fits)
+	var seat: Transform3D = Stations.seat(studio.venue, &"bells", walker.fits)
 	var off := Vector2(walker.global_position.x - seat.origin.x, walker.global_position.z - seat.origin.z).length()
-	check("a click on the harp's line closes the card and walks to the harp's seat (%.3f m off)" % off,
-			not card.visible and studio.station == &"harp" and off < 0.01 and get_viewport().gui_get_focus_owner() == null)
+	check("a click on the bells' line closes the card and walks to the bells' seat (%.3f m off)" % off,
+			not card.visible and studio.station == &"bells" and off < 0.01 and get_viewport().gui_get_focus_owner() == null)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(card.seen_path))
 	card.queue_free()
 	studio.ergonomics.motion_scale = saved_motion
@@ -30695,9 +30179,7 @@ func _test_the_help_card_holds_the_keys_and_walks_to_a_station() -> void:
 
 
 ## Going to a station frames what is played from where the walker actually stands, in every venue
-## and variant: the harp's seat stands its full step in front of it, in the aisle before the bricks
-## table it faces, and from there its crown, with the chord it names and both 8va buttons, is still in the view,
-## and so is the top of every other station's controls, and both ends of the chord ledge (CLEAR
+## and variant: the top of every station's controls is in the view from there, and both ends of the chord ledge (CLEAR
 ## and its BIN), below the HUD's line and the toast that says how to play it (the top 110 px). In a
 ## 1600x900 window at the room's lens.
 func _test_going_to_a_station_holds_its_controls_in_view() -> void:
@@ -30709,7 +30191,6 @@ func _test_going_to_a_station_holds_its_controls_in_view() -> void:
 	var saved_motion := studio.ergonomics.motion_scale
 	studio.ergonomics.motion_scale = 0.0
 	var out: Array = []
-	var close := 0
 	for id: StringName in Venue.IDS:
 		for v in Venue.variant_titles(id).size():
 			studio.set_venue(id, false, v)
@@ -30717,20 +30198,8 @@ func _test_going_to_a_station_holds_its_controls_in_view() -> void:
 				studio.go_to_station(station)
 				var cam := studio.camera.global_transform
 				var points: Array[Vector3] = []
-				if station == &"harp":
-					var harp := studio.harp
-					var seat: Transform3D = Stations.seat(studio.venue, &"harp", studio.walker.fits)
-					var spot: Transform3D = Stations.spot(studio.venue, &"harp")
-					if seat.origin.distance_to(spot.origin) < Stations.SEAT - 0.05:
-						close += 1
-					points.append(harp.global_transform * Vector3(0, ChordHarp.CROWN_Y + 0.04, 0.003))
-					for way in [-1, 1]:
-						for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
-							points.append(harp.global_transform * Vector3(way * 0.12 + c.x * ChordHarp.OctaveButton.SIZE.x * 0.5,
-									ChordHarp.CROWN_Y + c.y * ChordHarp.OctaveButton.SIZE.y * 0.5, 0.004))
-				else:
-					var frame_of := studio.venue.global_transform
-					points.append(frame_of * ((Stations.spot(studio.venue, station) as Transform3D) * (Stations.row(station)["frame"][0] as Vector3)))
+				var frame_of := studio.venue.global_transform
+				points.append(frame_of * ((Stations.spot(studio.venue, station) as Transform3D) * (Stations.row(station)["frame"][0] as Vector3)))
 				if station == VenueInstrument.STATION and studio.venue_instrument != null:
 					# The set's plaque, its INSTRUMENTS and BACK keys' feet, and its one jack: what a desk
 					# clicks there, under the bars, so its seat stands back far enough to see them.
@@ -30777,11 +30246,7 @@ func _test_going_to_a_station_holds_its_controls_in_view() -> void:
 				for p in points:
 					if not _in_view(cam, studio.camera.fov, 1600.0 / 900.0, p, 110.0 / 900.0):
 						out.append("%s:%d %s %s" % [id, v, station, p])
-	# The harp faces the bricks table across the harmony aisle (Venue.HARMONY_AISLE), which is wide
-	# enough for its player: nowhere does the table push the seat in.
-	check("the harp's seat stands its full step in front of it, in the aisle before the bricks table, everywhere (%d venues brought in)" % close,
-			close == 0)
-	check("from every station's seat its controls' top is in view, under the toast: the harp's chord and both 8va buttons, both ends of the ledge, the venue's set's plaque keys and jack, the looper's every ring, its pad and plaque keys (%s)" % [out.slice(0, 4)],
+	check("from every station's seat its controls' top is in view, under the toast: both ends of the ledge, the venue's set's plaque keys and jack, the looper's every ring, its pad and plaque keys (%s)" % [out.slice(0, 4)],
 			out.is_empty())
 	studio.ergonomics.motion_scale = saved_motion
 	studio.queue_free()
@@ -30838,7 +30303,7 @@ func _test_the_keys_that_move_you_wait_while_a_piano_has_them() -> void:
 	await get_tree().process_frame
 
 
-## I walks to each station in turn, the harp first and the studio's tubular bells last, and one more
+## I walks to each station in turn, the bells first and the studio's tubular bells last, and one more
 ## comes back round; Shift-I goes back; each time the walker ends at the seat, on floor a person fits on, facing the
 ## station, and a toast says its title and its desk line. God mode is left first. With motion it
 ## glides there; Esc walks back to the desk.
@@ -30861,7 +30326,7 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 	var arrived := true
 	var facing := true
 	var toasts := true
-	for n in 20:
+	for n in 19:
 		said.clear()
 		studio._unhandled_input(key)
 		visits.append(studio.station)
@@ -30875,8 +30340,8 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 		var r := Stations.row(studio.station)
 		toasts = toasts and said.size() == 1 and said[0].begins_with("%s, %s: " % [r["title"], Stations.where(r)]) \
 				and said[0].contains(r["desk"]) and not said[0].contains("in the this")
-	check("I nineteen times walks to the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the TV, the hand drums, the looper, the music box, the string spool, the modular wall, the lyric board and the studio's tubular bells, and a twentieth comes back round (%s)" % [visits],
-			visits == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"modular", &"lyrics", &"venue", &"harp"])
+	check("I eighteen times walks to the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the TV, the hand drums, the looper, the music box, the string spool, the modular wall, the lyric board and the studio's tubular bells, and a nineteenth comes back round (%s)" % [visits],
+			visits == [&"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"modular", &"lyrics", &"venue", &"bells"])
 	check("each time the walker ends at the seat, on walkable floor, facing the station", arrived and facing)
 	check("and a toast says its title, where it is (in the control room, in the live room, in this venue) and its desk line", toasts)
 	key.shift_pressed = true
@@ -30891,12 +30356,12 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 	check("a station that does not stand here is refused, and said", not studio.go_to_station(&"keytar")
 			and said[-1].contains("does not stand"))
 	studio.ergonomics.motion_scale = 0.3
-	studio.go_to_station(&"harp")
+	studio.go_to_station(&"wheel")
 	check("with motion it glides rather than cuts", walker.travelling())
 	await get_tree().create_timer(0.8).timeout
-	var harp: Transform3D = Stations.seat(studio.venue, &"harp", walker.fits)
+	var wheel_seat: Transform3D = Stations.seat(studio.venue, &"wheel", walker.fits)
 	check("and arrives", not walker.travelling() and Vector2(walker.global_position.x, walker.global_position.z)
-			.distance_to(Vector2(harp.origin.x, harp.origin.z)) < 0.01)
+			.distance_to(Vector2(wheel_seat.origin.x, wheel_seat.origin.z)) < 0.01)
 	studio.ergonomics.motion_scale = 0.0
 	studio._on_escape()
 	check("Esc walks back to the desk (%s)" % walker.global_position,
@@ -30916,9 +30381,9 @@ func _press(control: ControlAffordance) -> void:
 
 
 ## A headset travels to a station (docs/spatial_loop.md part two, slice 11), in --xr-sim: a row of
-## the board by the desk puts the play space's centre on the harp's seat facing it, so the head,
+## the board by the desk puts the play space's centre on the bells' seat facing it, so the head,
 ## stood off the centre and turned, is at the seat plus that same offset, within 5 cm; and that is
-## where Presence publishes it. At motion 0 it is a cut with no veil; BACK on the harp's plaque
+## where Presence publishes it. At motion 0 it is a cut with no veil; BACK on the bells' plaque
 ## comes home to the mix position. With motion the veil closes, the cut is made under it, and it
 ## opens again, all in about two FADEs.
 func _test_a_headset_travels_to_a_station_and_back() -> void:
@@ -30937,7 +30402,7 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	studio.ergonomics.motion_scale = 0.0
 	var board := studio.station_board
 	check("a headset has the station board, by the desk (%s)" % [board.rows() if board != null else null],
-			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv", &"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"modular", &"lyrics", &"venue"])
+			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"modular", &"lyrics", &"venue"])
 	# Home is the mix position, in front of the desk, not the room's origin inside the console;
 	# and from there the board is out of the way ahead (the desk is what is in view) and a few
 	# steps behind.
@@ -30960,22 +30425,22 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	rig.head.transform = Transform3D(Basis(Vector3.UP, 0.3), Vector3(0.3, 1.6, -0.2))
 	var offset := rig.head.transform
 	var at_home := rig.head.global_transform
-	_press(board.row(&"harp"))
+	_press(board.row(&"bells"))
 	var frame_of := studio.venue.global_transform
-	var seat: Transform3D = frame_of * (Stations.seat(studio.venue, &"harp", studio._station_fits()) as Transform3D)
-	var spot: Transform3D = frame_of * (Stations.spot(studio.venue, &"harp") as Transform3D)
+	var seat: Transform3D = frame_of * (Stations.seat(studio.venue, &"bells", studio._station_fits()) as Transform3D)
+	var spot: Transform3D = frame_of * (Stations.spot(studio.venue, &"bells") as Transform3D)
 	var wanted := seat * offset
 	var head := rig.head.global_transform
-	check("a press on the harp's row puts the head at its seat, kept off the centre as it stood (%.3f m)"
+	check("a press on the bells' row puts the head at its seat, kept off the centre as it stood (%.3f m)"
 			% head.origin.distance_to(wanted.origin), head.origin.distance_to(wanted.origin) < 0.05)
 	check("the seat the desktop walks to, in from the bricks table where it stands in the way (%.2f m out)"
 			% Vector2(seat.origin.x - spot.origin.x, seat.origin.z - spot.origin.z).length(),
 			Vector2(seat.origin.x - spot.origin.x, seat.origin.z - spot.origin.z).length() <= Stations.SEAT + 0.001)
 	var centre := rig.global_transform
-	var look: Vector3 = frame_of * (Stations.look_point(studio.venue, &"harp") as Vector3)
+	var look: Vector3 = frame_of * (Stations.look_point(studio.venue, &"bells") as Vector3)
 	var ahead := -centre.basis.z
 	var toward := look - centre.origin
-	check("the play space's centre on the seat, on the floor, facing the harp",
+	check("the play space's centre on the seat, on the floor, facing the bells",
 			Vector2(centre.origin.x - seat.origin.x, centre.origin.z - seat.origin.z).length() < 0.05
 			and absf(centre.origin.y) < 0.001
 			and Vector2(ahead.x, ahead.z).normalized().dot(Vector2(toward.x, toward.z).normalized()) > 0.99)
@@ -30986,9 +30451,9 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 			published.origin.distance_to(wanted.origin) < 0.05)
 	check("at motion 0 it is a cut: no veil, nothing under way", not rig.travelling() and rig.veil() == 0.0
 			and not rig._veil.visible and rig.away)
-	check("and the station is the harp", studio.station == &"harp")
-	var back := studio.harp.get_node_or_null("Plaque/Back") as ControlAffordance
-	check("the harp's plaque has BACK and INSTRUMENTS", back != null and studio.harp.get_node_or_null("Plaque/Instruments") != null)
+	check("and the station is the bells", studio.station == &"bells")
+	var back := studio._bell_stand.get_node_or_null("Plaque/Back") as ControlAffordance
+	check("the bells' plaque has BACK and INSTRUMENTS", back != null and studio._bell_stand.get_node_or_null("Plaque/Instruments") != null)
 	if back != null:
 		_press(back)
 	check("BACK comes home to the mix position (%.3f m)" % rig.head.global_position.distance_to(at_home.origin),
@@ -31087,11 +30552,11 @@ func _test_a_co_located_headset_stays_where_it_is_seen() -> void:
 	var rig := studio.rig
 	var before := rig.global_transform
 	check("marked on a real floor with another headset in the session, the room is co-located", studio.co_located())
-	var went := studio.go_to_station(&"harp")
+	var went := studio.go_to_station(&"bells")
 	var board := studio.station_board
 	var why := board.get_node("Face/Why") as Label3D
 	check("a co-located headset is refused travel, and stays where it is", not went and not rig.away
-			and rig.global_transform.is_equal_approx(before) and studio.station != &"harp")
+			and rig.global_transform.is_equal_approx(before) and studio.station != &"bells")
 	check("the board says why on its face, in words: CAN'T GO and the reason (%s)" % why.text,
 			why.visible and why.text.begins_with(StationBoard.REFUSED) and why.text.contains("share this floor")
 			and board.refusal == studio.travel_refusal())
@@ -31099,7 +30564,7 @@ func _test_a_co_located_headset_stays_where_it_is_seen() -> void:
 	board.clear_refusal()
 	# Pressed on the rows beside a plaque, the refusal is read there, not only metres away on the
 	# desk's board: they stay up and say it.
-	var plaque := studio.harp.get_node("Plaque") as Node3D
+	var plaque := studio._bell_stand.get_node("Plaque") as Node3D
 	_press(plaque.get_node("Instruments") as ControlAffordance)
 	var beside := plaque.get_node_or_null("Beside") as StationBoard
 	if beside != null:
@@ -31118,8 +30583,8 @@ func _test_a_co_located_headset_stays_where_it_is_seen() -> void:
 	Session.apply_roster([[1, "Ada", Presentation.Medium.AR, 0], [5, "Grace", Presentation.Medium.VR, 1]])
 	studio.room_anchor.adopt_virtual_frame(1.2)
 	check("a frame handed over whole is a room of its own: it goes", not studio.co_located()
-			and studio.go_to_station(&"harp") and rig.away and not why.visible)
-	_press(studio.harp.get_node("Plaque/Back") as ControlAffordance)
+			and studio.go_to_station(&"bells") and rig.away and not why.visible)
+	_press(studio._bell_stand.get_node("Plaque/Back") as ControlAffordance)
 	check("and BACK comes home", not rig.away)
 	Session.notice.disconnect(listen)
 	_as_session(Session.Role.SOLO, 1)
@@ -31183,10 +30648,10 @@ func _test_the_station_board_is_the_play_pages_and_its_rows_go() -> void:
 	var says := board.get_node("Face/Says") as Label3D
 	check("its face says how it works (%s)" % says.text, says.text == StationBoard.FACE_LINE)
 	var walker := studio.walker
-	_press(board.row(&"harp"))
-	var harp: Transform3D = Stations.seat(studio.venue, &"harp", walker.fits)
-	check("on a desktop a row walks there", studio.station == &"harp" and Vector2(walker.global_position.x, walker.global_position.z)
-			.distance_to(Vector2(harp.origin.x, harp.origin.z)) < 0.01)
+	_press(board.row(&"bells"))
+	var bell_seat: Transform3D = Stations.seat(studio.venue, &"bells", walker.fits)
+	check("on a desktop a row walks there", studio.station == &"bells" and Vector2(walker.global_position.x, walker.global_position.z)
+			.distance_to(Vector2(bell_seat.origin.x, bell_seat.origin.z)) < 0.01)
 	var keys: Array = []
 	for station: StringName in studio.station_ids():
 		# The venue's stations and the studio's own (the stage table's trolley).
@@ -31196,7 +30661,7 @@ func _test_the_station_board_is_the_play_pages_and_its_rows_go() -> void:
 	check("every station's plaque has INSTRUMENTS and BACK, named for its station (%s)" % [keys],
 			keys.size() == studio.station_ids().size() * 2
 			and keys.all(func(k: Array) -> bool: return String(k[2]).begins_with(Stations.row(k[0])["title"])))
-	var plaque := studio.harp.get_node("Plaque") as Node3D
+	var plaque := studio._bell_stand.get_node("Plaque") as Node3D
 	var instruments := plaque.get_node("Instruments") as ControlAffordance
 	_press(instruments)
 	var beside := plaque.get_node_or_null("Beside") as StationBoard
@@ -31220,7 +30685,7 @@ func _test_the_station_board_is_the_play_pages_and_its_rows_go() -> void:
 	_press(back)
 	check("BACK walks home to the desk (%s)" % walker.global_position,
 			Vector2(walker.global_position.x, walker.global_position.z).distance_to(Vector2(0, Studio.MIX_POSITION_Z)) < 0.05)
-	check("its keys and rows say what they do when hovered", board.row(&"harp").hint() != "" and back.hint() != ""
+	check("its keys and rows say what they do when hovered", board.row(&"bells").hint() != "" and back.hint() != ""
 			and instruments.hint().contains("again"))
 	studio.ergonomics.motion_scale = saved_motion
 	studio.queue_free()
@@ -31729,26 +31194,26 @@ func _test_a_player_has_one_wheel() -> void:
 	_as_session(Session.Role.SOLO, 1)
 	var gm := Session.guest_midi
 	var spy := _spy_on_keys()
-	gm.reach(&"harp", true)
+	gm.reach(&"string", true)
 	gm.reach(&"fingertips", true)
 	var bend := DawKitClip.PITCH_BEND
 	check("with nothing down the wheel is anyone's", gm.wheel_source() == null)
-	gm.note_on(60, 90, 0, 0.0, false, &"harp")
-	check("a harp note down owns it", gm.wheel_source() == &"harp")
-	check("the fingertips' bend while the harp owns the wheel is ignored",
+	gm.note_on(60, 90, 0, 0.0, false, &"string")
+	check("a string note down owns it", gm.wheel_source() == &"string")
+	check("the fingertips' bend while the string owns the wheel is ignored",
 			not gm.control(bend, 2000, &"fingertips") and not spy.controls.has(bend))
-	check("the harp's own is played", gm.control(bend, 1000, &"harp") and spy.controls[bend] == 1000)
-	gm.note_off(60, 0, 0.0, false, &"harp")
-	check("the harp letting go rests it, and frees it", spy.controls[bend] == 0 and gm.wheel_source() == null)
+	check("the string's own is played", gm.control(bend, 1000, &"string") and spy.controls[bend] == 1000)
+	gm.note_off(60, 0, 0.0, false, &"string")
+	check("the string letting go rests it, and frees it", spy.controls[bend] == 0 and gm.wheel_source() == null)
 	check("so the fingertips' bend is played after", gm.control(bend, 2000, &"fingertips") and spy.controls[bend] == 2000)
 	gm.note_on(64, 90, 0, 0.0, false, &"fingertips")
 	gm.control(bend, 3000, &"fingertips")
-	gm.note_on(67, 90, 0, 0.0, false, &"harp")
-	check("a newer harp note takes the wheel (%s)" % [gm.wheel_source()], gm.wheel_source() == &"harp"
+	gm.note_on(67, 90, 0, 0.0, false, &"string")
+	check("a newer string note takes the wheel (%s)" % [gm.wheel_source()], gm.wheel_source() == &"string"
 			and not gm.control(bend, 500, &"fingertips") and spy.controls[bend] == 3000)
-	check("and moves it", gm.control(bend, -2000, &"harp") and spy.controls[bend] == -2000)
-	gm.note_off(67, 0, 0.0, false, &"harp")
-	check("the harp's last note going leaves the wheel where it is: the fingertips still hold one (%s)"
+	check("and moves it", gm.control(bend, -2000, &"string") and spy.controls[bend] == -2000)
+	gm.note_off(67, 0, 0.0, false, &"string")
+	check("the string's last note going leaves the wheel where it is: the fingertips still hold one (%s)"
 			% [spy.controls[bend]], spy.controls[bend] == -2000 and gm.wheel_source() == &"fingertips")
 	check("and the wheel is theirs again", gm.control(bend, 1500, &"fingertips") and spy.controls[bend] == 1500)
 	gm.note_off(64, 0, 0.0, false, &"fingertips")
@@ -31758,7 +31223,7 @@ func _test_a_player_has_one_wheel() -> void:
 	_offline()
 
 
-## On the other end: TheirKeys, TheirMonitor and the harp each put a player's controls on the one
+## On the other end: TheirKeys, TheirMonitor and a string each put a player's controls on the one
 ## voice they have for that player, only while that player has a note down, and rest it at that
 ## player's last note-off.
 func _test_their_wheel_rests_at_their_last_note_off() -> void:
@@ -31772,7 +31237,7 @@ func _test_their_wheel_rests_at_their_last_note_off() -> void:
 	var nine: MonitorSynth = theirs.synths[9]
 	theirs.control(bend, 3000, 5)
 	check("a control with nothing of theirs down is not played (it may be a late one)", not five.controls.has(bend))
-	theirs.play(Session.Note.ON, 60, 100, 5, -1.0, &"harp")
+	theirs.play(Session.Note.ON, 60, 100, 5, -1.0, &"string")
 	theirs.play(Session.Note.ON, 64, 100, 5, -1.0, &"fingertips")
 	theirs.play(Session.Note.ON, 62, 100, 9)
 	theirs.control(bend, 3000, 5, -1.0, &"fingertips")
@@ -31782,7 +31247,7 @@ func _test_their_wheel_rests_at_their_last_note_off() -> void:
 	check("another player's last note-off rests theirs alone", nine.controls[bend] == 0 and five.controls[bend] == 3000)
 	theirs.play(Session.Note.OFF, 64, 0, 5, -1.0, &"fingertips")
 	check("one of their sources letting go leaves it", five.controls[bend] == 3000)
-	theirs.play(Session.Note.OFF, 60, 0, 5, -1.0, &"harp")
+	theirs.play(Session.Note.OFF, 60, 0, 5, -1.0, &"string")
 	check("their last note-off rests it", five.controls[bend] == 0)
 	theirs.control(bend, 3000, 5)
 	check("and a resend that comes after it is not played", five.controls[bend] == 0)
@@ -31815,26 +31280,6 @@ func _test_their_wheel_rests_at_their_last_note_off() -> void:
 	check("with nothing of theirs down, a control is not kept", line.waiting.is_empty() and line.synth.controls[bend] == 0)
 	monitor.queue_free()
 
-	var harp := _harp_for_test()
-	var spy := _SpySynth.new()
-	harp.room = spy
-	var presence := Presence.new()
-	presence.harp = harp
-	add_child(presence)
-	Session.note_played.emit(Session.Note.ON, 69, 90, 5, -1.0, ChordHarp.SOURCE)
-	Session.control_played.emit(bend, 4096, 5, -1.0, ChordHarp.SOURCE)
-	check("a bandmate's harp bend bends the harp's voice (%s)" % [spy.controls], spy.controls.get(bend) == 4096)
-	Session.control_played.emit(bend, 100, 7, -1.0, ChordHarp.SOURCE)
-	Session.control_played.emit(bend, 100, 5, -1.0, &"")
-	check("not one from a bandmate with no harp note sounding, nor one of their plain keys'", spy.controls[bend] == 4096)
-	Session.note_played.emit(Session.Note.ON, 72, 90, 7, -1.0, ChordHarp.SOURCE)
-	Session.note_played.emit(Session.Note.OFF, 72, 0, 7, -1.0, ChordHarp.SOURCE)
-	check("another bandmate's last note-off does not rest the bend under them", spy.controls[bend] == 4096)
-	Session.note_played.emit(Session.Note.OFF, 69, 0, 5, -1.0, ChordHarp.SOURCE)
-	check("theirs does", spy.controls[bend] == 0)
-	remove_child(presence)
-	presence.free()
-	harp.queue_free()
 	Session.start_solo()
 	_offline()
 
@@ -31940,7 +31385,7 @@ func _test_the_host_clamps_controls_and_refuses_others() -> void:
 	var bend := DawKitClip.PITCH_BEND
 	var refused := Session.controls_refused
 	check("a bend past the top is the top (%s)" % [heard.back() if not heard.is_empty() else null],
-			Session._pass_control(bend, 20000, 5.0, &"harp", 7) and heard.back() == [bend, 8191, 7, 5.0, &"harp"])
+			Session._pass_control(bend, 20000, 5.0, &"string", 7) and heard.back() == [bend, 8191, 7, 5.0, &"string"])
 	check("past the bottom the bottom, and an unknown song is -1",
 			Session._pass_control(bend, -20000, NAN, &"", 7) and heard.back() == [bend, -8192, 7, -1.0, &""])
 	check("the mod wheel and expression clamp to 0-127", Session._pass_control(1, 300, 1.0, &"", 7)
@@ -32403,11 +31848,11 @@ func _test_a_tilt_bends_from_where_its_note_began() -> void:
 	_roll_hand(hand, 0.0)
 	gm.note_on(69, 100, 0, 0.0, false, &"keytar")
 	_wobble_for(w, 0.1)
-	gm.note_on(72, 100, 0, 0.0, false, &"harp")
+	gm.note_on(72, 100, 0, 0.0, false, &"string")
 	before = w.sends
 	_wobble_for(w, 1.0, ramp.call(0.0, 20.0))
 	check("while another source's newer note has the wheel it sends nothing", w.sends == before)
-	gm.note_off(72, 0, 0.0, false, &"harp")
+	gm.note_off(72, 0, 0.0, false, &"string")
 	gm.note_off(69, 0, 0.0, false, &"keytar")
 	_wobble_for(w, 0.1)
 
@@ -32577,80 +32022,6 @@ func _test_alt_and_the_mouse_bend_and_spring_back() -> void:
 	check("and Ctrl's own keys are still the studio's", heard.is_empty())
 	piano.free()
 	mouse.free()
-	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-
-
-## A wiggle of the mouse over the harp's strings, with nothing carried and no grab, wobbles a
-## string it plucked while it rings; its ringing string bows across by its bend; a posed hand that
-## plucked bends it, and the curve follows.
-func _test_a_wiggle_over_the_harp_wobbles_it() -> void:
-	_offline()
-	_as_session(Session.Role.SOLO, 1)
-	var gm := Session.guest_midi
-	var spy := _spy_on_keys()
-	DAW.state.markers.clear()
-	DAW.state.markers[0.0] = "[A minor]"
-	var harp := _harp_for_test()
-	harp.keys = gm
-	var sent: Array = []
-	var on_sent := func(kind: int, value: int, _song: float, source: StringName) -> void:
-		sent.append([kind, value, source])
-	gm.control_sent.connect(on_sent)
-	var mouse := MouseInteractor.new()
-	add_child(mouse)
-	mouse.pointer_override = Vector2(400, 300)
-	check("a mouse over nothing does not wiggle", not mouse.wiggles())
-	harp.grab_begin(mouse, _harp_at(harp, 3))
-	harp.grab_end(mouse)
-	check("a click plucks a string", harp.ringing())
-	mouse._set_hovered(harp)
-	check("over the harp's strings, with nothing carried and no grab, the mouse wiggles",
-			mouse.wiggles() and mouse.carrying == null and mouse.held == null)
-	var bowed := [0.0]
-	var signs_agree := [true]
-	for i in 60:
-		var x := 400.0 + 40.0 * sin(TAU * 5.0 * i / 60.0)
-		mouse.wiggle(Vector2(x, 300), 1.0 / 60.0)
-		harp._physics_process(1.0 / 60.0)
-		harp._process(1.0 / 60.0)
-		var b := harp.bow(ChordHarp.nearest(ChordHarp.string_x(3)))
-		bowed[0] = maxf(bowed[0], absf(b))
-		if absf(harp.wobble.semitones) > 0.05 and signf(b) != signf(harp.wobble.semitones):
-			signs_agree[0] = false
-	var harp_bends := sent.filter(func(s: Array) -> bool: return s[0] == DawKitClip.PITCH_BEND and s[2] == ChordHarp.SOURCE)
-	check("a wiggle over a ringing string wobbles it: bends sent as the harp's (%d)" % harp_bends.size(),
-			harp_bends.size() > 5 and spy.played.size() > 5)
-	check("and its string bows across with it, the way it bends (%.4f m)" % bowed[0], bowed[0] > 0.001 and signs_agree[0])
-	check("a string not ringing does not bow", harp.bow(0) == 0.0 and not harp._ringing.has(0))
-	harp._physics_process(ChordHarp.RING)
-	harp._process(1.0 / 60.0)
-	check("rung out, it is straight again and the wheel at rest", harp.bow(3) == 0.0
-			and int(gm.controls.get(DawKitClip.PITCH_BEND, 0)) == 0)
-	mouse._set_hovered(null)
-
-	# A posed bare hand that plucked: tipped 20 degrees, the string it plucked bows by 0.79's share.
-	var hand := HandGestures.new()
-	_roll_hand(hand, 0.0)
-	harp.pluck([5], 90, hand)
-	for i in 6:
-		harp._physics_process(1.0 / 60.0)
-	for i in 60:
-		_roll_hand(hand, 20.0 * clampf(i / 12.0, 0.0, 1.0))
-		harp._physics_process(1.0 / 60.0)
-	harp._process(1.0 / 60.0)
-	var want := Wobble.bend_for(20.0) / Wobble.BEND_MOST * ChordHarp.BOW_MOST
-	check("a plucking hand tipped 20 degrees bends the harp %.2f semitones (%s)" % [harp.wobble.semitones, spy.controls],
-			absf(harp.wobble.semitones - Wobble.bend_for(20.0)) < 0.01
-			and absi(int(spy.controls.get(DawKitClip.PITCH_BEND, 0)) - Wobble.value_of(Wobble.bend_for(20.0))) <= 8)
-	check("and its ringing string's curve follows (%.4f m, wanted %.4f)" % [harp.bow(5), want],
-			absf(harp.bow(5) - want) < 0.0005 and harp.bow(4) == 0.0)
-	harp.silence()
-	gm.control_sent.disconnect(on_sent)
-	hand.free()
-	mouse.free()
-	harp.queue_free()
 	_put_back_synth(spy)
 	Session.start_solo()
 	_offline()
@@ -35140,7 +34511,7 @@ func _test_beads_go_with_the_level() -> void:
 			jacks.level_of(&"shaker_1", 1300) < Jacks.HEARD_LOUD and jacks.level_of(&"shaker_1", 1300) > 0.0)
 	check("to stillness", jacks.level_of(&"shaker_1", 1000 + int(Jacks.HEARD_FADE * 1000.0)) == 0.0)
 	jacks.free()
-	var socket := JackSocket.new(null, Jack.HARP)
+	var socket := JackSocket.new(null, Jack.keys_source(1))
 	check("an unplugged socket carries nothing", socket.signal_level() == 0.0 and socket.signal_spine().is_empty())
 	socket.free()
 	for run in [quiet, loud, silent]:
@@ -39353,7 +38724,7 @@ func _test_the_wheels_strip_is_bricks_on_the_ledge() -> void:
 ## playhead's bar on a strip, as one take named `chords`, one undo step. A brick from anywhere else
 ## writes itself alone. A frozen track and a microphone's refuse it and say why. Pressed into a
 ## section block, the row's harmony is written into that section's marker, one undo step, and the
-## harp follows it there and nowhere before; undo puts it back.
+## harmony follows it there and nowhere before; undo puts it back.
 func _test_a_pressed_brick_writes_its_rows_chords() -> void:
 	var saved_layout := Session.layout
 	_as_session(Session.Role.SOLO, 1)
@@ -39449,8 +38820,8 @@ func _test_a_pressed_brick_writes_its_rows_chords() -> void:
 	said = block.card_hint()
 	check("its card says what a click sets (%s)" % said, said == "click sets Verse 2's harmony to [A minor: Am F - C G]; Q puts it down")
 	var third := s.bar_to_seconds(43.0) + 0.05
-	var before := studio.harp.tuning_at(third)
-	var ahead := studio.harp.tuning_at(start - 0.05)
+	var before := Harmony.at(s, third).chord_name
+	var ahead := Harmony.at(s, start - 0.05).chord_name
 	depth = undo.size()
 	check("the hand's press on it writes", hand._paste_press(block.global_position))
 	block.hover_exit(hand)
@@ -39458,13 +38829,12 @@ func _test_a_pressed_brick_writes_its_rows_chords() -> void:
 	check("the section's marker has the row's brackets (%s)" % s.markers.get(start, ""), s.markers.get(start, "") == "Verse 2 [A minor: Am F - C G]")
 	check("as one undo step", undo.size() == depth + 1)
 	check("its third bar holds F now, where the Intro's bracket had C (%s, %s)" % [Harmony.at(s, third).chord_name, before],
-			Harmony.at(s, third).chord_name == "F" and before == PackedInt32Array([55, 60, 64, 67, 72, 76, 79, 84]))
-	check("and the harp follows it there, and not before it (%s)" % [studio.harp.tuning_at(third)],
-			studio.harp.tuning_at(third) == PackedInt32Array([57, 60, 65, 69, 72, 77, 81, 84])
-			and studio.harp.tuning_at(start - 0.05) == ahead)
+			Harmony.at(s, third).chord_name == "F" and before == "C")
+	check("and the harmony follows it there, and not before it (%s)" % [Harmony.at(s, third).chord_name],
+			Harmony.at(s, third).chord_name == "F" and Harmony.at(s, start - 0.05).chord_name == ahead)
 	DAW.undo()
 	check("undo gives the section its name back (%s)" % s.markers.get(start, ""), s.markers.get(start, "") == "Verse 2"
-			and studio.harp.tuning_at(third) == before)
+			and Harmony.at(s, third).chord_name == before)
 	studio.queue_free()
 	await get_tree().process_frame
 	_as_session(Session.Role.SOLO, 1)
@@ -39797,8 +39167,7 @@ func _test_chord_shapes_read_their_degrees_on_one_hand() -> void:
 
 
 ## A shape counts once it has held 0.12 s, so one passed through on the way to another never
-## sounds. Held, the harp's strings, letters and crown are its chord for this player and back on
-## an open hand, a string ringing through the change keeping its pitch; the fingertips play its
+## sounds. Held, it is the chord for this player and back on an open hand; the fingertips play its
 ## tones; a bell carried here rings its tone, a bell nobody here carries the song's.
 func _test_a_chord_shape_retunes_what_you_play() -> void:
 	_offline()
@@ -39836,20 +39205,13 @@ func _test_a_chord_shape_retunes_what_you_play() -> void:
 			gestures.take(HandPose.posed(curls, 0, palm, 1.0, -1))
 			chords.step(0.05)
 			t += 0.05
-	var harp := _harp_for_test()
-	harp._process(0.016)
-	var song_c := PackedInt32Array([55, 60, 64, 67, 72, 76, 79, 84])
-	check("with no shape the harp is the song's C (%s)" % [harp.tuning()], harp.tuning() == song_c
-			and harp._chord_label.text == "C")
+	check("with no shape the chord is the song's C", ChordHand.at(s.position_seconds).chord_name == "C")
 	frames.call([1, 0, 0, 0, 0], up, 0.1)
-	check("four fingers up for 0.1 s is not a shape yet", chords.degree == -1 and harp.tuning() == song_c)
+	check("four fingers up for 0.1 s is not a shape yet", chords.degree == -1
+			and ChordHand.at(s.position_seconds).chord_name == "C")
 	frames.call([1, 0, 0, 0, 0], up, 0.05)
-	harp._process(0.016)
-	var f_tones := PackedInt32Array([57, 60, 65, 69, 72, 77, 81, 84])
-	check("held 0.15 s it is IV: the strings are F's for this player, lettered so, F on the crown (%s, %s)"
-			% [harp.tuning(), harp._chord_label.text], chords.degree == 3 and harp.tuning() == f_tones
-			and harp._notes[2].text == "F4" and harp._chord_label.text == "F" and chords.words() == "IV · F")
-	check("its hover card says it is yours (%s)" % harp.readout(), harp.readout() == "F, your IV (C major)")
+	check("held 0.15 s it is IV: the chord is F for this player (%s)" % chords.words(),
+			chords.degree == 3 and ChordHand.at(s.position_seconds).chord_name == "F" and chords.words() == "IV · F")
 	seen.clear()
 	frames.call([1, 0, 0, 1, 1], up, 0.05)
 	frames.call([1, 0, 1, 1, 1], up, 0.15)
@@ -39857,26 +39219,10 @@ func _test_a_chord_shape_retunes_what_you_play() -> void:
 			seen == [0] and chords.degree == 0)
 	frames.call([1, 0, 0, 0, 0], up, 0.15)
 	check("and back to IV", chords.degree == 3)
-	var downs: Array = []
-	var shown := func(pitch: int, down: bool) -> void:
-		if down:
-			downs.append(pitch)
-	gm.key.connect(shown)
 	var plucker := Node.new()
-	harp.grab_begin(plucker, _harp_at(harp, 0, -1))
-	harp.grab_move(plucker, _harp_at(harp, 7))
-	harp.grab_end(plucker)
-	check("a strum plays F's tones from G3 up (%s)" % [downs], downs == Array(f_tones))
-	harp._physics_process(ChordHarp.RING + 0.01)
-	harp.grab_begin(plucker, _harp_at(harp, 2))
-	harp.grab_end(plucker)
 	frames.call([0, 0, 0, 0, 0], flat, 0.15)
-	harp._process(0.016)
-	check("an open flat hand lets the shape go: the strings are C's again, and the one ringing keeps F4 (%s)" % [harp.tuning()],
-			chords.degree == -1 and harp.tuning() == song_c and harp._chord_label.text == "C"
-			and harp._ringing.has(2) and int(harp._ringing[2][0]) == 65 and gm.held.has(65))
-	harp._physics_process(ChordHarp.RING + 0.01)
-	gm.key.disconnect(shown)
+	check("an open flat hand lets the shape go: the chord is C again", chords.degree == -1
+			and ChordHand.at(s.position_seconds).chord_name == "C")
 
 	# The fingertips, on the other hand, play the shape's chord.
 	frames.call([1, 0, 0, 0, 0], up, 0.15)
@@ -39944,7 +39290,6 @@ func _test_a_chord_shape_retunes_what_you_play() -> void:
 	wheel.free()
 	gm.heard_source = saved_heard
 	plucker.free()
-	harp.queue_free()
 	chords.free()
 	check("gone, ChordHand.at is the song's again", ChordHand.mine == null
 			and ChordHand.at(s.position_seconds).chord_name == "C")
@@ -40020,8 +39365,8 @@ func _test_the_chord_stick_latches_and_nudges_nothing() -> void:
 ## On a desktop, C is the chord layer: with no keys focused it gives the fingertips' catcher the
 ## keyboard, 1 to 7 in it pick the key's chords (4 is iv in A minor, Dm; Shift adds the seventh; 0
 ## is the song's), the studio sees none of them, and J still plays, the shape's root. A left glove
-## holds up the fingers with `iv · Dm` over it, and the HUD says CHORDS. A click on the harp strums
-## the chord and keeps the layer and the keys; C turns it off and gives them back, and Esc does too.
+## holds up the fingers with `iv · Dm` over it, and the HUD says CHORDS. A click on the room keeps
+## the layer and the keys; C turns it off and gives them back, and Esc does too.
 func _test_the_desktops_chord_layer_is_c_and_the_number_row() -> void:
 	_offline()
 	var saved_layout := Session.layout
@@ -40108,21 +39453,8 @@ func _test_the_desktops_chord_layer_is_c_and_the_number_row() -> void:
 			where.all(func(p: Vector2) -> bool: return p.x > 0.0 and p.y > 0.0 and p.x < screen.x * 0.5 and p.y < screen.y)
 			and not cam.is_position_behind(glove.global_position))
 
-	# A click on a harp: a strum in Dm, and the keys and the layer kept.
-	var view := cam.global_transform
-	var flat_forward := Vector3(-view.basis.z.x, 0.0, -view.basis.z.z).normalized()
-	var harp := ChordHarp.new()
-	add_child(harp)
-	harp.global_transform = Transform3D(Basis.looking_at(-flat_forward), view.origin + flat_forward * 0.9 - Vector3(0, 1.0, 0))
-	harp.global_position.y = view.origin.y - 1.0
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	var downs: Array = []
-	var shown := func(pitch: int, down: bool) -> void:
-		if down:
-			downs.append(pitch)
-	gm.key.connect(shown)
-	hand.pointer_override = cam.unproject_position(_harp_at(harp, 3))
+	# A click on the room: the keys and the layer kept.
+	hand.pointer_override = Vector2(2, 2)
 	hand.press_override = 0
 	hand._physics_process(1.0 / 60.0)
 	hand.press_override = 1
@@ -40132,15 +39464,11 @@ func _test_the_desktops_chord_layer_is_c_and_the_number_row() -> void:
 	click.position = hand.pointer_override
 	get_viewport().push_input(click)
 	hand._physics_process(1.0 / 60.0)
-	var dm := harp.tuning()
-	check("a click on the harp plucks it in Dm (%s, %s)" % [downs, dm], downs.size() == 1 and dm.has(downs[0] if downs.size() == 1 else -1)
-			and dm == PackedInt32Array([57, 62, 65, 69, 74, 77, 81, 86]) and hand.held == harp)
-	check("and the layer and the keys stay", chords.layer and keys.is_active() and hand.fingers_play)
+	check("a click does not take the keys or the layer away", chords.layer and keys.is_active() and hand.fingers_play)
 	hand.press_override = 0
 	hand._physics_process(1.0 / 60.0)
 	click.pressed = false
 	get_viewport().push_input(click)
-	gm.key.disconnect(shown)
 
 	tap.call(KEY_C)
 	chords.step(1.0 / 60.0)
@@ -40161,7 +39489,6 @@ func _test_the_desktops_chord_layer_is_c_and_the_number_row() -> void:
 
 	hand.pointer_override = Vector2(-1, -1)
 	hand.press_override = -1
-	harp.queue_free()
 	Session.notice.disconnect(listen)
 	studio.queue_free()
 	await get_tree().process_frame
@@ -40179,7 +39506,7 @@ func _test_the_desktops_chord_layer_is_c_and_the_number_row() -> void:
 func _test_a_chord_jack_says_its_chord_in_two_numbers() -> void:
 	check("chord:P is player P's chord hand, theirs alone, and no item (%s)" % Jack.chord_source(7),
 			Jack.chord_source(7) == &"chord:7" and Jack.chord_player(&"chord:7") == 7 and Jack.own_player(&"chord:7") == 7
-			and Jack.own_player(&"keys:5") == 5 and Jack.own_player(Jack.HARP) == 0 and not Jack.is_item(&"chord:7")
+			and Jack.own_player(&"keys:5") == 5 and not Jack.is_item(&"chord:7")
 			and Jack.chord_player(&"chord:") == 0 and Jack.keys_player(&"chord:7") == 0)
 	check("F is root 5, the first quality; Dm 2, the second; G7 its own (%d %d, %d %d, %d)" % [Jack.chord_root("F"),
 			Jack.chord_quality("F"), Jack.chord_root("Dm"), Jack.chord_quality("Dm"), Jack.chord_quality("G7")],
@@ -40205,10 +39532,10 @@ func _test_a_chord_jack_says_its_chord_in_two_numbers() -> void:
 	socket.free()
 
 
-## Grace's chord hand plugged into Ada: what it holds is Ada's chord, on her harp (its crown naming
-## Grace), her fingertips and the bells she holds, until Ada holds a shape of her own, which wins.
+## Grace's chord hand plugged into Ada: what it holds is Ada's chord, on her fingertips (its HUD naming
+## Grace), and the bells she holds, until Ada holds a shape of her own, which wins.
 ## It lets go when Grace opens her hand, when it is unplugged and when Grace leaves.
-func _test_a_chord_into_a_player_retunes_their_harp() -> void:
+func _test_a_chord_into_a_player_is_their_chord() -> void:
 	_offline()
 	var saved_layout := Session.layout
 	Session.layout = LayoutProfile.new()
@@ -40230,7 +39557,7 @@ func _test_a_chord_into_a_player_retunes_their_harp() -> void:
 	s.position_seconds = s.bar_to_seconds(1.25)
 	var jacks := studio.jacks
 	var chords := studio.chord_hand
-	var harp := studio.harp
+	var chord_now := func() -> String: return ChordHand.at(s.position_seconds).chord_name
 	var grace := Jack.chord_source(7)
 	var notices: Array[String] = []
 	var listen := func(t: String) -> void: notices.append(t)
@@ -40239,16 +39566,12 @@ func _test_a_chord_into_a_player_retunes_their_harp() -> void:
 	check("Grace plugs her chord hand into me, and I am told what it does (%s)" % [notices],
 			jacks.sink_of(grace) == &"player_1" and notices.size() == 1
 			and notices[0].begins_with("Grace plugged their chord hand into you: the chord they hold is yours"))
-	harp._process(0.016)
-	var song_c := PackedInt32Array([55, 60, 64, 67, 72, 76, 79, 84])
-	check("plugged, nothing held: the song's C", harp.tuning() == song_c and harp._chord_label.text == "C")
+	check("plugged, nothing held: the song's C", chord_now.call() == "C" and not chords.plays_theirs())
 	jacks.received(grace, Jack.Kind.CHORD, 5, Jack.chord_quality("F"), 7, s.position_seconds)
-	harp._process(0.016)
-	var f_tones := PackedInt32Array([57, 60, 65, 69, 72, 77, 81, 84])
-	check("Grace holds F: my harp's strings are F's and its crown says `IV from GRACE` (%s, %s)"
-			% [harp.tuning(), harp._chord_label.text], harp.tuning() == f_tones and harp._chord_label.text == "IV from GRACE")
-	check("its hover card and the HUD say whose (%s; %s)" % [harp.readout(), chords.hud_text()],
-			harp.readout() == "F, Grace's IV (C major)" and chords.hud_text() == "CHORDS · IV F FROM GRACE")
+	check("Grace holds F: the chord is F, and the crown text says `IV from GRACE` (%s, %s)"
+			% [chord_now.call(), chords.crown_text(Harmony.at(s, s.position_seconds))], chord_now.call() == "F"
+			and chords.crown_text(Harmony.at(s, s.position_seconds)) == "IV from GRACE")
+	check("and the HUD says whose (%s)" % chords.hud_text(), chords.hud_text() == "CHORDS · IV F FROM GRACE")
 	var tips := FingertipNotes.tones_at(s.position_seconds)
 	var f_voiced := Harmony.voiced(ChordHand.with_chord(Harmony.at(s, s.position_seconds), "F"), FingertipNotes.CENTRE, 4)
 	check("my fingertips play F too (%s)" % [tips], ChordHand.at(s.position_seconds).chord_name == "F"
@@ -40259,48 +39582,27 @@ func _test_a_chord_into_a_player_retunes_their_harp() -> void:
 	bell.carried_by = null
 	check("and a bell in my hand rings F's tone (%d, %s)" % [rung, Harmony.chord_tones("F")],
 			posmod(rung, 12) == 5 and posmod(bell.note_at(s.position_seconds), 12) == 0)
-	var downs: Array = []
-	var shown := func(pitch: int, down: bool) -> void:
-		if down:
-			downs.append(pitch)
-	gm.key.connect(shown)
-	var plucker := Node.new()
-	add_child(plucker)
-	harp.grab_begin(plucker, _harp_at(harp, 0, -1))
-	harp.grab_move(plucker, _harp_at(harp, 7))
-	harp.grab_end(plucker)
-	check("a strum plays F's tones (%s)" % [downs], downs == Array(f_tones))
-	harp._physics_process(ChordHarp.RING + 0.01)
 	chords.pick(4)
-	harp._process(0.016)
-	check("my own shape, V, wins over Grace's: G, as mine (%s, %s)" % [harp._chord_label.text, harp.readout()],
-			harp._chord_label.text == "G" and harp.readout() == "G, your V (C major)" and not chords.plays_theirs())
+	check("my own shape, V, wins over Grace's: G, as mine (%s)" % chord_now.call(),
+			chord_now.call() == "G" and not chords.plays_theirs())
 	chords.pick(-1)
-	harp._process(0.016)
-	check("my hand open, Grace's is mine again", harp._chord_label.text == "IV from GRACE" and harp.tuning() == f_tones)
+	check("my hand open, Grace's is mine again", chords.plays_theirs() and chord_now.call() == "F")
 	jacks.received(grace, Jack.Kind.CHORD, 2, Jack.chord_quality("Dm"), 7, s.position_seconds)
-	harp._process(0.016)
-	check("she moves to Dm, ii (%s)" % harp._chord_label.text, harp._chord_label.text == "ii from GRACE")
+	check("she moves to Dm, ii (%s)" % chord_now.call(), chord_now.call() == "Dm" and chords.plays_theirs())
 	jacks.received(grace, Jack.Kind.CHORD, 0, 0, 7, s.position_seconds)
-	harp._process(0.016)
-	check("her hand opened: the song's C again", harp.tuning() == song_c and harp._chord_label.text == "C"
-			and not chords.plays_theirs())
+	check("her hand opened: the song's C again", chord_now.call() == "C" and not chords.plays_theirs())
 	jacks.received(grace, Jack.Kind.CHORD, 5, Jack.chord_quality("F"), 7, s.position_seconds)
 	studio._on_room_asked(&"plug", [grace, &""], 1)
-	harp._process(0.016)
-	check("unplugged by me, whom it goes into: let go (%s)" % harp._chord_label.text,
-			jacks.sink_of(grace) == &"" and harp._chord_label.text == "C" and not chords.plays_theirs())
+	check("unplugged by me, whom it goes into: let go (%s)" % chord_now.call(),
+			jacks.sink_of(grace) == &"" and chord_now.call() == "C" and not chords.plays_theirs())
 	jacks.received(grace, Jack.Kind.CHORD, 7, Jack.chord_quality("G"), 7, s.position_seconds)
 	check("a late chord from it after the unplug is dropped", not chords.plays_theirs())
 	studio._on_room_asked(&"plug", [grace, &"player_1"], 7)
 	jacks.received(grace, Jack.Kind.CHORD, 5, Jack.chord_quality("F"), 7, s.position_seconds)
 	check("plugged in again, it plays once more", chords.plays_theirs())
 	studio._on_jack_player_left(7)
-	harp._process(0.016)
 	check("Grace leaves: her chord hand's jack comes out and her chord is let go (%s)" % [jacks.patch],
-			jacks.patch.is_empty() and not chords.plays_theirs() and harp._chord_label.text == "C")
-	gm.key.disconnect(shown)
-	plucker.free()
+			jacks.patch.is_empty() and not chords.plays_theirs() and chord_now.call() == "C")
 	Session.notice.disconnect(listen)
 	_put_back_synth(spy)
 	Session.start_solo()
@@ -40348,7 +39650,7 @@ func _test_my_chord_hand_sends_its_chord_down_its_jack() -> void:
 	chords.set_layer(true)
 	check("P in the chord layer is taken", chords._chord_key(KEY_P, false, true) and chords._chord_key(KEY_P, false, false))
 	check("and plugs my chord hand into Grace, and I am told (%s, %s)" % [notices, jacks.patch], jacks.sink_of(mine) == &"player_7"
-			and notices.has("Your chord hand goes into Grace: the chord you hold is theirs, on their harp, fingertips and bells."))
+			and notices.has("Your chord hand goes into Grace: the chord you hold is theirs, on their fingertips and bells."))
 	check("Shift+P is left to unplug what goes into me", not chords._chord_key(KEY_P, true, true))
 	jacks.tick(0.0)
 	check("plugged with no shape held, nothing is sent (%s)" % [sent], sent.is_empty())
@@ -40732,8 +40034,8 @@ func _test_the_miniature_is_the_session_to_hold() -> void:
 	# tray's front lip: the stage table's to the left of the platter's, and further back.
 	check("each on its station's side of the tray: the stage table behind and left of the platter (%s, %s)" % [stage, platter],
 			stage.x < platter.x and platter.z < stage.z)
-	check("and lettered with its station's title", mini.pins[&"harp"].title() == "CHORD HARP"
-			and (mini.pins[&"harp"].find_children("*", "Label3D", false, false)[0] as Label3D).text == "CHORD HARP")
+	check("and lettered with its station's title", mini.pins[&"bells"].title() == "HANDBELLS"
+			and (mini.pins[&"bells"].find_children("*", "Label3D", false, false)[0] as Label3D).text == "HANDBELLS")
 	var saved_motion := Ergonomics.current.motion_scale
 	var beat := s.seconds_at_beat(4.0)
 	DAW.seek(s.seconds_at_beat(4.6))
@@ -40858,13 +40160,13 @@ func _test_a_pin_on_the_miniature_goes_to_its_station() -> void:
 	var studio: Studio = await _miniature_studio(Presentation.Medium.SCREEN)
 	studio.ergonomics.motion_scale = 0.0
 	var mini := studio.items.items.get(MiniatureItem.KIND) as MiniatureItem
-	var pin: ControlAffordance = mini.pins.get(&"harp")
-	check("the harp's pin says where it goes (%s / %s)" % [pin.title(), pin.hint()], pin.title() == "CHORD HARP"
+	var pin: ControlAffordance = mini.pins.get(&"bells")
+	check("the bells' pin says where it goes (%s / %s)" % [pin.title(), pin.hint()], pin.title() == "HANDBELLS"
 			and pin.readout() == "in the live room" and pin.hint().contains("go there"))
 	_press(pin)
-	var seat: Transform3D = Stations.seat(studio.venue, &"harp", studio.walker.fits)
+	var seat: Transform3D = Stations.seat(studio.venue, &"bells", studio.walker.fits)
 	var at := Vector2(studio.walker.global_position.x, studio.walker.global_position.z)
-	check("at a desk a press walks there (%s)" % studio.station, studio.station == &"harp"
+	check("at a desk a press walks there (%s)" % studio.station, studio.station == &"bells"
 			and at.distance_to(Vector2(seat.origin.x, seat.origin.z)) < 0.01)
 	remove_child(studio)
 	studio.free()
@@ -40927,7 +40229,7 @@ func _test_the_miniature_in_a_hand_and_under_a_fingertip() -> void:
 	DAW.transport_stop()
 	DAW.seek(0.0)
 	check("the bed and the pins face up, +Z, as a fingertip presses them",
-			mini.face.global_basis.z.dot(Vector3.UP) > 0.99 and mini.pins[&"harp"].global_basis.z.dot(Vector3.UP) > 0.99)
+			mini.face.global_basis.z.dot(Vector3.UP) > 0.99 and mini.pins[&"bells"].global_basis.z.dot(Vector3.UP) > 0.99)
 	var tracker_name := &"/user/hand_tracker/test_mini_poke"
 	var poke := PokeInteractor.new()
 	poke.tracker_name = tracker_name
@@ -40952,11 +40254,11 @@ func _test_the_miniature_in_a_hand_and_under_a_fingertip() -> void:
 	down.call(bed + Vector3.UP * (face_top + 0.03))
 	poke._physics_process(1.0 / 60.0)
 	check("lifting it straight up lets go", poke.held == null and mini.face.held_by == null)
-	var pin: ControlAffordance = mini.pins[&"harp"]
+	var pin: ControlAffordance = mini.pins[&"bells"]
 	var head := pin.global_position + Vector3.UP * (MiniatureItem.PIN_TALL + 0.006)
 	down.call(head + Vector3.UP * 0.002)
 	poke._physics_process(1.0 / 60.0)
-	check("a fingertip on a pin presses it, and goes there (%s)" % studio.station, poke.held == pin and studio.station == &"harp")
+	check("a fingertip on a pin presses it, and goes there (%s)" % studio.station, poke.held == pin and studio.station == &"bells")
 	down.call(head + Vector3.UP * 0.03)
 	poke._physics_process(1.0 / 60.0)
 	check("and lifting it straight up lets go of the pin", poke.held == null and pin.held_by == null)
@@ -46132,7 +45434,7 @@ func _test_a_guests_music_box_keys_and_pegs_ask_the_host() -> void:
 	var rig: Array = await _looper_studio(Session.Role.SOLO, 1)
 	var studio: Studio = rig[0]
 	var box := studio.music_box
-	check("the studio stands the music box beside the harp, on its trolley", box != null and box.get_parent() == studio.venue
+	check("the studio stands the music box in the harmony row, on its trolley", box != null and box.get_parent() == studio.venue
 			and studio.live_pieces.has(MusicBox.STATION) and (studio.live_pieces[MusicBox.STATION] as Trolley).visible)
 	check("its row is a room verb", Session.room_ask_is_valid(MusicBox.VERB, [0, 2, 0, false])
 			and not Session.room_ask_is_valid(MusicBox.VERB, [0, 2.0, 0, false]))
@@ -46302,7 +45604,7 @@ func _test_a_plucked_string_plays_on_the_keys_with_its_source() -> void:
 	add_child(string)
 	check("a string plays the player's keys", string.keys == gm)
 	gm.reach(RoomString.SOURCE, true)
-	gm._process(0.016)
+	gm._process(0.02)
 	var downs: Array = []
 	var shown := func(pitch: int, down: bool) -> void:
 		if down:
@@ -46337,7 +45639,7 @@ func _test_a_plucked_string_plays_on_the_keys_with_its_source() -> void:
 	Ergonomics.current.motion_scale = 1.0
 	heard["seconds"] = s.bar_to_seconds(1.5)
 	string._physics_process(RoomString.RING + 0.01)
-	gm._process(0.016)
+	gm._process(0.02)
 	check("it rings RING and is let go (%s)" % [gm.held], gm.held.is_empty() and not string.ringing())
 	var brush := func(z: float) -> void:
 		var y := 0.05
@@ -46358,9 +45660,9 @@ func _test_a_plucked_string_plays_on_the_keys_with_its_source() -> void:
 	var poke := PokeInteractor.new()
 	string.grab_begin(poke, Vector3(0, 1.2, 0))
 	check("nor does a fingertip's poke count as a grab as well (%s)" % [downs], downs.is_empty() and string.held_by == null)
-	gm._process(0.016)
+	gm._process(0.02)
 	heard["recording"] = false
-	gm._process(0.016)
+	gm._process(0.02)
 	var items: Array = s.track(armed).items
 	check("its plucks are one take on the armed track (%d)" % items.size(), items.size() == 1)
 	if items.size() == 1:

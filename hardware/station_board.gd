@@ -431,7 +431,7 @@ class PlaqueFold extends ControlAffordance:
 
 
 ## A key's body: its collision box, a dark cap a little proud of what it is on, and its legend in
-## light lettering (unshaded, so it reads however the corner is lit), as the harp's crown buttons.
+## light lettering (unshaded, so it reads however the corner is lit), as a crown's buttons.
 static func dress_key(key: ControlAffordance, size: Vector2, legend: String, cap: float) -> void:
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()

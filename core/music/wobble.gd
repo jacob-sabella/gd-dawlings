@@ -4,7 +4,7 @@ extends RefCounted
 ## Bend and wobble by tilting (docs/spatial_loop.md part two, slice 15; idea #37): one playing
 ## hand's roll, turned into the player's pitch wheel while a note it plays sounds.
 ##
-## One per playing hand on each instrument that bends: the keytar's neck hand, the harp's plucking
+## One per playing hand on each instrument that bends: the keytar's neck hand, the room string's plucking
 ## hand, the fingertips' own hand, and on a desktop the mouse over the plain keys (MouseInteractor).
 ## Each physics frame `step` reads its hand's `tilt_angles()` (a bare hand's palm, a controller's
 ## aim, the mouse's wiggle), and while one of its `sources` owns the player's wheel

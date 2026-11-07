@@ -13,7 +13,7 @@ extends Node
 ## Every note also goes to everyone as it is played (Session.send_note), the host's keys and
 ## guests' alike, for whoever has a plug in this player's keys (TheirKeys), stamped with the song
 ## position it was played to (`song`), for whoever has a plug in their monitor (TheirMonitor),
-## and with what played it (`source`: the keytar, the harp, the fingertips...; `instruments`).
+## and with what played it (`source`: the keytar, the fingertips...; `instruments`).
 ##
 ## Beside the notes go the controls (`control`): the pitch wheel, the mod wheel and expression,
 ## on a channel of their own that may drop one (Session.send_control). A player has one wheel, as
@@ -36,7 +36,7 @@ extends Node
 ## everything their keys sound plays the rack, so what they send goes out as the rack's (`source`
 ## Modular.SOURCE, decided at the note-on and kept for its note-off), for the host to play in its rack
 ## (Presence.modular_heard). Those notes are not in a MIDI take; whatever else the take holds (the
-## harp before the player walked up to the rack, the keys after they left it while it rolled on) is.
+## strings before the player walked up to the rack, the keys after they left it while it rolled on) is.
 
 signal changed()
 ## A key down or up, wherever it was played from: for the keytar in this player's hands to show.
@@ -76,7 +76,7 @@ var record_with_host := true:
 		record_with_host = v
 		changed.emit()
 ## The instruments in this player's reach that play their keys: {name: true}, from `&"keytar"`,
-## `&"harp"`, `&"fingertips"`, `&"cable"` and `&"wheel"`. While any is here, their keys are
+## `&"fingertips"`, `&"cable"` and `&"wheel"`. While any is here, their keys are
 ## played, sent and taken down whatever this machine is, a host or alone too, and a take with no
 ## track chosen goes on the armed one (HitRecorder.armed_track). Each instrument puts in and takes
 ## out only its own name (`reach`), so one leaving never takes another's away. An instrument is
@@ -558,7 +558,7 @@ func _restore_hardware(at: float) -> void:
 
 
 ## What owns this player's wheel: the source of their newest note still down (`_down`), or null
-## with nothing down, when the wheel is anyone's to move. The harp hand, the keytar's neck and a
+## with nothing down, when the wheel is anyone's to move. The keytar's neck and a
 ## hardware wheel never fight over it, because only one of them is ever its owner.
 func wheel_source() -> Variant:
 	return _down.newest()
@@ -863,8 +863,8 @@ func _take_played(source: StringName) -> void:
 		_take_sources.append(played)
 
 
-## What a take is called after what played in it (`_take_played`): `harp`, `harp+fingertips`,
-## `keytar`, and `take` for plain keys alone, as every take was before there were instruments.
+## What a take is called after what played in it (`_take_played`): `keytar`,
+## `keytar+fingertips`, and `take` for plain keys alone, as every take was before there were instruments.
 static func take_name(played: Array) -> String:
 	if played.is_empty() or played == [&"keys"]:
 		return "take"

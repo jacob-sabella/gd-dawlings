@@ -11,7 +11,7 @@
 # One bell for all four: what tells them apart is the lettering. Materials "bronze", "clapper",
 # "leather", "tab".
 #
-# The stand (Venue.bell_spot): a small table beside the chord harp with a padded top and four
+# The stand (Venue.bell_spot): a small table with a padded top and four
 # pegs along it, one under each bell's mouth, so each bell stands mouth down on its pad with its
 # handle up, ready to be lifted. Materials "wood", "pad", "peg".
 #

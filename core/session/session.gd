@@ -128,7 +128,7 @@ signal note_played(kind: int, pitch: int, velocity: int, from: int, song: float,
 ## for an item with none), and it is heard from where the instrument stands.
 signal item_hit(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int, zone: StringName)
 ## An event down a jack into this player's instrument (docs/spatial_loop.md slice 6): `source`'s
-## (an item's id, `harp`, `keys:P`, `chord:P`) `kind` (Jack.Kind: NOTE_ON, NOTE_OFF, TRIGGER, CC,
+## (an item's id, `keys:P`, `chord:P`) `kind` (Jack.Kind: NOTE_ON, NOTE_OFF, TRIGGER, CC,
 ## CHORD), sent by `from`
 ## at song position `song` (-1 for not known), passed on by the host to this player alone (Jacks).
 signal jack_played(source: StringName, kind: int, pitch: int, velocity: int, from: int, song: float)
@@ -136,7 +136,7 @@ signal jack_played(source: StringName, kind: int, pitch: int, velocity: int, fro
 ## A control on `from`'s keys, as they move it (`send_control`): `kind` the pitch wheel
 ## (DawKitClip.PITCH_BEND) or controller 1 (the mod wheel) or 11 (expression), `value` already
 ## kept in bounds by the host (`control_value`). For whoever plays their keys here (TheirKeys,
-## TheirMonitor, the harp), to the one voice they have for that player. Unreliable: a lost one is
+## TheirMonitor), to the one voice they have for that player. Unreliable: a lost one is
 ## sent again soon, and the wheel goes back to rest at the player's last note-off on every end
 ## (GuestMidi.control).
 signal control_played(kind: int, value: int, from: int, song: float, source: StringName)

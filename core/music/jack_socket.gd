@@ -27,7 +27,7 @@ extends ControlAffordance
 ## squash never scales its shape.
 ##
 ## A socket on no instrument (`JackSocket.new(null, source)`) is the same plug for a source that is
-## not an item: the chord harp's, on its pillar (`Jack.HARP`), and a player's own keys', on their
+## not an item: a player's own keys', on their
 ## wrist (`mine_keys`: `keys:P` for whoever this player is now), and their chord hand's, on that
 ## hand's wrist beside it (`mine_chord`: `chord:P`, part two, slice 33). Its look is its own,
 ## facing out along its -Z, and it is there to press while it is drawn and `available` says so.
@@ -63,7 +63,7 @@ const CABLE_MOVED := 0.005
 
 ## The instrument it is on, or null for a socket on no instrument.
 var item: InstrumentItem
-## The source it plugs, on no instrument: `harp`. An item's is its id (`source_id`).
+## The source it plugs, on no instrument. An item's is its id (`source_id`).
 var source := &""
 ## A socket for this player's own keys (`keys:P`, P whoever this player is now), on their wrist.
 var mine_keys := false
@@ -73,7 +73,7 @@ var mine_chord := false
 var into_me := false
 ## What goes into this player, as last shown, on an `into_me` socket.
 var ins: Array[StringName] = []
-## What its card calls it, on no instrument: `CHORD HARP`, `MY KEYS`, `MY CHORDS`.
+## What its card calls it, on no instrument: `MY KEYS`, `MY CHORDS`.
 var label := ""
 ## () -> bool: whether it is there to press, on no instrument (a wrist's, while that hand is
 ## tracked). Unset, while it is drawn.

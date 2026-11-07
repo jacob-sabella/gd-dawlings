@@ -53,7 +53,7 @@ view), and nothing moves the room around the reader.
 21. **A looper station, by hand.** Slap the looper's pad to record a loop, slap again to stack a
     layer. Each layer is a ring around you: grab it to mute, pull it away to delete. Hands only:
     no stomping (feet are not an input).
-22. **An air harp of the current chord.** Strings in the air tuned only to the chord playing now
+22. **An air harp of the current chord** (built as the chord harp, then removed 2026-11-06). Strings in the air tuned only to the chord playing now
     (from the chord bricks): strum or pluck, no wrong notes, recorded as MIDI.
 23. **A theremin** (built, then removed 2026-11-06). One hand pitch, the other volume; optionally snapped to the song's scale,
     with a visible pitch guide so it is playable, not only a novelty.
@@ -66,7 +66,7 @@ view), and nothing moves the room around the reader.
 27. **The song in the sky.** At night venues the song's sections are constellations crossing the
     sky as it plays: look up to see where you are.
 28. **Chord shapes on one hand.** Fingers held up on the left hand pick the chord (one is I, four
-    is IV), the right hand strums. Pairs with the chord harp: no wrong chords.
+    is IV), the right hand strums. Pairs with the chord bricks: no wrong chords.
 29. **A circle-of-fifths wheel.** A wheel of the key's chords: touch a segment to play it, and the
     chords that would sound good next glow. Feeds the chord bricks.
 30. **A circle of hand drums.** Djembe, congas and a cajón in a ring for the band; where the
@@ -77,7 +77,7 @@ view), and nothing moves the room around the reader.
 32. **A handbell choir.** Each player holds handbells tuned to the current chord's notes; swing
     to ring. They retune when the chord changes, so the band cannot clash.
 33. **Cables between players.** Plug a cable from your instrument into a bandmate's: your hand
-    drums trigger their synth, your chord hand drives their harp.
+    drums trigger their synth, your chord hand drives their fingertips.
 34. **A string across the room.** Stretch a string between any two points; its length sets the
     pitch, snapped to the key. A giant bass string across the room, or five by the window.
 35. **A marble run** (built, then removed 2026-11-06). Build a run from blocks; marbles roll in time with the song and each block
@@ -85,7 +85,7 @@ view), and nothing moves the room around the reader.
 36. **Your fingertips are notes.** Thumb to each finger plays the current chord's notes (index
     the root, middle the third, and so on). No prop; hand tracking.
 37. **Bend and wobble by tilting.** Tilting the playing hand bends pitch, shaking it adds
-    vibrato, on the keytar and harp.
+    vibrato, on the keytar.
 38. **Shakers and a tambourine.** Hand percussion to hold and shake; hits snap gently to the
     beat.
 39. **A talk box.** Sing into a tube while the other hand holds a chord shape; the voice comes

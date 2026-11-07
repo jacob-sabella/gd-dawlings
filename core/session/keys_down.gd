@@ -3,12 +3,12 @@ extends RefCounted
 
 ## The pitches one player has down, counted by what is holding each: their keys can be played
 ## by several instruments at once (GuestMidi.instruments), and two of them can hold the same
-## pitch. A pitch is up only when the last of them lets it go, so a harp's A4 dying away does not
+## pitch. A pitch is up only when the last of them lets it go, so a string's A4 dying away does not
 ## stop a fingertip's A4 still held. Wherever a player's notes are sounded on one synth -- their
 ## own monitor (GuestMidi), a plug in their keys (TheirKeys) or in their monitor (TheirMonitor) --
 ## a note-off is sounded only when `let_go` says the pitch is up.
 ##
-## A source is the instrument's name (`&"harp"`), `&""` for plain keys.
+## A source is the instrument's name (`&"cable"`), `&""` for plain keys.
 
 ## {pitch: {source: velocity}}
 var _by := {}

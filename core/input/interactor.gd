@@ -138,7 +138,7 @@ func carry_pose() -> Transform3D:
 
 ## Override: whether this hand still presses while its fingers play: a mouse's, while the chord
 ## layer is on (docs/spatial_loop.md part two, slice 32), whose fingers are keys and whose button
-## strums the harp. A hand whose pinches are its fingers presses nothing while they play.
+## plucks. A hand whose pinches are its fingers presses nothing while they play.
 func presses_while_playing() -> bool:
 	return false
 
