@@ -13,7 +13,11 @@ files otherwise left out. To flip the reading for good set SUBSTANTIVE = 0. Prin
      consts and signals whose name is used nowhere but its own declaration(s) in scenes/ core/ hardware/ tools/
      tests/ mods/ layouts/ (any text file, so strings, has_method, call, groups and
      .tscn/.json references all count).
-Exit status 1 when anything is reported. Usage: tools/quality_check.sh [--limit N] [--all]
+  3. public signals and non-trivial public funcs (body longer than DOC_TRIVIAL lines) in the scoped .gd
+     files that have no `##` doc comment directly above (annotation lines may sit between), and
+     scoped files with no `##` class header (between `extends` and the first member). Lists only
+     with --docs; the count always prints.
+Exit status 1 when anything is reported. Usage: tools/quality_check.sh [--limit N] [--all] [--docs]
 """
 import os, re, subprocess, sys
 
@@ -25,6 +29,39 @@ ROOTS = ["scenes", "core", "hardware", "tools", "tests", "mods", "layouts"]
 TEXT = {".gd", ".tscn", ".tres", ".json", ".cfg", ".sh", ".py", ".md", ".gdshader", ".godot"}
 # Engine and framework entry points are called by Godot, not by name.
 ENGINE = {"initialize", "build", "setup"}
+DOC_TRIVIAL = 3  # a func whose body is this many lines or fewer needs no doc comment
+MEMBER = re.compile(r"(?:static\s+)?(?:func|var|const|signal|enum|@)")
+
+def undocumented(path):
+    """Return (missing class header?, [(line, kind, name, body lines)]) for one .gd file."""
+    lines = open(path, errors="replace").read().split("\n")
+    header = False
+    for l in lines:
+        if MEMBER.match(l):
+            break
+        if l.startswith("##"):
+            header = True
+    out = []
+    for i, l in enumerate(lines):
+        m = re.match(r"(?:static\s+)?(func|signal)\s+(\w+)", l)
+        if not m or m.group(2).startswith("_") or m.group(2) in ENGINE:
+            continue
+        j = i - 1
+        while j >= 0 and lines[j].startswith("@"):
+            j -= 1
+        if (j >= 0 and lines[j].lstrip().startswith("##")) or "##" in l:
+            continue
+        body = 0
+        if m.group(1) == "func":
+            for x in lines[i + 1:]:
+                if x.strip() == "" or x.startswith((" ", "\t")):
+                    body += 1
+                else:
+                    break
+            if body <= DOC_TRIVIAL:
+                continue
+        out.append((i + 1, m.group(1), m.group(2), body))
+    return (not header), out
 
 def sh(*a):
     return subprocess.run(a, capture_output=True, text=True, check=True).stdout
@@ -116,8 +153,29 @@ def main():
                 total += 1
     if not total:
         print("(none)")
+    print("\n== doc comments: public signals and non-trivial funcs without a ## above, files without a ## class header ==")
+    no_header, no_sig, no_fn, long_fn = [], 0, 0, 0
+    for p in files:
+        if not p.endswith(".gd"):
+            continue
+        miss, items = undocumented(p)
+        if miss:
+            no_header.append(p)
+        for ln, kind, name, body in items:
+            if kind == "signal":
+                no_sig += 1
+            else:
+                no_fn += 1
+                long_fn += body > 15
+            if "--docs" in sys.argv:
+                print("%s:%d  %s %s" % (p, ln, kind, name))
+    for p in no_header:
+        print("%s  no class header" % p)
+    undoc = len(no_header) + no_sig + no_fn
+    print("%d without class header, %d signals, %d funcs (%d of them over 15 lines) lack a ## comment%s"
+          % (len(no_header), no_sig, no_fn, long_fn, "" if "--docs" in sys.argv else " (--docs lists them)"))
     print("\n%d file(s) over the limit (%d more lightly changed, out of scope), %d unreferenced public symbol(s), %d file(s) in scope"
           % (len(over), len(out_of_scope), total, len(files)))
-    return 1 if (over or total) else 0
+    return 1 if (over or total or undoc) else 0
 
 sys.exit(main())
