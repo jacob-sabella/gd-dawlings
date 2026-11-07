@@ -12,7 +12,7 @@ extends RefCounted
 ## combinations, the roulette room and a widened room. No Studio is needed either.
 
 ## The anchors a shell provides (section 3), as one pattern: the contract layout files are written to.
-const ANCHOR_RE := "^(?:(?:wall|control_wall)\\.(?:left|right)|control_rear|live_back|mix|annex_edge|zone\\.[a-z][a-z0-9_]*(?:\\.(?:cx|cz|min|max))?)$"
+const ANCHOR_RE := "^(?:(?:wall|control_wall)\\.(?:left|right)|control_rear|live_back|mix|annex_edge|height\\.table|zone\\.[a-z][a-z0-9_]*(?:\\.(?:cx|cz|min|max|floor))?)$"
 const _EPSILON := 1e-5
 
 ## The venue's id and arrangement the facts are for.
@@ -31,6 +31,9 @@ var rooms: Array[Rect2] = []
 var solids: Array[Dictionary] = []
 ## Zone id -> AABB (Venue.zones()).
 var zones: Dictionary = {}
+## Zone id -> the height of the floor at the zone's middle: the top of what a person steps up onto
+## there (the drum riser), or 0 (`zone.<id>.floor`).
+var zone_floors: Dictionary = {}
 var live_room_half := Venue.LIVE_ROOM_HALF
 var annex_edge := Venue.LIVE_ROOM_HALF
 var has_walls := true
@@ -52,6 +55,10 @@ static func anchors_of(venue: Venue) -> ShellFacts:
 	f.variant = venue.variant
 	f.room_width = venue.room_width
 	f.zones = venue.zones()
+	var stepped := venue.zone_solids()
+	for id: StringName in f.zones:
+		var middle := (f.zones[id] as AABB).get_center()
+		f.zone_floors[id] = Walker.ground_of(stepped, Vector2(middle.x, middle.z))
 	f.live_room_half = venue.live_room_half()
 	f.annex_edge = venue.annex_edge()
 	return f
@@ -74,7 +81,8 @@ static func of(venue: Venue) -> ShellFacts:
 
 ## The value of anchor `name`, or null when this shell has no such anchor: a float for a line (a
 ## wall's x, a back wall's z), a Vector2 for a point (`zone.<id>` is the zone's middle) and for
-## `zone.<id>.min|max` its corners; `.cx` and `.cz` are floats.
+## `zone.<id>.min|max` its corners; `.cx`, `.cz` and `.floor` (the height of the floor at the zone's
+## middle) are floats, as is `height.table` (the bricks table's top, `ZoneKit.TABLE_HEIGHT`).
 func anchor(name: StringName) -> Variant:
 	var s := String(name)
 	if not is_anchor_name(s):
@@ -96,6 +104,8 @@ func anchor(name: StringName) -> Variant:
 			return Studio.MIX_POSITION_Z
 		"annex_edge":
 			return annex_edge
+		"height.table":
+			return ZoneKit.TABLE_HEIGHT
 	var parts := s.split(".")
 	var box: Variant = zones.get(StringName(parts[1]))
 	if box == null:
@@ -111,6 +121,8 @@ func anchor(name: StringName) -> Variant:
 			return lo
 		"max":
 			return hi
+		"floor":
+			return float(zone_floors.get(StringName(parts[1]), 0.0))
 	return (lo + hi) * 0.5
 
 
@@ -144,7 +156,8 @@ func to_dict() -> Dictionary:
 		"footprint": _rect(footprint), "rooms": rooms.map(_rect),
 		"solids": solids.map(func(s: Dictionary) -> Array:
 			return [s["c"].x, s["c"].y, s["h"].x, s["h"].y, s["a"], s["top"]]),
-		"zones": zone_rows, "live_room_half": live_room_half, "annex_edge": annex_edge,
+		"zones": zone_rows, "zone_floors": zone_floors.keys().map(func(k: StringName) -> Array: return [String(k), zone_floors[k]]),
+		"live_room_half": live_room_half, "annex_edge": annex_edge,
 		"has_walls": has_walls, "ceiling": ceiling,
 	}
 

@@ -1,11 +1,15 @@
 class_name PieceHost
 extends RefCounted
 
-## Stands the wheeled pieces of the live room in a Studio and carries what rides with them
+## Stands the pieces of the live room in a Studio and carries what rides with them
 ## (docs/layouts.md 4.1, 11 step 6). The studio keeps the pieces' trolleys (`live_pieces`) and the
-## nodes themselves, which are the venue's children; this reads each piece's `PieceDef` and does the
-## two things the studio used to do per piece: `build` makes the trolley from the definition, and
-## `carry` moves the piece's node to where its trolley is and runs its followers. The rehoming
+## nodes themselves, which are the venue's children; this reads each piece's `PieceDef` and does
+## what the studio used to do per piece: `build` makes the trolley from the definition, `carry`
+## moves the piece's node to where its trolley is and runs its followers, and `stand` makes a
+## piece's node (the fifths wheel, the section blocks, the rack, the sampler, the drums' plaque, the
+## looper, the lyric board, the venue's instrument and weather) at its spot in the venue and hangs
+## it there. The spot is the station's (`Stations.spot`), which for the wheeled and the zone-mounted
+## ones is the layout's (`Venue.default_spot`). The rehoming
 ## helpers (`rehome_items`, `rehome_spills`, `hold_the_rack`) live here because the followers are
 ## what call them; the studio calls them too, when a room is built or an item set up.
 
@@ -35,6 +39,143 @@ func build() -> void:
 			t.body_centre = def.body_centre
 			t.body_half = def.body_half
 		studio._go_live(t)
+
+
+## Stand every piece in `PieceDef.standing()` in the venue, each a child of it, in the order the
+## studio always did. Called once a venue is in the tree; the modular rack and the weather, which the
+## studio stands after, are not in the list (`stand` takes the weather by itself).
+func stand_all() -> void:
+	for id in PieceDef.standing():
+		stand(id)
+
+
+## Make piece `id`'s node and hang it on the venue where its spot is; the studio's variable for it
+## (`PieceDef.studio_node`) is the new node, or null where the venue has no room for it (no bricks
+## table, no riser, no booth, no instrument, no weather in this arrangement). What carried over from
+## the last venue's node (`was`) is taken across by that piece's arm of `_make`.
+func stand(id: StringName) -> void:
+	var def := PieceDef.of(id)
+	var venue := studio.venue
+	var held: Variant = studio.get(def.studio_node)
+	var was: Node3D = held as Node3D if _stands(held) else null
+	studio.set(def.studio_node, null)
+	var spec := {}
+	var at: Variant = null
+	if def.mount == PieceDef.Mount.VENUE:
+		spec = VenueInstrument.spec_of(venue) if id == VenueInstrument.STATION else Weather.spec_of(venue)
+		at = spec.get("spot")
+	else:
+		at = Stations.spot(venue, id)
+	var node: Node3D = _make(id, at, spec, was) if at != null else null
+	if node != null:
+		studio.set(def.studio_node, node)
+		venue.add_child(node)
+		_hung(id, node)
+	elif id == Looper.STATION and was != null and (was as Looper).mine():
+		# A layer it was taking down in the last venue has nowhere to finish.
+		studio._on_looper_called_off()
+	if id == VenueInstrument.STATION:
+		studio._dress_venue_bars()
+
+
+## The node of piece `id` for spot `at` (and `spec`, for the two the shell describes), with what it
+## needs of the studio wired; `was` is the last venue's node of it, or null.
+func _make(id: StringName, at: Transform3D, spec: Dictionary, was: Node3D) -> Node3D:
+	match id:
+		&"wheel":
+			var wheel := FifthsWheel.new()
+			wheel.transform = FifthsWheel.on_stand(at)
+			return wheel
+		&"sections":
+			var sections := SectionBlocks.new()
+			sections.transform = at
+			return sections
+		&"cassette_rack":
+			var rack := CassetteRack.new()
+			rack.transform = at
+			rack.items = studio.items
+			return rack
+		&"sampler":
+			# REC is the room's, kept across a change of venue.
+			var sampler := Sampler.new()
+			sampler.transform = at
+			sampler.items = studio.items
+			sampler.authority = Session.is_authority
+			sampler.local_peer = func() -> int: return Session.local_peer_id
+			sampler.name_of = Session.name_of
+			sampler.armed_by = (was as Sampler).armed_by if was != null else 0
+			sampler.rec_pressed.connect(studio._on_rec_pressed)
+			sampler.told.connect(func(peer: int, text: String) -> void: Session.tell(peer, text))
+			sampler.armed_changed.connect(studio._publish_room_soon)
+			return sampler
+		&"drums":
+			return _drum_circle(at)
+		&"looper":
+			var looper := Looper.new()
+			looper.transform = at
+			looper.local_peer = func() -> int: return Session.local_peer_id
+			looper.name_of = studio._looper_name
+			looper.length = studio.looper_length
+			looper.row = studio.looper_row
+			if was != null:
+				looper.take_over(was as Looper)
+			looper.slapped.connect(studio._on_looper_slapped)
+			looper.length_changed.connect(func(bars: int) -> void: studio.looper_length = bars)
+			looper.layer_done.connect(studio._on_looper_layer)
+			looper.called_off.connect(studio._on_looper_called_off)
+			return looper
+		&"lyrics":
+			var board := LyricBoard.new()
+			board.transform = at
+			board.told.connect(func(text: String) -> void: Session.notice.emit(text))
+			board.edit_asked.connect(studio.edit_lyrics)
+			return board
+		&"venue":
+			var instrument := VenueInstrument.new(spec)
+			instrument.transform = at
+			return instrument
+		&"weather":
+			var weather := Weather.new(spec, Weather.seed_of(studio.venue.venue_id()))
+			weather.transform = at
+			weather.listening = studio.weather_listening
+			weather.switch_pressed.connect(studio._on_weather_pressed)
+			weather.dropped.connect(studio._on_weather_dropped)
+			return weather
+	return null
+
+
+## What a piece needs once it is a child of the venue (its own children exist then).
+func _hung(id: StringName, node: Node3D) -> void:
+	if id == Looper.STATION:
+		# Its layers' rings say what a grab, a click or a pull did, as a toast.
+		(node as Looper).rings.told.connect(func(text: String) -> void: Session.notice.emit(text))
+
+
+## The circle of hand drums' plaque, at the ring's middle on the drum riser. The drums themselves are
+## the room's items, whose homes are their places round it (`Studio._item_homes`).
+func _drum_circle(at: Transform3D) -> Node3D:
+	var ring := Node3D.new()
+	ring.name = "DrumCircle"
+	ring.transform = at
+	var plaque := Stations.plaque(&"drums", Stations.DRUM_PLAQUE_WIDTH)
+	plaque.transform = Transform3D(Basis(Vector3.RIGHT, -Stations.DRUM_PLAQUE_TILT), Stations.DRUM_PLAQUE)
+	ring.add_child(plaque)
+	# A slim post under it, so it stands on the riser rather than hanging in the air.
+	var post := MeshInstance3D.new()
+	post.name = "Post"
+	var rod := CylinderMesh.new()
+	rod.top_radius = 0.012
+	rod.bottom_radius = 0.018
+	rod.height = Stations.DRUM_PLAQUE.y - 0.02
+	post.mesh = rod
+	post.position = Vector3(0, rod.height * 0.5, Stations.DRUM_PLAQUE.z - 0.03)
+	var metal := StandardMaterial3D.new()
+	metal.albedo_color = Color(0.1, 0.1, 0.11)
+	metal.roughness = 0.4
+	metal.metallic = 0.8
+	post.material_override = metal
+	ring.add_child(post)
+	return ring
 
 
 ## Take piece `id` to where its trolley is now: its node, then each follower in order. Each frame

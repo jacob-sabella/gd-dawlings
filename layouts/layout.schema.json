@@ -40,7 +40,7 @@
     "triple": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/number"}},
     "anchor_name": {
       "type": "string",
-      "pattern": "^(?:(?:wall|control_wall)\\.(?:left|right)|control_rear|live_back|mix|annex_edge|zone\\.[a-z][a-z0-9_]*(?:\\.(?:cx|cz|min|max))?)$"
+      "pattern": "^(?:(?:wall|control_wall)\\.(?:left|right)|control_rear|live_back|mix|annex_edge|height\\.table|zone\\.[a-z][a-z0-9_]*(?:\\.(?:cx|cz|min|max|floor))?)$"
     },
     "shell": {
       "type": "object",
@@ -78,7 +78,9 @@
         "pos": {"$ref": "#/$defs/pair"},
         "frame": {"type": "string", "pattern": "^authored:[a-z][a-z0-9_]{0,39}$"},
         "local": {"$ref": "#/$defs/pair"},
-        "yaw": {"type": "number", "minimum": -1000, "maximum": 1000}
+        "up": {"description": "Height of the piece's origin: metres, or an anchor name read as a height (height.table, zone.<id>.floor).", "oneOf": [{"$ref": "#/$defs/number"}, {"$ref": "#/$defs/anchor_name"}]},
+        "yaw": {"description": "Radians about +Y, or {toward, snap}: turned to face the anchor `toward` (a line anchor is the point (0, value)), rounded to a multiple of `snap` radians.",
+          "oneOf": [{"type": "number", "minimum": -1000, "maximum": 1000}, {"type": "object", "required": ["toward"], "properties": {"toward": {"$ref": "#/$defs/anchor_name"}, "snap": {"type": "number", "minimum": 0, "maximum": 7}}}]}
       }
     },
     "placement": {

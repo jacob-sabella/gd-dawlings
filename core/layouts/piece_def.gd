@@ -16,6 +16,13 @@ extends RefCounted
 ## `PieceFeet.ANNEX` until its definition moves in.
 enum Kind { SINGLE, ROOM_SCALE }
 
+## How a piece is held in the room: `WHEELED` on its own trolley on the floor (the live room's five,
+## pushed about); `ZONE` mounted in one of the venue's zones (on the bricks table, on the drum riser, in
+## the booth), which does not move and has no footprint of its own, the zone standing in for it in the
+## validator; `VENUE` supplied by the shell (the venue's own instrument, its weather), whose spot the
+## venue says and no layout does.
+enum Mount { WHEELED, ZONE, VENUE }
+
 ## What may ride with a piece (`followers`), each run by `PieceHost.carry` after the piece itself has
 ## moved: the venue's items rehomed on the shelf and hoop (`ITEMS`), the dart boards that hang on the
 ## shelf's posts (`BOARDS`), the hoops' baskets (`HOOPS`), the rack's slots and the made items' homes
@@ -31,6 +38,7 @@ const SPILLS := &"spills"
 ## The id (`Venue.default_spot`, `Studio.live_pieces`) and what the player sees.
 var id: StringName
 var kind := Kind.SINGLE
+var mount := Mount.WHEELED
 ## Name of the studio's trolley node.
 var trolley_name := ""
 ## The footprint in the piece's own frame: centre and half extents (from its `Stations` row or its own
@@ -68,13 +76,25 @@ static func has(piece: StringName) -> bool:
 	return _table().has(piece)
 
 
-## Every defined id, in the order the studio builds their trolleys (the same order as `LiveRoom.wheeled_ids`).
+## Every wheeled id, in the order the studio builds their trolleys (the same order as `LiveRoom.wheeled_ids`).
 static func ids() -> Array[StringName]:
 	var out: Array[StringName] = []
 	for k: StringName in _table():
-		out.append(k)
+		if (_table()[k] as PieceDef).mount == Mount.WHEELED:
+			out.append(k)
 	return out
 
+
+## The ids `PieceHost.stand_all` stands in a venue, in the order it stands them: the zone-mounted and
+## the venue's own pieces, with the wheeled two whose node the studio builds with the venue (the rack
+## and the sampler) between them. The modular rack, which is not a node of the venue, is not here.
+static func standing() -> Array[StringName]:
+	return STAND_ORDER
+
+
+## What `standing()` returns (the order `Studio.set_venue` always stood them in).
+const STAND_ORDER: Array[StringName] = [&"wheel", &"sections", &"cassette_rack", &"sampler", &"drums", &"looper",
+		&"lyrics", &"venue"]
 
 static var _defs := {}
 
@@ -141,4 +161,15 @@ static func _build() -> Dictionary:
 	hoop.venue_child = "Hoop"
 	hoop.followers = [HOOPS, ITEMS]
 	out[hoop.id] = hoop
+
+	# Mounted in a zone of the venue, placed by `common.live_room` (`wheel`..`looper`) or by the shell
+	# (`lyrics`, `venue`, `weather`). No footprint: the zone stands in for each in the validator. Each
+	# id is its `Stations` row's (`Looper.STATION`, `LyricBoard.STATION`, ...).
+	for row: Array in [[&"wheel", &"wheel"], [&"sections", &"sections"], [&"drums", &"drum_circle"],
+			[&"looper", &"looper"], [&"lyrics", &"lyric_board"], [&"venue", &"venue_instrument"], [&"weather", &"weather"]]:
+		var zoned := PieceDef.new()
+		zoned.id = row[0]
+		zoned.mount = Mount.VENUE if row[0] in [&"venue", &"weather"] else Mount.ZONE
+		zoned.studio_node = row[1]
+		out[zoned.id] = zoned
 	return out

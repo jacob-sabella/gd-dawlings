@@ -127,6 +127,8 @@ static func _placed(layout: LayoutData, facts: ShellFacts, issues: Array, opts: 
 					"The %s needs a mod that is not installed; it stays where it is." % LayoutChecks.name_of(kind)))
 		if spot == null or kind == PieceFeet.ANNEX:
 			continue
+		if PieceFeet.mounted(kind):
+			continue
 		if not PieceFeet.known(kind):
 			if kind not in missing:
 				issues.append(LayoutIssue.make(&"unknown_piece", LayoutIssue.WARNING, id, &"", Vector2.ZERO,

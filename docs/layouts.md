@@ -1,6 +1,6 @@
 # Layouts: rooms as data
 
-Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 to 5 (11) are built; from step 5 the game reads them for the five wheeled pieces (`LiveRoom`):
+Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 to 5 (11) and parts 1 and 2 of step 6 are built; the game reads them for the five wheeled pieces and the four zone-mounted ones (`LiveRoom`, `PieceHost`):
 `core/layouts/` (`LayoutData`, `LayoutCheck`, `LayoutMerge`, `LayoutSet`, `LayoutProblem`, `ShellFacts`, `LayoutResolver`,
 `LayoutValidator` with `LayoutChecks`, `LayoutIssue`, `LayoutReach`, `LayoutGeometry`, `PieceFeet`, `LiveRoom`), `layouts/common/live_room.layout.json`, `layouts/venues/studio.layout.json`,
 `layouts/layout.schema.json`, fixtures in `tests/fixtures/layouts/`. Where they differ from the text below, the
@@ -113,6 +113,10 @@ the booth's felt height is then a constant of the zone kit.
 
 `ShellFacts.anchors_of(venue)` (step 5) is the part `of` starts from: id, arrangement, width, zones, `live_room_half`, `annex_edge`, and no solid. `Venue.default_spot` resolves against it, because `of` asks the venue for `solids()`, which asks for the wheeled pieces' spots, which are `default_spot`.
 
+**Built (step 6, part 2)**: two more anchor forms, both heights, for the zone-mounted pieces: `height.table` (the bricks table's top,
+`ZoneKit.TABLE_HEIGHT`) and `zone.<id>.floor` (the floor at the zone's middle: the riser's top where the zone has a stepped riser, else 0;
+`ShellFacts.zone_floors`, from `Walker.ground_of(zone_solids())`, the very call `Venue.drum_floor` made). `ANCHOR_RE` and the schema carry them.
+
 Anchors the shell provides (names are the contract): `wall.left`, `wall.right` (x of the live room's
 side walls, +-`live_room_half`), `control_wall.left|right` (+-`room_width/2`), `control_rear` (z =
 `Studio.ROOM_BACK` = 4.0), `live_back` (`LIVE_ROOM_BACK` 12.4), `mix` (`Studio.MIX_POSITION_Z` 0.66),
@@ -154,6 +158,42 @@ and `trolley` fields stay the data form for when a mod can add a piece; the layo
 (was four of the six `_carry_live` arms; `station_board`, `patch_wall` and `mini_table` stay in the studio, they are not in the
 five), and `rehome_items`, `rehome_spills`, `hold_the_rack` moved over from the studio. `PieceFeet` reads `PieceDef`; `Studio.LIVE_TROLLEYS`
 is gone. Not yet: the `piece` mod entry, `PieceBuilders`, `station`, `slots`, `claims` and the annex as a definition.
+
+**Built (step 6, part 2)**: `PieceDef` gains `mount` (`WHEELED`, `ZONE`, `VENUE`) and seven zone/venue definitions: `wheel`, `sections`, `drums`
+(the studio's `drum_circle`), `looper`, `lyrics` (`lyric_board`) and the shell's `venue` (instrument) and `weather` (`studio_node` names the
+studio's variable). `PieceDef.ids()` is still the five wheeled; `PieceDef.standing()` is the order `PieceHost.stand_all` stands the rest in
+(`wheel, sections, cassette_rack, sampler, drums, looper, lyrics, venue`; the weather by itself, after the modular rack). `PieceHost.stand(id)`
+replaced nine of the studio's `_stand_the_*` functions (wheel, sections, cassette rack, sampler, drum circle, looper, lyrics, venue instrument,
+weather; 172 lines of `studio.gd`): it asks `Stations.spot` (or the shell's `instrument()`/`weather()` spec for the two the shell describes), makes
+the node (`PieceHost._make`, one arm per piece, with the studio's signal handlers wired as they were: the sampler keeps its REC across a venue, the
+looper takes over a layer from the last one), sets the studio's variable and hangs it on the venue. A venue with no room for a piece (no bricks
+table, no riser, no booth, no weather) leaves the variable null. `PieceFeet.known` means "has a footprint" (wheeled only) and `mounted` "has none
+because it is in a zone or the shell's": the validator skips those instead of warning, the zone standing in for them as before.
+
+What moved to data (all in `layouts/common/live_room.layout.json`; the old code is frozen in `tests/fixtures/layouts/zone_pieces_legacy_spots.json`,
+336 transforms over 43 rooms at two widths plus 8 nulls for the roulette room, held by `_test_the_zone_mounted_pieces_stand_where_the_old_code_stood_them`):
+
+| Piece | Placement | Replaces |
+|---|---|---|
+| `wheel` | `zone.bricks.cx|cz`, pos (0, -0.94), `up: height.table`, yaw pi | `Venue.wheel_spot` body (`WHEEL_IN` stays as a constant: the wheel's plaque hangs off the same edge) |
+| `sections` | `zone.bricks.cx|cz`, pos (0.30, 0.29), `up: height.table`, yaw -pi/2 | `band_spot` (deleted) and `sections_spot` body; `TABLE_BANDS` stays as the clearance bands the tests measure |
+| `drums` | `zone.drums.cx|cz`, `up: zone.drums.floor`, yaw `{toward: mix, snap: pi/2}` | `drum_circle_spot(-1)` body; `drum_ring` stays, static, for drum `n` and `ZoneKit.solids` |
+| `looper` | frame `authored:drums`, local (-0.98, 0.98), yaw 0 | `looper_spot` body; `looper_at` stays, static, for `ZoneKit.solids` |
+
+Two keys were added to `at` for these (and to the schema, `LayoutCheck`, `LayoutResolver`): **`up`**, the origin's height, a number of metres or an
+anchor name read as a height (default 0: everything before stood on y = 0); and **`yaw` may be `{toward: <anchor>, snap: radians}`**: turned to face the
+anchor from where the piece stands (a line such as `mix` is the point (0, value)), rounded to a multiple of `snap`. Both are about the facts the shell
+reports, so they keep a layout meaningful in a wider room or another arrangement.
+
+**Not moved, and why.** `lyrics`: its spot reads the booth's mic stand node (`find_child("MicStand")`) for the felt's height, so it needs a built
+shell; it becomes data when the booth's felt is a constant of the zone kit (3, `lyrics_spot`). `venue` (instrument) and `weather`: the shell supplies
+the spot, which is each of the 14 files' own geometry (`back_wall_instrument`, a window's sill); they move with the venue files (step 7). `modular`
+(`_stand_the_modular`, `_stand_the_annex`): the rack's spot is `ModularAnnex.rack_spot`, a scaled transform (1.2) that `at` cannot say, and it is
+a room-scale piece (step 11). The control-room furniture rows (`stage_table`, `eq_wall`, `levels`, `tv`, `platter`, `miniature`) are the studio's
+`_build_furniture`, wheeled or hung by `SessionLayout`, not stood by `_stand_the_*`; they wait for the control-room fragment. The `Stations.ALL`
+rows themselves (title, help lines, look point, frame, seat) are written in terms of the pieces' class constants (`RackWall.FRAME_TOP`,
+`Looper.PLAQUE_FOOT`, ...) and stay code until the `station` field and `PieceBuilders` exist; their `spot` method names now resolve to the layout for
+the nine pieces that are in it. The groups `rhythm`, `harmony` and `vocals` wait for `Neighbourhoods` (next slice).
 
 ### 4.2 Catalogue of today's things
 
@@ -228,6 +268,8 @@ the anchors' values plus `pos` (an absent anchor means the floor's origin), `yaw
 `Transform3D(Basis(Vector3.UP, yaw), ...)`. `{"frame": "authored:<piece id>", "local": [x, z], "yaw": r}`
 places a piece in another's authored frame (not its pushed one; this is what `default_cassette_rack_spot`
 does, `venue.gd:641`). A zone-mounted piece has no `at`: its definition's zone-relative rule applies.
+(**Built, step 6 part 2**: that is superseded for the four whose rule was arithmetic on a zone box. They have an `at` against the zone's anchors;
+see 4.1 "Built (part 2)" and the two extra `at` keys there.)
 
 `variants[i]` may carry any of `zones`, `pieces` (merged by `id`; `"enabled": false` removes), `groups`,
 `wiring`. Variant 0 is the base. Merge rule: objects merge by key, arrays of `id`-bearing objects merge by
@@ -589,7 +631,9 @@ item 7, 11-12 item 8.
    the spots, `WHEELED` and the studio entry (see 5.2 "Built (step 5)"); `LIVE_TROLLEYS` and the five `_carry_live` arms moved in step 6a (see 4.1 "Built").
 6. **The rest of `Stations.ALL`**, zone-mounted pieces, the control-room fragment and `Neighbourhoods` to
    data; `PieceHost` replaces `_stand_the_*`. Old Studio placement tests deleted once equal (each deletion
-   noted in the commit).
+   noted in the commit). **Part 1 done** (piece definitions, 4.1); **part 2 done for** the four zone-mounted pieces
+   placed from the layout and nine `_stand_the_*` replaced by `PieceHost.stand` (4.1 "Built (part 2)"); still to do: the
+   control-room fragment, `Neighbourhoods`, the `Stations` text rows, and the pieces listed there as not moved.
 7. **14 venue files and the roulette room**; `IDS`, `VARIANTS`, `make_title`, `RackMood.MOODS` derived.
 8. **Room delta and the `layout` row**, import of `floor/*`, persistence in `user://layouts/rooms/`.
 9. **Edit ops** (`ask_layout`), edit mode, reset; validators in the loop.

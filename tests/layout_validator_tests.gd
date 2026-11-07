@@ -50,7 +50,9 @@ func every_layout_is_valid() -> void:
 			warnings += issues.size() - errors.size()
 			check("%s: the layout is valid (%s)" % [tag, errors], errors.is_empty())
 	check("43 rooms at two widths were checked, in %d ms" % (Time.get_ticks_msec() - started), runs == 86)
-	check("the only thing left out is the roulette room's sampler (%d warnings)" % warnings, warnings == 2)
+	# The roulette room has no zones: its sampler (needs a synth zone) and the four pieces mounted in zones
+	# (wheel, sections, drums, looper; step 6 part 2) are left out, at each of the two widths.
+	check("the only things left out are the roulette room's sampler and zone-mounted four (%d warnings)" % warnings, warnings == 2 + 8)
 
 
 ## Resolves `body` (merged over the standard live room) as a room called `name`.

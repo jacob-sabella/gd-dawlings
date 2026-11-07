@@ -653,16 +653,9 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_hang_the_roulette_door()
 	# Before anything stands at its spot: the spots of what is wheeled about are its trolley's.
 	_wheel_in_live_pieces()
-	_stand_the_wheel()
-	_stand_the_sections()
-	_stand_the_cassette_rack()
-	_stand_the_sampler()
-	_stand_the_drum_circle()
-	_stand_the_looper()
-	_stand_the_lyrics()
-	_stand_the_venue_instrument()
+	pieces.stand_all()
 	_stand_the_modular()
-	_stand_the_weather()
+	pieces.stand(&"weather")
 	_hang_hood_signs()
 	var mirror := venue.make_mirror(env)
 	venue.add_child(mirror)
@@ -700,157 +693,6 @@ func _hang_the_roulette_door() -> void:
 	door.transform = venue.rig_roulette_door()
 	door.used.connect(_on_roulette_door_used)
 	venue.add_child(door)
-
-
-## The fifths wheel, in the venue's own frame on the bricks table: a child of the venue, so it
-## goes with it. Each player's is their own (its key and strip); what SET writes is the song's.
-## None in a venue with no bricks table.
-func _stand_the_wheel() -> void:
-	wheel = null
-	var spot: Variant = Stations.spot(venue, &"wheel")
-	if spot == null:
-		return
-	wheel = FifthsWheel.new()
-	wheel.transform = FifthsWheel.on_stand(spot)
-	venue.add_child(wheel)
-
-
-## The section blocks, in the venue's own frame on the bricks table, past the wheel: a child of the
-## venue, so they go with it. What they show and rearrange is the song's regions. None in a venue
-## with no bricks table.
-func _stand_the_sections() -> void:
-	sections = null
-	var spot: Variant = Stations.spot(venue, &"sections")
-	if spot == null:
-		return
-	sections = SectionBlocks.new()
-	sections.transform = spot
-	venue.add_child(sections)
-
-
-## The cassette rack, in the venue's own frame beside the prop shelf: a child of the venue, so it
-## goes with it. Its slots are the room's holder RACK and its bin BIN (`PieceHost.hold_the_rack`).
-func _stand_the_cassette_rack() -> void:
-	cassette_rack = null
-	var spot: Variant = Stations.spot(venue, &"cassette_rack")
-	if spot == null:
-		return
-	cassette_rack = CassetteRack.new()
-	cassette_rack.transform = spot
-	cassette_rack.items = items
-	venue.add_child(cassette_rack)
-
-
-## The sampler, in the venue's own frame beside the cassette rack: a child of the venue, so it goes
-## with it. REC is the room's (`sampler`), kept across a change of venue.
-func _stand_the_sampler() -> void:
-	var was := sampler.armed_by if sampler != null and is_instance_valid(sampler) else 0
-	sampler = null
-	var spot: Variant = Stations.spot(venue, &"sampler")
-	if spot == null:
-		return
-	sampler = Sampler.new()
-	sampler.transform = spot
-	sampler.items = items
-	sampler.authority = Session.is_authority
-	sampler.local_peer = func() -> int: return Session.local_peer_id
-	sampler.name_of = Session.name_of
-	sampler.armed_by = was
-	sampler.rec_pressed.connect(_on_rec_pressed)
-	sampler.told.connect(func(peer: int, text: String) -> void: Session.tell(peer, text))
-	sampler.armed_changed.connect(_publish_room_soon)
-	venue.add_child(sampler)
-
-
-## The circle of hand drums' plaque, in the venue's own frame at the ring's middle on the drum riser:
-## a child of the venue, so it goes with it. The drums themselves are the room's items, whose homes
-## are their places round it (`_item_homes`). None in a venue with no riser.
-func _stand_the_drum_circle() -> void:
-	drum_circle = null
-	var spot: Variant = Stations.spot(venue, &"drums")
-	if spot == null:
-		return
-	drum_circle = Node3D.new()
-	drum_circle.name = "DrumCircle"
-	drum_circle.transform = spot
-	var plaque := Stations.plaque(&"drums", Stations.DRUM_PLAQUE_WIDTH)
-	plaque.transform = Transform3D(Basis(Vector3.RIGHT, -Stations.DRUM_PLAQUE_TILT), Stations.DRUM_PLAQUE)
-	drum_circle.add_child(plaque)
-	# A slim post under it, so it stands on the riser rather than hanging in the air.
-	var post := MeshInstance3D.new()
-	post.name = "Post"
-	var rod := CylinderMesh.new()
-	rod.top_radius = 0.012
-	rod.bottom_radius = 0.018
-	rod.height = Stations.DRUM_PLAQUE.y - 0.02
-	post.mesh = rod
-	post.position = Vector3(0, rod.height * 0.5, Stations.DRUM_PLAQUE.z - 0.03)
-	var metal := StandardMaterial3D.new()
-	metal.albedo_color = Color(0.1, 0.1, 0.11)
-	metal.roughness = 0.4
-	metal.metallic = 0.8
-	post.material_override = metal
-	drum_circle.add_child(post)
-	venue.add_child(drum_circle)
-
-
-## The looper (Looper), in the venue's own frame at the drum riser's front corner: a child of the venue,
-## so it goes with it. Its row is the room's (`looper_row`) and LENGTH this player's (`looper_length`);
-## a layer it was taking down here carries over to the new one. Its rings (LooperRings) are the mix's
-## LOOPER folder, so they stand again with it. None in a venue with no riser.
-func _stand_the_looper() -> void:
-	var was := looper if looper != null and is_instance_valid(looper) else null
-	looper = null
-	var spot: Variant = Stations.spot(venue, Looper.STATION)
-	if spot == null:
-		if was != null and was.mine():
-			_on_looper_called_off()
-		return
-	looper = Looper.new()
-	looper.transform = spot
-	looper.local_peer = func() -> int: return Session.local_peer_id
-	looper.name_of = _looper_name
-	looper.length = looper_length
-	looper.row = looper_row
-	if was != null:
-		looper.take_over(was)
-	looper.slapped.connect(_on_looper_slapped)
-	looper.length_changed.connect(func(bars: int) -> void: looper_length = bars)
-	looper.layer_done.connect(_on_looper_layer)
-	looper.called_off.connect(_on_looper_called_off)
-	venue.add_child(looper)
-	# Its layers' rings (slice 46) say what a grab, a click or a pull did, as a toast.
-	looper.rings.told.connect(func(text: String) -> void: Session.notice.emit(text))
-
-
-## The venue's own instrument's mount (VenueInstrument), in the venue's own frame at its spot: a child
-## of the venue, so it goes with it, its plaque and the set's jack on it. Its bars are the room's
-## items, dressed as its set here (`_dress_venue_bars`) and at home on it (`_item_homes`). None in a
-## venue with no instrument, whose bars are put away.
-func _stand_the_venue_instrument() -> void:
-	venue_instrument = null
-	var spec := VenueInstrument.spec_of(venue)
-	if not spec.is_empty():
-		venue_instrument = VenueInstrument.new(spec)
-		venue_instrument.transform = spec["spot"]
-		venue.add_child(venue_instrument)
-	_dress_venue_bars()
-
-
-## The venue's weather (Weather), in the venue's own frame at its switch's spot: a child of the venue,
-## so it goes with it. Its switch is the room's (`weather_listening`). None in an arrangement with no
-## weather.
-func _stand_the_weather() -> void:
-	weather = null
-	var spec := Weather.spec_of(venue)
-	if spec.is_empty():
-		return
-	weather = Weather.new(spec, Weather.seed_of(venue.venue_id()))
-	weather.transform = spec["spot"]
-	weather.listening = weather_listening
-	weather.switch_pressed.connect(_on_weather_pressed)
-	weather.dropped.connect(_on_weather_dropped)
-	venue.add_child(weather)
 
 
 ## The room's venue bars dressed as this venue's set, the first of them its count, for the mount to
@@ -4495,20 +4337,6 @@ func _on_looper_player_left(peer: int) -> void:
 	if Session.is_authority() and not looper_row.is_empty() and int(looper_row[0]) == peer:
 		_show_looper([])
 		_publish_room_soon()
-
-
-## The lyric board (LyricBoard), in the venue's own frame at its spot in the booth: a child of the venue,
-## so it goes with it. Its notices are toasts, and its EDIT is `edit_lyrics`.
-func _stand_the_lyrics() -> void:
-	lyric_board = null
-	var spot: Variant = Stations.spot(venue, LyricBoard.STATION)
-	if spot == null:
-		return
-	lyric_board = LyricBoard.new()
-	lyric_board.transform = spot
-	lyric_board.told.connect(func(text: String) -> void: Session.notice.emit(text))
-	lyric_board.edit_asked.connect(edit_lyrics)
-	venue.add_child(lyric_board)
 
 
 ## EDIT on the lyric board: in a headset, the typing pad by the singer's hand (LyricBoard.PAD_AT), its

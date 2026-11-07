@@ -8,7 +8,11 @@
     {"id": "sampler", "piece": "sampler", "mobility": "wheeled", "at": {"anchor": {"x": "zone.synth.cx", "z": "zone.synth.cz"}, "pos": [-1.7, 1.1], "yaw": 3.141592653589793}},
     {"id": "tour_case", "piece": "tour_case", "mobility": "wheeled", "at": {"frame": "authored:prop_shelf", "local": [-2.0, 3.21], "yaw": 3.141592653589793}},
     {"id": "prop_shelf", "piece": "prop_shelf", "mobility": "wheeled", "at": {"anchor": {"x": "wall.left", "z": "control_rear"}, "pos": [0.29, 1.0], "yaw": 1.5707963267948966}},
-    {"id": "hoop", "piece": "hoop", "mobility": "wheeled", "at": {"frame": "authored:prop_shelf", "local": [-0.4, 3.31], "yaw": 3.141592653589793}}
+    {"id": "hoop", "piece": "hoop", "mobility": "wheeled", "at": {"frame": "authored:prop_shelf", "local": [-0.4, 3.31], "yaw": 3.141592653589793}},
+    {"id": "wheel", "piece": "wheel", "at": {"anchor": {"x": "zone.bricks.cx", "z": "zone.bricks.cz"}, "pos": [0.0, -0.94], "up": "height.table", "yaw": 3.141592653589793}},
+    {"id": "sections", "piece": "sections", "at": {"anchor": {"x": "zone.bricks.cx", "z": "zone.bricks.cz"}, "pos": [0.3, 0.29], "up": "height.table", "yaw": -1.5707963267948966}},
+    {"id": "drums", "piece": "drums", "at": {"anchor": {"x": "zone.drums.cx", "z": "zone.drums.cz"}, "up": "zone.drums.floor", "yaw": {"toward": "mix", "snap": 1.5707963267948966}}},
+    {"id": "looper", "piece": "looper", "at": {"frame": "authored:drums", "local": [-0.98, 0.98], "yaw": 0.0}}
   ],
   "groups": [
     {"id": "synth", "title": "SYNTH & SOUND DESIGN", "colour": "#C7A8FF", "lift": 0.25, "members": ["sampler"]},

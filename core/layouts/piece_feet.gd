@@ -15,7 +15,13 @@ const CLEAR_IN_FRONT_OF_DOOR := 1.2
 
 ## True for a kind with a known footprint: the wheeled five.
 static func known(kind: StringName) -> bool:
-	return PieceDef.has(kind)
+	return PieceDef.has(kind) and PieceDef.of(kind).mount == PieceDef.Mount.WHEELED
+
+
+## True for a piece with no footprint of its own because it is mounted in a zone or by the shell
+## (`PieceDef.Mount`): nothing is unknown of it, so the validator does not warn.
+static func mounted(kind: StringName) -> bool:
+	return PieceDef.has(kind) and PieceDef.of(kind).mount != PieceDef.Mount.WHEELED
 
 
 ## The footprint of `kind` stood at `spot` (studio space): `{c, h, a, top}`, in the form of the walker.

@@ -11,7 +11,7 @@ const MOBILITIES: Array[String] = ["wheeled", "fixed"]
 const GROW: Array[String] = ["outward", "inward", "none"]
 const WIRE_KINDS: Array[String] = ["feeds", "rides", "loom", "opens_onto"]
 const PIECE_KEYS: Array[String] = ["id", "piece", "at", "mobility", "enabled"]
-const AT_KEYS: Array[String] = ["anchor", "pos", "frame", "local", "yaw"]
+const AT_KEYS: Array[String] = ["anchor", "pos", "frame", "local", "up", "yaw"]
 const ZONE_KEYS: Array[String] = ["min", "size", "grow"]
 const GROUP_KEYS: Array[String] = ["id", "title", "colour", "lift", "members"]
 const WIRE_KEYS: Array[String] = ["kind", "from", "to", "enabled"]
@@ -160,8 +160,10 @@ func placement(at: Variant, where: String) -> void:
 		vector(at["local"], 2, where + ".local")
 	if at.has("pos"):
 		vector(at["pos"], 2, where + ".pos")
-	if at.has("yaw") and not is_number(at["yaw"], 1000.0):
-		bad(where + ".yaw", "must be a number of radians")
+	if at.has("yaw"):
+		yaw(at["yaw"], where + ".yaw")
+	if at.has("up") and not (is_number(at["up"], 200.0) or (at["up"] is String and ShellFacts.is_anchor_name(at["up"]))):
+		bad(where + ".up", "must be a height in metres or an anchor name", &"unknown_anchor" if at["up"] is String else &"bad_schema")
 	if at.has("anchor"):
 		var a: Variant = at["anchor"]
 		if not a is Dictionary:
@@ -171,6 +173,20 @@ func placement(at: Variant, where: String) -> void:
 		for axis in ["x", "z"]:
 			if a.has(axis) and not (a[axis] is String and ShellFacts.is_anchor_name(a[axis])):
 				bad("%s.anchor.%s" % [where, axis], "'%s' is not an anchor the shell provides" % str(a[axis]).left(40), &"unknown_anchor")
+
+
+## A `yaw`: radians, or `{toward: <anchor>, snap: radians}` (turned to face the anchor, rounded to a multiple of snap).
+func yaw(v: Variant, where: String) -> void:
+	if is_number(v, 1000.0):
+		return
+	if not v is Dictionary:
+		bad(where, "must be a number of radians or {toward, snap}")
+		return
+	unknown_keys(v, ["toward", "snap"], where)
+	if not (v.get("toward") is String and ShellFacts.is_anchor_name(v["toward"])):
+		bad(where + ".toward", "'%s' is not an anchor the shell provides" % str(v.get("toward")).left(40), &"unknown_anchor")
+	if v.has("snap") and not (is_number(v["snap"], 7.0) and float(v["snap"]) >= 0.0):
+		bad(where + ".snap", "must be a number of radians, 0 or more")
 
 
 ## One entry of `groups`.

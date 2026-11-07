@@ -640,17 +640,13 @@ func default_sampler_spot() -> Variant:
 ## the bottom edge of its board WHEEL_IN in from the table's end nearest the control room, facing
 ## back toward it. So whoever walks back from the desk meets it at the end of the table, where
 ## both hands reach it and the table's length is behind it. Null where there is no bricks table
-## (the Rig Roulette room has no zones).
+## (the Rig Roulette room has no zones). The layout's (`wheel` of `common.live_room`, whose offset is
+## this WHEEL_IN in from the table's end); the constant stays for the wheel's own plaque
+## (`FifthsWheel`), which hangs off the same edge.
 const WHEEL_IN := 0.06
 
-
 func wheel_spot() -> Variant:
-	var at := zones()
-	if not at.has(&"bricks"):
-		return null
-	var c := (at[&"bricks"] as AABB).get_center()
-	return Transform3D(Basis(Vector3.UP, PI),
-			Vector3(c.x, ZoneKit.TABLE_HEIGHT, c.z - ZoneKit.TABLE_TOP.z * 0.5 + WHEEL_IN))
+	return default_spot(&"wheel")
 
 
 ## The bricks table in three bands (docs/spatial_loop.md part two, slice 30), each a rectangle on
@@ -676,22 +672,12 @@ func bricks_table() -> Variant:
 	return Transform3D(Basis.IDENTITY, Vector3(c.x, ZoneKit.TABLE_HEIGHT, c.z))
 
 
-## Where band `id` (TABLE_BANDS) is on the bricks table, in studio space: on its top at the band's
-## middle, its front (+Z) toward the near long edge, where a player stands to use it, so its +X runs
-## along the table away from the wheel, left to right for them. Null where there is no table.
-func band_spot(id: StringName) -> Variant:
-	var table: Variant = bricks_table()
-	if table == null or not TABLE_BANDS.has(id):
-		return null
-	var band: Rect2 = TABLE_BANDS[id]
-	var middle := band.get_center()
-	return (table as Transform3D) * Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(middle.x, 0, middle.y))
-
-
-## Where the section blocks stand (SectionBlocks, slice 30): their band's middle on the bricks
-## table, along its far long edge. Null where there is no bricks table.
+## Where the section blocks stand (SectionBlocks, slice 30), in studio space: their band's middle
+## (TABLE_BANDS) on the bricks table, along its far long edge, its front (+Z) toward the near long
+## edge where a player stands, so its +X runs along the table away from the wheel, left to right for
+## them. The layout's (`sections` of `common.live_room`). Null where there is no bricks table.
 func sections_spot() -> Variant:
-	return band_spot(&"sections")
+	return default_spot(&"sections")
 
 
 ## The circle of hand drums on the drum riser (HandDrum, docs/spatial_loop.md part two, slice 40):
@@ -724,6 +710,8 @@ static func drum_ring(box: AABB, n := -1, floor := ZoneKit.RISER_HEIGHT) -> Tran
 ## station `drums`) or drum `n`'s place. Null where the venue has no drum riser (the Rig Roulette room
 ## has no zones).
 func drum_circle_spot(n := -1) -> Variant:
+	if n < 0:
+		return default_spot(&"drums")
 	var at := zones()
 	if not at.has(&"drums"):
 		return null
@@ -756,10 +744,7 @@ static func looper_at(box: AABB, floor := ZoneKit.RISER_HEIGHT) -> Transform3D:
 ## Where the looper stands here (`looper_at`), in studio space: the station `looper`. Null where the
 ## venue has no drum riser.
 func looper_spot() -> Variant:
-	var at := zones()
-	if not at.has(&"drums"):
-		return null
-	return looper_at(at[&"drums"], drum_floor())
+	return default_spot(&"looper")
 
 
 ## The venue's own instrument (VenueInstrument, docs/spatial_loop.md part two, slices 42 and 43, idea

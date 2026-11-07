@@ -770,6 +770,8 @@ func _ready() -> void:
 	_test_every_layout_is_valid()
 	_test_the_piece_definitions_are_the_classes_own_numbers()
 	_test_a_defined_piece_carries_its_followers()
+	_test_the_zone_mounted_pieces_stand_where_the_old_code_stood_them()
+	_test_a_piece_host_stands_each_piece_where_its_station_is()
 	_test_the_validator_names_each_seeded_violation()
 	await _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates()
 	_test_a_rack_catalogue_is_the_engines_own_description()
@@ -45866,6 +45868,36 @@ func _test_a_defined_piece_carries_its_followers() -> void:
 	check("and the boards' places follow it", studio.items.boards.size() == studio.venue.dart_boards().size())
 	check("a piece with no definition is left to the studio", not studio.pieces.carry(&"station_board"))
 	_drop_floor_studio(rig)
+
+
+## Section 11 step 6 (part 2): the wheel, the section blocks, the drum ring and the looper are placed by
+## the layout and equal the old code's spots in every room.
+func _test_the_zone_mounted_pieces_stand_where_the_old_code_stood_them() -> void:
+	LayoutResolverTests.new(self).equals_the_zone_pieces()
+
+
+## Every piece `PieceHost.stand` hangs on a venue is a child of it at its station's spot, is the
+## studio's variable for it, and is replaced (not doubled) by the next stand; where the venue has no
+## room for it the variable is null.
+func _test_a_piece_host_stands_each_piece_where_its_station_is() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	for id in PieceDef.standing() + [&"weather"]:
+		var def := PieceDef.of(id)
+		var node: Node3D = studio.get(def.studio_node)
+		var spot: Variant = Stations.spot(studio.venue, id)
+		check("%s: stands in the venue where its station is" % id, (node != null) == (spot != null) \
+				and (node == null or (node.get_parent() == studio.venue and (id == &"wheel" or id == &"drums" or node.transform.is_equal_approx(spot)))))
+	var before: Node3D = studio.sections
+	studio.pieces.stand(&"sections")
+	check("standing again replaces the node", studio.sections != null and studio.sections != before and studio.sections.get_parent() == studio.venue)
+	_drop_floor_studio(rig)
+	var roulette := _floor_studio()
+	var other: Studio = roulette["studio"]
+	other.set_venue(Venue.ROULETTE_ID, false)
+	check("the roulette room, with no zones, stands none of the zone pieces", other.wheel == null and other.sections == null
+			and other.drum_circle == null and other.looper == null and other.lyric_board == null and other.sampler == null)
+	_drop_floor_studio(roulette)
 
 
 func _test_a_placement_is_anchors_plus_an_offset_or_a_frame() -> void:
