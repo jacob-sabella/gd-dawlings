@@ -605,7 +605,7 @@ func _process(delta: float) -> void:
 ## brush ends; a drag begun off the set brushes nothing, so a drag that orbits or walks the view
 ## never rings a bar it passes over.
 func brush(hand: Interactor, held: bool) -> void:
-	var over := hand.hovered as Bar
+	var over: Bar = hand.hovered as Bar if is_instance_valid(hand.hovered) else null
 	if over != null and not bars.has(over):
 		over = null
 	# [whether its button was down, whether this is a brush, the bar it is on or last was].

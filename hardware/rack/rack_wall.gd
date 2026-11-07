@@ -93,6 +93,9 @@ var group := "Source"
 var mood := RackMood.palette(&"")
 var _built := false
 var _shape_key := ""
+## What is built on the wall, {module id: [type, column, row]}, and the blank plates' paint.
+var _on_wall := {}
+var _blank_paint: StandardMaterial3D
 var _lamps := {}
 ## The screens of the SCOPE modules, by module id.
 var _scopes := {}
@@ -525,6 +528,7 @@ func _clear_modules() -> void:
 		if is_instance_valid(n):
 			_drop(n)
 	module_nodes.clear()
+	_on_wall.clear()
 	jacks.clear()
 	knobs.clear()
 	_pads.clear()
@@ -535,20 +539,30 @@ func _clear_modules() -> void:
 	_stream_due.clear()
 
 
-## A blank plate in every place no module holds, so the case reads as a full rack with room left.
+## A blank plate in every place no module holds, so the case reads as a full rack with room left. Only
+## the places that changed are touched: a module put down or lifted fills or frees its own cells.
 func _build_blanks() -> void:
 	var taken := {}
 	for id in patch["modules"]:
 		var m: Dictionary = patch["modules"][id]
 		for c in RackLayout.width_of(m["type"]):
 			taken[Vector2i(int(m["at"][0]) + c, int(m["at"][1]))] = true
-	var paint := StandardMaterial3D.new()
-	paint.albedo_color = Color(0.085, 0.085, 0.09)
-	paint.metallic = 0.4
-	paint.roughness = 0.5
+	for key: String in module_nodes.keys():
+		if not key.begins_with("blank/"):
+			continue
+		var cell := key.trim_prefix("blank/").split("_")
+		if taken.has(Vector2i(int(cell[0]), int(cell[1]))):
+			if is_instance_valid(module_nodes[key]):
+				_drop(module_nodes[key])
+			module_nodes.erase(key)
+	if _blank_paint == null:
+		_blank_paint = StandardMaterial3D.new()
+		_blank_paint.albedo_color = Color(0.085, 0.085, 0.09)
+		_blank_paint.metallic = 0.4
+		_blank_paint.roughness = 0.5
 	for row in ROWS:
 		for col in COLS:
-			if taken.has(Vector2i(col, row)):
+			if taken.has(Vector2i(col, row)) or module_nodes.has("blank/%d_%d" % [col, row]):
 				continue
 			var holder := Node3D.new()
 			holder.name = "Blank_%d_%d" % [col, row]
@@ -558,7 +572,7 @@ func _build_blanks() -> void:
 			face.size = Vector3(MODULE_WIDE - 0.003, ROW_TALL - 0.004, 0.004)
 			plate.mesh = face
 			plate.position = Vector3(0, ROW_TALL * 0.5, -0.002)
-			plate.material_override = paint
+			plate.material_override = _blank_paint
 			holder.add_child(plate)
 			for y in [0.014, ROW_TALL - 0.014]:
 				var screw := MeshInstance3D.new()
@@ -573,6 +587,70 @@ func _build_blanks() -> void:
 				holder.add_child(screw)
 			_put(holder)
 			module_nodes["blank/%d_%d" % [col, row]] = holder
+
+
+## The modules on the wall made to be the patch's, by the difference: one put in is built, one taken out
+## is dropped, one moved is set in its new place. Rebuilding every module for one of them cost a visible
+## stall when a module was let go. The ids whose nodes changed.
+func _sync_modules() -> Dictionary:
+	var changed := {}
+	var now: Dictionary = patch["modules"]
+	for id: String in _on_wall.keys():
+		if not now.has(id) or now[id]["type"] != _on_wall[id][0]:
+			_remove_module(id)
+			_on_wall.erase(id)
+			changed[id] = true
+	for id: String in now:
+		var m: Dictionary = now[id]
+		var seen := [String(m["type"]), int(m["at"][0]), int(m["at"][1])]
+		if not _on_wall.has(id):
+			_build_module(id)
+			changed[id] = true
+		elif _on_wall[id] != seen:
+			_move_module(id)
+			changed[id] = true
+		else:
+			continue
+		_on_wall[id] = seen
+	return changed
+
+
+func _remove_module(id: String) -> void:
+	if not _carry.is_empty() and _carry["id"] == id:
+		var g: Variant = _carry.get("ghost")
+		if g is Node and is_instance_valid(g):
+			(g as Node).queue_free()
+		_carry.clear()
+	var holder: Variant = module_nodes.get(id)
+	if holder is Node and is_instance_valid(holder):
+		_drop(holder as Node)
+	module_nodes.erase(id)
+	module_nodes.erase(id + "/x")
+	for d: Dictionary in [jacks, knobs, _settle_at, _stream_due]:
+		for key: String in d.keys():
+			if key.begins_with(id + "."):
+				d.erase(key)
+	for d: Dictionary in [_pads, _lamps, _scopes, _bands]:
+		d.erase(id)
+
+
+## A module set in the cell the patch now has for it. The one a hand is carrying stays under the hand,
+## and goes home to the new place when let go.
+func _move_module(id: String) -> void:
+	var m: Dictionary = patch["modules"][id]
+	var holder: Node3D = module_nodes.get(id)
+	if holder == null or not is_instance_valid(holder):
+		return
+	var col := int(m["at"][0])
+	var row := int(m["at"][1])
+	var to := Vector3(_x_of(col + RackLayout.width_of(m["type"]) * 0.5), _row_foot(row), 0)
+	if not _carry.is_empty() and _carry["id"] == id:
+		_carry["home"] = to
+	else:
+		holder.position = to
+	var plate := holder.get_node_or_null("Plate") as MeshInstance3D
+	if plate != null:
+		(plate.material_override as StandardMaterial3D).albedo_color = RackSkin.face(String(m["type"]), (col + row) % 2 == 1)
 
 
 func _build_module(id: String) -> void:
@@ -907,19 +985,18 @@ func show_group(g: String) -> void:
 ## out, moved, or a different set of knobs); a cable or a knob value changes in place.
 func show_patch(to: Dictionary) -> void:
 	patch = RackPatch.sanitize(to)
-	var shape := _shape_of(patch)
-	if shape != _shape_key or panel.get_node_or_null("Palette") == null and _palette_nodes.is_empty():
-		_shape_key = shape
-		var held := turning()
+	var changed := {}
+	var first := _palette_nodes.is_empty()
+	if first:
 		_clear_modules()
-		for id in patch["modules"]:
-			_build_module(id)
+	var shape := _shape_of(patch)
+	if shape != _shape_key or first:
+		_shape_key = shape
+		changed = _sync_modules()
 		_build_blanks()
 		_seat_pillars()
-		_build_palette()
-		for key in held:
-			if knobs.has(key):
-				(knobs[key] as Knob).apply_remote(held[key])
+		if first:
+			_build_palette()
 	for key: String in knobs:
 		var k: Knob = knobs[key]
 		if not k.is_held() and not _settle_at.has(key):
@@ -934,7 +1011,7 @@ func show_patch(to: Dictionary) -> void:
 			elif not j.output and c[1] == path:
 				j.plugged_to.append(StringName(c[0]))
 	_refresh_faces()
-	_lay_cables()
+	_lay_cables(changed)
 	_apply_reach()
 
 
@@ -1012,9 +1089,17 @@ func turning() -> Dictionary:
 	return out
 
 
-func _lay_cables() -> void:
+## The cables the patch has, each stood between its two plugs. A cable already stood and unchanged is
+## kept: only those that are new, whose plug-in module is in `touching` (one moved, put in or lifted), or
+## whose fan-out place changed are made again, so a module let go costs its own cables and not the case's.
+func _lay_cables(touching := {}) -> void:
+	var standing := {}
 	for c in cables:
 		if is_instance_valid(c):
+			var ends: Array = c.get_meta(&"cable", [])
+			if ends.size() == 2 and is_inside_tree():
+				standing[String(ends[0]) + ">" + String(ends[1])] = c
+				continue
 			# Out of the tree at once, so a laid-again cable never stands over its predecessor.
 			if c.get_parent() != null:
 				c.get_parent().remove_child(c)
@@ -1026,13 +1111,20 @@ func _lay_cables() -> void:
 	for c: Array in patch["cables"]:
 		var a: RackJack = jacks.get(_jack_key(c[0], true))
 		var b: RackJack = jacks.get(_jack_key(c[1], false))
+		var fan: int = fanned.get(c[0], 0)
+		fanned[c[0]] = fan + 1
 		if a == null or b == null:
+			continue
+		var key := String(c[0]) + ">" + String(c[1])
+		var old: PatchCable = standing.get(key)
+		if old != null and int(old.get_meta(&"fan", 0)) == fan \
+				and not touching.has(String(c[0]).get_slice(".", 0)) and not touching.has(String(c[1]).get_slice(".", 0)):
+			standing.erase(key)
+			cables.append(old)
 			continue
 		var tint := RackSkin.signal_of(String(c[0]).get_slice(".", 1))
 		# A second cable from one output stands its plug further out, so the plugs never share a face.
 		var from_plug := a.plug_transform()
-		var fan: int = fanned.get(c[0], 0)
-		fanned[c[0]] = fan + 1
 		from_plug.origin += from_plug.basis.z.normalized() * 0.014 * fan
 		var cable := PatchCable.create(from_plug, b.plug_transform(), tint, hash(c))
 		cable.name = "Cable_%s_%s" % [c[0], c[1]]
@@ -1043,8 +1135,14 @@ func _lay_cables() -> void:
 		cable.sag_ratio = CABLE_SAG if absf(a.global_position.x - b.global_position.x) < MODULE_WIDE * 2.0 \
 				else clampf(0.25 / maxf(span, 0.05), CABLE_SAG, 0.6)
 		cable.set_meta(&"cable", [c[0], c[1]])
+		cable.set_meta(&"fan", fan)
+		if old != null:
+			standing.erase(key)
+			_drop(old)
 		add_child(cable)
 		cables.append(cable)
+	for gone: PatchCable in standing.values():
+		_drop(gone)
 
 
 func show_keys(pitch: int, gate: bool) -> void:
@@ -1165,8 +1263,8 @@ func _carry_to(local: Vector3) -> void:
 	_carry["fits"] = fits
 	# Its cables follow, as often as the wall can afford to lay them again.
 	_carry["relaid"] = int(_carry["relaid"]) + 1
-	if int(_carry["relaid"]) % 4 == 0 and (patch["cables"] as Array).size() <= 24:
-		_lay_cables()
+	if int(_carry["relaid"]) % 4 == 0:
+		_lay_cables({String(_carry["id"]): true})
 
 
 func _on_grip_finished(from: RackHandle, _at: Vector3) -> void:
@@ -1184,11 +1282,11 @@ func _on_grip_finished(from: RackHandle, _at: Vector3) -> void:
 		ghost.queue_free()
 	if is_instance_valid(holder):
 		holder.position = home
+	# Its cables back to where it stands, whatever the answer to the ask is (a refusal changes nothing).
+	_lay_cables({id: true})
 	if fits and (cell.x != int(here[0]) or cell.y != int(here[1])):
 		Foley.play(holder, Foley.plug_seat(), -6.0)
 		edit_asked.emit("move", [id, cell.x, cell.y])
-	else:
-		_lay_cables()
 
 
 # --- carrying a cable -------------------------------------------------------------------------

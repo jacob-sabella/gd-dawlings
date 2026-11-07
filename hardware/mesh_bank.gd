@@ -33,6 +33,15 @@ extends MultiMeshInstance3D
 static var _lamp_shader: Shader
 
 var _transforms: Array[Transform3D] = []
+
+
+func _init() -> void:
+	# Slots are moved from `_process` (a meter, a fader cap), where the engine's physics interpolation
+	# of a MultiMesh is not meant to be driven from: it warns once per bank, and tweens a slot between
+	# two ticks it was never given.
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+
+
 ## RETAINED after commit, not dropped, and that is the whole reason this is readable at all.
 ##
 ## A MultiMesh's instance buffer lives in the rendering server, and the headless server is a

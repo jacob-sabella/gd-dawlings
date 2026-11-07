@@ -38,6 +38,10 @@ var level := 0.0
 var hit := 0.0
 var _last_peak := 0.0
 var _held := {}
+## Where the rack plays when no track can carry it (see `_direct`): a player of its own on the monitor
+## bus, fed from the engine's stream a frame at a time.
+var _player: AudioStreamPlayer
+var _playback: AudioStreamGeneratorPlayback
 
 
 func _ready() -> void:
@@ -62,6 +66,7 @@ func start() -> bool:
 
 func shutdown() -> void:
 	InputMonitor.feeds.erase(track)
+	_stop_direct()
 	engine.stop()
 
 
@@ -200,9 +205,56 @@ func _transport() -> Dictionary:
 	return {"playing": st.playing, "beats": st.position_seconds * st.tempo / 60.0, "bpm": st.tempo}
 
 
+## Whether the rack plays on its own: only the built-in engine's InputMonitor takes a track's feed,
+## so on the silent stand-in (a launch from the editor without --built-in) or under Reaper nothing
+## would ever read the engine's stream and the rack would be mute. Without a sound card (the Dummy
+## driver of a headless run) nothing would take it either, and the suite reads the stream itself.
+func _direct() -> bool:
+	if AudioServer.get_driver_name() == "Dummy":
+		return false
+	var backend: Object = DAW.backend if DAW != null else null
+	var carried := backend is GodotBackend and (backend as GodotBackend).monitors != null and track > 0
+	return not carried
+
+
+func _stop_direct() -> void:
+	if _player != null and is_instance_valid(_player):
+		_player.queue_free()
+	_player = null
+	_playback = null
+
+
+## The engine's sound to the speakers, the frames the generator has room for.
+func _pump_direct() -> void:
+	if _player == null:
+		var stream := AudioStreamGenerator.new()
+		stream.mix_rate = RackEngine.RATE
+		stream.buffer_length = 0.3
+		_player = AudioStreamPlayer.new()
+		_player.name = "RackDirect"
+		_player.bus = AudioPorts.bus(AudioPorts.MONITOR)
+		_player.stream = stream
+		add_child(_player)
+		_player.play()
+		_playback = _player.get_stream_playback() as AudioStreamGeneratorPlayback
+	if _playback == null:
+		return
+	var frames := source.read()
+	var room := _playback.get_frames_available()
+	if frames.size() > room:
+		frames = frames.slice(frames.size() - room)
+	if not frames.is_empty():
+		_playback.push_buffer(frames)
+
+
 func _process(delta: float) -> void:
 	if not engine.running():
+		_stop_direct()
 		return
+	if source != null and _direct():
+		_pump_direct()
+	elif _player != null:
+		_stop_direct()
 	engine.poll()
 	meters = engine.meters
 	scopes = engine.scopes

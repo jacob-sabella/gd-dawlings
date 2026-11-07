@@ -45303,3 +45303,58 @@ func _test_a_knobs_shape_is_drawn_as_a_curve() -> void:
 	var sharp := RackCurves.peak(RackCurves.filter("lp", 2, 1000.0, 8.0))
 	check("resonance raises a peak at the cutoff", sharp > calm)
 	check("only the shaped modules have a curve", RackCurves.of("vco", {}).is_empty() and not RackCurves.of("svf", {}).is_empty())
+
+
+func _test_letting_go_of_a_rack_module_builds_only_what_moved() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	studio.ask_rack("preset", ["heavy_machine"])
+	await get_tree().process_frame
+	var wall: RackWall = studio.rack_wall
+	var ids: Array = wall.patch["modules"].keys()
+	var id := String(ids[0])
+	var other := String(ids[ids.size() - 1])
+	var holder_was: Node = wall.module_nodes[id]
+	var other_was: Node = wall.module_nodes[other]
+	var standing := {}
+	for c in wall.cables:
+		standing[c.name] = c
+	var here: Array = wall.patch["modules"][id]["at"]
+	var free := Vector2i(-1, -1)
+	for row in RackWall.ROWS:
+		for col in RackWall.COLS - 1:
+			if RackLayout.fits(wall.patch, String(wall.patch["modules"][id]["type"]), Vector2i(col, row), id) \
+					and Vector2i(col, row) != Vector2i(int(here[0]), int(here[1])):
+				free = Vector2i(col, row)
+				break
+		if free.x >= 0:
+			break
+	check("the case has a free place to carry a module to", free.x >= 0)
+	var t0 := Time.get_ticks_usec()
+	studio.ask_rack("move", [id, free.x, free.y])
+	var took := (Time.get_ticks_usec() - t0) / 1000.0
+	check("a module let go is the same module, set down in its new place", wall.module_nodes[id] == holder_was and not holder_was.is_queued_for_deletion()
+			and is_equal_approx(holder_was.position.x, wall._x_of(free.x + RackLayout.width_of(String(wall.patch["modules"][id]["type"])) * 0.5)))
+	check("and the rest of the case is left as it stood", wall.module_nodes[other] == other_was)
+	var kept := 0
+	var made := 0
+	for c in wall.cables:
+		var ends: Array = c.get_meta(&"cable")
+		if standing.get(c.name) == c:
+			kept += 1
+			check("a cable kept is none of the moved module's", String(ends[0]).get_slice(".", 0) != id and String(ends[1]).get_slice(".", 0) != id)
+		else:
+			made += 1
+	check("only the moved module's cables are laid again", kept > 0 and made > 0 and kept + made == wall.patch["cables"].size())
+	check("the place it fills has no blank plate left in it", not wall.module_nodes.has("blank/%d_%d" % [free.x, free.y]))
+	check("and the place it left has one again unless it still covers it", wall.module_nodes.has("blank/%d_%d" % [int(here[0]), int(here[1])])
+			== not (int(here[1]) == free.y and int(here[0]) >= free.x and int(here[0]) < free.x + RackLayout.width_of(String(wall.patch["modules"][id]["type"]))))
+	check("it takes under 40 ms in a headless run (was ~65 ms rebuilding the case)", took < 40.0)
+	print("  rack move took ", took, " ms")
+	var voice := RackVoice.new()
+	check("headless there is no sound card, so the rack does not play itself", not voice._direct())
+	voice.free()
+	studio.queue_free()

@@ -51,7 +51,7 @@ func _ready() -> void:
 
 
 func show_on(control: ControlAffordance, held: bool) -> void:
-	if control != null and not is_instance_valid(control):
+	if control != null and (not is_instance_valid(control) or not control.is_inside_tree()):
 		control = null
 	if control != _target or held != _held or tint != _built_tint:
 		_target = control
