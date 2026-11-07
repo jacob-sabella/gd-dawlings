@@ -1,7 +1,8 @@
 # Layouts: rooms as data
 
-Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 and 2 (11) are built and unused by the game:
-`core/layouts/` (`LayoutData`, `LayoutCheck`, `LayoutMerge`, `LayoutSet`, `LayoutProblem`, `ShellFacts`),
+Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 to 4 (11) are built and unused by the game:
+`core/layouts/` (`LayoutData`, `LayoutCheck`, `LayoutMerge`, `LayoutSet`, `LayoutProblem`, `ShellFacts`, `LayoutResolver`,
+`LayoutValidator` with `LayoutChecks`, `LayoutIssue`, `LayoutReach`, `LayoutGeometry`, `PieceFeet`), `layouts/common/live_room.layout.json`,
 `layouts/layout.schema.json`, fixtures in `tests/fixtures/layouts/`. Where they differ from the text below, the
 text says so ("Built:"). It is queue item 2 of `docs/refactor_loop.md` and feeds items 6-8. "Today" claims cite `docs/refactor_state_map.md` (SM) or
 a file:line. Companion: `docs/mods.md` (manifests, registry; a piece is delivered as a mod entry).
@@ -107,6 +108,8 @@ wider (86 comparisons, none differs), and `_test_shell_facts_of_a_venue_in_a_stu
 `Studio` built for each of the 43. `rich` only changes shadows, so it is not varied. So "where a `solids()` reads nodes the solid becomes
 a constant" (below) turned out to be needed nowhere. `lyrics_spot`/`mic_spot` will need it when step 6 makes the lyric board a piece:
 the booth's felt height is then a constant of the zone kit.
+
+`ShellFacts.can_cut(wall, z, width)` (step 4) answers whether a doorway can be cut in a side wall; see 6.
 
 Anchors the shell provides (names are the contract): `wall.left`, `wall.right` (x of the live room's
 side walls, +-`live_room_half`), `control_wall.left|right` (+-`room_width/2`), `control_rear` (z =
@@ -246,6 +249,20 @@ these rules made exact; each is a clarification or a deviation from the text abo
 * `shell.size` is any short name until queue slice 8 settles the sizes (decision 4); no size is designed here.
 
 ### 5.2 Worked example: the rooftop, today's numbers
+
+**Built (step 3)**: the shipped `res://layouts/common/live_room.layout.json` holds the five wheeled pieces, the `feeds`
+wire and the `synth` and `tape` groups (the other four groups wait for their members, step 6). It differs from the
+JSON below in one way: `hoop` and `tour_case` are placed in the **authored frame of `prop_shelf`**
+(`{"frame": "authored:prop_shelf", "local": [-0.4, 3.31], "yaw": pi}` and `[-2.0, 3.21]`), not against `wall.left`,
+because the code derives them from `default_prop_shelf_spot()` (`_toys_wall(shelf)`): with the wall anchors the studio's
+"Live room beside" arrangement would have needed three variant entries instead of the shelf's one, as the text
+below shows. `local` is the world offset turned into the shelf's frame (the shelf is turned a quarter, so
+`local = (-dz, dx)`). The sampler keeps `zone.synth.cx|cz` with `pos [-1.7, 1.1]`, yaw pi, which is the code's
+`SYNTH_MIDDLE`/`SAMPLER_RING` for a synth zone on the right-hand side and behind the desk, as it is in all 14
+venues; a made room that puts the synth zone on the left or in front must place the sampler itself (the code's
+`side`/`away` signs have no data form yet). Yaws are written to 16 digits. `_test_the_layout_resolves_to_the_venues_own_defaults`
+holds all five to `Venue.default_spot` within 1e-4 for 14 x 3 + 1 rooms at two widths (428 transforms, the
+roulette room's two missing samplers null on both sides).
 
 The rooftop (`rooftop_venue.gd`, 858 lines) overrides none of the placement functions; it stands on the base
 class (SM 2.2), at base width (`room_width` 11.2, so `live_room_half` 8.8 and zone growth 0). The five
@@ -401,6 +418,37 @@ The 42-combination guarantee becomes `_test_every_layout_is_valid` (loops files 
 `validate`, no Studio, expected to be fast). The old Studio tests stay during migration, run beside the new
 one, and are removed only when step 6 proves them equal.
 
+**Built (step 4)**: `LayoutValidator` (`validate`, `validate_piece`, `nearest_clear`, `structure`, `walkable`),
+`LayoutIssue` (`CODES` lists the 17 below), and under it `LayoutChecks` (one function per rule), `LayoutReach` (the
+walkway grid, taken from the test's `_walk_grid`/`_walk_from`/`_walked_to`), `LayoutGeometry` (footprints, gap,
+`fits`) and `PieceFeet` (the code-side table of what a piece kind weighs on the floor until definitions are data: the
+footprint is `Studio.LIVE_TROLLEYS`'s, the height the class's own, the seat the `Stations` row's, the claims
+`ModularAnnex`'s constants). Where it differs from the sketch and table:
+
+* Options: `unavailable` (kinds whose mod is missing), `fix` (fill `LayoutIssue.fix` with `{"pos": [x, z]}`, the nearest
+  clear floor point for the piece's origin, found by rings of 10 cm to 3 m), `reach` (false skips the grid, the one slow check).
+  `validate_piece` is `validate` filtered to the issues naming the piece; it is not incremental.
+* Parser problems pass through as issues (`schema` for any not named in the table, `unknown_key` as a warning). A layout
+  that did not resolve returns only these.
+* `unknown_anchor` is also raised here for `zone.<id>` where `<id>` is no zone any shell has (`Venue.ZONE_IDS`). A real zone
+  a shell lacks is `needs_missing`: a warning, and the piece is left out, as is one framed on such a piece.
+* `unknown_piece` is also a warning for a piece kind with a placement but no known footprint (not checked).
+* `too_close`: 0.6 m between pieces, and between a piece and a shell solid, but not for a solid that is stood on
+  (top <= `Walker.STEP_HEIGHT`) nor one in the same zone as the piece. `hits_solid` is any overlap with a shell solid, a zone's
+  ground or the control-room footprint. The footprint is not held 0.6 m off: the tests measure that against the desk and
+  trolleys inside it, which are not in a layout yet.
+* `unreachable` / `no_seat`: a station piece (one with a `Stations` row and a foot: the rack, the sampler) needs room to stand
+  at its front and a seat found by `Stations.seat`'s search, and the seat must be reached from the mixing position down a
+  0.9 m walkway (clearance 0.45, like the test, not the 0.3 above). **Every zone must also be reachable** (a walkway up to
+  within 0.9 m of its ground), standing in for the zone-mounted stations, which are not pieces of a layout yet. An unreachable zone
+  is reported with `piece` = `zone.<id>`.
+* Room-scale claims use a code-side claim for `modular_annex` only (`PieceFeet.claims`, `limit` 1 -> `over_limit`).
+  `site_taken`: two sites overlap. `door_blocked`: a piece or a tall solid in the 1.2 m in front of the doorway (to 15 cm
+  short of the wall). `wall_uncuttable`: `ShellFacts.can_cut(wall, z, width)`, which for now says no only when the opening is
+  not inside the live room's depth (every shell cuts what is boxy there and leaves open ground alone); a shell that can
+  refuse for another reason will say so in this method.
+* `unavailable_mod` is raised from `opts.unavailable`; the registry is not read here.
+
 ## 7. Editing, saving, sharing
 
 **Edit mode.** A mode of the station board (headset) and a key on the desktop (binding chosen at build;
@@ -501,8 +549,8 @@ item 7, 11-12 item 8.
 1. **`LayoutData` parser and merge** (`extends`, variants), `layouts/layout.schema.json`, fixtures. Unused. **Done** (see 5.1 "Built").
 2. **`ShellFacts`** and the un-readied-venue equivalence test over 42 + 1. **Done** (see 3 "Built"; no fact needs `_ready`).
 3. **`LayoutResolver`** and `common.live_room` for the five wheeled pieces; a test that resolved transforms
-   equal `Venue.default_spot` for every combination (1e-4). Venues untouched.
-4. **`LayoutValidator`** and `_test_every_layout_is_valid`, with seeded violations. Old tests unchanged.
+   equal `Venue.default_spot` for every combination (1e-4). Venues untouched. **Done** (see 5.2 "Built").
+4. **`LayoutValidator`** and `_test_every_layout_is_valid`, with seeded violations. Old tests unchanged. **Done** (see 6 "Built").
 5. **Switch the five.** `default_*_spot` bodies, `WHEELED`, `LIVE_TROLLEYS`, the five `_carry_live` arms read
    the layout; studio's shelf override becomes its variant entry. Old placement tests must pass untouched.
 6. **The rest of `Stations.ALL`**, zone-mounted pieces, the control-room fragment and `Neighbourhoods` to
@@ -524,9 +572,9 @@ item 7, 11-12 item 8.
 |---|---|
 | `_test_a_layout_parses_and_names_every_error`, `_test_layout_fragments_and_variants_merge_and_resolve`, `_test_a_layout_that_cannot_be_resolved_says_why`, `_test_the_layout_schema_agrees_with_the_parser` (`tests/layout_data_tests.gd`) | step 1 (built) |
 | `_test_shell_facts_from_an_unreadied_venue_match_the_built_one`, `_test_shell_facts_of_a_venue_in_a_studio_are_the_unreadied_ones`, `_test_shell_anchors_have_the_values_placement_uses` (`tests/shell_facts_tests.gd`) | step 2 (built) |
-| `_test_the_layout_resolves_to_the_venues_own_defaults` (temporary) | 5 |
-| `_test_every_layout_is_valid` | the 42 guarantees, no Studio |
-| `_test_the_validator_names_each_seeded_violation` | each code in 6 fires |
+| `_test_the_layout_resolves_to_the_venues_own_defaults` (temporary), `_test_a_placement_is_anchors_plus_an_offset_or_a_frame` (`tests/layout_resolver_tests.gd`) | step 3 (built) |
+| `_test_every_layout_is_valid` | the 42 guarantees as far as a layout holds them, no Studio (built; 86 runs, 8 s with start-up) |
+| `_test_the_validator_names_each_seeded_violation` | each code in 6 fires (built, `tests/layout_validator_tests.gd`) |
 | `_test_deleting_and_adding_a_piece_survives_a_restart` | brief proof: delete in one venue, add in another, make a room, reload |
 | `_test_a_guest_sees_the_hosts_layout_and_cannot_edit_it` | 7 |
 | `_test_reset_returns_the_default` | 7 |

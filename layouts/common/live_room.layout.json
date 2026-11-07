@@ -1,0 +1,18 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "common.live_room",
+  "title": "Standard live room",
+  "pieces": [
+    {"id": "prop_shelf", "piece": "prop_shelf", "mobility": "wheeled", "at": {"anchor": {"x": "wall.left", "z": "control_rear"}, "pos": [0.29, 1.0], "yaw": 1.5707963267948966}},
+    {"id": "cassette_rack", "piece": "cassette_rack", "mobility": "wheeled", "at": {"frame": "authored:prop_shelf", "local": [-1.345, -0.11], "yaw": 0.0}},
+    {"id": "hoop", "piece": "hoop", "mobility": "wheeled", "at": {"frame": "authored:prop_shelf", "local": [-0.4, 3.31], "yaw": 3.141592653589793}},
+    {"id": "tour_case", "piece": "tour_case", "mobility": "wheeled", "at": {"frame": "authored:prop_shelf", "local": [-2.0, 3.21], "yaw": 3.141592653589793}},
+    {"id": "sampler", "piece": "sampler", "mobility": "wheeled", "at": {"anchor": {"x": "zone.synth.cx", "z": "zone.synth.cz"}, "pos": [-1.7, 1.1], "yaw": 3.141592653589793}}
+  ],
+  "groups": [
+    {"id": "synth", "title": "SYNTH & SOUND DESIGN", "colour": "#C7A8FF", "lift": 0.25, "members": ["sampler"]},
+    {"id": "tape", "title": "TAPE & TOYS", "colour": "#B3FFB8", "members": ["cassette_rack", "prop_shelf", "tour_case", "hoop"]}
+  ],
+  "wiring": [{"kind": "feeds", "from": "sampler", "to": "cassette_rack"}]
+}

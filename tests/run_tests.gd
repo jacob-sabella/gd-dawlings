@@ -765,6 +765,10 @@ func _ready() -> void:
 	_test_shell_facts_from_an_unreadied_venue_match_the_built_one()
 	_test_shell_facts_of_a_venue_in_a_studio_are_the_unreadied_ones()
 	_test_shell_anchors_have_the_values_placement_uses()
+	_test_the_layout_resolves_to_the_venues_own_defaults()
+	_test_a_placement_is_anchors_plus_an_offset_or_a_frame()
+	_test_every_layout_is_valid()
+	_test_the_validator_names_each_seeded_violation()
 	await _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates()
 	_test_a_rack_catalogue_is_the_engines_own_description()
 	_test_a_rack_patch_checks_every_verb()
@@ -45783,6 +45787,8 @@ func _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_repl
 
 const LayoutDataTests := preload("res://tests/layout_data_tests.gd")
 const ShellFactsTests := preload("res://tests/shell_facts_tests.gd")
+const LayoutResolverTests := preload("res://tests/layout_resolver_tests.gd")
+const LayoutValidatorTests := preload("res://tests/layout_validator_tests.gd")
 
 
 ## docs/layouts.md section 11 step 1: the parser, the problem codes and the files that break it.
@@ -45814,3 +45820,21 @@ func _test_shell_facts_of_a_venue_in_a_studio_are_the_unreadied_ones() -> void:
 
 func _test_shell_anchors_have_the_values_placement_uses() -> void:
 	ShellFactsTests.new(self).anchors()
+
+
+## docs/layouts.md section 11 step 3: the shipped live-room fragment resolves to Venue.default_spot.
+func _test_the_layout_resolves_to_the_venues_own_defaults() -> void:
+	LayoutResolverTests.new(self).equals_the_venue()
+
+
+func _test_a_placement_is_anchors_plus_an_offset_or_a_frame() -> void:
+	LayoutResolverTests.new(self).placement_rules()
+
+
+## Section 11 step 4: the placement guarantees of the 42 combinations, from facts and no Studio.
+func _test_every_layout_is_valid() -> void:
+	LayoutValidatorTests.new(self).every_layout_is_valid()
+
+
+func _test_the_validator_names_each_seeded_violation() -> void:
+	LayoutValidatorTests.new(self).names_each_seeded_violation()
