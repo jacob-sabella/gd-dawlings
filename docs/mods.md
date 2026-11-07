@@ -222,7 +222,7 @@ it into a temporary user mods folder (section 10).
 }
 ```
 
-Expansion (pure GDScript, in `RackPatch.lines`): an instance `pl` becomes engine modules `pl~osc`,
+Expansion (pure GDScript, `RackExpansion`, called by `RackPatch.lines`; see section 9 step 7): an instance `pl` becomes engine modules `pl~osc`,
 `pl~env`, `pl~amp` (`~` is not a valid instance-id character, so ids cannot collide) with the inner
 cables, and outer cables to `pl.pitch` fan out to the inner jacks. Knob values are 0..1 positions,
 as in patch files. Depth limit 3, cycles rejected, inner types must exist (else the whole entry is
@@ -619,6 +619,48 @@ Each step ends with the suite green and no behaviour change unless stated. Steps
    * Not done: the unavailable DAW plugin slot (needs the chain/`PluginTablet` work of step 8); the problem list is
      a function (`RackGaps.problems`) that nothing shows yet; the plate is not restyled beyond title and note.
 7. **Composite.** Expansion in `RackPatch.lines`; `interface` handling in `RackModuleDef`; meters.
+   **Built (2026-11-07).**
+   * `RackModuleDef` (`core/music/rack/rack_module_def.gd`) is the scan-time half and reads no registry, patch or
+     catalogue (a cycle between those classes does not compile): `resolve(entries)` checks every composite and
+     gives each its interface `{ins, outs, knobs}`, `depth` and `cost`. It also reads the engine snapshot
+     (`engine_modules`, `engine_spec`; `RackCatalogue.PATH` is `RackModuleDef.PATH`). The registry calls it at the
+     end of `_index_rack_modules` (`_check_composites`): a bad composite is taken out of the rack modules, recorded
+     as `composite_invalid` (error, entry `rack_module:<type>`, the reason in the message; the mod's other entries
+     stay), and kept in `invalid_composite_entry` / `composite_problem` for the plate. Good ones are
+     `is_composite`, `composite_info` (`depth`, `cost`, `spec`), `composite_sound`, `composite_types`.
+   * Rules of `resolve`: inner ids are identifiers up to 20 characters (no `~`, no dot); inner types must be
+     available rack modules (engine or composite) and not `builtin.out` / `builtin.world`; inner `knobs` name real
+     knobs and hold numbers; each cable goes from an inner output to an inner input; each `ins` name has one or more
+     inner inputs, each `outs` name one inner output, each plate knob a `to` that is an inner knob; `meter_from`
+     is an inner id; a cycle, nesting past 3 (`RackModuleDef.MAX_DEPTH`; a composite of engine modules is depth 1),
+     more than 64 expanded modules or 160 cables, and a plate with no jacks are refused.
+   * The catalogue (`RackCatalogue._load`) lists the good composites after the engine's own, in registry order, with
+     `engine: ""` and `composite: true`. A plate knob has the inner knob's range, curve, units and label (or the
+     label given); where the composite sets the inner module's knob (`"knobs": {"d": 0.25}` on the inner module), that
+     position is the plate knob's default. The width comes from the counts as for any module.
+   * `RackExpansion` (`core/music/rack/rack_expansion.gd`) is the play-time half: `expand(p)` (returns `p` itself when
+     it holds no composite, so a plain patch is untouched), `cost(type)`, `has_composite`, `meter_map`. Ids are
+     `<instance>~<inner>`, nested `<instance>~<a>~<b>`. Order: every module of the patch by id, with each
+     composite's inner modules and cables written as it is met; inner cables come before the patch's own; a patch
+     cable on a plate jack fans out to every inner jack (a cable on a jack the plate lacks is dropped, as a
+     dangling one is). A module's knobs are the composite's values for it, then the instance's values routed to it
+     (0..1, clamped); a plate knob the instance does not hold leaves the inner value alone.
+   * **Cap.** `RackPatch.cost(p)` is the sum of `RackExpansion.cost` (1 for an engine module and for a type nobody
+     provides, the expanded count for a composite); `add`, the `add` verb and `sanitize` hold it to
+     `MAX_MODULES` (64; the constant now lives in `RackModuleDef` and `RackPatch` aliases it). A patch with more
+     is cut at the cap on load, in module order.
+   * **Voice.** `RackVoice._sync_patch` diffs the *expanded* patch against what the engine has, so a live edit sends
+     only inner changes; `knob()` on a composite plate re-syncs instead of sending one line; `meters` folds each
+     composite plate's lamp from `meter_map` (`meter_from`, else the module its first output comes from; nested:
+     through the inner composite's own). Scopes and sequencer steps inside a composite are not forwarded.
+   * **Unavailable.** A composite that is `composite_invalid` is not in the catalogue, so a patch that uses it keeps
+     it as the existing stranger plate (step 5); `RackGaps.plate_text` adds "unavailable, <reason>", and
+     `to_dict` takes the plate's title from the dropped entry. No crash path: `resolve` returns a reason for any
+     junk (tested with malformed `sound` objects).
+   * Not done: `ModEntryCheck` still checks only the shape (`modules`, `ins`, `outs`); the details are
+     `composite_invalid`, not `bad_schema`. The reason is not shown anywhere but the plate sentence and the
+     problem list (the MODS screen is step 8). Fixtures: `tests/fixtures/mods/composite/` (`test_comp`: pluck, pair,
+     stack; `test_bad`: one broken composite per rule, one fine). The sample mod itself is step 9.
 8. **Plugin overlays, MODS screen, notices tool.** Plugin part, catalogue built (4.3; the tablet/unit look,
    the unavailable slot and `display.skin` remain); `plugin_display` in the tablet/unit; the MODS plate;
    `tools/mods_notices.py` and its `--check` in `tools/verify.sh`.
@@ -644,7 +686,7 @@ Each step ends with the suite green and no behaviour change unless stated. Steps
 | `_test_a_patch_file_round_trips` | 6.1, v1 loads, atomic write |
 | `_test_a_missing_mod_keeps_its_place_and_cables` | 6.2: save with the mod, load without, save again, load with: identical |
 | `_test_a_guest_without_the_mod_sees_a_named_plate_and_hears_the_host` | 6.3 (host feeds the track; guest plate text from `uses`) |
-| `_test_a_composite_expands_plays_and_meters` | 3.5: render 0.3 s, finite and non-silent |
+| `_test_a_composite_expands_exactly`, `_test_a_composite_has_its_own_interface`, `_test_composite_knobs_are_routed_to_the_inner_modules`, `_test_composites_nest_three_deep`, `_test_a_bad_composite_is_an_unavailable_plate_and_never_a_crash`, `_test_the_module_cap_is_counted_on_the_expansion`, `_test_a_composite_plate_meters_its_inner_module`, `_test_a_patch_without_composites_is_unchanged`, `_test_composite_fixtures_load`, `_test_a_composite_plays` (built, `tests/rack_composite_tests.gd`) | 3.5: exact lines, interface, knob routing, nesting, depth/cycle limits, cap, meters; render equals the same modules patched by hand. The sample mod's own render is the proof test |
 | **`_test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates`** | the proof: copy `mods_examples/dawlings.sample.pluck` into a temp user root, `scan`, assert the module and preset are in the palette; load the preset, render audio from the engine; `to_dict` -> file -> `from_dict` equal; remove the folder, reload: plate unavailable, place and cables kept; host row -> guest `apply_room`: guest without the mod gets the named plate |
 
 ## 11. Decisions (owner, 2026-11-07)

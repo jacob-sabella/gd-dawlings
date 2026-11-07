@@ -94,6 +94,9 @@ static func plate_text(p: Dictionary, id: String) -> String:
 	var u := uses_of(p, id)
 	var name: String = u.get("title", RackPatch.type_of(p, id))
 	var note := plate_note(p, id)
+	var why := ModRegistry.ensure_current().composite_problem(RackPatch.type_of(p, id))
+	if why != "":
+		return "%s (%s): unavailable, %s" % [name, note, why] if note != "" else "%s: unavailable, %s" % [name, why]
 	return "%s (%s): not installed" % [name, note] if note != "" else "%s: not installed" % name
 
 

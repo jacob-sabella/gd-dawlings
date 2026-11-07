@@ -7,8 +7,10 @@ extends RefCounted
 ## says no to what the engine would refuse, so a patch that passes is a patch that plays.
 
 const ROW := &"rack"
-const MAX_MODULES := 64
-const MAX_CABLES := 160
+## The most engine modules a rack holds: a composite counts as the modules it expands to
+## (`RackExpansion.cost`, docs/mods.md decision 8).
+const MAX_MODULES := RackModuleDef.MAX_MODULES
+const MAX_CABLES := RackModuleDef.MAX_CABLES
 ## The one module a rack must keep: the sound leaves the room through it.
 const OUT_MODULE := "builtin.out"
 ## The module whose outputs are the room's world sockets.
@@ -71,9 +73,18 @@ static func new_id(p: Dictionary, type: String) -> String:
 	return "%s%d" % [stem, n]
 
 
+## How many engine modules the patch is, against `MAX_MODULES`: each module counts 1, a composite the
+## modules it expands to.
+static func cost(p: Dictionary) -> int:
+	var n := 0
+	for id in p["modules"]:
+		n += RackExpansion.cost(p["modules"][id]["type"])
+	return n
+
+
 ## Adds a module. "" when the catalogue has no such type, the rack is full, or it is a second OUT.
 static func add(p: Dictionary, type: String, at := Vector2i.ZERO) -> String:
-	if not RackCatalogue.has(type) or (p["modules"] as Dictionary).size() >= MAX_MODULES:
+	if not RackCatalogue.has(type) or cost(p) + RackExpansion.cost(type) > MAX_MODULES:
 		return ""
 	if type == OUT_MODULE and has_type(p, OUT_MODULE):
 		return ""
@@ -283,6 +294,7 @@ static func sanitize(raw: Variant) -> Dictionary:
 	if not raw is Dictionary or not (raw as Dictionary).get("modules") is Dictionary:
 		return p
 	var raw_uses: Variant = raw.get("uses", {})
+	var used := 0
 	for id in raw["modules"]:
 		var m: Variant = raw["modules"][id]
 		var sid := String(id)
@@ -293,6 +305,10 @@ static func sanitize(raw: Variant) -> Dictionary:
 			continue
 		if type == OUT_MODULE and has_type(p, OUT_MODULE):
 			continue
+		var weight := RackExpansion.cost(type)
+		if used + weight > MAX_MODULES:
+			continue
+		used += weight
 		var at: Variant = m.get("at", [0, 0])
 		var col := _int(at[0]) if at is Array and at.size() >= 2 else 0
 		var row := _int(at[1]) if at is Array and at.size() >= 2 else 0
@@ -389,7 +405,8 @@ static func to_dict(p: Dictionary, title := "", track := 0) -> Dictionary:
 			continue
 		var owner := reg.entry_owner("rack_module:" + type)
 		if owner != "":
-			uses[type] = {"mod": owner, "version": reg.mod(owner).version, "title": String(RackCatalogue.spec(type).get("title", type))}
+			var name: Variant = RackCatalogue.spec(type).get("title", reg.invalid_composite_entry(type).get("title", type))
+			uses[type] = {"mod": owner, "version": reg.mod(owner).version, "title": String(name)}
 		elif p.get("uses", {}).has(type):
 			uses[type] = (p["uses"][type] as Dictionary).duplicate()
 	var cables: Array = []
@@ -406,10 +423,11 @@ static func from_dict(raw: Variant) -> Dictionary:
 
 
 ## The engine's lines for a whole patch: clear, every module and its knobs, every cable (a module no
-## mod here provides, and the cables on it, are not sounded).
+## mod here provides, and the cables on it, are not sounded). A composite is its inner modules, under
+## ids `<instance>~<inner>`, with its knob values routed to theirs (`RackExpansion.expand`).
 static func lines(p: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray(["clear"])
-	p = playable(p)
+	p = RackExpansion.expand(playable(p))
 	for id in module_ids(p):
 		out.append("add %s %s" % [id, RackCatalogue.engine_type(p["modules"][id]["type"])])
 	for id in module_ids(p):
@@ -437,7 +455,7 @@ static func answer(p: Dictionary, op: String, args: Array) -> String:
 				return "there is no module called %s" % type
 			if type == OUT_MODULE and has_type(p, OUT_MODULE):
 				return "the rack has its OUT already: one sound leaves the room"
-			if (p["modules"] as Dictionary).size() >= MAX_MODULES:
+			if cost(p) + RackExpansion.cost(type) > MAX_MODULES:
 				return "the case is full: take something out first"
 			if at.x < 0:
 				at = RackLayout.free_slot(p, type)

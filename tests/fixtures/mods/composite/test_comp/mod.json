@@ -1,0 +1,188 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "test.comp",
+  "name": "Test composites",
+  "version": "0.1.0",
+  "licence": {
+    "spdx": "CC0-1.0"
+  },
+  "source": {
+    "kind": "data"
+  },
+  "provides": [
+    {
+      "kind": "rack_module",
+      "type": "test.comp.pluck",
+      "title": "PLUCK",
+      "group": "Voice",
+      "blurb": "A composite for the tests.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "osc": {
+            "type": "builtin.plaits",
+            "knobs": {
+              "engine": 0.35,
+              "harm": 0.4
+            }
+          },
+          "env": {
+            "type": "builtin.env",
+            "knobs": {
+              "a": 0.0,
+              "d": 0.25,
+              "s": 0.0,
+              "r": 0.2
+            }
+          },
+          "amp": {
+            "type": "builtin.vca"
+          }
+        },
+        "cables": [
+          [
+            "env.out",
+            "amp.cv"
+          ],
+          [
+            "osc.out",
+            "amp.in"
+          ]
+        ],
+        "ins": {
+          "pitch": [
+            "osc.pitch"
+          ],
+          "gate": [
+            "env.gate",
+            "osc.trig"
+          ]
+        },
+        "outs": {
+          "out": "amp.out"
+        },
+        "knobs": {
+          "timbre": {
+            "to": "osc.timbre",
+            "label": "TIMBRE"
+          },
+          "decay": {
+            "to": "env.d",
+            "label": "DECAY"
+          }
+        },
+        "meter_from": "amp"
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "TEST"
+      }
+    },
+    {
+      "kind": "rack_module",
+      "type": "test.comp.pair",
+      "title": "PAIR",
+      "group": "Voice",
+      "blurb": "A composite for the tests.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "a": {
+            "type": "test.comp.pluck",
+            "knobs": {
+              "timbre": 0.2
+            }
+          },
+          "b": {
+            "type": "test.comp.pluck",
+            "knobs": {
+              "timbre": 0.8
+            }
+          },
+          "mix": {
+            "type": "builtin.mix"
+          }
+        },
+        "cables": [
+          [
+            "a.out",
+            "mix.in1"
+          ],
+          [
+            "b.out",
+            "mix.in2"
+          ]
+        ],
+        "ins": {
+          "pitch": [
+            "a.pitch",
+            "b.pitch"
+          ],
+          "gate": [
+            "a.gate",
+            "b.gate"
+          ]
+        },
+        "outs": {
+          "out": "mix.out"
+        },
+        "knobs": {
+          "decay": {
+            "to": "a.decay"
+          },
+          "decay_b": {
+            "to": "b.decay",
+            "label": "DECAY B"
+          }
+        },
+        "meter_from": "mix"
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "TEST"
+      }
+    },
+    {
+      "kind": "rack_module",
+      "type": "test.comp.stack",
+      "title": "STACK",
+      "group": "Voice",
+      "blurb": "A composite for the tests.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "p": {
+            "type": "test.comp.pair"
+          }
+        },
+        "ins": {
+          "pitch": [
+            "p.pitch"
+          ],
+          "gate": [
+            "p.gate"
+          ]
+        },
+        "outs": {
+          "out": "p.out"
+        },
+        "knobs": {
+          "decay": {
+            "to": "p.decay"
+          }
+        }
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "TEST"
+      }
+    }
+  ]
+}

@@ -748,6 +748,16 @@ func _ready() -> void:
 	await _test_the_room_row_says_which_mod_each_type_needs()
 	await _test_a_guest_without_the_mod_sees_a_named_plate_and_hears_the_host()
 	_test_plugins_are_described_by_the_registry()
+	_test_composite_fixtures_load()
+	_test_a_composite_has_its_own_interface()
+	_test_a_composite_expands_exactly()
+	_test_a_patch_without_composites_is_unchanged()
+	_test_composite_knobs_are_routed_to_the_inner_modules()
+	_test_composites_nest_three_deep()
+	_test_a_bad_composite_is_an_unavailable_plate_and_never_a_crash()
+	_test_the_module_cap_is_counted_on_the_expansion()
+	_test_a_composite_plate_meters_its_inner_module()
+	_test_a_composite_plays()
 	_test_a_rack_catalogue_is_the_engines_own_description()
 	_test_a_rack_patch_checks_every_verb()
 	_test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input()
@@ -45710,3 +45720,46 @@ func _test_a_guest_without_the_mod_sees_a_named_plate_and_hears_the_host() -> vo
 
 func _test_plugins_are_described_by_the_registry() -> void:
 	RackModTests.new(self).plugins_are_described_by_the_registry()
+
+
+const RackCompositeTests := preload("res://tests/rack_composite_tests.gd")
+
+
+func _test_composite_fixtures_load() -> void:
+	RackCompositeTests.new(self).the_fixture_mods_load()
+
+
+func _test_a_composite_has_its_own_interface() -> void:
+	RackCompositeTests.new(self).the_interface_is_the_composites_own()
+
+
+func _test_a_composite_expands_exactly() -> void:
+	RackCompositeTests.new(self).expansion_is_exact()
+
+
+func _test_a_patch_without_composites_is_unchanged() -> void:
+	RackCompositeTests.new(self).a_patch_without_composites_is_unchanged()
+
+
+func _test_composite_knobs_are_routed_to_the_inner_modules() -> void:
+	RackCompositeTests.new(self).knobs_are_routed_to_the_inner_modules()
+
+
+func _test_composites_nest_three_deep() -> void:
+	RackCompositeTests.new(self).nesting_expands_all_the_way_down()
+
+
+func _test_a_bad_composite_is_an_unavailable_plate_and_never_a_crash() -> void:
+	RackCompositeTests.new(self).bad_composites_are_unavailable_and_never_a_crash()
+
+
+func _test_the_module_cap_is_counted_on_the_expansion() -> void:
+	RackCompositeTests.new(self).the_cap_is_counted_on_the_expansion()
+
+
+func _test_a_composite_plate_meters_its_inner_module() -> void:
+	RackCompositeTests.new(self).meters_follow_the_inner_module()
+
+
+func _test_a_composite_plays() -> void:
+	RackCompositeTests.new(self).a_composite_plays()

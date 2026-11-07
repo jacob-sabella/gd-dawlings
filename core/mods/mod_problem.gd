@@ -14,14 +14,14 @@ const CODES: Array[StringName] = [
 	&"api_version_unsupported", &"game_too_old",
 	&"id_collision", &"type_collision", &"reserved_id",
 	&"missing_dependency", &"dependency_cycle",
-	&"missing_file", &"bad_model", &"unsupported_sound_kind", &"unknown_group",
+	&"missing_file", &"bad_model", &"unsupported_sound_kind", &"unknown_group", &"composite_invalid",
 ]
 
 ## Codes from docs/mods.md section 5 that need machinery not built yet, so nothing raises them
-## today: the engine snapshot (3), composite expansion (7), plugin scan (8), source pins (10).
+## today: the engine snapshot (3), plugin scan (8), source pins (10).
 const LATER_CODES: Array[StringName] = [
 	&"engine_type_missing", &"engine_unavailable", &"snapshot_stale", &"binary_hash_mismatch",
-	&"unsupported_platform", &"composite_invalid", &"plugin_not_found",
+	&"unsupported_platform", &"plugin_not_found",
 ]
 
 ## One of CODES (or LATER_CODES).

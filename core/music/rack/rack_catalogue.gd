@@ -9,7 +9,7 @@ extends RefCounted
 ## its own name (`plaits`, `engine_type`). A patch and everything on the wall speak types, and only
 ## the lines sent to the engine speak engine names.
 
-const PATH := "res://core/music/rack/modules.json"
+const PATH := RackModuleDef.PATH
 
 static var _modules := {}
 static var _order: Array[String] = []
@@ -19,23 +19,35 @@ static var _watching: ModRegistry
 static func _load() -> void:
 	if not _modules.is_empty():
 		return
-	var f := FileAccess.open(PATH, FileAccess.READ)
-	if f == null:
-		push_error("RackCatalogue: no %s" % PATH)
-		return
-	var data: Variant = JSON.parse_string(f.get_as_text())
-	if not data is Dictionary:
+	var snapshot := RackModuleDef.engine_modules()
+	if snapshot.is_empty():
 		return
 	var reg := ModRegistry.ensure_current()
 	if reg != _watching:
 		_watching = reg
 		reg.changed.connect(_forget)
-	for m in data["modules"]:
+	for m in snapshot:
 		var type := reg.rack_type_of_engine(m["type"])
 		if type == "":
 			type = m["type"]
 		_order.append(type)
 		_modules[type] = _from_registry(m, type, reg)
+	# The composites a mod builds from these, after the engine's own, in the registry's order.
+	for type in reg.composite_types():
+		var spec: Dictionary = reg.composite_info(type)["spec"]
+		var knobs: Array = []
+		for k: Dictionary in spec["knobs"]:
+			var own := k.duplicate()
+			if own.has("set"):
+				own["def"] = real(own, float(own["set"]))
+				own.erase("set")
+			knobs.append(own)
+		var m := {"type": type, "title": type, "group": "Other", "blurb": "", "ins": spec["ins"], "outs": spec["outs"],
+				"knobs": knobs}
+		_order.append(type)
+		_modules[type] = _from_registry(m, type, reg)
+		_modules[type]["engine"] = ""
+		_modules[type]["composite"] = true
 
 
 ## A module a mod provides takes its title, group and blurb from the manifest. The jacks and knobs
@@ -84,7 +96,8 @@ static func spec(type: String) -> Dictionary:
 	return _modules.get(type, {})
 
 
-## The native engine's name for a type (`builtin.vco` -> `vco`), or "" for an unknown type.
+## The native engine's name for a type (`builtin.vco` -> `vco`), or "" for an unknown type or a composite
+## (which is no engine module: `RackExpansion.expand` turns it into some).
 static func engine_type(type: String) -> String:
 	return spec(type).get("engine", "")
 

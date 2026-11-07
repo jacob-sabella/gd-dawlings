@@ -23,6 +23,8 @@ var follow_daw := true
 ## Offered to the suite: {playing, beats, bpm} instead of DAW.state.
 var transport_override: Callable = Callable()
 var _sent := RackPatch.empty()
+## Composite plate id -> the engine module whose meter stands for it (RackExpansion.meter_map).
+var _meter_map := {}
 var _was_playing := false
 var _bpm := 0.0
 var _since_sync := 0.0
@@ -78,6 +80,7 @@ func running() -> bool:
 ## cables and knobs changed, so a sounding tail is not cut by turning a knob.
 func set_patch(p: Dictionary) -> void:
 	patch = RackPatch.playable(RackPatch.sanitize(p))
+	_meter_map = RackExpansion.meter_map(patch)
 	_sync_patch()
 	changed.emit()
 
@@ -86,7 +89,7 @@ func _sync_patch() -> void:
 	if not engine.running():
 		return
 	var was: Dictionary = _sent
-	var now: Dictionary = patch
+	var now: Dictionary = RackExpansion.expand(patch)
 	var lines := PackedStringArray()
 	var fresh := {}
 	for id in was["modules"]:
@@ -125,14 +128,17 @@ func _sync_patch() -> void:
 	_sent = now.duplicate(true)
 
 
-## One knob, at once (a hand turning it): the patch and the engine, with no diff.
+## One knob, at once (a hand turning it): the patch and the engine, with no diff. A composite's knob is
+## an inner module's, so it goes as the difference of the expanded patch.
 func knob(id: String, k: String, v01: float) -> void:
-	if RackPatch.set_knob(patch, id, k, v01):
-		if RackPatch.set_knob(_sent, id, k, v01):
-			pass
-		else:
-			_sent = patch.duplicate(true)
-		engine.say(RackPatch.knob_line(id, k, v01))
+	if not RackPatch.set_knob(patch, id, k, v01):
+		return
+	if _meter_map.has(id):
+		_sync_patch()
+		return
+	if not RackPatch.set_knob(_sent, id, k, v01):
+		_sent = RackExpansion.expand(patch).duplicate(true)
+	engine.say(RackPatch.knob_line(id, k, v01))
 
 
 func note_on(pitch: int, velocity := 100) -> void:
@@ -247,6 +253,17 @@ func _pump_direct() -> void:
 		_playback.push_buffer(frames)
 
 
+## The engine's meters, with a lamp for each composite plate: the meter of the inner module that stands
+## for it (`meter_from`).
+func _fold_meters(raw: Dictionary) -> Dictionary:
+	if _meter_map.is_empty():
+		return raw
+	var out := raw.duplicate()
+	for id in _meter_map:
+		out[id] = float(raw.get(_meter_map[id], 0.0))
+	return out
+
+
 func _process(delta: float) -> void:
 	if not engine.running():
 		_stop_direct()
@@ -256,7 +273,7 @@ func _process(delta: float) -> void:
 	elif _player != null:
 		_stop_direct()
 	engine.poll()
-	meters = engine.meters
+	meters = _fold_meters(engine.meters)
 	scopes = engine.scopes
 	steps = engine.steps
 	var peak := 0.0

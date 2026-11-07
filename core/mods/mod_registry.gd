@@ -40,6 +40,10 @@ var _plate_of_engine: Dictionary = {}
 var _plugins: Dictionary = {}
 var _plugin_ids: Dictionary = {}
 var _preset_names: Array[StringName] = []
+## Composite rack modules (RackModuleDef.resolve): type -> {depth, cost, spec} for the good ones, in
+## registry order, and type -> {entry, reason} for the ones dropped as `composite_invalid`.
+var _composites: Dictionary = {}
+var _bad_composites: Dictionary = {}
 ## Preset name -> {"entry": the manifest entry, "folder": the mod's folder, "patch": the patch once read}.
 var _presets: Dictionary = {}
 
@@ -83,6 +87,7 @@ func scan(roots: Array[String]) -> void:
 	_claim_entries()
 	_check_groups()
 	_index_rack_modules()
+	_check_composites()
 	_index_presets()
 	_index_plugins()
 	for p in _problems:
@@ -212,6 +217,63 @@ func _read_patch(entry: Dictionary, folder: String) -> Dictionary:
 		m["at"] = [int(at[0]), int(at[1])] if at is Array and (at as Array).size() >= 2 else [0, 0]
 		out["modules"][id] = m
 	return out
+
+
+## True when an available mod provides a composite rack module of this type (docs/mods.md 4.1).
+func is_composite(type: String) -> bool:
+	return _composites.has(type)
+
+
+## The composite types, in registry order.
+func composite_types() -> Array[String]:
+	var out: Array[String] = []
+	out.assign(_composites.keys())
+	return out
+
+
+## A composite's {depth, cost, spec}: `cost` is the engine modules it expands to, `spec` its {ins, outs,
+## knobs} as the catalogue holds a module. {} for anything else.
+func composite_info(type: String) -> Dictionary:
+	return _composites.get(type, {})
+
+
+## A composite's `sound` as the mod gave it ({} for anything else). The caller must not modify it.
+func composite_sound(type: String) -> Dictionary:
+	return _rack_modules.get(type, {}).get("sound", {}) if _composites.has(type) else {}
+
+
+## Why a composite was dropped as `composite_invalid` ("" for any other type).
+func composite_problem(type: String) -> String:
+	return str(_bad_composites.get(type, {}).get("reason", ""))
+
+
+## The manifest entry of a composite that was dropped (its title, for the plate), or {}.
+func invalid_composite_entry(type: String) -> Dictionary:
+	return _bad_composites.get(type, {}).get("entry", {})
+
+
+## Checks every composite (RackModuleDef.resolve): a good one is kept with its description, a bad one is
+## taken out of the rack modules (so its plates are unavailable) and recorded as `composite_invalid`.
+## The mod's other entries stay.
+func _check_composites() -> void:
+	_composites.clear()
+	_bad_composites.clear()
+	var found := RackModuleDef.resolve(_rack_modules)
+	for type in _rack_modules.keys():
+		var e: Dictionary = _rack_modules[type]
+		if e.get("sound", {}).get("kind") != "composite":
+			continue
+		var info: Dictionary = found[type]
+		if info["ok"]:
+			_composites[type] = {"depth": info["depth"], "cost": info["cost"], "spec": info["spec"]}
+			continue
+		_bad_composites[type] = {"entry": e, "reason": info["reason"]}
+		_rack_modules.erase(type)
+		var key := ModEntryCheck.entry_key(e)
+		var owner: ModManifest = _by_id.get(_owner.get(key, ""))
+		if owner != null:
+			owner.unavailable_entries[key] = &"composite_invalid"
+		_record(&"composite_invalid", _owner.get(key, ""), "%s: %s" % [type, info["reason"]], key)
 
 
 ## The native engine's name for a rack module type (`builtin.plaits` -> `plaits`): the `sound.type` of

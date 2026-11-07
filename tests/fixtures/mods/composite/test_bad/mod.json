@@ -1,0 +1,349 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "test.bad",
+  "name": "Test broken composites",
+  "version": "0.1.0",
+  "licence": {
+    "spdx": "CC0-1.0"
+  },
+  "source": {
+    "kind": "data"
+  },
+  "provides": [
+    {
+      "kind": "rack_module",
+      "type": "test.bad.deep",
+      "title": "DEEP",
+      "group": "Voice",
+      "blurb": "A composite for the tests.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "s": {
+            "type": "test.comp.stack"
+          }
+        },
+        "ins": {
+          "pitch": [
+            "s.pitch"
+          ]
+        },
+        "outs": {
+          "out": "s.out"
+        }
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "TEST"
+      }
+    },
+    {
+      "kind": "rack_module",
+      "type": "test.bad.unknown",
+      "title": "UNKNOWN",
+      "group": "Voice",
+      "blurb": "A composite for the tests.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "amp": {
+            "type": "builtin.vca"
+          },
+          "x": {
+            "type": "test.nowhere.thing"
+          }
+        },
+        "ins": {
+          "in": [
+            "amp.in"
+          ]
+        },
+        "outs": {
+          "out": "amp.out"
+        }
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "TEST"
+      }
+    },
+    {
+      "kind": "rack_module",
+      "type": "test.bad.loop_a",
+      "title": "A",
+      "group": "Voice",
+      "blurb": "A composite for the tests.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "b": {
+            "type": "test.bad.loop_b"
+          }
+        },
+        "ins": {
+          "in": [
+            "b.in"
+          ]
+        },
+        "outs": {
+          "out": "b.out"
+        }
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "TEST"
+      }
+    },
+    {
+      "kind": "rack_module",
+      "type": "test.bad.loop_b",
+      "title": "B",
+      "group": "Voice",
+      "blurb": "A composite for the tests.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "a": {
+            "type": "test.bad.loop_a"
+          }
+        },
+        "ins": {
+          "in": [
+            "a.in"
+          ]
+        },
+        "outs": {
+          "out": "a.out"
+        }
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "TEST"
+      }
+    },
+    {
+      "kind": "rack_module",
+      "type": "test.bad.self",
+      "title": "SELF",
+      "group": "Voice",
+      "blurb": "A composite for the tests.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "me": {
+            "type": "test.bad.self"
+          }
+        },
+        "ins": {
+          "in": [
+            "me.in"
+          ]
+        },
+        "outs": {
+          "out": "me.out"
+        }
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "TEST"
+      }
+    },
+    {
+      "kind": "rack_module",
+      "type": "test.bad.jack",
+      "title": "JACK",
+      "group": "Voice",
+      "blurb": "A composite for the tests.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "amp": {
+            "type": "builtin.vca"
+          }
+        },
+        "ins": {
+          "in": [
+            "amp.in"
+          ]
+        },
+        "outs": {
+          "out": "amp.out"
+        },
+        "cables": [
+          [
+            "amp.out",
+            "amp.nope"
+          ]
+        ]
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "TEST"
+      }
+    },
+    {
+      "kind": "rack_module",
+      "type": "test.bad.knob",
+      "title": "KNOB",
+      "group": "Voice",
+      "blurb": "A composite for the tests.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "amp": {
+            "type": "builtin.vca"
+          }
+        },
+        "ins": {
+          "in": [
+            "amp.in"
+          ]
+        },
+        "outs": {
+          "out": "amp.out"
+        },
+        "knobs": {
+          "level": {
+            "to": "amp.nope"
+          }
+        }
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "TEST"
+      }
+    },
+    {
+      "kind": "rack_module",
+      "type": "test.bad.out",
+      "title": "OUT",
+      "group": "Voice",
+      "blurb": "A composite for the tests.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "amp": {
+            "type": "builtin.vca"
+          },
+          "o": {
+            "type": "builtin.out"
+          }
+        },
+        "ins": {
+          "in": [
+            "amp.in"
+          ]
+        },
+        "outs": {
+          "out": "amp.out"
+        }
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "TEST"
+      }
+    },
+    {
+      "kind": "rack_module",
+      "type": "test.bad.huge",
+      "title": "HUGE",
+      "group": "Voice",
+      "blurb": "A composite for the tests.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "m0": {
+            "type": "test.comp.pair"
+          },
+          "m1": {
+            "type": "test.comp.pair"
+          },
+          "m2": {
+            "type": "test.comp.pair"
+          },
+          "m3": {
+            "type": "test.comp.pair"
+          },
+          "m4": {
+            "type": "test.comp.pair"
+          },
+          "m5": {
+            "type": "test.comp.pair"
+          },
+          "m6": {
+            "type": "test.comp.pair"
+          },
+          "m7": {
+            "type": "test.comp.pair"
+          },
+          "m8": {
+            "type": "test.comp.pair"
+          },
+          "m9": {
+            "type": "test.comp.pair"
+          }
+        },
+        "ins": {
+          "pitch": [
+            "m0.pitch"
+          ]
+        },
+        "outs": {
+          "out": "m0.out"
+        }
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "TEST"
+      }
+    },
+    {
+      "kind": "rack_module",
+      "type": "test.bad.fine",
+      "title": "FINE",
+      "group": "Voice",
+      "blurb": "A composite for the tests.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "amp": {
+            "type": "builtin.vca"
+          }
+        },
+        "ins": {
+          "in": [
+            "amp.in"
+          ]
+        },
+        "outs": {
+          "out": "amp.out"
+        }
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "TEST"
+      }
+    }
+  ]
+}
