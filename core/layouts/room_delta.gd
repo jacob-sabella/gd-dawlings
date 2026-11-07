@@ -66,9 +66,17 @@ func is_empty() -> bool:
 
 ## Piece `id` stands at (x, z) turned `yaw`. Rounded to a tenth of a millimetre: the text stays short
 ## and the same spot is always the same text. True if that is a change (a piece left where it was
-## is not a new revision).
+## is not a new revision). A piece the room added carries its spot in its own `added` entry.
 func move(id: StringName, x: float, z: float, yaw: float) -> bool:
 	var spot := [_tenth_mm(x), _tenth_mm(z), _tenth_mm(yaw)]
+	var i := added_index(id)
+	if i >= 0:
+		var at := {"pos": [spot[0], spot[1]], "yaw": spot[2]}
+		if added[i].get("at") == at:
+			return false
+		added[i]["at"] = at
+		rev += 1
+		return true
 	if moved.get(String(id)) == spot:
 		return false
 	moved[String(id)] = spot
@@ -84,12 +92,80 @@ func unmove(id: StringName) -> bool:
 	return false
 
 
-## Where piece `id` stands in this room, or null where nobody moved it.
+## Where piece `id` stands in this room, or null where nobody moved it (and it was not added).
 func transform_of(id: StringName) -> Variant:
+	var i := added_index(id)
+	if i >= 0:
+		var at: Dictionary = added[i]["at"]
+		return Transform3D(Basis(Vector3.UP, float(at.get("yaw", 0.0))), Vector3(float(at["pos"][0]), 0.0, float(at["pos"][1])))
 	var m: Variant = moved.get(String(id))
 	if m == null:
 		return null
 	return Transform3D(Basis(Vector3.UP, float(m[2])), Vector3(float(m[0]), 0.0, float(m[1])))
+
+
+## The index of the `added` entry with id `id`, or -1.
+func added_index(id: StringName) -> int:
+	for i in added.size():
+		if added[i].get("id") == String(id):
+			return i
+	return -1
+
+
+## Whether the room does without layout piece `id`.
+func is_removed(id: StringName) -> bool:
+	return String(id) in removed
+
+
+## A copy to try an edit on: the same room, the same revision.
+func copy() -> RoomDelta:
+	return RoomDelta.from_dict(to_dict())
+
+
+## The room has a piece the layout does not: `entry` is `{id, piece, at: {pos, yaw}, footprint?}`.
+func add_piece(entry: Dictionary) -> void:
+	added.append(entry.duplicate(true))
+	rev += 1
+
+
+## Layout piece `id` is done without, and wherever it was moved to is forgotten. True if it was not already.
+func take_out(id: StringName) -> bool:
+	if is_removed(id):
+		return false
+	moved.erase(String(id))
+	removed.append(String(id))
+	rev += 1
+	return true
+
+
+## Layout piece `id` is in the room again. True if it was out.
+func put_back(id: StringName) -> bool:
+	if removed.has(String(id)):
+		removed.erase(String(id))
+		rev += 1
+		return true
+	return false
+
+
+## The piece the room added, `id`, is gone again. True if there was one.
+func drop_added(id: StringName) -> bool:
+	var i := added_index(id)
+	if i < 0:
+		return false
+	added.remove_at(i)
+	rev += 1
+	return true
+
+
+## Everything back as the layout has it. True if there was anything to put back.
+func clear() -> bool:
+	if is_empty():
+		return false
+	moved.clear()
+	added.clear()
+	removed.clear()
+	rev += 1
+	return true
 
 
 ## The delta as a dictionary: the file (`with_format`) or the room-state row.

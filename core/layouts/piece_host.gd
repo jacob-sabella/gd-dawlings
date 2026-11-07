@@ -29,16 +29,22 @@ func build() -> void:
 		var spot: Variant = venue.default_spot(id) if venue != null else null
 		var at: Transform3D = spot if spot != null else Transform3D.IDENTITY
 		var t := studio._trolley(def.trolley_name, id, at.origin, rad_to_deg(at.basis.get_euler().y))
-		t.footprint_centre = def.foot_centre
-		t.footprint_half = def.foot_half
-		t.follow = def.weight
-		t.rolls = false
-		for grip: Array in def.grips:
-			studio._grip(t, grip[0], grip[1])
-		if def.body_half != Vector2.ZERO:
-			t.body_centre = def.body_centre
-			t.body_half = def.body_half
+		equip(t, def)
 		studio._go_live(t)
+
+
+## Give trolley `t` the feet of definition `def`: its footprint, how heavy it is to push, what it is taken
+## by and where a walker bumps it. The five pieces' trolleys and a copy a room added are made alike.
+func equip(t: Trolley, def: PieceDef) -> void:
+	t.footprint_centre = def.foot_centre
+	t.footprint_half = def.foot_half
+	t.follow = def.weight
+	t.rolls = false
+	for grip: Array in def.grips:
+		studio._grip(t, grip[0], grip[1])
+	if def.body_half != Vector2.ZERO:
+		t.body_centre = def.body_centre
+		t.body_half = def.body_half
 
 
 ## Stand every piece in `PieceDef.standing()` in the venue, each a child of it, in the order the
@@ -65,7 +71,7 @@ func stand(id: StringName) -> void:
 		spec = VenueInstrument.spec_of(venue) if id == VenueInstrument.STATION else Weather.spec_of(venue)
 		at = spec.get("spot")
 	else:
-		at = Stations.spot(venue, id)
+		at = null if studio.room_deltas.delta.is_removed(id) else Stations.spot(venue, id)
 	var node: Node3D = _make(id, at, spec, was) if at != null else null
 	if node != null:
 		studio.set(def.studio_node, node)
@@ -76,6 +82,19 @@ func stand(id: StringName) -> void:
 		studio._on_looper_called_off()
 	if id == VenueInstrument.STATION:
 		studio._dress_venue_bars()
+
+
+## Take piece `id`'s node down (a room that does without it): freed, the studio's variable null as where
+## a venue has no room for it, and what rode on it let go of (the rack's slots, the shelf's toys).
+func unstand(id: StringName) -> void:
+	var def := PieceDef.of(id)
+	var held: Variant = studio.get(def.studio_node)
+	if _stands(held):
+		(held as Node).get_parent().remove_child(held)
+		(held as Node).queue_free()
+	studio.set(def.studio_node, null)
+	hold_the_rack()
+	rehome_items()
 
 
 ## The node of piece `id` for spot `at` (and `spec`, for the two the shell describes), with what it
@@ -180,11 +199,11 @@ func _drum_circle(at: Transform3D) -> Node3D:
 
 ## Take piece `id` to where its trolley is now: its node, then each follower in order. Each frame
 ## the trolley moves, so a shelf's toys ride on it rather than catching up. False when `id` is not
-## one of the defined pieces (the caller's own arms handle the rest).
+## one of the defined pieces or a copy a room added (the caller's own arms handle the rest).
 func carry(id: StringName) -> bool:
 	var def := PieceDef.of(id)
 	if def == null:
-		return false
+		return RoomSync.carry_copy(studio, id)
 	var venue := studio.venue
 	var node: Node3D = _node_of(def)
 	var spot: Variant = venue.call(StringName("%s_spot" % id))
@@ -204,7 +223,7 @@ func carry(id: StringName) -> bool:
 					studio.items.boards = venue.dart_boards()
 			PieceDef.HOOPS:
 				if studio.items != null:
-					studio.items.hoops = venue.hoops()
+					studio.items.hoops = RoomSync.hoops(studio)
 			PieceDef.ITEMS:
 				rehome_items()
 			PieceDef.HOLD_RACK_IF_GONE:

@@ -369,10 +369,12 @@ var spectra: Spectra
 ## control room's rig: the venue's free-standing stations and back-of-house furniture
 ## (Venue.WHEELED), the station board's stand and the audio patch wall's legs. id -> Trolley. Built
 ## once and the same in every venue, as the rack is; a venue with no room for one hides it
-## (`_wheel_in_live_pieces`). Empty in AR.
+## (`RoomSync.wheel_in`). Empty in AR.
 var live_pieces := {}
 ## Builds the wheeled pieces from their definitions and carries what rides with them.
 var pieces := PieceHost.new(self)
+## The host's edits of the room's layout (move, rotate, add, remove, reset), asked through `ask_layout`.
+var layout_edit := LayoutEdit.new(self)
 ## Clap to mute (Clap, docs/spatial_loop.md slice 19): the two hands' palms or grips, and K held at
 ## a desk. Two of them, so a key and the hands never let go of each other's press.
 var clap := Clap.new()
@@ -654,7 +656,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	add_child(venue)
 	_hang_the_roulette_door()
 	# Before anything stands at its spot: the spots of what is wheeled about are its trolley's.
-	_wheel_in_live_pieces()
+	RoomSync.wheel_in(self)
 	pieces.stand_all()
 	_stand_the_modular()
 	pieces.stand(&"weather")
@@ -917,7 +919,7 @@ func _walk_where_the_venue_lets() -> void:
 		walker.unstick()
 	if items != null and venue != null:
 		items.boards = venue.dart_boards()
-		items.hoops = venue.hoops()
+		items.hoops = RoomSync.hoops(self)
 		items.set_venue(venue.venue_id())
 		items.set_spots(venue.item_spots(), _item_homes())
 	pieces.hold_the_rack()
@@ -1597,13 +1599,13 @@ func _build_patch_stand() -> void:
 # baskets a ball goes through, the dartboard on the shelf's posts -- goes with them.
 
 ## A wheeled piece's trolley for each of Venue.WHEELED (`PieceHost.build`, from its `PieceDef`), and the patch wall's legs; stood where
-## this venue has them (`_wheel_in_live_pieces`) and what stands on them taken there.
+## this venue has them (`RoomSync.wheel_in`) and what stands on them taken there.
 func _build_live_pieces() -> void:
 	floor_plan.rooms = venue.rooms() if venue != null else []
 	floor_plan.stops.append(_venue_stops)
 	pieces.build()
 	_build_patch_wall_legs()
-	_wheel_in_live_pieces()
+	RoomSync.wheel_in(self)
 	_carry_all_live()
 
 
@@ -1650,8 +1652,11 @@ func _build_patch_wall_legs() -> void:
 ## frame; null where this venue has no room for it: the Rig Roulette room has no booth for the
 ## sampler to stand against, and a venue that hangs its own patch wall needs no legs for one.
 func _live_default(id: StringName) -> Variant:
-	if venue == null:
+	if venue == null or room_deltas.delta.is_removed(id):
 		return null
+	var added: Variant = room_deltas.delta.transform_of(id) if room_deltas.delta.added_index(id) >= 0 else null
+	if added != null:
+		return added
 	match id:
 		&"station_board":
 			return ControlRoom.spot(&"station_board", room_width)
@@ -1662,38 +1667,6 @@ func _live_default(id: StringName) -> Variant:
 			return ControlRoom.spot(&"patch_wall", room_width)
 	var spot: Variant = venue.default_spot(id)
 	return _venue_to_set(spot) if spot != null else null
-
-
-## Every piece of `live_pieces` stood for this venue: hidden, and out of everyone's way, where it
-## has no room for it; else where this player last left it, or, never moved, where the venue
-## stands it. Then each is settled against the others and the venue's own solids, so a spot left
-## in one venue that is a wall in this one is the nearest clear place to it. Not saved: none of
-## this was anyone's push.
-func _wheel_in_live_pieces() -> void:
-	if floor_plan == null or venue == null or live_pieces.is_empty():
-		return
-	floor_plan.rooms = venue.rooms()
-	var placing: Array[Trolley] = []
-	for id: StringName in live_pieces:
-		var t: Trolley = live_pieces[id]
-		var spot: Variant = _live_default(id)
-		t.visible = spot != null
-		# Where the venue only draws the shelf, what stands about with it is drawn to walk through.
-		t.walk_through = Venue.WHEELED.has(id) and not venue.prop_shelf_solid()
-		if spot == null or t.held_by != null:
-			continue
-		var at: Transform3D = spot
-		var left: Variant = room_deltas.saved(id, null)
-		if left != null:
-			at = left
-		t.position = Vector3(at.origin.x, 0, at.origin.z)
-		t.rotation = Vector3(0, at.basis.get_euler().y, 0)
-		placing.append(t)
-	var was := _fitting
-	_fitting = true
-	for t in placing:
-		t.place(Vector2(t.position.x, t.position.z), t.rotation.y)
-	_fitting = was
 
 
 func _carry_all_live() -> void:
@@ -2647,6 +2620,8 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"rack":
 			# A guest's edit of the rack, or its track: the room's row, or told why not.
 			_answer_rack(String(args[0]), args[1], from)
+		&"layout":
+			layout_edit.answer(String(args[0]), args[1], from)
 		&"scratch":
 			# A guest's scratch on the platter, for the sampler: of what is in its slot here, and
 			# a path that fits (Varispeed.fits: bounded in steps and in time). Rendered only when
@@ -2743,7 +2718,7 @@ func _put_back_own_room() -> void:
 			var left: Variant = room_deltas.saved(t.piece_id, Session.layout)
 			var own: Transform3D = left if left != null else _authored_floor[t.piece_id]
 			t.place(Vector2(own.origin.x, own.origin.z), own.basis.get_euler().y)
-		_wheel_in_live_pieces()
+		RoomSync.wheel_in(self)
 		_carry_all_live()
 		_applying_room = false
 		_fit_room_to_session()
@@ -3692,7 +3667,7 @@ func _build_items() -> void:
 	studio_set.add_child(items)
 	if venue != null:
 		items.boards = venue.dart_boards()
-		items.hoops = venue.hoops()
+		items.hoops = RoomSync.hoops(self)
 		items.set_venue(venue.venue_id())
 	var shelf: Array[Transform3D] = []
 	if venue != null:
@@ -4436,6 +4411,12 @@ func ask_rack(op: String, args: Array) -> void:
 		return
 	if _predict(&"rack", [StringName(op), args]) > 0:
 		_show_rack(row)
+
+
+## An edit of the room's layout, `op` and `args` as `LayoutEdit` takes them: done on the host, refused in
+## words where the host would refuse it (and for a guest, which may only push). The refusal, or "".
+func ask_layout(op: String, args: Array) -> String:
+	return layout_edit.ask(op, args)
 
 
 ## One knob turned: only that value is set, on the wall, in the voice and in the row. The patch is not

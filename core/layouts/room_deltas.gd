@@ -126,6 +126,16 @@ func adopt(row: Variant) -> void:
 	_resolve()
 
 
+## The host's edit (`LayoutEdit`): `candidate`, a changed copy of the room's delta, is now the room's, and
+## written after the pause. A guest never commits; it is told the host's row instead (`adopt`).
+func commit(candidate: RoomDelta) -> void:
+	if following:
+		return
+	delta = candidate
+	_rooms[delta.room] = delta
+	_note()
+
+
 ## Piece `id` put to where the layout has it (forgotten as moved) and the change written. True if it was moved.
 func reset(id: StringName) -> bool:
 	var did := delta.unmove(id)

@@ -1685,6 +1685,9 @@ const ROOM_VERBS := {&"tv": [TYPE_STRING, TYPE_BOOL, TYPE_FLOAT], &"open_tablet"
 		&"looper_layer": [TYPE_FLOAT, TYPE_FLOAT, TYPE_ARRAY],
 		# The modular room's rack (RackPatch.answer): its patch, edited. The room's `rack` row.
 		&"rack": [TYPE_STRING_NAME, TYPE_ARRAY],
+		# An edit of the room's layout (LayoutEdit): move, rotate, add, remove or reset a piece. Host only, but a
+		# guest's `move` of a piece on wheels is the push it makes by hand anywhere (docs/layouts.md 7).
+		&"layout": [TYPE_STRING_NAME, TYPE_ARRAY],
 		# Look to solo (LookSolo, docs/spatial_loop.md part three, G): the track looked at, held or
 		# let go. The host solos it alone for the room and puts every solo back at the let-go.
 		&"look_solo": [TYPE_INT, TYPE_BOOL]}

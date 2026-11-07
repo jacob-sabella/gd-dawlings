@@ -50,7 +50,13 @@ static func row(studio: Studio) -> Dictionary:
 	var out := delta.to_dict(false)
 	var moved: Dictionary = out["moved"]
 	for t in room_pieces(studio):
-		if not at_default(studio, t):
+		if delta.is_removed(t.piece_id):
+			continue
+		var copy := delta.added_index(t.piece_id)
+		if copy >= 0:
+			# A copy the room added carries its own spot.
+			out["added"][copy]["at"] = {"pos": [t.position.x, t.position.z], "yaw": t.rotation.y}
+		elif not at_default(studio, t):
 			moved[String(t.piece_id)] = [t.position.x, t.position.z, t.rotation.y]
 		elif default_of(studio, t.piece_id) != null:
 			moved.erase(String(t.piece_id))
@@ -60,6 +66,7 @@ static func row(studio: Studio) -> Dictionary:
 ## Put every trolley of the room where the (adopted) delta has it, or where the room stands it, unless
 ## a hand here has hold of it or its own push has not been answered yet (`pending`, a set of ids).
 static func follow(studio: Studio, pending: Dictionary, glide: bool) -> void:
+	RoomSync.sync(studio)
 	for t in room_pieces(studio):
 		if pending.has(t.piece_id):
 			continue

@@ -786,6 +786,12 @@ func _ready() -> void:
 	_test_a_bad_room_file_degrades_to_the_defaults()
 	_test_a_guest_applies_the_hosts_layout_row_and_writes_nothing()
 	_test_the_floor_import_moves_saved_spots_into_the_studio_room()
+	_test_a_layout_op_is_done_or_refused_whole()
+	_test_a_guest_is_told_host_only_but_may_push()
+	_test_an_added_piece_is_built_a_removed_one_is_not_stood_and_reset_restores()
+	await _test_a_layout_edit_survives_a_reload_in_a_fresh_studio()
+	_test_a_guest_sees_the_hosts_layout_edit_through_the_row()
+	_test_the_edit_panel_shows_the_validators_words_and_is_shut_to_a_guest()
 	await _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates()
 	_test_a_rack_catalogue_is_the_engines_own_description()
 	_test_a_rack_patch_checks_every_verb()
@@ -45956,6 +45962,39 @@ func _test_a_guest_applies_the_hosts_layout_row_and_writes_nothing() -> void:
 ## The saved `floor/*` spots become the studio room's moved pieces once.
 func _test_the_floor_import_moves_saved_spots_into_the_studio_room() -> void:
 	RoomDeltaTests.new(self).the_floor_import_moves_into_the_room()
+
+
+const LayoutEditTests := preload("res://tests/layout_edit_tests.gd")
+
+
+## Section 11 step 9: each op is done or refused, and a refusal changes nothing.
+func _test_a_layout_op_is_done_or_refused_whole() -> void:
+	LayoutEditTests.new(self).ops_are_done_or_refused()
+
+
+## A guest is told host only, except for pushing a piece on wheels.
+func _test_a_guest_is_told_host_only_but_may_push() -> void:
+	LayoutEditTests.new(self).a_guest_is_told_host_only()
+
+
+## An added hoop is built, a removed piece is not stood, and reset returns the default.
+func _test_an_added_piece_is_built_a_removed_one_is_not_stood_and_reset_restores() -> void:
+	LayoutEditTests.new(self).add_remove_and_reset()
+
+
+## The edit is written and a fresh studio finds the room as it was left.
+func _test_a_layout_edit_survives_a_reload_in_a_fresh_studio() -> void:
+	await LayoutEditTests.new(self).an_edit_survives_a_reload()
+
+
+## A guest applying the host's layout row builds the copy and un-stands the removed piece.
+func _test_a_guest_sees_the_hosts_layout_edit_through_the_row() -> void:
+	LayoutEditTests.new(self).a_guest_sees_the_edit()
+
+
+## The F3 edit panel shows the validator's message and is shut to a guest.
+func _test_the_edit_panel_shows_the_validators_words_and_is_shut_to_a_guest() -> void:
+	LayoutEditTests.new(self).the_panel_shows_what_the_validator_said()
 
 
 const VenueFilesTests := preload("res://tests/venue_files_tests.gd")

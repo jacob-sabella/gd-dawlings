@@ -275,6 +275,12 @@ func _ready() -> void:
 	if args["stage"]:
 		stage.open()
 
+	# The room's edit mode: F3, the host only (LayoutEditor).
+	var editor := LayoutEditor.new()
+	editor.name = "LayoutEditor"
+	editor.studio = studio
+	add_child(editor)
+
 	# The whole mix as a flat DAW: F2, or `--flat` to start in it.
 	var flat := FlatView.new()
 	flat.name = "FlatView"

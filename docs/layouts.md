@@ -1,6 +1,6 @@
 # Layouts: rooms as data
 
-Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 to 5 (11), parts 1 to 3 of step 6 and step 7 (the 14 venue files and the roulette room) are built; the game reads them for the five wheeled pieces, the four zone-mounted ones (`LiveRoom`, `PieceHost`) and the control room's eight trolleys (`ControlRoom`), and `Neighbourhoods` is the layouts' `groups`:
+Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 to 5 (11), step 8 and step 9 (edit ops, building, the F3 panel; 7), parts 1 to 3 of step 6 and step 7 (the 14 venue files and the roulette room) are built; the game reads them for the five wheeled pieces, the four zone-mounted ones (`LiveRoom`, `PieceHost`) and the control room's eight trolleys (`ControlRoom`), and `Neighbourhoods` is the layouts' `groups`:
 `core/layouts/` (`LayoutData`, `LayoutCheck`, `LayoutMerge`, `LayoutSet`, `LayoutProblem`, `ShellFacts`, `LayoutResolver`,
 `LayoutValidator` with `LayoutChecks`, `LayoutIssue`, `LayoutReach`, `LayoutGeometry`, `PieceFeet`, `LiveRoom`, `ControlRoom`, `FloorImport`, `VenueCatalogue`, `ShellBuilders`), `layouts/common/live_room.layout.json`, `layouts/common/control_room.layout.json`, `layouts/import/floor_v1.json`, `layouts/venues/<id>.layout.json` (15 files),
 `layouts/layout.schema.json`, fixtures in `tests/fixtures/layouts/`. Where they differ from the text below, the
@@ -595,6 +595,16 @@ entry (`footprint` copied from the definition at add time), so the guest's valid
 * **Import.** `FloorImport.into_room(profile, deltas)` (once per profile, `LayoutProfile.floor_moved`, after `FloorImport.run`) moves every remaining saved `floor/<id>` studio spot into the delta of the room the player is in (not over a spot the delta already has), forgets the LEVELS and TV keys (built into the wall), leaves the player's own stands, and does nothing for a guest. `LayoutProfile` no longer receives a floor spot from a pushed piece.
 * Tests: `tests/room_delta_tests.gd`, six wrappers in `tests/run_tests.gd` (data and over the defaults, the file, per-room persistence and a fresh studio, a bad or oversized file, a guest adopting the row, the import). The runner sets `RoomDeltas.disabled`, so a studio under test never touches the player's rooms; the tests that want files turn it on with `RoomDeltaFile.dir_override`.
 
+**Built (step 9)**: `ask_layout`, building added pieces, un-standing removed ones, and the F3 panel.
+
+* **The verb.** `Studio.ask_layout(op, args)` is `LayoutEdit.ask` (`core/layouts/layout_edit.gd`); the room verb is `layout` (`Session.ROOM_VERBS`, `_on_room_asked`). Ops: `move [id, x, z, (yaw)]`, `rotate [id, yaw]`, `add [piece, x, z, yaw]`, `remove [id]`, `reset [id | "all"]`. It returns "" when done, else the reason, which is also told to the asker (`Session.tell`).
+* **Host only (decision 3).** A guest's ask is answered `LayoutEdit.HOST_ONLY`; the one exception is `move` of a piece with a trolley, the push a guest makes by hand: it is placed on the guest and reaches the host through the trolley settling, as before.
+* **Validated, never half done.** The op is applied to a `copy()` of the room's `RoomDelta`; the copy is laid over the room's layout (`LayoutEdit.layout_of`, the modular annex appended outside the roulette room) and `LayoutValidator` is run with the room's `ShellFacts`. An error the room did not already have (compared by `code|piece|other`) refuses the op with that issue's own message; an `add` that does not fit is first tried at `LayoutValidator.nearest_clear`. Only then `RoomDeltas.commit(copy)` takes it (a no-op while following the host), `RoomFloor.follow` makes the studio match and the room is published. `reset all` is never refused. Arguments are checked first (types, finite, within 60 m).
+* **Which pieces.** `PieceCatalogue`: the cassette rack, the sampler and the hoop may be removed and put back (`add` of that kind, or `reset` of it); the hoop may also be added as copies up to 4 in all (`hoop_2`, `hoop_3`, ...). Not removable: the prop shelf (it carries the toys), the Tour case, and every piece a zone or the shell supplies. The control room's furniture moves but is not removed.
+* **Building.** `RoomSync` (`room_sync.gd`) is the studio's side of the delta: a copy is a trolley (`PieceHost.equip`, the `PieceDef` of its kind, a floor-plan piece) and a `Hoop` node `Copy_<id>` in the venue, built by `Hoop.new` as the venue does; a removed trolley is hidden (so the floor plan ignores it) and its node freed (`PieceHost.unstand`), put back it is `stand`ed again. `RoomFloor.follow` calls `RoomSync.sync`, so a reload, a venue change and a guest applying the host's row all build the same room. A pushed copy writes its spot into its own `added` entry. The old `Studio._wheel_in_live_pieces` moved to `RoomSync.wheel_in`.
+* **The panel.** `LayoutEditor` (`layout_editor.gd`, a CanvasLayer made in `bootstrap.gd` beside the StageManager): F3 opens it for the host (a guest is told the host arranges the room). Piece buttons, nudge 0.1 m and turn 15 degrees, REMOVE, RESET (the piece), RESET ROOM, and a `+` button per catalogue kind, which puts the piece 1.5 m ahead of the walker. One line shows the validator's words or "Done". Every button is one `ask_layout`.
+* Tests: `tests/layout_edit_tests.gd`, six wrappers (ops done or refused, guest told host only, add builds / remove un-stands / reset, reload in a fresh studio, a guest through the row, the panel).
+
 ## 8. The new-room maker
 
 A panel in the stage manager (the first row picks a venue today, `docs/venues.md`). The player chooses:
@@ -662,8 +672,8 @@ item 7, 11-12 item 8.
    placed from the layout and nine `_stand_the_*` replaced by `PieceHost.stand` (4.1 "Built (part 2)"); **part 3 done**: the control-room fragment
    (eight trolleys, the MIXING banner, `fit`), `Neighbourhoods` as `groups` and the one `FloorImport` step (4.1 "Built (part 3)"); still to do: the `Stations` text rows, and the pieces listed there as not moved (`lyrics`, `venue`, `weather`, `modular`, `levels`, `tv`, the timeline stand, the lamps).
 7. **14 venue files and the roulette room**; `IDS`, `VARIANTS`, `make_title`, `RackMood.MOODS` derived. **Done** (see 5.3 "Built (step 7)"; the instrument and weather mounts and the `Stations` text rows stay in code).
-8. **Room delta and the `layout` row**, import of `floor/*`, persistence in `user://layouts/rooms/`. **Done** (see 7 "Built (step 8)"; no editing UI yet, that is step 9).
-9. **Edit ops** (`ask_layout`), edit mode, reset; validators in the loop.
+8. **Room delta and the `layout` row**, import of `floor/*`, persistence in `user://layouts/rooms/`. **Done** (see 7 "Built (step 8)").
+9. **Edit ops** (`ask_layout`), edit mode, reset; validators in the loop. **Done** for the single items the catalogue lists (see 7 "Built (step 9)"); not done: other kinds of piece, the station-board and VR entry point.
 10. **Sharing**: guest apply, unavailable pieces, host-only rules; two-instance test.
 11. **`modular_annex` as a room-scale piece** (`claims`, `PieceBuilders`), `class` enforced.
 12. **The new-room maker.**
@@ -682,9 +692,8 @@ item 7, 11-12 item 8.
 | `_test_every_layout_is_valid` | the 42 guarantees as far as a layout holds them, no Studio (built; 86 runs, 8 s with start-up) |
 | `_test_the_validator_names_each_seeded_violation` | each code in 6 fires (built, `tests/layout_validator_tests.gd`) |
 | `_test_a_room_delta_applies_over_the_defaults_and_flags_what_it_cannot_place`, `_test_a_room_delta_file_is_atomic_and_refuses_the_bad_and_the_big`, `_test_pushed_furniture_is_saved_per_room_and_reloaded_by_a_fresh_studio`, `_test_a_bad_room_file_degrades_to_the_defaults`, `_test_a_guest_applies_the_hosts_layout_row_and_writes_nothing`, `_test_the_floor_import_moves_saved_spots_into_the_studio_room` (`tests/room_delta_tests.gd`) | step 8 (built) |
-| `_test_deleting_and_adding_a_piece_survives_a_restart` | brief proof: delete in one venue, add in another, make a room, reload |
-| `_test_a_guest_sees_the_hosts_layout_and_cannot_edit_it` | 7 |
-| `_test_reset_returns_the_default` | 7 |
+| `_test_a_layout_op_is_done_or_refused_whole`, `_test_a_guest_is_told_host_only_but_may_push`, `_test_an_added_piece_is_built_a_removed_one_is_not_stood_and_reset_restores`, `_test_a_layout_edit_survives_a_reload_in_a_fresh_studio`, `_test_a_guest_sees_the_hosts_layout_edit_through_the_row`, `_test_the_edit_panel_shows_the_validators_words_and_is_shut_to_a_guest` (`tests/layout_edit_tests.gd`) | step 9 (built): ops, host only, add/remove/reset, restart, guest, panel. Replace the three brief-proof rows that were here |
+| `_test_deleting_and_adding_a_piece_survives_a_restart` | brief proof across venues (still to do: delete in one venue, add in another, make a room) |
 | `_test_a_made_room_validates_and_loads` | 8 |
 | existing `_test_every_venue_*`, neighbourhood and per-station tests | stay until replaced (6) |
 
