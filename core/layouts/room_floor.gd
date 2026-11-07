@@ -23,7 +23,7 @@ static func room_pieces(studio: Studio) -> Array[Trolley]:
 ## room for it (the sampler in a room without a synth zone) or no default (a piece built into the wall).
 static func default_of(studio: Studio, id: StringName) -> Variant:
 	if studio.live_pieces.has(id):
-		return studio._live_default(id)
+		return studio.furniture_host._live_default(id)
 	return studio._authored_floor.get(id)
 
 
@@ -74,4 +74,4 @@ static func follow(studio: Studio, pending: Dictionary, glide: bool) -> void:
 		if spot == null:
 			spot = default_of(studio, t.piece_id)
 		if spot != null:
-			studio._follow_room(t, (spot as Transform3D).origin.x, (spot as Transform3D).origin.z, ControlRoom.heading(spot), glide)
+			studio.room_rows._follow_room(t, (spot as Transform3D).origin.x, (spot as Transform3D).origin.z, ControlRoom.heading(spot), glide)

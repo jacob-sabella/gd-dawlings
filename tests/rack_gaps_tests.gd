@@ -95,7 +95,7 @@ func the_room_row_says_which_mod_each_type_needs() -> void:
 	studio.medium = Presentation.Medium.SCREEN
 	t.add_child(studio)
 	await t.get_tree().physics_frame
-	var row: Dictionary = studio.room_state()[RackPatch.ROW]
+	var row: Dictionary = studio.room_rows.room_state()[RackPatch.ROW]
 	var uses: Dictionary = row["patch"].get("uses", {})
 	var types := {}
 	for id in row["patch"]["modules"]:
@@ -121,10 +121,10 @@ func a_guest_without_the_mod_sees_a_named_plate_and_hears_the_host() -> void:
 	host.medium = Presentation.Medium.SCREEN
 	t.add_child(host)
 	await t.get_tree().physics_frame
-	var state: Dictionary = host.room_state().duplicate(true)
+	var state: Dictionary = host.room_rows.room_state().duplicate(true)
 	state[RackPatch.ROW]["patch"] = _patch(false)
-	host.apply_room(state)
-	var sent: Dictionary = host.room_state()[RackPatch.ROW]
+	host.room_rows.apply_room(state)
+	var sent: Dictionary = host.room_rows.room_state()[RackPatch.ROW]
 	check("the host keeps the stranger and publishes the mod behind it (here only its type: the host never knew it)", RackPatch.is_missing(host.rack_row["patch"], "pl")
 			and sent["patch"]["modules"].has("pl"))
 	# The host's engine plays the rack without the stranger; that is the sound a guest is sent.
@@ -140,7 +140,7 @@ func a_guest_without_the_mod_sees_a_named_plate_and_hears_the_host() -> void:
 		print("  (no engine here: no sound to check)")
 	# The guest: the host's row, as the room sends it, with the mod named.
 	sent["patch"]["uses"] = USES.duplicate(true)
-	var other := host.room_state().duplicate(true)
+	var other := host.room_rows.room_state().duplicate(true)
 	other[RackPatch.ROW] = sent
 	Session.start_solo()
 	Session.role = Session.Role.GUEST
@@ -149,7 +149,7 @@ func a_guest_without_the_mod_sees_a_named_plate_and_hears_the_host() -> void:
 	guest.medium = Presentation.Medium.SCREEN
 	t.add_child(guest)
 	await t.get_tree().physics_frame
-	guest.apply_room(other)
+	guest.room_rows.apply_room(other)
 	var wall: RackWall = guest.rack_wall
 	var words: Array = []
 	for l in (wall.module_nodes["pl"] as Node3D).find_children("*", "Label3D", true, false):

@@ -3806,31 +3806,31 @@ func _test_the_room_is_the_hosts() -> void:
 	var plugin := DAW.state.fx(2, order[1]).name
 
 	# The host, answering a guest: the same stand its own hand would have pulled.
-	studio._on_room_asked(&"open_tablet", [2, order[1], plugin, 0.4, 0.2], 7)
+	studio.room_rows._on_room_asked(&"open_tablet", [2, order[1], plugin, 0.4, 0.2], 7)
 	check("a guest's ask puts a stand out on the host", studio.tablets.size() == 1)
 	var id: StringName = studio.tablets.keys()[0]
-	var room := studio.room_state()
+	var room := studio.room_rows.room_state()
 	check("and the room says so, where it stands (%s)" % [room], room["tablets"].has(id)
 			and room["tablets"][id][0] == 2 and room["tablets"][id][2] == plugin
 			and Vector2(room["tablets"][id][3], room["tablets"][id][4]).is_equal_approx(Vector2(0.4, 0.2)))
 	# Clear of the station board by the desk's left end, which is taller by a row for each station.
-	studio._on_room_asked(&"move_tablet", [id, -0.05, 0.2, 0.5], 7)
+	studio.room_rows._on_room_asked(&"move_tablet", [id, -0.05, 0.2, 0.5], 7)
 	var stand: Trolley = studio.tablets[id][0]
 	check("a guest wheeling it moves it on the host (%s)" % [Vector2(stand.position.x, stand.position.z)],
 			Vector2(stand.position.x, stand.position.z).is_equal_approx(Vector2(-0.05, 0.2)))
-	studio._on_room_asked(&"close_tablet", [id], 7)
+	studio.room_rows._on_room_asked(&"close_tablet", [id], 7)
 	check("and docking it puts it away", studio.tablets.is_empty())
 	var rack_home := Vector2(studio.rack_trolley.position.x, studio.rack_trolley.position.z)
-	studio._on_room_asked(&"move_piece", [&"rack", rack_home.x - 0.2, rack_home.y + 0.1, 0.4], 7)
+	studio.room_rows._on_room_asked(&"move_piece", [&"rack", rack_home.x - 0.2, rack_home.y + 0.1, 0.4], 7)
 	check("a guest rolling the rack rolls it on the host", Vector2(studio.rack_trolley.position.x,
 			studio.rack_trolley.position.z).is_equal_approx(rack_home + Vector2(-0.2, 0.1)))
-	check("and the room says where it is", Vector2(studio.room_state()["layout"]["moved"]["rack"][0],
-			studio.room_state()["layout"]["moved"]["rack"][1]).is_equal_approx(rack_home + Vector2(-0.2, 0.1)))
+	check("and the room says where it is", Vector2(studio.room_rows.room_state()["layout"]["moved"]["rack"][0],
+			studio.room_rows.room_state()["layout"]["moved"]["rack"][1]).is_equal_approx(rack_home + Vector2(-0.2, 0.1)))
 	var desk_at := studio.mount.studio_home(&"console").translated(Vector3(0.05, 0, 0))
-	studio._on_room_asked(&"place_surface", [&"console", desk_at], 7)
+	studio.room_rows._on_room_asked(&"place_surface", [&"console", desk_at], 7)
 	check("a guest putting the desk down puts it down on the host",
-			studio.room_state()["placed"][&"console"].is_equal_approx(desk_at))
-	studio._on_room_asked(&"move_piece", [&"rack", rack_home.x, rack_home.y, deg_to_rad(38.0)], 7)
+			studio.room_rows.room_state()["placed"][&"console"].is_equal_approx(desk_at))
+	studio.room_rows._on_room_asked(&"move_piece", [&"rack", rack_home.x, rack_home.y, deg_to_rad(38.0)], 7)
 	Session.layout.local_transforms.clear()
 	studio.mount.share_studio({})
 	check("only what a guest may ask is heard", not Session.room_ask_is_valid(&"set_venue", [&"grid"])
@@ -3845,10 +3845,10 @@ func _test_the_room_is_the_hosts() -> void:
 	var notices: Array[String] = []
 	var heard := func(t: String): notices.append(t)
 	Session.notice.connect(heard)
-	check("a guest cannot change the venue", not studio.choose_venue(&"grid")
+	check("a guest cannot change the venue", not studio.venue_switch.choose_venue(&"grid")
 			and studio.venue.venue_id() == own_venue)
 	check("and is told why", notices.size() == 1 and notices[0].begins_with("Only "))
-	check("nor how it is arranged", not studio.choose_variant(1) and studio.venue.variant == 0
+	check("nor how it is arranged", not studio.venue_switch.choose_variant(1) and studio.venue.variant == 0
 			and not Session.room_ask_is_valid(&"set_variant", [1]))
 	Session.notice.disconnect(heard)
 	studio.rack.tear_requested.emit(2, order[1], studio.rack.global_position)
@@ -3857,12 +3857,12 @@ func _test_the_room_is_the_hosts() -> void:
 	check("and waits on the host's answer", studio._predictions.size() == 1
 			and studio._predictions[0]["verb"] == &"open_tablet")
 	for predicted in studio.tablets.keys():
-		studio._take_down_tablet(predicted)
+		studio.tablet_host._take_down_tablet(predicted)
 	studio._predictions.clear()
 	Session.room_seq = 0
 
 	var host_desk := studio.mount.studio_home(&"console").translated(Vector3(0, 0, 0.04))
-	studio.apply_room({"venue": &"grid", "tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]},
+	studio.room_rows.apply_room({"venue": &"grid", "tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]},
 			"layout": {"moved": {"rack": [rack_home.x - 0.25, rack_home.y + 0.05, 0.3]}}, "placed": {&"console": host_desk}})
 	check("the host's rack is where the host rolled it", Vector2(studio.rack_trolley.position.x,
 			studio.rack_trolley.position.z).is_equal_approx(rack_home + Vector2(-0.25, 0.05)))
@@ -3874,11 +3874,11 @@ func _test_the_room_is_the_hosts() -> void:
 			not Session.layout.has_transform(&"floor/rack", Presentation.Mode.STUDIO))
 	check("the host's venue is the guest's", studio.venue.venue_id() == &"grid")
 	check("and so are its stands", studio.tablets.has(&"tablet_3"))
-	studio.apply_room({"venue": &"grid", "variant": 1,
+	studio.room_rows.apply_room({"venue": &"grid", "variant": 1,
 			"tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]}})
 	check("the host's arrangement of it is the guest's", studio.venue.venue_id() == &"grid"
 			and studio.venue.variant == 1 and studio.tablets.has(&"tablet_3"))
-	studio.apply_room({"venue": &"grid", "variant": 99,
+	studio.room_rows.apply_room({"venue": &"grid", "variant": 99,
 			"tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]}})
 	check("an arrangement the guest does not have is the venue's first", studio.venue.variant == 0)
 	stand = studio.tablets[&"tablet_3"][0]
@@ -3886,9 +3886,9 @@ func _test_the_room_is_the_hosts() -> void:
 			and is_equal_approx(stand.rotation.y, 0.25))
 	check("none of it written into the guest's own layout",
 			Session.layout.tablets.is_empty() and Session.layout.venue == own_choice)
-	studio.apply_room({"venue": &"grid", "tablets": {}})
+	studio.room_rows.apply_room({"venue": &"grid", "tablets": {}})
 	check("a stand the host docks goes from the guest's room too", studio.tablets.is_empty())
-	studio.apply_room({"venue": &"chalk", "tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]}})
+	studio.room_rows.apply_room({"venue": &"chalk", "tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]}})
 
 	_check_a_guest_predicts_and_rolls_back(studio, order, plugin, rack_home)
 
@@ -3914,12 +3914,12 @@ func _check_a_guest_predicts_and_rolls_back(studio: Studio, order: Array, plugin
 	var room := func(acked: int, tablets: Dictionary, rack: Vector2) -> Dictionary:
 		return {"venue": &"chalk", "tablets": tablets, "layout": {"moved": {"rack": [rack.x, rack.y, 0.3]}},
 				"placed": {}, "acks": {me: acked}}
-	studio.apply_room(room.call(0, {}, rack_home), false)
+	studio.room_rows.apply_room(room.call(0, {}, rack_home), false)
 	check("the room is empty to start with", studio.tablets.is_empty())
 
 	# Pulled off the rack: out at once, under the guest's own name.
 	studio._predictions.clear()
-	var mine := studio._predicted_tablet(2, order[1], plugin, Vector2(0.4, 0.2))
+	var mine := studio.tablet_host._predicted_tablet(2, order[1], plugin, Vector2(0.4, 0.2))
 	var pulled: int = studio._predictions[-1]["seq"]
 	var stand: Trolley = studio.tablets[mine][0]
 	# And the rack wheeled, before the host has heard of either.
@@ -3928,26 +3928,26 @@ func _check_a_guest_predicts_and_rolls_back(studio: Studio, order: Array, plugin
 	check("both are waiting on the host", studio._predictions.size() == 2 and rolled > pulled
 			and studio._predictions[-1]["verb"] == &"move_piece")
 
-	studio.apply_room(room.call(pulled - 1, {}, rack_home), false)
+	studio.room_rows.apply_room(room.call(pulled - 1, {}, rack_home), false)
 	check("a room from before the ask does not take the guest's stand back", studio.tablets.has(mine))
 	check("nor its rack", Vector2(studio.rack_trolley.position.x, studio.rack_trolley.position.z)
 			.is_equal_approx(rack_home + Vector2(0.15, 0.0)))
 
-	studio.apply_room(room.call(pulled, {&"tablet_9": [2, order[1], plugin, 0.4, 0.2, 0.0]}, rack_home), false)
+	studio.room_rows.apply_room(room.call(pulled, {&"tablet_9": [2, order[1], plugin, 0.4, 0.2, 0.0]}, rack_home), false)
 	check("answered, the guest's stand takes the host's name", studio.tablets.has(&"tablet_9")
 			and not studio.tablets.has(mine))
 	check("and is the same stand, not a new one", studio.tablets.get(&"tablet_9", [null])[0] == stand)
 	check("the rack, not yet answered, stays where the guest put it", Vector2(studio.rack_trolley.position.x,
 			studio.rack_trolley.position.z).is_equal_approx(rack_home + Vector2(0.15, 0.0)))
 
-	studio.apply_room(room.call(rolled, {&"tablet_9": [2, order[1], plugin, 0.4, 0.2, 0.0]}, rack_home), false)
+	studio.room_rows.apply_room(room.call(rolled, {&"tablet_9": [2, order[1], plugin, 0.4, 0.2, 0.0]}, rack_home), false)
 	check("the host would not move the rack, so it goes back", Vector2(studio.rack_trolley.position.x,
 			studio.rack_trolley.position.z).is_equal_approx(rack_home))
 	check("and nothing is left waiting (%s)" % [studio._predictions], studio._predictions.is_empty())
 
 	# A pull the host turns down.
-	var refused := studio._predicted_tablet(3, 0, "Nothing", Vector2(0.0, 0.4))
-	studio.apply_room(room.call(studio._predictions[-1]["seq"], {&"tablet_9": [2, order[1], plugin, 0.4, 0.2, 0.0]},
+	var refused := studio.tablet_host._predicted_tablet(3, 0, "Nothing", Vector2(0.0, 0.4))
+	studio.room_rows.apply_room(room.call(studio._predictions[-1]["seq"], {&"tablet_9": [2, order[1], plugin, 0.4, 0.2, 0.0]},
 			rack_home), false)
 	check("a stand the host would not put out is taken back", not studio.tablets.has(refused))
 
@@ -3955,23 +3955,23 @@ func _check_a_guest_predicts_and_rolls_back(studio: Studio, order: Array, plugin
 	# Their push, as sent: a step every 50ms, played back a moment behind (PoseTrail).
 	var asked := studio._predictions.size()
 	for k in 6:
-		studio._on_room_motion(&"rack", rack_home.x - 0.05 * (k + 1), rack_home.y, 0.05 * (k + 1), 5)
+		studio.room_rows._on_room_motion(&"rack", rack_home.x - 0.05 * (k + 1), rack_home.y, 0.05 * (k + 1), 5)
 		PoseTrail.skew_msec += 50.0
 	# Now 300ms after the first: drawn at 200ms, between the fifth and the sixth sent.
-	studio._drive_pushed()
+	studio.room_rows._drive_pushed()
 	studio.rack_trolley._physics_process(1.0 / 60.0)
 	var moved_by := Vector2(studio.rack_trolley.position.x, studio.rack_trolley.position.z).distance_to(rack_home)
 	check("someone else's push plays back as they pushed, a moment behind (%.3f)" % moved_by,
 			absf(moved_by - 0.25) < 0.02)
 	PoseTrail.skew_msec += 400.0
-	studio._drive_pushed()
+	studio.room_rows._drive_pushed()
 	for i in 240:
 		studio.rack_trolley._physics_process(1.0 / 60.0)
 	check("and it gets there", Vector2(studio.rack_trolley.position.x, studio.rack_trolley.position.z)
 			.distance_to(rack_home + Vector2(-0.3, 0.0)) < 0.01)
 	check("without the guest telling the host it moved it", studio._predictions.size() == asked
 			and not studio.rack_trolley.steered)
-	studio._take_down_tablet(&"tablet_9")
+	studio.tablet_host._take_down_tablet(&"tablet_9")
 
 
 ## Reaper names a plugin two ways depending on who is asked, and a VST3 reports thousands of MIDI
@@ -6490,7 +6490,7 @@ func _test_focused_gear_fits_the_frame_it_is_shown_in() -> void:
 		for _pass in 2:
 			for surface in studio.focus.surfaces:
 				surface._process(0.0)
-		studio._sit_down()
+		studio.station_host._sit_down()
 
 		var focused: Surface = null
 		for surface in studio.focus.surfaces:
@@ -6591,7 +6591,7 @@ func _test_rig_roulette_rolls_outside_tour() -> void:
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
 	check("a venue has no setup wall, only a door", studio.rig_roulette_station == null)
-	check("the host goes into the room", studio.enter_roulette_room())
+	check("the host goes into the room", studio.venue_switch.enter_roulette_room())
 	check("the setup wall is built there", studio.rig_roulette_station != null)
 	var station := studio.rig_roulette_station
 	station.count = 2
@@ -6729,10 +6729,10 @@ func _test_the_big_board_shows_any_surface() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
-	studio.enter_roulette_room()
+	studio.venue_switch.enter_roulette_room()
 	var station := studio.rig_roulette_station
 	var board := studio.roll_board
-	var sources := studio.board_sources()
+	var sources := studio.roll_room.board_sources()
 	check("the board can show the write-up and every piece of gear (%s)" % [sources],
 			sources[0] == &"" and sources.has(&"console") and sources.has(&"timeline")
 			and sources.has(&"rack") and sources.has(&"patchbay") and sources.has(&"tape_deck"))
@@ -6742,12 +6742,12 @@ func _test_the_big_board_shows_any_surface() -> void:
 	var console := studio.mount.surface(&"console")
 	# Built now, not at its first frame: the feed marks the parts that exist when it is chosen.
 	console._rebuild()
-	studio.choose_board_source(&"console")
+	studio.roll_room.choose_board_source(&"console")
 	var writing := board.find_child("Writing", false, false) as Node3D
 	var caption := board.find_child("FeedCaption", false, false) as Label3D
 	check("chosen, the board shows the console live, captioned, in place of the write-up",
 			board.source() == console and not writing.visible and caption.visible and caption.text == "CONSOLE")
-	check("the choice is the room's", studio.room_state()["board"] == &"console")
+	check("the choice is the room's", studio.room_rows.room_state()["board"] == &"console")
 	check("and the panel's wheel reads it back", station.screen_wheel.words() == "SCREEN: CONSOLE")
 	var parts := console.find_children("*", "VisualInstance3D", true, false)
 	var marked := parts.filter(func(n): return (n as VisualInstance3D).layers & BoardFeed.ON_BOARD)
@@ -6779,17 +6779,17 @@ func _test_the_big_board_shows_any_surface() -> void:
 	station.screen_wheel._on_grab_begin(Vector3.ZERO)
 	var after := sources[(sources.find(next) + 1) % sources.size()]
 	check("and clicking it steps on again (%s)" % after, studio.board_source == after)
-	studio.choose_board_source(&"timeline")
+	studio.roll_room.choose_board_source(&"timeline")
 	check("the console comes off the feed's layer when something else is shown",
 			not parts.any(func(n): return is_instance_valid(n) and (n as VisualInstance3D).layers & BoardFeed.ON_BOARD))
-	studio.choose_board_source(&"a_mixer_that_is_not_here")
+	studio.roll_room.choose_board_source(&"a_mixer_that_is_not_here")
 	check("something not in the room is not shown", studio.board_source == &"timeline")
 	check("a guest may ask for it", Session.room_ask_is_valid(&"board_source", [&"rack"]))
 
-	var state := studio.room_state()
+	var state := studio.room_rows.room_state()
 	state["board"] = &"patchbay"
 	Session.role = Session.Role.GUEST
-	studio.apply_room(state)
+	studio.room_rows.apply_room(state)
 	check("a guest's board shows what the room's says", board.source() == studio.mount.surface(&"patchbay"))
 	Session.role = Session.Role.HOST
 
@@ -6844,8 +6844,8 @@ func _test_a_track_pulls_out_of_the_rack_on_a_rack_of_its_own() -> void:
 			name_strip != null and name_strip.text.begins_with("TRACK 1") and pulled.find_child("FoldButton", true, false) is PanelButton)
 	var away := Vector2(stand.position.x, stand.position.z).distance_to(Vector2(rack.global_position.x, rack.global_position.z))
 	check("standing out in front of the rack, not inside it (%.2f m)" % away, away > 0.5)
-	check("the room has it", (studio.room_state()["track_racks"] as Dictionary).has(id)
-			and not (studio.room_state()["layout"]["moved"] as Dictionary).has(String(id)))
+	check("the room has it", (studio.room_rows.room_state()["track_racks"] as Dictionary).has(id)
+			and not (studio.room_rows.room_state()["layout"]["moved"] as Dictionary).has(String(id)))
 
 	DAW.state.track(2).selected = true
 	pulled._on_track_changed(2, &"selected")
@@ -6858,24 +6858,24 @@ func _test_a_track_pulls_out_of_the_rack_on_a_rack_of_its_own() -> void:
 
 	(pulled.find_child("FoldButton", true, false) as PanelButton).pressed.emit()
 	check("FOLD puts it back", not studio.track_racks.has(id) and studio.track_racks.size() == 1
-			and not (studio.room_state()["track_racks"] as Dictionary).has(id))
+			and not (studio.room_rows.room_state()["track_racks"] as Dictionary).has(id))
 	check("a guest may ask for both", Session.room_ask_is_valid(&"open_track_rack", [1, 0.5, 0.5])
 			and Session.room_ask_is_valid(&"close_track_rack", [&"track_rack_1"]))
 
-	var state := studio.room_state()
+	var state := studio.room_rows.room_state()
 	(state["track_racks"] as Dictionary)[&"track_rack_9"] = [3, 0.4, 0.6, 0.0]
 	Session.role = Session.Role.GUEST
-	studio.apply_room(state)
+	studio.room_rows.apply_room(state)
 	check("a guest's room puts up what the host's has out",
 			studio.track_racks.has(&"track_rack_9") and (studio.track_racks[&"track_rack_9"][1] as RackSurface).track_index == 3)
 	(state["track_racks"] as Dictionary).erase(&"track_rack_9")
-	studio.apply_room(state)
+	studio.room_rows.apply_room(state)
 	check("and takes down what it has folded", not studio.track_racks.has(&"track_rack_9"))
 	Session.role = Session.Role.HOST
 
 	var other: StringName = studio.track_racks.keys()[0]
 	DAW.remove_track(2)
-	studio._fold_orphaned_track_racks()
+	studio.tablet_host._fold_orphaned_track_racks()
 	check("a track deleted folds its rack away", not studio.track_racks.has(other))
 	remove_child(studio)
 	studio.free()
@@ -7935,7 +7935,7 @@ func _test_a_click_on_the_gear_moves_nobody() -> void:
 	var racked := studio.rack.find_children("*", "RackUnit", true, false)
 	if not racked.is_empty():
 		var unit: RackUnit = racked[0]
-		studio._on_tear_requested(unit.track_index, unit.fx_index, unit.global_position)
+		studio.tablet_host._on_tear_requested(unit.track_index, unit.fx_index, unit.global_position)
 		for i in 3:
 			await get_tree().process_frame
 	check("a plugin pulled off onto a tablet: the tablet comes out, nobody walks to it (%s)" % studio.focus.focused_id,
@@ -8457,7 +8457,7 @@ func _test_furniture_rolls_where_it_is_pushed() -> void:
 			studio.mount.studio_home(&"rack").is_equal_approx(studio.rack.transform))
 
 	# The cable out of the back follows. Its floor point is written against the authored stand.
-	studio.refresh_looms()
+	studio.surface_host.refresh_looms()
 	var loom: GearLoom = null
 	for node in studio.studio_set.get_children():
 		if node is GearLoom and not node.is_queued_for_deletion() \
@@ -8522,7 +8522,7 @@ func _test_you_can_say_how_tall_you_are_in_the_room() -> void:
 			poses[surface.surface_id] = surface.global_transform
 	check("you start at the default height", is_equal_approx(studio.ergonomics.height,
 			Ergonomics.DEFAULT_HEIGHT))
-	studio.set_body_height(1.48)
+	studio.venue_look.set_body_height(1.48)
 	check("a shorter you has a lower eye (%.2f)" % studio.walker.eye_height,
 			is_equal_approx(studio.walker.eye_height, 1.48 - Ergonomics.EYE_BELOW_CROWN)
 			and is_equal_approx(studio.walker.standing_eye, studio.walker.eye_height))
@@ -8536,7 +8536,7 @@ func _test_you_can_say_how_tall_you_are_in_the_room() -> void:
 			moved.append(surface.surface_id)
 	check("the gear in the room stays where it is (%s of %d)" % [moved, poses.size()],
 			moved.is_empty() and poses.size() >= 3)
-	studio.set_body_height(9.0)
+	studio.venue_look.set_body_height(9.0)
 	check("but not beyond a person", is_equal_approx(studio.ergonomics.height, Ergonomics.HEIGHT_RANGE.y))
 
 	check("the stage manager has no height row: we are ghosts, and fly", true)
@@ -8596,7 +8596,7 @@ func _test_what_stands_on_its_own_is_pushed_about_too() -> void:
 	check("and the station board's row for it is still there", studio.station_board.rows().has(&"cassette_rack"))
 	check("and it is saved where it was left", studio.room_deltas.delta.moved.has("cassette_rack")
 			and (studio.room_deltas.saved(&"cassette_rack", null) as Transform3D).origin.is_equal_approx(rack_t.transform.origin))
-	check("and the room says where it is", (studio.room_state()["layout"]["moved"] as Dictionary).has("cassette_rack"))
+	check("and the room says where it is", (studio.room_rows.room_state()["layout"]["moved"] as Dictionary).has("cassette_rack"))
 	var slots: Array = studio.items.holders.get(CassetteRack.RACK, [])
 	check("a pushed cassette rack takes its slots with it", studio.cassette_rack.transform.is_equal_approx(
 			venue.cassette_rack_spot()) and slots.size() == CassetteRack.SLOTS
@@ -8734,7 +8734,7 @@ func _test_furniture_is_solid() -> void:
 	var studio: Studio = rig["studio"]
 	var hand: FakeHand = rig["hand"]
 	var piece := studio.rack_trolley
-	var desk: Array = studio._desk_footprint()
+	var desk: Array = studio.venue_switch._desk_footprint()
 	check("the desk is on the floor plan", desk.size() == 1)
 
 	# Straight at the console, hard, and well past where it stands.
@@ -8894,9 +8894,9 @@ func _test_a_monitor_goes_to_the_gear_and_leaves_the_room_alone() -> void:
 			seen[0] < 3.0 and seen[1] == 8)
 
 	# And bringing is one key away.
-	studio._toggle_summoning()
+	studio.station_host._toggle_summoning()
 	check("G brings the gear instead", not studio.focus.visits and studio.focus.holds(&"rack"))
-	studio._toggle_summoning()
+	studio.station_host._toggle_summoning()
 	check("and G again goes back to visiting", studio.focus.visits and not studio.focus.holds(&"rack")
 			and studio.rack.get_parent() == studio.studio_set)
 	_drop_floor_studio(rig)
@@ -8998,7 +8998,7 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 	var id := studio.venue.venue_id()
 	for step in Venue.IDS.size():
 		var old := studio.venue
-		studio.cycle_venue()
+		studio.venue_switch.cycle_venue()
 		id = studio.venue.venue_id()
 		seen.append(id)
 		check("%s: the old venue leaves the room" % id, not old.is_inside_tree())
@@ -9189,13 +9189,13 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 	for surface in studio.focus.surfaces:
 		grid_poses[surface.surface_id] = surface.global_transform
 	var grid_zones := studio.venue.zones()
-	var grid_walkable := studio._walkable()
+	var grid_walkable := studio.venue_look._walkable()
 	check("a venue with arrangements has more than one", Venue.variant_titles(&"grid").size() > 1)
 	check("every venue has at least two alternates to its first arrangement", Venue.IDS.all(
 			func(v: StringName) -> bool: return Venue.variant_titles(v).size() >= 3))
 	check("one unknown has a name as its only one", Venue.variant_titles(&"nowhere")
 			== PackedStringArray([Venue.make_title(&"nowhere")]))
-	check("the host can arrange it another way", studio.choose_variant(1) and studio.venue.variant == 1
+	check("the host can arrange it another way", studio.venue_switch.choose_variant(1) and studio.venue.variant == 1
 			and studio.venue.venue_id() == &"grid")
 	check("and is told which (%s)" % studio.venue.title(), studio.venue.title().ends_with(
 			Venue.variant_titles(&"grid")[1]))
@@ -9207,15 +9207,15 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 			shifted.append(surface.surface_id)
 	check("arranging it moves no gear (%s)" % [shifted], shifted.is_empty())
 	check("and keeps its zones", studio.venue.zones() == grid_zones)
-	check("and where you can walk", studio._walkable() == grid_walkable)
+	check("and where you can walk", studio.venue_look._walkable() == grid_walkable)
 	check("the arrangement is remembered", Session.layout.venue == &"grid"
 			and Session.layout.venue_variant == 1)
-	check("and travels in the room", studio.room_state()["variant"] == 1)
+	check("and travels in the room", studio.room_rows.room_state()["variant"] == 1)
 	studio.set_venue(&"grid", true, 7)
 	check("an arrangement a venue lacks is its first", studio.venue.variant == 0
 			and Session.layout.venue_variant == 0)
-	studio.choose_variant(1)
-	studio.choose_venue(&"studio")
+	studio.venue_switch.choose_variant(1)
+	studio.venue_switch.choose_venue(&"studio")
 	check("another venue starts at its first arrangement", studio.venue.variant == 0)
 	studio.set_venue(&"grid", true, 1)
 
@@ -9481,7 +9481,7 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 			var home_ok := duck.state == Item.State.HOME and spots.size() >= _shelf_kinds().size() - 17 \
 					and duck.position.is_equal_approx(spots[0].origin)
 			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
-					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
+					% [id, v], not rect.intersects(studio.venue_switch._room_bounds()) and clear_of_zones
 					and clear_of_solids and on_floor and standable and home_ok)
 	studio.set_venue(&"studio", false)
 	# On its trolley, which the walker stops at: the shelf's solid is the first of the free-standing ones.
@@ -9636,11 +9636,11 @@ func _test_the_duck_is_the_rooms() -> void:
 	duck.grab_end(hand)
 	presence.claim_carries()
 	check("picking it up claims it with the host", hand.carrying == duck and Session.holder_of(key) == 1)
-	check("and the room has it in a hand", studio.room_state()["items"].get(&"duck") == [])
+	check("and the room has it in a hand", studio.room_rows.room_state()["items"].get(&"duck") == [])
 	room.lay(duck, spot, 0.0)
 	presence.claim_carries()
 	check("putting it down lets the claim go", Session.holder_of(key) == 0 and hand.carrying == null)
-	check("and the room has it on the floor", (studio.room_state()["items"].get(&"duck", []) as Array).size() == 4)
+	check("and the room has it on the floor", (studio.room_rows.room_state()["items"].get(&"duck", []) as Array).size() == 4)
 	duck.snap_home()
 
 	Session._grant(7, key)
@@ -9690,12 +9690,12 @@ func _test_the_duck_is_the_rooms() -> void:
 	check("a squeeze from someone not holding it is nothing", duck._squash_speed == 0.0)
 	Session.item_used.emit(&"duck", true, 7, 1)
 	check("hers squeezes ours", duck._squash_speed < -1.0)
-	studio._on_room_asked(&"put_item", [&"duck", spot.x, spot.y, 0.3], 9)
+	studio.room_rows._on_room_asked(&"put_item", [&"duck", spot.x, spot.y, 0.3], 9)
 	check("nobody else may put it down", duck.is_held_elsewhere())
-	studio._on_room_asked(&"put_item", [&"duck", spot.x, spot.y, 0.3], 7)
+	studio.room_rows._on_room_asked(&"put_item", [&"duck", spot.x, spot.y, 0.3], 7)
 	check("she may, and it lies where she put it", duck.state == Item.State.LOOSE
 			and Vector2(duck.resting.origin.x, duck.resting.origin.z).is_equal_approx(spot))
-	check("which the room now says", (studio.room_state()["items"].get(&"duck", []) as Array).size() == 4)
+	check("which the room now says", (studio.room_rows.room_state()["items"].get(&"duck", []) as Array).size() == 4)
 	Session._release(7, key)
 	check("her letting go after leaves it there, without her colour", duck.state == Item.State.LOOSE
 			and not rimmed.call())
@@ -9736,9 +9736,9 @@ func _test_the_duck_is_the_rooms() -> void:
 		out["items"] = entries
 		out["acks"] = {5: acks}
 		return out
-	studio.apply_room(with_items.call({&"duck": []}))
+	studio.room_rows.apply_room(with_items.call({&"duck": []}))
 	check("a room that says it is in a hand leaves it there", duck.is_held_elsewhere())
-	studio.apply_room(with_items.call({&"duck": [spot.x, 0.0, spot.y, 0.2]}))
+	studio.room_rows.apply_room(with_items.call({&"duck": [spot.x, 0.0, spot.y, 0.2]}))
 	check("the host's word on where she put it lays it there", duck.state == Item.State.LOOSE
 			and Vector2(duck.resting.origin.x, duck.resting.origin.z).is_equal_approx(spot))
 	Session._receive_holds({})
@@ -9752,9 +9752,9 @@ func _test_the_duck_is_the_rooms() -> void:
 	room.put_down(duck, Transform3D.IDENTITY.translated(over).looking_at(Vector3(spot.x, 0, spot.y)))
 	check("a guest's put-down is done at once", duck.state == Item.State.LOOSE)
 	check("and asked of the host", studio._predictions.size() == 1 and studio._predictions[0]["verb"] == &"put_item")
-	studio.apply_room(with_items.call({}))
+	studio.room_rows.apply_room(with_items.call({}))
 	check("a room from before the host heard the ask does not take it back", duck.state == Item.State.LOOSE)
-	studio.apply_room(with_items.call({}, Session.room_seq))
+	studio.room_rows.apply_room(with_items.call({}, Session.room_seq))
 	check("the host's answer, that it is home, sends it home", duck.state == Item.State.HOME
 			and studio._predictions.is_empty())
 
@@ -9941,9 +9941,9 @@ func _test_a_ball_is_thrown_and_flies_the_same_everywhere() -> void:
 	_as_session(Session.Role.HOST, 1)
 	ball.snap_home()
 	Session._grant(7, ball.network_key())
-	studio._on_room_asked(&"throw_item", [&"ball", Vector3(front.x, 1.2, front.z), Vector3(0, 2, 1), Vector3.ZERO], 9)
+	studio.room_rows._on_room_asked(&"throw_item", [&"ball", Vector3(front.x, 1.2, front.z), Vector3(0, 2, 1), Vector3.ZERO], 9)
 	check("the host will not fly a throw from someone without the ball", not ball.is_flying())
-	studio._on_room_asked(&"throw_item", [&"ball", Vector3(front.x, 1.2, front.z), Vector3(0, 2, 1), Vector3.ZERO], 7)
+	studio.room_rows._on_room_asked(&"throw_item", [&"ball", Vector3(front.x, 1.2, front.z), Vector3(0, 2, 1), Vector3.ZERO], 7)
 	check("but flies its holder's", ball.is_flying())
 	Session.start_solo()
 
@@ -10298,18 +10298,18 @@ func _test_headphones_go_on_your_head() -> void:
 	check("the room has them on a head", room.state().get(&"headphones") == [true])
 	check("you see them only in your mirror", self_only.call())
 	check("and the room is shut out", Ears.gain_db(Ears.ROOM) == Ears.ROOM_DB)
-	studio._toggle_headphones()
+	studio.player_host._toggle_headphones()
 	check("H takes them off into your hand", hand.carrying == phones and hand.worn == null
 			and not phones.on_head and room.state().get(&"headphones") == [])
 	check("seen again, and the room heard again", not self_only.call() and is_zero_approx(Ears.gain_db(Ears.ROOM)))
-	studio._toggle_headphones()
+	studio.player_host._toggle_headphones()
 	check("H puts them back on", hand.worn == phones and phones.on_head)
 	var duck := room.items[&"duck"] as Item
 	hand.pick_up(duck)
 	var told: Array = []
 	var listen := func(text: String): told.append(text)
 	Session.notice.connect(listen)
-	studio._toggle_headphones()
+	studio.player_host._toggle_headphones()
 	check("with your hand full they stay on, and you are told why (%s)" % [told], hand.worn == phones
 			and told.size() == 1 and (told[0] as String).contains("hand is full"))
 	Session.notice.disconnect(listen)
@@ -10330,10 +10330,10 @@ func _test_headphones_go_on_your_head() -> void:
 	check("and nothing changes in your ears", is_zero_approx(Ears.gain_db(Ears.ROOM)))
 	room.apply({&"headphones": []})
 	check("and takes them off again", not phones.on_head and not phones._shape.disabled)
-	studio._on_room_asked(&"wear_item", [&"headphones", true], 0)
+	studio.room_rows._on_room_asked(&"wear_item", [&"headphones", true], 0)
 	check("a host puts them on the head of whoever has them", phones.on_head)
 	phones.snap_home()
-	studio._on_room_asked(&"wear_item", [&"headphones", true], 0)
+	studio.room_rows._on_room_asked(&"wear_item", [&"headphones", true], 0)
 	check("but not when nobody has them", not phones.on_head)
 
 	var ghost := Presence.Avatar.new()
@@ -10464,7 +10464,7 @@ func _test_the_tablet_patches_your_headphones() -> void:
 	check("its place in the tray is empty, and its row says MIX", not sender._plug.visible
 			and (face._rows[0]["source"] as Label3D).text == "MIX")
 	check("and you are told (%s)" % [told], told.size() == 1 and (told[0] as String).contains("Plug A in SEND MIX"))
-	check("the room carries it", (studio.room_state()["patches"] as Dictionary).get(me) == ["mix", "", "", ""])
+	check("the room carries it", (studio.room_rows.room_state()["patches"] as Dictionary).get(me) == ["mix", "", "", ""])
 	sender.grab_begin(hand, sender.global_position)
 	sender.grab_move(hand, sender.global_position + Vector3(0, 0.1, 0))
 	hand.hovered = null
@@ -10485,24 +10485,24 @@ func _test_the_tablet_patches_your_headphones() -> void:
 	studio._on_patch_asked(1, &"keys")
 	check("a second plug in KEYS brings your keys in", is_zero_approx(Ears.gain_db(Ears.KEYS))
 			and sends[1].plug_count() == 1)
-	studio._on_send_pressed(&"mix")
+	studio.patch_host._on_send_pressed(&"mix")
 	check("clicking SEND MIX brings your plug back from it", studio.patches.get(me) == ["", "keys", "", ""]
 			and sends[0].plug_count() == 0 and Ears.gain_db(Ears.MIX) == Ears.OFF_DB)
 	told.clear()
-	studio._on_send_pressed(&"mix")
+	studio.patch_host._on_send_pressed(&"mix")
 	check("with none of yours in it, it says where the plugs are (%s)" % [told], told.size() == 1
 			and (told[0] as String).contains("lower tier"))
 	Session.notice.disconnect(listen)
 
-	studio._on_room_asked(&"patch", [2, &"mix"], 7)
+	studio.room_rows._on_room_asked(&"patch", [2, &"mix"], 7)
 	check("a host puts a guest's plug where they asked", studio.patches.get(7) == ["", "", "mix", ""]
 			and sends[0].plug_count() == 1)
 	check("and it is not in your ears", studio.personal.sockets[2] == &"")
-	studio._on_room_asked(&"patch", [2, &"talkback"], 7)
+	studio.room_rows._on_room_asked(&"patch", [2, &"talkback"], 7)
 	check("but not into a socket there is not", studio.patches.get(7) == ["", "", "mix", ""])
-	studio._on_room_asked(&"patch", [2, &""], 7)
+	studio.room_rows._on_room_asked(&"patch", [2, &""], 7)
 	check("and a guest with every plug back in the tray has no row", not studio.patches.has(7))
-	studio.apply_room({"patches": {7: ["keys", "", "", ""]}})
+	studio.room_rows.apply_room({"patches": {7: ["keys", "", "", ""]}})
 	check("the host's room says where everyone's plugs are, yours too", studio.patches == {7: ["keys", "", "", ""]}
 			and not studio.personal.is_patched() and sends[1].plug_count() == 1)
 	check("and with none of yours in, the headphones are back to the mix and your keys",
@@ -10625,7 +10625,7 @@ func _test_a_strip_send_puts_one_track_in_your_headphones() -> void:
 	check("headphones off, every cue is silent", Ears.gain_db(cue) == Ears.OFF_DB or AudioServer.get_bus_index(cue) < 0)
 
 	Session.role = Session.Role.GUEST
-	studio._show_patches()
+	studio.patch_host._show_patches()
 	told.clear()
 	studio._on_patch_asked(2, strip.send.source)
 	check("a guest hears the host's mix whole: the track's plug is in, and not heard (%s)" % [told],
@@ -10857,7 +10857,7 @@ func _seat_audit(tracks: int) -> void:
 	var station_eyes: Array = []
 	for sid: StringName in Stations.ids(venue):
 		var spot := (Stations.spot(venue, sid) as Transform3D).origin
-		if studio._room_bounds().has_point(Vector2(spot.x, spot.z)):
+		if studio.venue_switch._room_bounds().has_point(Vector2(spot.x, spot.z)):
 			continue
 		var seat: Variant = Stations.seat(venue, sid, studio.walker.fits)
 		if seat != null:
@@ -10872,7 +10872,7 @@ func _seat_audit(tracks: int) -> void:
 	var eye_for := func(at: Vector3) -> Array:
 		var local := to_venue * at
 		var flat := Vector2(local.x, local.z)
-		if studio._room_bounds().has_point(flat) or station_eyes.is_empty():
+		if studio.venue_switch._room_bounds().has_point(flat) or station_eyes.is_empty():
 			return [eye]
 		var best: Array = station_eyes[0]
 		for e: Array in station_eyes:
@@ -10959,8 +10959,8 @@ func _seat_audit(tracks: int) -> void:
 	# other control is, the board's from the desk's seat, each plaque's from its station's.
 	var travel := controls.filter(func(c: Node) -> bool: return c is StationBoard.Row or c is StationBoard.PlaqueKey)
 	check("%d tracks: the station board's %d rows and every plaque's two keys are audited (%d)" % [tracks,
-			studio.station_board.rows().size(), travel.size()], studio.station_board.rows().size() == studio.station_ids().size()
-			and travel.size() == studio.station_board.rows().size() + 2 * studio.station_ids().size())
+			studio.station_board.rows().size(), travel.size()], studio.station_board.rows().size() == studio.station_host.station_ids().size()
+			and travel.size() == studio.station_board.rows().size() + 2 * studio.station_host.station_ids().size())
 	check("%d tracks: from the seat, a click on each of %d controls lands on it (%d miss: %s)" % [
 			tracks, controls.size(), missed.size(), ", ".join(missed.slice(0, 8))], missed.is_empty())
 	check("%d tracks: and each is at least %.0fpx to aim at (smallest %.1fpx; %d under: %s)" % [
@@ -11037,7 +11037,7 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 		walker.step(1.0 / 60.0, Vector3.ZERO, -1.0)
 
 	# Walk straight at the desk from in front of it. The desk stops you.
-	var desk: Array = studio._desk_footprint()
+	var desk: Array = studio.venue_switch._desk_footprint()
 	check("the desk has a footprint to walk into", desk.size() == 1)
 	if desk.size() == 1:
 		var f: Dictionary = desk[0]
@@ -11702,7 +11702,7 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	studio.focus.focus(&"rack")
 	for surface in studio.focus.surfaces:
 		surface._process(0.0)
-	studio._sit_down()
+	studio.station_host._sit_down()
 	for i in 60:
 		await get_tree().process_frame
 	var seat := studio.body.global_position
@@ -11738,7 +11738,7 @@ func _test_the_room_is_laid_out_for_the_size_of_the_session() -> void:
 		for node in room.find_children("*", "Node3D", true, false):
 			if node is Surface:
 				(node as Surface)._process(0.0)
-		var desk: Dictionary = room._desk_footprint()[0]
+		var desk: Dictionary = room.venue_switch._desk_footprint()[0]
 		var bounds := room.floor_plan.bounds
 		var lost: Array = []
 		for piece in room.floor_plan.pieces:
@@ -18144,13 +18144,13 @@ func _test_on_air_puts_a_monitor_socket_on_your_pack() -> void:
 	await get_tree().process_frame
 	var ghost := studio.presence.avatar_of(7)
 	check("off air, a pack has no monitor socket", ghost.monitor_send == null)
-	studio._on_room_asked(&"patch", [1, &"monitor_7"], 1)
+	studio.room_rows._on_room_asked(&"patch", [1, &"monitor_7"], 1)
 	check("and nobody can plug into one", not studio.patches.has(1))
-	studio._on_room_asked(&"on_air", [true], 7)
+	studio.room_rows._on_room_asked(&"on_air", [true], 7)
 	check("on air, their pack has a MONITOR socket (%s)" % [studio.on_air], studio.on_air == [7]
 			and ghost.monitor_send != null and ghost.monitor_send.source == &"monitor_7"
 			and ghost.monitor_send.title().contains("LIN'S MONITOR")
-			and studio.room_state()["on_air"] == [7])
+			and studio.room_rows.room_state()["on_air"] == [7])
 	var told: Array = []
 	var listen := func(text: String): told.append(text)
 	Session.notice.connect(listen)
@@ -18185,11 +18185,11 @@ func _test_on_air_puts_a_monitor_socket_on_your_pack() -> void:
 	var line: TheirMonitor.Line = studio.their_monitor.lines[7]
 	Session.note_played.emit(Session.Note.ON, 60, 100, 7, -1.0)
 	check("their notes reach it", line.sounded == [[Session.Note.ON, 60]])
-	studio._on_room_asked(&"on_air", [false], 7)
+	studio.room_rows._on_room_asked(&"on_air", [false], 7)
 	check("off air, the plug comes back to its tray, the socket goes, and nothing is rebuilt",
 			not studio.patches.has(1) and ghost.monitor_send == null
 			and studio.their_monitor.performers().is_empty())
-	studio._on_room_asked(&"on_air", [true], 7)
+	studio.room_rows._on_room_asked(&"on_air", [true], 7)
 	Session.participants.erase(7)
 	Session.roster_changed.emit()
 	await get_tree().process_frame
@@ -18979,7 +18979,7 @@ func _test_a_ball_goes_through_the_hoop() -> void:
 				if not own.has(s) and Walker._gap(s, Vector2(at.x, at.z)) <= 0.0:
 					wrong.append("%s: its base is in something" % id)
 		var foot := Vector2(spot.origin.x, spot.origin.z)
-		if studio._room_bounds().grow(0.3).has_point(foot):
+		if studio.venue_switch._room_bounds().grow(0.3).has_point(foot):
 			wrong.append("%s: on the footprint" % id)
 	check("in every venue there is a hoop, with floor in front of it and nothing under it (%s)" % [wrong], wrong.is_empty())
 	studio.set_venue(&"studio", false)
@@ -20536,7 +20536,7 @@ func _test_tour_spill_puts_a_real_item_in_the_room() -> void:
 	check("the run remembers it", Tour.run.instruments == [&"cowbell"])
 	var item: Item = studio.items.items.get(&"cowbell")
 	check("a real item in the room, tossed out flying", item is CowbellItem and item.is_flying())
-	var room_items: Dictionary = studio.room_state()["items"]
+	var room_items: Dictionary = studio.room_rows.room_state()["items"]
 	check("and an 8-wide entry rides the room (%s)" % [room_items.get(&"cowbell")],
 			room_items.has(&"cowbell") and (room_items[&"cowbell"] as Array).size() == 8)
 
@@ -20560,10 +20560,10 @@ func _test_tour_spill_puts_a_real_item_in_the_room() -> void:
 			back.instrument_curses == Tour.run.instrument_curses
 			and back.instrument_bound == Tour.run.instrument_bound)
 
-	studio._on_tour_run_ended(false)
+	studio.tour_room._on_tour_run_ended(false)
 	check("the run ending clears both out of the room",
 			not studio.items.items.has(&"cowbell") and not studio.items.items.has(&"cowbell2"))
-	check("and out of the published room", not (studio.room_state()["items"] as Dictionary).has(&"cowbell"))
+	check("and out of the published room", not (studio.room_rows.room_state()["items"] as Dictionary).has(&"cowbell"))
 
 	Tour.run = null
 	remove_child(studio)
@@ -20586,14 +20586,14 @@ func _test_tour_run_ended_announces_the_result_to_the_room() -> void:
 	Session.notice.connect(hear)
 
 	Tour.unlocks.reputation = 4
-	studio._on_tour_run_ended(true)
+	studio.tour_room._on_tour_run_ended(true)
 	check("a win announces the result with the fresh reputation (%s)" % [heard],
 			not heard.is_empty() and heard.back().contains("4")
 			and heard.back().to_lower().contains("hit"))
 
 	heard.clear()
 	Tour.unlocks.reputation = 4
-	studio._on_tour_run_ended(false)
+	studio.tour_room._on_tour_run_ended(false)
 	check("a loss announces too, a different line (%s)" % [heard],
 			not heard.is_empty() and heard.back().contains("4")
 			and not heard.back().to_lower().contains("hit"))
@@ -24578,16 +24578,16 @@ func _test_the_band_goes_into_the_roulette_room_and_back() -> void:
 	check("the room is a place the game knows, and not one of the venues", Venue.is_known(Venue.ROULETTE_ID)
 			and not Venue.IDS.has(Venue.ROULETTE_ID))
 	check("cycling never lands in it", Venue.IDS.all(func(v: StringName) -> bool: return Venue.next_after(v) != Venue.ROULETTE_ID))
-	check("leaving when not in it does nothing", not studio.leave_roulette_room())
-	studio.choose_venue(&"grid", 1)
+	check("leaving when not in it does nothing", not studio.venue_switch.leave_roulette_room())
+	studio.venue_switch.choose_venue(&"grid", 1)
 	var poses := {}
 	for surface in studio.focus.surfaces:
 		poses[surface.surface_id] = surface.global_transform
-	check("the host goes in", studio.enter_roulette_room() and studio.in_roulette_room())
+	check("the host goes in", studio.venue_switch.enter_roulette_room() and studio.venue_switch.in_roulette_room())
 	check("it is the roulette room (%s)" % studio.venue.title(), studio.venue is RouletteRoom
 			and studio.venue.venue_id() == Venue.ROULETTE_ID and studio.venue.title() == "Rig Roulette room")
 	check("and is not written down as the room's venue", Session.layout.venue == &"grid" and Session.layout.venue_variant == 1)
-	check("the room the host publishes names it", studio.room_state()["venue"] == Venue.ROULETTE_ID)
+	check("the room the host publishes names it", studio.room_rows.room_state()["venue"] == Venue.ROULETTE_ID)
 	var moved := []
 	for surface in studio.focus.surfaces:
 		if surface.surface_id != &"levels" and surface.surface_id != &"tv" \
@@ -24600,7 +24600,7 @@ func _test_the_band_goes_into_the_roulette_room_and_back() -> void:
 	wall.key_locked = true
 	wall.changed.emit()
 	check("the studio keeps what the wall is set to", studio.roll_settings.count == 3 and studio.roll_settings.key_locked)
-	check("going in twice does nothing", not studio.enter_roulette_room())
+	check("going in twice does nothing", not studio.venue_switch.enter_roulette_room())
 	var room := studio.venue as RouletteRoom
 	var walls := room.get_children().filter(func(n): return String(n.name).ends_with("Wall"))
 	check("it is shut in by walls", walls.size() >= 2 and room.find_child("Ceiling", false, false) != null)
@@ -24613,17 +24613,17 @@ func _test_the_band_goes_into_the_roulette_room_and_back() -> void:
 			and absf(room.hoop_spot().origin.x) < room.room_width * 0.5 and absf(room.tour_case_spot().origin.x) < room.room_width * 0.5)
 	studio.set_venue(&"nowhere", false)
 	check("an unknown venue is still the studio", studio.venue.venue_id() == &"studio")
-	studio.enter_roulette_room()
+	studio.venue_switch.enter_roulette_room()
 	check("and the way out goes back to where the band was (%s)" % studio.venue.venue_id(),
-			studio.leave_roulette_room() and studio.venue.venue_id() == &"studio" and not studio.in_roulette_room())
-	studio.choose_venue(&"grid", 1)
-	studio.enter_roulette_room()
-	studio.leave_roulette_room()
+			studio.venue_switch.leave_roulette_room() and studio.venue.venue_id() == &"studio" and not studio.venue_switch.in_roulette_room())
+	studio.venue_switch.choose_venue(&"grid", 1)
+	studio.venue_switch.enter_roulette_room()
+	studio.venue_switch.leave_roulette_room()
 	check("the venue and its arrangement come back", studio.venue.venue_id() == &"grid" and studio.venue.variant == 1)
 	check("the setup wall stays behind in the room", studio.rig_roulette_station == null)
-	studio.enter_roulette_room()
+	studio.venue_switch.enter_roulette_room()
 	check("and is set as it was left", studio.rig_roulette_station.count == 3 and studio.rig_roulette_station.key_locked)
-	studio.leave_roulette_room()
+	studio.venue_switch.leave_roulette_room()
 	studio.queue_free()
 	Session.layout = saved_layout
 
@@ -24668,7 +24668,7 @@ func _test_guests_see_the_hosts_roll_settings_and_cannot_change_them() -> void:
 	var heard := []
 	var listen := func(): heard.append(Session.roll_setup.duplicate())
 	Session.roll_setup_changed.connect(listen)
-	check("the host enters", host.enter_roulette_room())
+	check("the host enters", host.venue_switch.enter_roulette_room())
 	host.rig_roulette_station.count = 3
 	host.rig_roulette_station.changed.emit()
 	Session.roll_setup_changed.disconnect(listen)
@@ -24802,25 +24802,25 @@ func _test_a_roll_can_be_replayed_and_re_rolls_can_run_out() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
-	studio.enter_roulette_room()
+	studio.venue_switch.enter_roulette_room()
 	studio.roll_settings.reroll_limit = 1
 	studio.roll_settings.replay_last = false
 	backend.mark_clean()
-	studio._roll_rig()
+	studio.roll_room._roll_rig()
 	var first: Dictionary = Session.roll.duplicate(true)
 	check("the roll says its seed and what is left", first["seed"] > 0 and first["left"] == 1)
 	studio.roll_settings.replay_last = true
-	studio._roll_rig()
+	studio.roll_room._roll_rig()
 	var second: Dictionary = Session.roll
 	check("replaying lands the same tracks, key and pedals", second["seed"] == first["seed"] and second["tracks"] == first["tracks"]
 			and second["key"] == first["key"] and second["pedals"] == first["pedals"] and second["left"] == 0)
 	var n: int = second["n"]
-	studio._roll_rig()
+	studio.roll_room._roll_rig()
 	check("with no re-rolls left a third is refused", Session.roll["n"] == n)
 	studio.roll_settings.reroll_limit = 0
-	studio.leave_roulette_room()
-	studio.enter_roulette_room()
-	studio._roll_rig()
+	studio.venue_switch.leave_roulette_room()
+	studio.venue_switch.enter_roulette_room()
+	studio.roll_room._roll_rig()
 	check("a new visit starts again, and with none allowed the one roll lands", Session.roll["n"] == n + 1 and Session.roll["left"] == 0)
 	studio.queue_free()
 	Session.roll = {}
@@ -24853,10 +24853,10 @@ func _test_chaos_throws_the_knobs_of_the_pedals_that_land() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
-	studio.enter_roulette_room()
+	studio.venue_switch.enter_roulette_room()
 	studio.roll_settings.chaos = RollSettings.CHAOS_MAX
 	backend.mark_clean()
-	studio._roll_rig()
+	studio.roll_room._roll_rig()
 	check("the roll says the chaos it was thrown with", Session.roll["chaos"] == RollSettings.CHAOS_MAX)
 	# The stand-in engine's pedals report no knobs (like Reaper's first answer), so a roll leaves
 	# them alone; the throw itself is checked on a pedal given some.
@@ -24867,7 +24867,7 @@ func _test_chaos_throws_the_knobs_of_the_pedals_that_land() -> void:
 		pedal.params = {0: 0.5, 1: 0.2, 2: 0.9}
 		var r := RandomNumberGenerator.new()
 		r.seed = seed_value
-		studio._throw_the_knobs(track, pedal, r, chaos)
+		studio.roll_room._throw_the_knobs(track, pedal, r, chaos)
 		return pedal.params.duplicate()
 	var untouched: Dictionary = throw.call(0, 9)
 	var thrown: Dictionary = throw.call(RollSettings.CHAOS_MAX, 9)
@@ -24911,7 +24911,7 @@ func _test_presets_load_save_and_replicate() -> void:
 	studio.medium = Presentation.Medium.SCREEN
 	studio.roll_presets_path = path
 	add_child(studio)
-	studio.enter_roulette_room()
+	studio.venue_switch.enter_roulette_room()
 	var wall := studio.rig_roulette_station
 	var listed: Array = wall.preset_wheel.options.call()
 	check("the wheel lists a resting word, three built in, three slots", listed.size() == 7 and listed[0][0] == 0)
@@ -24954,38 +24954,38 @@ func _test_a_roll_can_be_undone_back_to_the_project_before_it() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
-	studio.enter_roulette_room()
+	studio.venue_switch.enter_roulette_room()
 	DAW.new_project(5)
 	DAW.set_tempo(133.0)
 	backend.mark_clean()
 	var notices: Array[String] = []
 	var hear := func(t: String): notices.append(t)
 	Session.notice.connect(hear)
-	studio.undo_the_roll()
+	studio.roll_room.undo_the_roll()
 	check("nothing to undo before a roll, and it says so", notices.size() == 1 and notices[0] == "Nothing to undo.")
-	studio._roll_rig()
+	studio.roll_room._roll_rig()
 	var first_tracks: int = Session.roll["tracks"]
 	check("the first roll has no earlier ones listed", Session.roll["past"] == [])
 	backend.mark_clean()
-	studio._roll_rig()
+	studio.roll_room._roll_rig()
 	check("the second lists the first on the board", Session.roll["past"].size() == 1 and String(Session.roll["past"][0]).contains("%d tracks" % first_tracks))
 	check("and the board writes it", studio.roll_board.find_child("Writing", false, false).get_children().any(func(l): return (l as Label3D).text.begins_with("BEFORE:")))
 	DAW.set_tempo(90.0)
 	notices.clear()
-	studio.undo_the_roll()
+	studio.roll_room.undo_the_roll()
 	check("an unsaved project is not replaced", notices.size() == 1 and notices[0].begins_with("Save the project first") and DAW.state.tempo == 90.0)
 	backend.mark_clean()
-	studio.undo_the_roll()
+	studio.roll_room.undo_the_roll()
 	check("undo brings back the first roll's project", DAW.state.track_indices().size() == first_tracks and Session.roll["n"] == 1)
 	check("and the board is that roll again, without a ceremony", studio.roll_board._ceremony == null)
 	check("it is clean, as a roll leaves it", not DAW.has_unsaved_changes())
-	studio.undo_the_roll()
+	studio.roll_room.undo_the_roll()
 	check("another undo goes back past the first roll, to the project as it was",
 			DAW.state.track_indices().size() == 5 and DAW.state.tempo == 133.0 and Session.roll.is_empty())
 	check("no files are left behind", DirAccess.get_files_at("user://roll_history").is_empty())
 	_as_session(Session.Role.GUEST, 5)
 	notices.clear()
-	studio.undo_the_roll()
+	studio.roll_room.undo_the_roll()
 	check("a guest cannot undo", notices.size() == 1 and notices[0].begins_with("Only "))
 	Session.notice.disconnect(hear)
 	_as_session(Session.Role.HOST, 1)
@@ -25027,10 +25027,10 @@ func _test_a_roll_can_set_the_tempo() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
-	studio.enter_roulette_room()
+	studio.venue_switch.enter_roulette_room()
 	studio.roll_settings.tempo_pick = 3
 	backend.mark_clean()
-	studio._roll_rig()
+	studio.roll_room._roll_rig()
 	var rolled: int = Session.roll["tempo"]
 	check("a rolled tempo is the project's (%d)" % rolled, rolled >= 90 and rolled <= 120 and is_equal_approx(DAW.state.tempo, float(rolled)))
 	check("and it is on the board", studio.roll_board.find_child("Writing", false, false).get_children().any(func(l): return (l as Label3D).text.contains("%d BPM" % rolled)))
@@ -25038,7 +25038,7 @@ func _test_a_roll_can_set_the_tempo() -> void:
 	studio.roll_settings.tempo_pick = 0
 	DAW.set_tempo(101.0)
 	backend.mark_clean()
-	studio._roll_rig()
+	studio.roll_room._roll_rig()
 	check("a locked roll does not choose one (the new project's own)", Session.roll["tempo"] == 0)
 	studio.queue_free()
 	Session.roll = {}
@@ -25076,7 +25076,7 @@ func _test_a_custom_pool_weighs_its_kinds() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
-	studio.enter_roulette_room()
+	studio.venue_switch.enter_roulette_room()
 	var wall := studio.rig_roulette_station
 	var listed: Array = wall._kind_wheel.options.call()
 	check("the KIND row lists every kind with what it weighs now", listed.size() == RollSettings.ALL_KINDS.size() and listed[2][1] == "REVERB: x1" and listed[0][1] == "EQ: OFF")
@@ -25107,11 +25107,11 @@ func _test_every_venue_has_a_clear_door_to_the_roulette_room() -> void:
 		for v in Venue.variant_titles(id).size():
 			places.append([id, v])
 	places.append([Venue.ROULETTE_ID, 0])
-	var walkable := studio._walkable()
+	var walkable := studio.venue_look._walkable()
 	for place in places:
 		var tag := "%s/%d" % place
 		studio.set_venue(place[0], false, place[1])
-		walkable = studio._walkable()
+		walkable = studio.venue_look._walkable()
 		var venue := studio.venue
 		var door := venue.get_node_or_null("RouletteDoor") as RouletteDoor
 		check("%s: has a door" % tag, door != null)
@@ -25154,9 +25154,9 @@ func _test_every_venue_has_a_clear_door_to_the_roulette_room() -> void:
 	studio.set_venue(&"loft", false, 0)
 	var door := studio.venue.get_node("RouletteDoor") as RouletteDoor
 	door.used.emit()
-	check("the host goes through it", studio.in_roulette_room())
+	check("the host goes through it", studio.venue_switch.in_roulette_room())
 	(studio.venue.get_node("RouletteDoor") as RouletteDoor).used.emit()
-	check("and back through the one in the room, to the loft", not studio.in_roulette_room() and studio.venue.venue_id() == &"loft")
+	check("and back through the one in the room, to the loft", not studio.venue_switch.in_roulette_room() and studio.venue.venue_id() == &"loft")
 	studio.queue_free()
 	Session.layout = saved_layout
 
@@ -26889,7 +26889,7 @@ func _room_things(studio: Studio) -> Array:
 	var add := func(id: StringName, fp: Dictionary, step: bool, through: bool, scenery := false) -> void:
 		out.append({"id": id, "corners": _quad(fp), "in": zone_of.call(fp["c"]), "step": step, "through": through,
 				"scenery": scenery})
-	var desk := studio._desk_footprint()
+	var desk := studio.venue_switch._desk_footprint()
 	if not desk.is_empty():
 		add.call(&"console", desk[0], false, false)
 	for piece in studio.floor_plan.pieces:
@@ -26961,7 +26961,7 @@ static func _poly_gap(a: PackedVector2Array, b: PackedVector2Array) -> float:
 ## The floor a body of `radius` can stand on, on a 5 cm grid: {free (PackedByteArray), x0, z0, nx, nz}.
 func _walk_grid(studio: Studio, obstacles: Array, radius: float) -> Dictionary:
 	const CELL := 0.05
-	var rects := studio._walkable()
+	var rects := studio.venue_look._walkable()
 	var lo := rects[0].position
 	var hi := rects[0].end
 	for r in rects:
@@ -27088,7 +27088,7 @@ func _check_neighbourhood(hood: StringName) -> void:
 				var at := (Stations.spot(venue, s) as Transform3D).origin
 				var flat := Vector2(at.x, at.z)
 				if hood == &"mixing":
-					if not studio._room_bounds().has_point(flat):
+					if not studio.venue_switch._room_bounds().has_point(flat):
 						strays.append("%s out of the control room" % s)
 					continue
 				var own := flat.distance_to(Vector2(mid.x, mid.z))
@@ -27118,14 +27118,14 @@ func _check_neighbourhood(hood: StringName) -> void:
 				# On a wall: just in from one of the floor's edges, its face looking back over the floor.
 				var faces := Vector2(sign.basis.z.x, sign.basis.z.z)
 				var foot := Vector2(sign.position.x, sign.position.z)
-				var on_wall := Walker.outline(studio._walkable()).any(func(e: Array) -> bool:
+				var on_wall := Walker.outline(studio.venue_look._walkable()).any(func(e: Array) -> bool:
 					var a: Vector2 = e[0]
 					var b: Vector2 = e[1]
 					var t := clampf((foot - a).dot((b - a).normalized()), 0.0, a.distance_to(b))
 					var off := absf(foot.distance_to(a + (b - a).normalized() * t) - Neighbourhoods.OFF_WALL)
 					return off < 0.02 and faces.dot(-(e[2] as Vector2)) > 0.99)
 				check("%s: the banner is on a wall, above head height, facing into the room (%s)" % [tag, sign.position],
-						sign.position.y >= 2.4 and on_wall and studio._walkable().any(func(w: Rect2) -> bool:
+						sign.position.y >= 2.4 and on_wall and studio.venue_look._walkable().any(func(w: Rect2) -> bool:
 							return w.has_point(foot)))
 	await get_tree().process_frame
 	studio.queue_free()
@@ -27252,7 +27252,7 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 			# The modular wall over the synth zone's stand (slice 51), a surface in the set at the venue's
 			# spot, its jacks, knobs and touch keys on it, and the venue's own rack given way to it.
 			var wall := studio.rack_wall
-			if wall == null or not wall.visible or not wall.transform.is_equal_approx(studio._venue_to_set(spot)) \
+			if wall == null or not wall.visible or not wall.transform.is_equal_approx(studio.venue_switch._venue_to_set(spot)) \
 					or wall.jacks.is_empty() or wall.knobs.is_empty() \
 					or wall.touch_keys.size() != RackWall.TOUCH_COUNT or not studio.focus.surfaces.has(wall):
 				return false
@@ -27379,7 +27379,7 @@ func _check_free_station(studio: Studio, id: StringName, spot: Transform3D, tag:
 	var before := spot * Vector3(0, 0, r["foot_z"] + r["foot"].y + Walker.RADIUS + 0.12)
 	var standable := walker.fits(Vector2(before.x, before.z))
 	check("%s: free-standing, off the footprint, clear of the zones %s, solids %s and props %s, on the floor, with room to stand at it"
-			% [tag, zoned, blocked, near], not rect.intersects(studio._room_bounds()) and zoned.is_empty()
+			% [tag, zoned, blocked, near], not rect.intersects(studio.venue_switch._room_bounds()) and zoned.is_empty()
 			and blocked.is_empty() and near.is_empty() and on_floor and standable)
 	# On a trolley of its own whose footprint is its own, which the walker stops at where the room is
 	# solid; the venue's solids leave it to the trolley.
@@ -27510,7 +27510,7 @@ func _test_a_track_jack_records_onto_its_track() -> void:
 	var block := _stand(room, &"woodblock")
 	var jacks := studio.jacks
 	check("every instrument has a jack, and nothing is plugged", bell.jack != null and block.jack != null and jacks.patch.is_empty()
-			and jacks.recorder == studio.hit_recorder and studio.room_state()["jacks"] == {})
+			and jacks.recorder == studio.hit_recorder and studio.room_rows.room_state()["jacks"] == {})
 	check("its socket steps through unplugged and every track, in order (%s)" % [Jacks.sinks().slice(0, 3)],
 			Jacks.sinks().size() == s.tracks.size() + 1 and Jacks.sinks()[0] == &"" and Jacks.sinks()[1] == &"track_1")
 	check("unplugged, it shows no tag and no lead, and its card says so (%s)" % bell.jack.readout(),
@@ -27538,8 +27538,8 @@ func _test_a_track_jack_records_onto_its_track() -> void:
 	studio._on_plug_asked(&"cowbell", &"track_6")
 	Session.notice.disconnect(listen)
 	var six := Jacks.sink_name(&"track_6")
-	check("plugged into track 6: the room's patch says so (%s)" % [studio.room_state()["jacks"]],
-			jacks.sink_of(&"cowbell") == &"track_6" and studio.room_state()["jacks"] == {"cowbell": "track_6"})
+	check("plugged into track 6: the room's patch says so (%s)" % [studio.room_rows.room_state()["jacks"]],
+			jacks.sink_of(&"cowbell") == &"track_6" and studio.room_rows.room_state()["jacks"] == {"cowbell": "track_6"})
 	check("and the player is told, in words (%s)" % [notices], notices.size() == 1
 			and notices[0] == "The cowbell's jack is in %s: its hits are recorded there, armed or not." % six)
 	check("its card says where, and its lead hangs out of it; no tag floats over it (%s)" % bell.jack.readout(),
@@ -27731,27 +27731,27 @@ func _test_the_host_says_who_may_plug() -> void:
 			and Jacks.refusal(bell, &"track_99", 7, 0) == "there is no track 99 to record onto"
 			and Jacks.plug_refusal(&"cowbell", bell, &"player_12", 7, 0, &"", [1, 7, 9]) == "player 12 is not in the room"
 			and Jacks.refusal(bell, &"track_2", 7, 0) == "")
-	studio._on_room_asked(&"plug", [&"cowbell", &"track_3"], 7)
-	check("anyone may plug it while it is at home (%s)" % [studio.room_state()["jacks"]],
-			jacks.sink_of(&"cowbell") == &"track_3" and studio.room_state()["jacks"] == {"cowbell": "track_3"})
-	studio._on_room_asked(&"plug", [&"cowbell", &"track_99"], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &"track_3"], 7)
+	check("anyone may plug it while it is at home (%s)" % [studio.room_rows.room_state()["jacks"]],
+			jacks.sink_of(&"cowbell") == &"track_3" and studio.room_rows.room_state()["jacks"] == {"cowbell": "track_3"})
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &"track_99"], 7)
 	check("not into a track there is not", jacks.sink_of(&"cowbell") == &"track_3")
-	studio._on_room_asked(&"plug", [&"cowbell", &"player_12"], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &"player_12"], 7)
 	check("nor into a player who is not in the room", jacks.sink_of(&"cowbell") == &"track_3")
-	studio._on_room_asked(&"plug", [&"duck", &"track_2"], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"duck", &"track_2"], 7)
 	check("nor anything with no jack", not jacks.patch.has("duck"))
 	Session._grant(7, key)
 	bell.follow(func() -> Transform3D: return Transform3D.IDENTITY)
-	studio._on_room_asked(&"plug", [&"cowbell", &"track_5"], 9)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &"track_5"], 9)
 	check("in Grace's hand, Lin may not", jacks.sink_of(&"cowbell") == &"track_3")
-	studio._on_room_asked(&"plug", [&"cowbell", &"track_5"], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &"track_5"], 7)
 	check("Grace may", jacks.sink_of(&"cowbell") == &"track_5")
-	studio._on_room_asked(&"plug", [&"cowbell", &""], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &""], 7)
 	check("and may unplug it", jacks.patch.is_empty())
 	Session._release(7, key)
 	var spot := studio.venue.prop_shelf_spot() * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.4)
 	room.lay(bell, Vector2(spot.x, spot.z), 0.0)
-	studio._on_room_asked(&"plug", [&"cowbell", &"track_2"], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &"track_2"], 7)
 	check("lying on the floor in nobody's hand, nobody may (%s)" % [Item.State.keys()[bell.state]],
 			bell.state == Item.State.LOOSE and jacks.patch.is_empty())
 	bell.snap_home()
@@ -27760,12 +27760,12 @@ func _test_the_host_says_who_may_plug() -> void:
 	var spill := room.spawn(&"cowbell", &"cowbell2", Transform3D(Basis.IDENTITY, Vector3(0.3, 0, 0.3)))
 	await get_tree().process_frame
 	check("a spill has a jack of its own", spill is InstrumentItem and (spill as InstrumentItem).jack != null)
-	studio._on_room_asked(&"plug", [&"cowbell2", &"track_2"], 7)
-	studio._on_room_asked(&"plug", [&"cowbell", &"track_4"], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell2", &"track_2"], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &"track_4"], 7)
 	check("plugged at home", jacks.sink_of(&"cowbell2") == &"track_2")
 	room.despawn(&"cowbell2")
-	check("swallowed, its plug is gone from the room, and nothing else's (%s)" % [studio.room_state()["jacks"]],
-			studio.room_state()["jacks"] == {"cowbell": "track_4"})
+	check("swallowed, its plug is gone from the room, and nothing else's (%s)" % [studio.room_rows.room_state()["jacks"]],
+			studio.room_rows.room_state()["jacks"] == {"cowbell": "track_4"})
 	var tablet := room.take_personal(&"tablet", 7)
 	jacks.plug(tablet.id, &"track_2")
 	room.retire(tablet)
@@ -27809,20 +27809,20 @@ func _test_a_guests_plug_is_predicted_and_rolled_back() -> void:
 	check("a guest's plug is in at once", jacks.sink_of(&"cowbell") == &"track_3" and bell.jack._lead.visible)
 	check("and asked of the host", studio._predictions.size() == 1 and studio._predictions[0]["verb"] == &"plug"
 			and studio._predictions[0]["args"] == [&"cowbell", &"track_3"])
-	studio.apply_room(room_with.call({}, 0))
+	studio.room_rows.apply_room(room_with.call({}, 0))
 	check("a room from before the host heard it leaves it in", jacks.sink_of(&"cowbell") == &"track_3")
-	studio.apply_room(room_with.call({"woodblock": "track_2"}, 0))
+	studio.room_rows.apply_room(room_with.call({"woodblock": "track_2"}, 0))
 	check("with the host's own plugs beside it", jacks.sink_of(&"woodblock") == &"track_2" and jacks.sink_of(&"cowbell") == &"track_3")
-	studio.apply_room(room_with.call({"woodblock": "track_2"}, Session.room_seq))
+	studio.room_rows.apply_room(room_with.call({"woodblock": "track_2"}, Session.room_seq))
 	check("the host's answer without it takes it out: refused", jacks.sink_of(&"cowbell") == &""
 			and not bell.jack._lead.visible and studio._predictions.is_empty())
 	studio._on_plug_asked(&"cowbell", &"track_3")
-	studio.apply_room(room_with.call({"woodblock": "track_2", "cowbell": "track_3"}, Session.room_seq))
+	studio.room_rows.apply_room(room_with.call({"woodblock": "track_2", "cowbell": "track_3"}, Session.room_seq))
 	check("an answer that took it keeps it", jacks.sink_of(&"cowbell") == &"track_3" and studio._predictions.is_empty())
 	studio._on_plug_asked(&"cowbell", &"")
-	studio.apply_room(room_with.call({"woodblock": "track_2", "cowbell": "track_3"}, Session.room_seq - 1))
+	studio.room_rows.apply_room(room_with.call({"woodblock": "track_2", "cowbell": "track_3"}, Session.room_seq - 1))
 	check("an unplug not yet answered stays unplugged", jacks.sink_of(&"cowbell") == &"")
-	studio.apply_room(room_with.call({"woodblock": "track_2"}, Session.room_seq))
+	studio.room_rows.apply_room(room_with.call({"woodblock": "track_2"}, Session.room_seq))
 	check("and the answer agrees", jacks.sink_of(&"cowbell") == &"" and studio._predictions.is_empty())
 	# In somebody else's hand: said, not asked.
 	studio.presence._item_holders[&"woodblock"] = 1
@@ -28065,8 +28065,8 @@ func _test_a_jack_into_a_bandmate_sends_what_its_source_plays() -> void:
 	mouse._unhandled_input(p)
 	check("and again takes them out", jacks.sink_of(&"keys:1") == &"")
 	notices.clear()
-	studio._on_room_asked(&"plug", [&"woodblock", &"player_1"], 7)
-	studio._on_room_asked(&"plug", [&"cowbell", &"player_1"], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"woodblock", &"player_1"], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &"player_1"], 7)
 	check("Grace plugs the woodblock and the cowbell into me, and I am told who plugged what (%s)" % [notices],
 			jacks.into(1).size() == 2 and notices.size() == 2
 			and notices[0].begins_with("Grace plugged the woodblock into you: its hits play chord tones on your keys.")
@@ -28088,7 +28088,7 @@ func _test_a_jack_into_a_bandmate_sends_what_its_source_plays() -> void:
 	jacks.plug(&"woodblock", &"player_7")
 	jacks.plug(Jack.keys_source(7), &"player_1")
 	jacks.plug(&"cowbell", &"track_2")
-	studio._on_jack_player_left(7)
+	studio.patch_host._on_jack_player_left(7)
 	check("a leaver's jacks, into them and out of their keys, come out (%s)" % [jacks.patch], jacks.patch == {"cowbell": "track_2"})
 	jacks.plug(&"cowbell", &"")
 	Session.notice.disconnect(listen)
@@ -28129,7 +28129,7 @@ func _test_the_host_says_who_may_send_down_a_jack() -> void:
 	Session.jack_played.connect(hear)
 	Session._grant(7, key)
 	bell.follow(func() -> Transform3D: return Transform3D.IDENTITY)
-	studio._on_room_asked(&"plug", [&"cowbell", &"player_1"], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &"player_1"], 7)
 	check("Grace plugs the cowbell in her hand into me", jacks.sink_of(&"cowbell") == &"player_1")
 	var refused := Session.jacks_refused
 	check("Lin's hit down the cowbell's jack is refused: it is not in her hand (%s)" % Session.jack_refusal(1, &"cowbell", 9),
@@ -28154,11 +28154,11 @@ func _test_the_host_says_who_may_send_down_a_jack() -> void:
 			Session.jacks_refused == refused + 2 and played.size() == 2)
 	# The sink's owner unplugs, though the cowbell is in Grace's hand; nobody else may.
 	jacks.plug(&"cowbell", &"player_9")
-	studio._on_room_asked(&"plug", [&"cowbell", &""], 1)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &""], 1)
 	check("in Grace's hand and going into Lin, I may not unplug it", jacks.sink_of(&"cowbell") == &"player_9")
-	studio._on_room_asked(&"plug", [&"cowbell", &""], 9)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &""], 9)
 	check("Lin, whom it goes into, may", jacks.sink_of(&"cowbell") == &"")
-	studio._on_room_asked(&"plug", [&"cowbell", &"player_7"], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &"player_7"], 7)
 	check("and Grace may not plug it into herself", jacks.sink_of(&"cowbell") == &"")
 	Session.jack_played.disconnect(hear)
 	Session._release(7, key)
@@ -28243,8 +28243,8 @@ func _test_a_jack_into_whoever_plays_it_is_no_cable() -> void:
 	studio.send_item_hit = func(_id: StringName, _v: int, _song: float, _snap: bool, _take: int, _zone: StringName) -> void: pass
 	_stand(studio.items, &"cowbell")
 	_stand(studio.items, &"woodblock")
-	studio._on_room_asked(&"plug", [&"cowbell", &"player_1"], 7)
-	studio._on_room_asked(&"plug", [&"woodblock", &"player_1"], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"cowbell", &"player_1"], 7)
+	studio.room_rows._on_room_asked(&"plug", [&"woodblock", &"player_1"], 7)
 	check("Lin plugs the cowbell and a woodblock into me", jacks.into(1).size() == 2)
 
 	var song := s.bar_to_seconds(1.3)
@@ -29452,7 +29452,7 @@ func _test_a_guests_set_is_asked_with_its_bar() -> void:
 			and Session.room_ask_is_valid(wheel.asked[0], wheel.asked[1]))
 	check("and nothing is written here", s.markers.size() == 1)
 	_as_session(Session.Role.HOST, 1)
-	studio._on_room_asked(FifthsWheel.VERB, [4, "C major: F C"], 5)
+	studio.room_rows._on_room_asked(FifthsWheel.VERB, [4, "C major: F C"], 5)
 	check("the host writes it at the guest's bar (%s)" % [s.markers],
 			s.markers.get(s.bar_to_seconds(5.0), "") == "[C major: F C]"
 			and Harmony.at(s, s.bar_to_seconds(5.0) + 0.01).chord_name == "F")
@@ -29461,10 +29461,10 @@ func _test_a_guests_set_is_asked_with_its_bar() -> void:
 			and FifthsWheel.answer(6, "Q major") == "" and s.markers.size() == 2)
 	var hand := Node.new()
 	wheel.hover_enter(hand)
-	studio._follow_wheel()
+	studio.venue_switch._follow_wheel()
 	check("a hand over the wheel puts it in the keys' reach", gm.instruments.has(FifthsWheel.SOURCE))
 	wheel.hover_exit(hand)
-	studio._follow_wheel()
+	studio.venue_switch._follow_wheel()
 	check("and off it, out", not gm.instruments.has(FifthsWheel.SOURCE))
 	hand.free()
 	gm.heard_source = saved_heard
@@ -29770,7 +29770,7 @@ func _test_going_to_a_station_holds_its_controls_in_view() -> void:
 		for v in Venue.variant_titles(id).size():
 			studio.set_venue(id, false, v)
 			for station: StringName in Stations.ids(studio.venue):
-				studio.go_to_station(station)
+				studio.station_host.go_to_station(station)
 				var cam := studio.camera.global_transform
 				var points: Array[Vector3] = []
 				var frame_of := studio.venue.global_transform
@@ -29851,7 +29851,7 @@ func _test_the_keys_that_move_you_wait_while_a_piano_has_them() -> void:
 		studio._unhandled_input(key)
 	press.call(KEY_I)
 	var first: StringName = studio.station
-	studio._modular_play(true)
+	studio.rack_host._modular_play(true)
 	said.clear()
 	var venue_before: Variant = studio.venue
 	press.call(KEY_I)
@@ -29915,22 +29915,22 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 	studio._unhandled_input(key)
 	check("Shift-I goes back to the one before (%s)" % studio.station, studio.station == &"venue")
 	studio.set_god_mode(true)
-	studio.go_to_station(&"wheel")
+	studio.station_host.go_to_station(&"wheel")
 	var bells: Transform3D = Stations.seat(studio.venue, &"wheel", walker.fits)
 	check("from god mode it comes down into the body first, and goes",
 			not studio.god_mode and walker.active and Vector2(walker.global_position.x, walker.global_position.z)
 					.distance_to(Vector2(bells.origin.x, bells.origin.z)) < 0.01)
-	check("a station that does not stand here is refused, and said", not studio.go_to_station(&"fingertips")
+	check("a station that does not stand here is refused, and said", not studio.station_host.go_to_station(&"fingertips")
 			and said[-1].contains("does not stand"))
 	studio.ergonomics.motion_scale = 0.3
-	studio.go_to_station(&"wheel")
+	studio.station_host.go_to_station(&"wheel")
 	check("with motion it glides rather than cuts", walker.travelling())
 	await get_tree().create_timer(0.8).timeout
 	var wheel_seat: Transform3D = Stations.seat(studio.venue, &"wheel", walker.fits)
 	check("and arrives", not walker.travelling() and Vector2(walker.global_position.x, walker.global_position.z)
 			.distance_to(Vector2(wheel_seat.origin.x, wheel_seat.origin.z)) < 0.01)
 	studio.ergonomics.motion_scale = 0.0
-	studio._on_escape()
+	studio.view_host._on_escape()
 	check("Esc walks back to the desk (%s)" % walker.global_position,
 			Vector2(walker.global_position.x, walker.global_position.z).distance_to(Vector2(0, Studio.MIX_POSITION_Z)) < 0.05)
 	Session.notice.disconnect(listen)
@@ -29994,7 +29994,7 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	var at_home := rig.head.global_transform
 	_press(board.row(&"wheel"))
 	var frame_of := studio.venue.global_transform
-	var seat: Transform3D = frame_of * (Stations.seat(studio.venue, &"wheel", studio._station_fits()) as Transform3D)
+	var seat: Transform3D = frame_of * (Stations.seat(studio.venue, &"wheel", studio.station_host._station_fits()) as Transform3D)
 	var spot: Transform3D = frame_of * (Stations.spot(studio.venue, &"wheel") as Transform3D)
 	var wanted := seat * offset
 	var head := rig.head.global_transform
@@ -30027,7 +30027,7 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 			rig.head.global_position.distance_to(at_home.origin) < 0.05 and not rig.away
 			and rig.transform.is_equal_approx(rig.home))
 	# A mark taken while away is where the floor is at home: the calibration does not travel.
-	studio.go_to_station(&"wheel")
+	studio.station_host.go_to_station(&"wheel")
 	var tip := rig.tip_of(rig.left)
 	var tip_home := at_home * (rig.head.global_transform.affine_inverse() * tip)
 	check("a floor mark taken at a station is the same spot of the real floor as at home",
@@ -30037,9 +30037,9 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	# desk's seat further back, and the toast says where it is in words ("in this venue").
 	said.clear()
 	Session.notice.connect(listen)
-	studio.go_to_station(VenueInstrument.STATION)
+	studio.station_host.go_to_station(VenueInstrument.STATION)
 	Session.notice.disconnect(listen)
-	var near: Transform3D = frame_of * (Stations.seat(studio.venue, VenueInstrument.STATION, studio._station_fits(), true) as Transform3D)
+	var near: Transform3D = frame_of * (Stations.seat(studio.venue, VenueInstrument.STATION, studio.station_host._station_fits(), true) as Transform3D)
 	var set_at: Transform3D = frame_of * (Stations.spot(studio.venue, VenueInstrument.STATION) as Transform3D)
 	var set_spec := VenueInstrument.spec_of(studio.venue)
 	var out := Vector2(near.origin.x - set_at.origin.x, near.origin.z - set_at.origin.z).length()
@@ -30057,7 +30057,7 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	var at_cut: Array = []
 	var cut := func(_home: bool) -> void: at_cut.append(rig.veil())
 	rig.travelled.connect(cut)
-	check("with motion, going there", studio.go_to_station(&"wheel"))
+	check("with motion, going there", studio.station_host.go_to_station(&"wheel"))
 	check("it does not cut at once: the veil is closing over FADE", rig.travelling() and rig.away == false
 			and rig.head.global_position.distance_to(at_home.origin) < 0.05)
 	await get_tree().process_frame
@@ -30069,7 +30069,7 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	await get_tree().create_timer(XRRig.FADE * 2.0 + 0.15).timeout
 	rig.travelled.disconnect(cut)
 	check("and was made once, under the closed veil (%s)" % [at_cut], at_cut == [1.0])
-	var bells: Transform3D = frame_of * (Stations.seat(studio.venue, &"wheel", studio._station_fits()) as Transform3D)
+	var bells: Transform3D = frame_of * (Stations.seat(studio.venue, &"wheel", studio.station_host._station_fits()) as Transform3D)
 	check("then it is at the wheel's seat, and the veil is open again (%.3f m)"
 			% rig.head.global_position.distance_to((bells * offset).origin),
 			rig.head.global_position.distance_to((bells * offset).origin) < 0.05 and not rig.travelling()
@@ -30078,8 +30078,8 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	# floor is put down on its top, so the real floor is the riser that is seen, and home is the
 	# floor again.
 	studio.ergonomics.motion_scale = 0.0
-	check("to the hand drums", studio.go_to_station(&"drums"))
-	var drums: Transform3D = frame_of * (Stations.seat(studio.venue, &"drums", studio._station_fits()) as Transform3D)
+	check("to the hand drums", studio.station_host.go_to_station(&"drums"))
+	var drums: Transform3D = frame_of * (Stations.seat(studio.venue, &"drums", studio.station_host._station_fits()) as Transform3D)
 	var riser_top := (frame_of * Vector3(0, ZoneKit.RISER_HEIGHT, 0)).y
 	check("there the play space's floor is the riser's top under the seat (%.2f up, the riser %.2f)" % [rig.global_position.y, riser_top],
 			rig.global_position.distance_to(drums.origin) < 0.05 and is_equal_approx(rig.global_position.y, riser_top) and rig.away
@@ -30118,15 +30118,15 @@ func _test_a_co_located_headset_stays_where_it_is_seen() -> void:
 	studio.room_anchor.mark_forward(Vector3(0.7, 0, 0.2))
 	var rig := studio.rig
 	var before := rig.global_transform
-	check("marked on a real floor with another headset in the session, the room is co-located", studio.co_located())
-	var went := studio.go_to_station(&"wheel")
+	check("marked on a real floor with another headset in the session, the room is co-located", studio.station_host.co_located())
+	var went := studio.station_host.go_to_station(&"wheel")
 	var board := studio.station_board
 	var why := board.get_node("Face/Why") as Label3D
 	check("a co-located headset is refused travel, and stays where it is", not went and not rig.away
 			and rig.global_transform.is_equal_approx(before) and studio.station != &"wheel")
 	check("the board says why on its face, in words: CAN'T GO and the reason (%s)" % why.text,
 			why.visible and why.text.begins_with(StationBoard.REFUSED) and why.text.contains("share this floor")
-			and board.refusal == studio.travel_refusal())
+			and board.refusal == studio.station_host.travel_refusal())
 	check("and so does a toast (%s)" % [said], said.size() > 0 and String(said[-1]).contains("share this floor"))
 	board.clear_refusal()
 	# Pressed on the rows beside a plaque, the refusal is read there, not only metres away on the
@@ -30146,11 +30146,11 @@ func _test_a_co_located_headset_stays_where_it_is_seen() -> void:
 	_press(plaque.get_node("Instruments") as ControlAffordance)
 	board.clear_refusal()
 	Session.apply_roster([[1, "Ada", Presentation.Medium.SCREEN, 0], [5, "Grace", Presentation.Medium.VR, 1]])
-	check("with only a screen beside it, nobody shares its floor", not studio.co_located())
+	check("with only a screen beside it, nobody shares its floor", not studio.station_host.co_located())
 	Session.apply_roster([[1, "Ada", Presentation.Medium.AR, 0], [5, "Grace", Presentation.Medium.VR, 1]])
 	studio.room_anchor.adopt_virtual_frame(1.2)
-	check("a frame handed over whole is a room of its own: it goes", not studio.co_located()
-			and studio.go_to_station(&"wheel") and rig.away and not why.visible)
+	check("a frame handed over whole is a room of its own: it goes", not studio.station_host.co_located()
+			and studio.station_host.go_to_station(&"wheel") and rig.away and not why.visible)
 	_press(studio.wheel.get_node("Plaque/Back") as ControlAffordance)
 	check("and BACK comes home", not rig.away)
 	Session.notice.disconnect(listen)
@@ -30209,7 +30209,7 @@ func _test_the_station_board_is_the_play_pages_and_its_rows_go() -> void:
 	check("it stands on the floor plan, on a stand of its own, clear of the desk", stand != null
 			and studio.floor_plan.pieces.has(stand) and not fixture.is_empty()
 			and (stood["c"] as Vector2).distance_to(fixture["c"]) < 0.001 and (stood["h"] as Vector2).is_equal_approx(fixture["h"])
-			and FloorPlan.separation(stood, studio._desk_footprint()[0]) == Vector2.ZERO)
+			and FloorPlan.separation(stood, studio.venue_switch._desk_footprint()[0]) == Vector2.ZERO)
 	var middle: Vector3 = (board.get_node("Face") as Node3D).global_transform * Vector3(0, -board.face_height() * 0.5, 0)
 	check("and is out of the desk seat's view, which is the desk's", not _in_view(studio.camera.global_transform, studio.camera.fov, 1600.0 / 900.0, middle))
 	var says := board.get_node("Face/Says") as Label3D
@@ -30220,13 +30220,13 @@ func _test_the_station_board_is_the_play_pages_and_its_rows_go() -> void:
 	check("on a desktop a row walks there", studio.station == &"wheel" and Vector2(walker.global_position.x, walker.global_position.z)
 			.distance_to(Vector2(bell_seat.origin.x, bell_seat.origin.z)) < 0.01)
 	var keys: Array = []
-	for station: StringName in studio.station_ids():
+	for station: StringName in studio.station_host.station_ids():
 		# The venue's stations and the studio's own (the stage table's trolley).
 		for key: StationBoard.PlaqueKey in studio.find_children("*", "", true, false).filter(
 				func(n: Node) -> bool: return n is StationBoard.PlaqueKey and n.station == station):
 			keys.append([station, key.kind, key.title()])
 	check("every station's plaque has INSTRUMENTS and BACK, named for its station (%s)" % [keys],
-			keys.size() == studio.station_ids().size() * 2
+			keys.size() == studio.station_host.station_ids().size() * 2
 			and keys.all(func(k: Array) -> bool: return String(k[2]).begins_with(Stations.row(k[0])["title"])))
 	var plaque := studio.wheel.get_node("Plaque") as Node3D
 	var instruments := plaque.get_node("Instruments") as ControlAffordance
@@ -32512,7 +32512,7 @@ func _test_the_stage_tables_voices_are_clickable_at_it() -> void:
 		for surface in studio.focus.surfaces:
 			surface._process(0.0)
 		await get_tree().physics_frame
-	studio._sit_down()
+	studio.station_host._sit_down()
 	for i in 3:
 		await get_tree().physics_frame
 	var hand: Interactor = studio.get_node("MouseHand")
@@ -32655,8 +32655,8 @@ func _test_the_stage_table_stands_clear_in_every_venue() -> void:
 		if desk_tracks == 40:
 			_offline(40)
 			studio.console._rebuild()
-			studio._forget_desk_box()
-			studio._fit_room_to_session()
+			studio.venue_switch._forget_desk_box()
+			studio.venue_switch._fit_room_to_session()
 			# The old desk's strips are freed at the frame's end.
 			await get_tree().process_frame
 		for id: StringName in Venue.IDS:
@@ -32673,7 +32673,7 @@ func _test_the_stage_table_stands_clear_in_every_venue() -> void:
 						crowded.append("%s: %s" % [tag, f["c"]])
 				if Walker._gap(mine, Vector2(0, Studio.MIX_POSITION_Z)) < Walker.RADIUS + 0.25:
 					crowded.append("%s: the mix position" % tag)
-				var room := studio._room_bounds()
+				var room := studio.venue_switch._room_bounds()
 				for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
 					var p := trolley.transform * Vector3(trolley.footprint_centre.x + c.x * trolley.footprint_half.x, 0,
 							trolley.footprint_centre.y + c.y * trolley.footprint_half.y)
@@ -33254,7 +33254,7 @@ func _test_track_under_answers_each_kind_of_surface() -> void:
 		for surface in studio.focus.surfaces:
 			surface._process(0.0)
 		await get_tree().physics_frame
-	studio._sit_down()
+	studio.station_host._sit_down()
 	for i in 3:
 		await get_tree().physics_frame
 	var eye := studio.camera.global_position
@@ -33262,13 +33262,13 @@ func _test_track_under_answers_each_kind_of_surface() -> void:
 	var own := 0
 	for track in table.voices:
 		var v: StageVoice = table.voices[track]
-		var got := studio.track_under(eye, (v.global_position - eye).normalized())
+		var got := studio.mix_follow.track_under(eye, (v.global_position - eye).normalized())
 		found.append(got)
 		own += 1 if got == track else 0
 	# A ball under another, wholly or in part, finds the one on top: taken by its tag's name.
 	check("a ray at each voice finds a track, and most of them their own (%s, %d own)" % [found, own],
 			found.all(func(t): return t > 0) and own >= 5)
-	check("a ray at the sky finds none", studio.track_under(eye, Vector3.UP) == 0)
+	check("a ray at the sky finds none", studio.mix_follow.track_under(eye, Vector3.UP) == 0)
 	monitor.queue_free()
 	await get_tree().process_frame
 	Session.layout = saved_layout
@@ -33952,7 +33952,7 @@ func _test_a_clip_lifts_the_studios_lamps_and_lights_over() -> void:
 	studio.venue._since_lift = INF
 	var hot: int = s.track_indices()[0]
 	s.track(hot).vu_l = 0.9
-	studio.follow_clip(1.0 / 60.0)
+	studio.venue_look.follow_clip(1.0 / 60.0)
 	close_to("a clipping track lifts the practicals 30%", studio._lamps[0].light_energy, base[0] * (1.0 + Venue.LIFT), 0.001)
 	var strip: ChannelStrip = null
 	for st in studio.console.strips:
@@ -33962,13 +33962,13 @@ func _test_a_clip_lifts_the_studios_lamps_and_lights_over() -> void:
 	check("the master's lamp is not lit", not studio.console.master.over)
 	s.track(hot).vu_l = 0.3
 	s.master.vu_l = 0.95
-	studio.follow_clip(1.0 / 60.0)
+	studio.venue_look.follow_clip(1.0 / 60.0)
 	check("the master over lights its OVER lamp and says it", studio.console.master.over
 			and studio.console.master._db_label.text == "OVER")
 	check("and the room does not lift again inside FLASH_GAP", studio.venue.lifts == 1)
 	s.master.vu_l = 0.3
 	for f in 120:
-		studio.follow_clip(1.0 / 60.0)
+		studio.venue_look.follow_clip(1.0 / 60.0)
 	check("the lift gone and OVER let go once the clip has been held its second",
 			is_equal_approx(studio._lamps[0].light_energy, base[0]) and not studio.console.master.over
 			and strip != null and not strip.over)
@@ -33976,7 +33976,7 @@ func _test_a_clip_lifts_the_studios_lamps_and_lights_over() -> void:
 	studio._process(1.0 / 60.0)
 	studio.venue._since_lift = INF
 	s.track(hot).vu_l = 0.9
-	studio.follow_clip(1.0 / 60.0)
+	studio.venue_look.follow_clip(1.0 / 60.0)
 	check("Room reacts off: the lamps hold", is_equal_approx(studio._lamps[0].light_energy, base[0]))
 	s.track(hot).vu_l = 0.0
 	_drop_floor_studio(rig)
@@ -34500,8 +34500,8 @@ func _test_a_clip_pulled_off_the_timeline_is_a_cassette_in_the_hand() -> void:
 	check("its row is the session's, once (%s)" % [Session.made.keys()], Session.made.has(&"cassette1")
 			and room.made == Session.made and (Session.made[&"cassette1"] as Array)[0] == &"cassette"
 			and (Session.made[&"cassette1"] as Array)[2] is PackedByteArray)
-	check("the room names it and carries nothing of its clip", studio.room_state()["made"] == [&"cassette1"]
-			and not var_to_str(studio.room_state()).contains(kick.name))
+	check("the room names it and carries nothing of its clip", studio.room_rows.room_state()["made"] == [&"cassette1"]
+			and not var_to_str(studio.room_rows.room_state()).contains(kick.name))
 	check("and the layout keeps it", Session.layout.made.has(&"cassette1"))
 
 	# Shelved: let go by a slot, it goes into it; the room says which.
@@ -34512,10 +34512,10 @@ func _test_a_clip_pulled_off_the_timeline_is_a_cassette_in_the_hand() -> void:
 	cassette.global_transform = Transform3D(Basis.IDENTITY, slot_middle - Vector3(0, CassetteItem.SIZE.y * 0.5, 0))
 	var eye := slot_middle + Vector3(0, 0.3, 0.6)
 	room.put_down(cassette, Transform3D(Basis.looking_at(slot_middle - eye, Vector3.UP), eye))
-	check("let go by a slot, it is shelved in it (%s)" % [studio.room_state()["items"].get(&"cassette1")],
+	check("let go by a slot, it is shelved in it (%s)" % [studio.room_rows.room_state()["items"].get(&"cassette1")],
 			hand.carrying == null and cassette.slot_in == CassetteRack.RACK and cassette.slot_n == 0
 			and cassette.state == Item.State.LOOSE
-			and studio.room_state()["items"].get(&"cassette1") == ["slot", "rack", 0])
+			and studio.room_rows.room_state()["items"].get(&"cassette1") == ["slot", "rack", 0])
 	check("its card says where (%s)" % cassette.readout(), cassette.readout().contains("slot 1"))
 	check("the rack's face counts it (%s)" % studio.cassette_rack.face.readout(),
 			studio.cassette_rack.face.readout().begins_with("1 of 12"))
@@ -34524,14 +34524,14 @@ func _test_a_clip_pulled_off_the_timeline_is_a_cassette_in_the_hand() -> void:
 	# Eleven more, by the face: a click with one in the hand shelves it in the nearest free slot.
 	var face := studio.cassette_rack.face
 	for n in range(1, CassetteRack.SLOTS):
-		studio._on_clip_pulled(2 + n % 4, 0, hand)
+		studio.item_host._on_clip_pulled(2 + n % 4, 0, hand)
 		face.grab_begin(hand, studio.cassette_rack.global_transform * CassetteRack.slot_pose(n).origin)
 	check("twelve are shelved, one to a slot (%s)" % [room.made_ids()], room.made_ids().size() == CassetteRack.SLOTS
 			and range(CassetteRack.SLOTS).all(func(n: int) -> bool: return room.in_slot(CassetteRack.RACK, n) != null))
 	var notices: Array[String] = []
 	var listen := func(t: String) -> void: notices.append(t)
 	Session.notice.connect(listen)
-	studio._on_clip_pulled(3, 0, hand)
+	studio.item_host._on_clip_pulled(3, 0, hand)
 	var thirteenth := CassetteRack.made_in(hand)
 	face.grab_begin(hand, studio.cassette_rack.global_transform * CassetteRack.slot_pose(4).origin)
 	check("a thirteenth is refused, and the rack says it is full (%s)" % [notices], thirteenth != null
@@ -34706,13 +34706,13 @@ func _test_a_guests_pull_is_a_ghost_until_the_host_answers() -> void:
 		out["acks"] = {5: acks}
 		return out
 
-	studio._on_clip_pulled(2, 0, hand)
+	studio.item_host._on_clip_pulled(2, 0, hand)
 	check("a guest's pull is asked of the host, by what it names, never with the clip",
 			studio._predictions.size() == 1 and studio._predictions[0]["verb"] == &"make"
 			and studio._predictions[0]["args"] == [&"cassette", "clip:2:0"])
 	check("with a blank cassette in its glove meanwhile", studio._making.size() == 1
 			and is_instance_valid(studio._making[0]["look"]) and studio.items.made_ids().is_empty())
-	studio._follow_making()
+	studio.item_host._follow_making()
 	var ghost := studio._making[0]["look"] as Node3D
 	check("which follows the hand", ghost.global_position.distance_to(hand.carry_pose().origin) < 0.1)
 	var seq := Session.room_seq
@@ -34720,11 +34720,11 @@ func _test_a_guests_pull_is_a_ghost_until_the_host_answers() -> void:
 	# The host's answer: the row first, then the holds and the room.
 	Session._made(&"cassette1", &"cassette", 5, var_to_bytes(minted))
 	check("its row arrives first, and is kept", Session.made.has(&"cassette1") and not studio.items.items.has(&"cassette1"))
-	studio.apply_room(room_with.call([], 0))
+	studio.room_rows.apply_room(room_with.call([], 0))
 	check("a room that does not name it yet makes nothing", not studio.items.items.has(&"cassette1")
 			and studio._making.size() == 1)
 	Session._receive_holds({"CASSETTE 1": 5})
-	studio.apply_room(room_with.call([&"cassette1"], seq))
+	studio.room_rows.apply_room(room_with.call([&"cassette1"], seq))
 	await get_tree().process_frame
 	var cassette := studio.items.items.get(&"cassette1") as CassetteItem
 	check("answered: the blank one goes and the made one is in the hand that pulled (%s)" % [hand.carrying],
@@ -34733,9 +34733,9 @@ func _test_a_guests_pull_is_a_ghost_until_the_host_answers() -> void:
 	check("carrying the host's clip", cassette != null and cassette.clip == minted["clip"] and cassette.from_track == 2)
 
 	# Refused: the blank one goes, nothing is left.
-	studio._on_clip_pulled(3, 0, hand)
+	studio.item_host._on_clip_pulled(3, 0, hand)
 	var refused_ghost := studio._making[0]["look"] as Node3D if not studio._making.is_empty() else null
-	studio.apply_room(room_with.call([&"cassette1"], Session.room_seq))
+	studio.room_rows.apply_room(room_with.call([&"cassette1"], Session.room_seq))
 	await get_tree().process_frame
 	check("a refused pull: its blank one goes, and nothing new is made", studio._making.is_empty()
 			and not is_instance_valid(refused_ghost) and studio.items.made_ids() == [&"cassette1"]
@@ -34782,8 +34782,8 @@ func _test_the_host_mints_a_guests_pull_and_cassettes_are_handed_over() -> void:
 	var listen := func(t: String) -> void: notices.append(t)
 	Session.notice.connect(listen)
 
-	var room_before := var_to_bytes(studio.room_state()).size()
-	studio._on_room_asked(&"make", [&"cassette", "clip:6:%d" % take.index], 5)
+	var room_before := var_to_bytes(studio.room_rows.room_state()).size()
+	studio.room_rows._on_room_asked(&"make", [&"cassette", "clip:6:%d" % take.index], 5)
 	var cassette := room.items.get(&"cassette1") as CassetteItem
 	check("a guest's pull is minted by the host, from its own song", cassette != null
 			and cassette.clip.get("notes") == take.notes and cassette.from_track == 6)
@@ -34791,31 +34791,31 @@ func _test_the_host_mints_a_guests_pull_and_cassettes_are_handed_over() -> void:
 			cassette != null and (Session.made[&"cassette1"] as Array)[1] == 5
 			and Session.holder_of(cassette.network_key()) == 5 and hand.carrying == null)
 	var row_bytes := ((Session.made[&"cassette1"] as Array)[2] as PackedByteArray).size()
-	var room_after := var_to_bytes(studio.room_state()).size()
+	var room_after := var_to_bytes(studio.room_rows.room_state()).size()
 	check("the room grows by its name, not its clip (%d bytes more; the clip %d)" % [room_after - room_before, row_bytes],
-			studio.room_state()["made"] == [&"cassette1"] and room_after - room_before < 128 and row_bytes > 1024)
+			studio.room_rows.room_state()["made"] == [&"cassette1"] and room_after - room_before < 128 and row_bytes > 1024)
 	var row: PackedByteArray = (Session.made[&"cassette1"] as Array)[2]
-	studio._on_room_asked(&"put_item", [&"cassette1", -1.0, 3.6, 0.0], 5)
-	check("a put-down after the mint is the room again: the clip is not in it (%d bytes)" % var_to_bytes(studio.room_state()).size(),
-			cassette.state == Item.State.LOOSE and var_to_bytes(studio.room_state()).size() - room_before < 160
+	studio.room_rows._on_room_asked(&"put_item", [&"cassette1", -1.0, 3.6, 0.0], 5)
+	check("a put-down after the mint is the room again: the clip is not in it (%d bytes)" % var_to_bytes(studio.room_rows.room_state()).size(),
+			cassette.state == Item.State.LOOSE and var_to_bytes(studio.room_rows.room_state()).size() - room_before < 160
 			and (Session.made[&"cassette1"] as Array)[2] == row)
-	studio._on_room_asked(&"slot_item", [&"cassette1", CassetteRack.RACK, 7], 5)
-	check("a guest's shelving is the room's (%s)" % [studio.room_state()["items"].get(&"cassette1")],
+	studio.room_rows._on_room_asked(&"slot_item", [&"cassette1", CassetteRack.RACK, 7], 5)
+	check("a guest's shelving is the room's (%s)" % [studio.room_rows.room_state()["items"].get(&"cassette1")],
 			cassette.slot_in == CassetteRack.RACK and cassette.slot_n == 7
-			and studio.room_state()["items"].get(&"cassette1") == ["slot", "rack", 7])
+			and studio.room_rows.room_state()["items"].get(&"cassette1") == ["slot", "rack", 7])
 
 	# Refused past what the room holds; told, and nothing made.
 	var fake := {}
 	for n in ItemRoom.MADE_MOST - 1:
 		fake[StringName("cassette%d" % (100 + n))] = [&"cassette", 1, PackedByteArray([1])]
 	Session.made.merge(fake)
-	studio._on_room_asked(&"make", [&"cassette", "clip:2:0"], 5)
+	studio.room_rows._on_room_asked(&"make", [&"cassette", "clip:2:0"], 5)
 	check("past %d made things a pull is refused (%s)" % [ItemRoom.MADE_MOST, room.mint_refusal],
 			room.mint_refusal.contains("%d" % ItemRoom.MADE_MOST) and room.made_ids() == [&"cassette1"])
 	for id in fake:
 		Session.made.erase(id)
 	var huge := _bent_clip(7, 0.0, 600.0, 60.0)
-	studio._on_room_asked(&"make", [&"cassette", "clip:7:%d" % huge.index], 5)
+	studio.room_rows._on_room_asked(&"make", [&"cassette", "clip:7:%d" % huge.index], 5)
 	check("a clip too much to carry is refused (%s)" % room.mint_refusal, room.mint_refusal.contains("too much")
 			and room.made_ids() == [&"cassette1"])
 	DAW.state.track(7).items.erase(huge)
@@ -34823,30 +34823,30 @@ func _test_the_host_mints_a_guests_pull_and_cassettes_are_handed_over() -> void:
 	heavy.resize(ItemRoom.MADE_BYTES - 64)
 	for n in ItemRoom.MADE_TOTAL / ItemRoom.MADE_BYTES:
 		Session.made[StringName("cassette%d" % (200 + n))] = [&"cassette", 1, heavy]
-	studio._on_room_asked(&"make", [&"cassette", "clip:6:%d" % take.index], 5)
+	studio.room_rows._on_room_asked(&"make", [&"cassette", "clip:6:%d" % take.index], 5)
 	check("and past the room's %d MiB (%s)" % [ItemRoom.MADE_TOTAL / 1024 / 1024, room.mint_refusal],
 			room.mint_refusal.contains("full") and room.made_ids() == [&"cassette1"])
 	for n in ItemRoom.MADE_TOTAL / ItemRoom.MADE_BYTES:
 		Session.made.erase(StringName("cassette%d" % (200 + n)))
-	studio._on_room_asked(&"make", [&"cassette", "clip:99:0"], 5)
+	studio.room_rows._on_room_asked(&"make", [&"cassette", "clip:99:0"], 5)
 	check("nothing there makes nothing", room.made_ids() == [&"cassette1"])
 
 	# Handed over. The guest has cassette1; it gives it to the host, whose free hand takes it.
-	studio._on_room_asked(&"give", [&"cassette1", 1], 7)
+	studio.room_rows._on_room_asked(&"give", [&"cassette1", 1], 7)
 	check("only whoever has it hands it over", Session.holder_of(cassette.network_key()) == 5)
-	studio._on_room_asked(&"give", [&"cassette1", 9], 5)
+	studio.room_rows._on_room_asked(&"give", [&"cassette1", 9], 5)
 	check("and only to someone in the room", Session.holder_of(cassette.network_key()) == 5)
 	notices.clear()
-	studio._on_room_asked(&"give", [&"cassette1", 1], 5)
+	studio.room_rows._on_room_asked(&"give", [&"cassette1", 1], 5)
 	studio.presence.claim_carries()
 	check("a guest's give puts it in the host's hand (%s)" % [notices], hand.carrying == cassette
 			and Session.holder_of(cassette.network_key()) == 1 and cassette.slot_in == &"")
 	# The host's to the guest.
 	notices.clear()
-	studio.give_item(cassette, 5)
+	studio.item_host.give_item(cassette, 5)
 	check("the host's give puts it in the guest's glove, and says so (%s)" % [notices], hand.carrying == null
 			and Session.holder_of(cassette.network_key()) == 5 and notices.has("Handed the %s cassette to Grace." % cassette.clip_name()))
-	studio._on_room_asked(&"give", [&"cassette1", 1], 5)
+	studio.room_rows._on_room_asked(&"give", [&"cassette1", 1], 5)
 	studio.presence.claim_carries()
 
 	# Who a click gives it to: the ghost it points at. Who a headset's hand gives it to: the glove
@@ -34870,16 +34870,16 @@ func _test_the_host_mints_a_guests_pull_and_cassettes_are_handed_over() -> void:
 		hand.lose_carrying()
 	headset.pick_up(cassette)
 	cassette.global_transform = headset.carry_pose() * cassette.held_pose()
-	studio._follow_gives(Studio.GIVE_HOLD * 0.6)
+	studio.sampler_host._follow_gives(Studio.GIVE_HOLD * 0.6)
 	check("held there a moment, it is still in the hand", headset.carrying == cassette)
-	studio._follow_gives(Studio.GIVE_HOLD * 0.6)
+	studio.sampler_host._follow_gives(Studio.GIVE_HOLD * 0.6)
 	check("held there for GIVE_HOLD, it is theirs", headset.carrying == null
 			and Session.holder_of(cassette.network_key()) == 5)
 	headset.queue_free()
 
 	# A desktop click on a bandmate standing in front of a control, through the hand's own tick:
 	# theirs, not the control's. Standing behind it, the control is still the click's.
-	studio._on_room_asked(&"give", [&"cassette1", 1], 5)
+	studio.room_rows._on_room_asked(&"give", [&"cassette1", 1], 5)
 	studio.presence.claim_carries()
 	var holder := Node3D.new()
 	add_child(holder)
@@ -34925,14 +34925,14 @@ func _test_the_host_mints_a_guests_pull_and_cassettes_are_handed_over() -> void:
 	holder.queue_free()
 
 	# A guest who joins later: the rows, then the room, and the room makes them, where they are.
-	studio._on_room_asked(&"slot_item", [&"cassette1", CassetteRack.RACK, 2], 5)
+	studio.room_rows._on_room_asked(&"slot_item", [&"cassette1", CassetteRack.RACK, 2], 5)
 	var late := ItemRoom.new()
 	add_child(late)
 	for id in Session.made:
 		late.made[id] = (Session.made[id] as Array).duplicate()
 	late.set_holder(CassetteRack.RACK, room.holders[CassetteRack.RACK])
-	late.apply_made(studio.room_state()["made"])
-	late.apply(studio.room_state()["items"])
+	late.apply_made(studio.room_rows.room_state()["made"])
+	late.apply(studio.room_rows.room_state()["items"])
 	var theirs := late.items.get(&"cassette1") as CassetteItem
 	check("a guest who joins later has it, carrying the clip, where it is", theirs != null
 			and theirs.clip == cassette.clip and theirs.slot_in == CassetteRack.RACK and theirs.slot_n == 2)
@@ -34962,7 +34962,7 @@ func _test_a_players_own_cassettes_wait_while_they_are_a_guest() -> void:
 	var room := studio.items
 	var hand := studio.get_node("MouseHand") as MouseInteractor
 	for n in 2:
-		studio._on_clip_pulled(2 + n, 0, hand)
+		studio.item_host._on_clip_pulled(2 + n, 0, hand)
 		room.slot_item(hand.carrying, CassetteRack.RACK, n)
 	await get_tree().process_frame
 	var own := Session.layout.made.duplicate(true)
@@ -35057,7 +35057,7 @@ func _test_a_cassette_pastes_onto_a_track_as_the_clip_it_was() -> void:
 
 	# A MIDI take, pulled out and pressed onto Track 4 by the trigger at a time off the beat.
 	var take := _bent_clip(6, 30.0, 8.0, 20.0)
-	studio._on_clip_pulled(6, take.index, mouse)
+	studio.item_host._on_clip_pulled(6, take.index, mouse)
 	var cassette := mouse.carrying as CassetteItem
 	mouse.lose_carrying()
 	hand.pick_up(cassette)
@@ -35176,7 +35176,7 @@ func _test_a_cassette_pastes_onto_a_track_as_the_clip_it_was() -> void:
 	clip.index = s.track(8).items.size()
 	s.track(8).items.append(clip)
 	hand.lose_carrying()
-	studio._on_clip_pulled(8, clip.index, hand)
+	studio.item_host._on_clip_pulled(8, clip.index, hand)
 	var tape := hand.carrying as CassetteItem
 	var strip := ChannelStrip.create(5)
 	strip.position = Vector3(40.0, 1.0, 40.0)
@@ -35195,7 +35195,7 @@ func _test_a_cassette_pastes_onto_a_track_as_the_clip_it_was() -> void:
 
 	# A demo part, onto a stage voice: it plays the part it was cut from on the built-in engine.
 	hand.lose_carrying()
-	studio._on_clip_pulled(2, 0, hand)
+	studio.item_host._on_clip_pulled(2, 0, hand)
 	var demo := hand.carrying as CassetteItem
 	var table := StageTable.new()
 	StageLink.wire(table)
@@ -35339,7 +35339,7 @@ func _test_a_guests_paste_names_its_cassette_track_and_time() -> void:
 	var s := DAW.state
 	var mouse := studio.get_node("MouseHand") as MouseInteractor
 	var take := _bent_clip(6, 30.0, 8.0, 20.0)
-	studio._on_clip_pulled(6, take.index, mouse)
+	studio.item_host._on_clip_pulled(6, take.index, mouse)
 	var cassette := mouse.carrying as CassetteItem
 	var at := s.bar_to_seconds(30.0) + 0.125
 	_as_session(Session.Role.GUEST, 5)
@@ -35365,17 +35365,17 @@ func _test_a_guests_paste_names_its_cassette_track_and_time() -> void:
 	var notices: Array[String] = []
 	var listen := func(t: String) -> void: notices.append(t)
 	Session.notice.connect(listen)
-	studio._on_room_asked(&"paste", [&"cassette1", 4, at], 5)
+	studio.room_rows._on_room_asked(&"paste", [&"cassette1", 4, at], 5)
 	check("from someone not holding it, nothing is pasted", s.track(4).items.size() == count)
 	Session.holds[cassette.network_key()] = 5
-	studio._on_room_asked(&"paste", [&"cassette1", 4, at], 5)
+	studio.room_rows._on_room_asked(&"paste", [&"cassette1", 4, at], 5)
 	var pasted := _item_starting(s, 4, at)
 	check("the host pastes its own row's clip where the guest asked, at its time (%s; %d to %d; %s)" % [pasted, depth, s.undo_depth, notices], pasted != null
 			and _clip_but_start(MixWire.pack_item(pasted)) == _clip_but_start(cassette.clip) and s.undo_depth == depth + 1)
 	check("and is told who pasted what where (%s)" % [notices], notices.has("Grace pasted the Bent take cassette onto %s at %s."
 			% [s.track(4).display_name(), s.bar_beat(at)]))
 	s.track(4).frozen = {"items": [], "comp": [], "fx_on": {}}
-	studio._on_room_asked(&"paste", [&"cassette1", 4, at + 4.0], 5)
+	studio.room_rows._on_room_asked(&"paste", [&"cassette1", 4, at + 4.0], 5)
 	check("a refused one pastes nothing", _item_starting(s, 4, at + 4.0) == null and s.undo_depth == depth + 1)
 	s.track(4).frozen = {}
 	DAW.undo()
@@ -35422,7 +35422,7 @@ func _test_a_cassette_at_the_ear_plays_to_this_player_alone() -> void:
 	var mouse := studio.get_node("MouseHand") as MouseInteractor
 	var ear := studio.ear
 	var take := _bent_clip(6, 30.0, 2.0, 4.0)
-	studio._on_clip_pulled(6, take.index, mouse)
+	studio.item_host._on_clip_pulled(6, take.index, mouse)
 	var cassette := mouse.carrying as CassetteItem
 	var notices: Array[String] = []
 	var listen := func(t: String) -> void: notices.append(t)
@@ -35433,10 +35433,10 @@ func _test_a_cassette_at_the_ear_plays_to_this_player_alone() -> void:
 		e.keycode = KEY_L
 		e.pressed = down
 		mouse._unhandled_input(e)
-	studio._follow_ear()
+	studio.mix_follow._follow_ear()
 	check("carried, it is not at the ear until L", ear.cassette == null and mouse.cassette_at_ear() == null)
 	key.call(true)
-	studio._follow_ear()
+	studio.mix_follow._follow_ear()
 	check("L held at a desk with a cassette puts it to the ear, and is no lean", ear.cassette == cassette
 			and mouse.cassette_at_ear() == cassette and not studio._lean_key and Ears.leaning == 0)
 	check("its MIDI is rendered first, and the tag says so (%s)" % cassette.hearing,
@@ -35465,15 +35465,15 @@ func _test_a_cassette_at_the_ear_plays_to_this_player_alone() -> void:
 			and notices.any(told))
 	check("and the song is as it was: nothing went to the DAW", DAW.state.track(6).items.size() == take.index + 1)
 	key.call(false)
-	studio._follow_ear()
+	studio.mix_follow._follow_ear()
 	check("L let go, it stops and the room is as it was (%.1f dB)" % Ears.gain_db(Ears.MIX), ear.cassette == null
 			and not ear.player.playing and is_zero_approx(Ears.gain_db(Ears.MIX)) and is_zero_approx(Ears.gain_db(Ears.ROOM))
 			and cassette.hearing == "" and not Ears.cueing)
 	key.call(true)
-	studio._follow_ear()
+	studio.mix_follow._follow_ear()
 	check("held up again, it plays at once: its render was kept", ear.hearing == EarCue.Hearing.PLAYING and ear.player.stream == stream)
 	key.call(false)
-	studio._follow_ear()
+	studio.mix_follow._follow_ear()
 	var drums := EarCue.midi_frames(PackedFloat64Array([0.0, 0.1, 36, 110, 9, 0.5, 0.6, 72, 100, 10]), 1.0, 48000)
 	var loud := 0.0
 	for f in drums:
@@ -35490,7 +35490,7 @@ func _test_a_cassette_at_the_ear_plays_to_this_player_alone() -> void:
 	hand.head = Vector3(3.0, 1.6, 3.0)
 	var hold_at := func(p: Vector3) -> void:
 		cassette.global_transform = Transform3D(Basis.IDENTITY, p - Vector3.UP * cassette.centre_height())
-		studio._follow_ear()
+		studio.mix_follow._follow_ear()
 	hold_at.call(hand.head + Vector3(0.6, -0.4, -0.2))
 	check("held out in front, nothing plays", ear.cassette == null)
 	hold_at.call(hand.head + Vector3(0.12, -0.02, 0.0))
@@ -35506,7 +35506,7 @@ func _test_a_cassette_at_the_ear_plays_to_this_player_alone() -> void:
 
 	# One at each ear: the one playing keeps on, and every hand's edge is of now, not of when it was
 	# last asked.
-	studio._on_clip_pulled(6, take.index, mouse)
+	studio.item_host._on_clip_pulled(6, take.index, mouse)
 	var other := mouse.carrying as CassetteItem
 	mouse.lose_carrying()
 	var hand2 := EarHand.new()
@@ -35516,7 +35516,7 @@ func _test_a_cassette_at_the_ear_plays_to_this_player_alone() -> void:
 	hand2.head = hand.head
 	var place := func(c: CassetteItem, p: Vector3) -> void:
 		c.global_transform = Transform3D(Basis.IDENTITY, p - Vector3.UP * c.centre_height())
-		studio._follow_ear()
+		studio.mix_follow._follow_ear()
 	place.call(cassette, hand.head + Vector3(0.6, -0.4, -0.2))
 	place.call(other, hand.head + Vector3(-0.12, -0.02, 0.0))
 	check("a second cassette at the other ear plays", ear.cassette == other)
@@ -35559,7 +35559,7 @@ func _test_a_demo_or_audio_cassette_at_the_ear_plays_its_own_sound() -> void:
 	# An ear of its own: the studio's follows the hands, and none of them holds one up.
 	var ear := EarCue.new()
 	add_child(ear)
-	studio._on_clip_pulled(2, 0, mouse)
+	studio.item_host._on_clip_pulled(2, 0, mouse)
 	var demo := mouse.carrying as CassetteItem
 	var clip := MixWire.unpack_item(demo.clip)
 	check("a demo cassette carries its part (%s)" % [demo.clip], clip != null and clip.part == s.track(2).part and clip.notes.is_empty())
@@ -35627,7 +35627,7 @@ func _test_a_demo_or_audio_cassette_at_the_ear_plays_its_own_sound() -> void:
 	audio.fade_in = 0.01
 	audio.index = s.track(8).items.size()
 	s.track(8).items.append(audio)
-	studio._on_clip_pulled(8, audio.index, mouse)
+	studio.item_host._on_clip_pulled(8, audio.index, mouse)
 	var tape := mouse.carrying as CassetteItem
 	ear.hold(tape)
 	var wav := ear.player.stream as AudioStreamWAV
@@ -35707,7 +35707,7 @@ func _test_a_guest_fetches_an_audio_cassettes_file_once_to_hear_it() -> void:
 	audio.source = tone
 	audio.index = s.track(8).items.size()
 	s.track(8).items.append(audio)
-	studio._on_clip_pulled(8, audio.index, mouse)
+	studio.item_host._on_clip_pulled(8, audio.index, mouse)
 	var tape := mouse.carrying as CassetteItem
 	# Only the made row names the file now: the room plays it on a cassette, and on no track.
 	s.track(8).items.erase(audio)
@@ -35850,8 +35850,8 @@ func _test_a_squeeze_after_rec_is_one_sample_on_the_rack() -> void:
 
 	# REC, by the key, as a hand presses it.
 	sampler.rec.grab_begin(hand, sampler.rec.global_position)
-	check("REC pressed is on for this player, the room's row (%s)" % [studio.room_state().get("sampler")],
-			sampler.armed_by == 1 and studio.room_state().get("sampler") == 1)
+	check("REC pressed is on for this player, the room's row (%s)" % [studio.room_rows.room_state().get("sampler")],
+			sampler.armed_by == 1 and studio.room_rows.room_state().get("sampler") == 1)
 	check("and said, in words, on its key and its screen, not only by its light (%s; %s)" % [sampler.rec.readout(), sampler.screen_text()],
 			sampler.rec.readout().contains("your next sound") and sampler.screen_text().begins_with("REC · YOUR NEXT SOUND\n")
 			and sampler.rec.legend.text == "REC ON" and (sampler.rec.cap.material_override as StandardMaterial3D).emission_enabled)
@@ -35884,8 +35884,8 @@ func _test_a_squeeze_after_rec_is_one_sample_on_the_rack() -> void:
 			and is_equal_approx(cassette.length(), float(stream.data.size() / 2) / Foley.RATE) and cassette.track_name == Sampler.TRACK_NAME
 			and MixWire.unpack_item(cassette.clip) != null)
 	check("into the rack's first free slot", cassette != null and cassette.slot_in == CassetteRack.RACK and cassette.slot_n == 0)
-	check("and REC is off after, the room's row too (%s)" % [studio.room_state().get("sampler")],
-			sampler.armed_by == 0 and studio.room_state().get("sampler") == 0 and sampler.screen_text().contains("last: duck squeeze 1"))
+	check("and REC is off after, the room's row too (%s)" % [studio.room_rows.room_state().get("sampler")],
+			sampler.armed_by == 0 and studio.room_rows.room_state().get("sampler") == 0 and sampler.screen_text().contains("last: duck squeeze 1"))
 	check("and the presser is told what it caught and where it went (%s)" % [notices],
 			notices.any(func(t: String) -> bool: return t.begins_with("Sampled the rubber duck's squeeze: duck_squeeze_1.wav") and t.contains("slot 1")))
 	check("the cassette pastes as audio: the file is on this machine (%s)" % DAW.paste_refusal(4, cassette.clip),
@@ -35910,9 +35910,9 @@ func _test_a_squeeze_after_rec_is_one_sample_on_the_rack() -> void:
 	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	Session._register(1, "Ada", 0)
 	Session._register(5, "Grace", 1)
-	studio._on_room_asked(&"sampler", [true], 5)
-	check("a guest's REC is on for them, the room's row (%s; %s)" % [studio.room_state().get("sampler"), sampler.screen_text()],
-			sampler.armed_by == 5 and studio.room_state().get("sampler") == 5 and sampler.screen_text().contains("GRACE'S NEXT SOUND"))
+	studio.room_rows._on_room_asked(&"sampler", [true], 5)
+	check("a guest's REC is on for them, the room's row (%s; %s)" % [studio.room_rows.room_state().get("sampler"), sampler.screen_text()],
+			sampler.armed_by == 5 and studio.room_rows.room_state().get("sampler") == 5 and sampler.screen_text().contains("GRACE'S NEXT SOUND"))
 	duck.work(false)
 	duck.work(true)
 	check("out of the mic's reach (%.1f m), someone else's squeeze catches nothing, and REC stays on" % duck.middle().distance_to(sampler.mic_point()),
@@ -35937,7 +35937,7 @@ func _test_a_squeeze_after_rec_is_one_sample_on_the_rack() -> void:
 	block.go_home()
 
 	# A shake, as a hand here shakes it: a hit, caught as its take.
-	studio._on_rec_pressed(true)
+	studio.sampler_host._on_rec_pressed(true)
 	var bell := _stand(room, &"cowbell")
 	hand.pick_up(bell)
 	bell.play(90)
@@ -35950,7 +35950,7 @@ func _test_a_squeeze_after_rec_is_one_sample_on_the_rack() -> void:
 	check("the screen says the newest one (%s)" % sampler.screen_text().replace("\n", " / "), sampler.screen_text().contains("last: cowbell 1"))
 
 	# The ball: a squeeze is not its sound; a bounce by the mic is, the take its throw rang.
-	studio._on_rec_pressed(true)
+	studio.sampler_host._on_rec_pressed(true)
 	var ball := room.items[&"ball"] as BallItem
 	hand.pick_up(ball)
 	ball.global_position = sampler.mic_point() + Vector3(0.2, -0.3, 0.4)
@@ -35984,7 +35984,7 @@ func _test_a_squeeze_after_rec_is_one_sample_on_the_rack() -> void:
 	ball.snap_home()
 
 	# A yo-yo trick: one press, one sample of the whole trick, its whirr and its catch.
-	studio._on_rec_pressed(true)
+	studio.sampler_host._on_rec_pressed(true)
 	var yoyo := room.items[&"yoyo"] as YoyoItem
 	hand.pick_up(yoyo)
 	yoyo.work(true)
@@ -36007,7 +36007,7 @@ func _test_a_squeeze_after_rec_is_one_sample_on_the_rack() -> void:
 	yoyo.go_home()
 
 	# A card trick: the shuffle, whole.
-	studio._on_rec_pressed(true)
+	studio.sampler_host._on_rec_pressed(true)
 	var cards := room.items[&"cards"] as CardsItem
 	hand.pick_up(cards)
 	cards.work(true)
@@ -36022,7 +36022,7 @@ func _test_a_squeeze_after_rec_is_one_sample_on_the_rack() -> void:
 	cards.go_home()
 
 	# The woodblock's low second voice, a fifth down: kept a fifth down.
-	studio._on_rec_pressed(true)
+	studio.sampler_host._on_rec_pressed(true)
 	block.voice = 1
 	hand.pick_up(block)
 	block.work(true)
@@ -36043,20 +36043,20 @@ func _test_a_squeeze_after_rec_is_one_sample_on_the_rack() -> void:
 	Session._register(5, "Grace", 1)
 	studio._predictions.clear()
 	Session.room_seq = 0
-	var state := studio.room_state()
+	var state := studio.room_rows.room_state()
 	state["sampler"] = 1
-	studio.apply_room(state)
+	studio.room_rows.apply_room(state)
 	check("a guest's REC shows the host's row (%s)" % sampler.screen_text(), sampler.armed_by == 1 and sampler.screen_text().contains("ADA'S NEXT SOUND"))
-	studio._on_rec_pressed(false)
+	studio.sampler_host._on_rec_pressed(false)
 	check("its own press is asked of the host and shown at once (%s)" % [studio._predictions],
 			studio._predictions.size() == 1 and studio._predictions[0]["verb"] == Sampler.VERB
 			and studio._predictions[0]["args"] == [false] and Session.room_ask_is_valid(Sampler.VERB, [false]) and sampler.armed_by == 0)
 	state["sampler"] = 1
-	studio.apply_room(state)
+	studio.room_rows.apply_room(state)
 	check("and not taken back by a room that crossed it", sampler.armed_by == 0)
 	state["acks"] = {5: studio._predictions[0]["seq"]}
 	state["sampler"] = 0
-	studio.apply_room(state)
+	studio.room_rows.apply_room(state)
 	check("the host's answer is the room's word", sampler.armed_by == 0 and studio._predictions.is_empty())
 	var count := room.made_ids().size()
 	sampler.armed_by = 5
@@ -36101,7 +36101,7 @@ func _test_a_guests_squeeze_is_sampled_on_the_host_with_its_take() -> void:
 	check("the take is cleaned as a hit's is", Session.clean_take(3) == 3 and Session.clean_take(-4) == -1
 			and Session.clean_take(1 << 25) == -1)
 
-	studio._on_room_asked(&"sampler", [true], 5)
+	studio.room_rows._on_room_asked(&"sampler", [true], 5)
 	Session._grant(5, key)
 	await get_tree().physics_frame
 	# Not hers: nothing.
@@ -36114,16 +36114,16 @@ func _test_a_guests_squeeze_is_sampled_on_the_host_with_its_take() -> void:
 	check("and the host's sampler writes it: Foley's take 3, not another (%d bytes)" % (body[0] as PackedByteArray).size(),
 			body[0] == Foley.take_of(&"duck_squeeze", 3).data and body[0] != Foley.take_of(&"duck_squeeze", 2).data)
 	var cassette := room.items.get(room.made_ids()[0]) as CassetteItem if room.made_ids().size() == 1 else null
-	check("a cassette made by her, on the rack, and REC off for the room (%s)" % [studio.room_state().get("sampler")],
+	check("a cassette made by her, on the rack, and REC off for the room (%s)" % [studio.room_rows.room_state().get("sampler")],
 			cassette != null and (Session.made[cassette.id] as Array)[1] == 5 and cassette.slot_in == CassetteRack.RACK
-			and sampler.armed_by == 0 and studio.room_state().get("sampler") == 0)
+			and sampler.armed_by == 0 and studio.room_rows.room_state().get("sampler") == 0)
 	Session.item_used.emit(&"duck", false, 5, 4)
 	Session.item_used.emit(&"duck", true, 5, 5)
 	check("her second squeeze writes nothing", room.made_ids().size() == 1 and _samples_of(&"duck_squeeze") == ["duck_squeeze_1.wav"])
 
 	# Her shake, take 6.
 	var bell := _stand(room, &"cowbell")
-	studio._on_room_asked(&"sampler", [true], 5)
+	studio.room_rows._on_room_asked(&"sampler", [true], 5)
 	Session._grant(5, bell.network_key())
 	Session.item_hit.emit(&"cowbell", 90, 5, -1.0, false, 6)
 	check("her shake is caught as her take, shaken (%s)" % [_samples_of(&"cowbell")], _samples_of(&"cowbell") == ["cowbell_1.wav"]
@@ -36132,7 +36132,7 @@ func _test_a_guests_squeeze_is_sampled_on_the_host_with_its_take() -> void:
 	# Her yo-yo trick, her fourth since she picked it up: the host's copy plays her fourth, and the
 	# sampler keeps that trick, not the host copy's own next.
 	var yoyo := room.items[&"yoyo"] as YoyoItem
-	studio._on_room_asked(&"sampler", [true], 5)
+	studio.room_rows._on_room_asked(&"sampler", [true], 5)
 	Session._grant(5, yoyo.network_key())
 	await get_tree().physics_frame
 	Session.item_used.emit(&"yoyo", true, 5, 4)
@@ -36145,9 +36145,9 @@ func _test_a_guests_squeeze_is_sampled_on_the_host_with_its_take() -> void:
 			and room.made_ids().size() == 3 and sampler.armed_by == 0)
 
 	# Her REC off.
-	studio._on_room_asked(&"sampler", [true], 5)
-	studio._on_room_asked(&"sampler", [false], 5)
-	check("her REC off is the room's", sampler.armed_by == 0 and studio.room_state().get("sampler") == 0)
+	studio.room_rows._on_room_asked(&"sampler", [true], 5)
+	studio.room_rows._on_room_asked(&"sampler", [false], 5)
+	check("her REC off is the room's", sampler.armed_by == 0 and studio.room_rows.room_state().get("sampler") == 0)
 	check("a REC ask must be a yes or no", Session.room_ask_is_valid(&"sampler", [true])
 			and not Session.room_ask_is_valid(&"sampler", [1]) and not Session.room_ask_is_valid(&"sampler", []))
 
@@ -36451,7 +36451,7 @@ func _test_the_platter_rides_the_deck_cart_clear_in_every_venue() -> void:
 					crowded.append("%s: %s" % [tag, f["c"]])
 			if Walker._gap(mine, Vector2(0, Studio.MIX_POSITION_Z)) < Walker.RADIUS + 0.25:
 				crowded.append("%s: the mix position" % tag)
-			var room := studio._room_bounds()
+			var room := studio.venue_switch._room_bounds()
 			for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
 				var p := cart.transform * Vector3(cart.footprint_centre.x + c.x * cart.footprint_half.x, 0,
 						cart.footprint_centre.y + c.y * cart.footprint_half.y)
@@ -36498,7 +36498,7 @@ func _test_a_cassette_on_the_platter_scratches_on_monitor() -> void:
 	var mouse := studio.get_node("MouseHand") as MouseInteractor
 	var platter := studio.platter
 	var take := _bent_clip(6, 30.0, 2.0, 4.0)
-	studio._on_clip_pulled(6, take.index, mouse)
+	studio.item_host._on_clip_pulled(6, take.index, mouse)
 	var cassette := mouse.carrying as CassetteItem
 	var notices: Array[String] = []
 	var listen := func(t: String) -> void: notices.append(t)
@@ -36556,18 +36556,18 @@ func _test_a_cassette_on_the_platter_scratches_on_monitor() -> void:
 			[cassette.id, PackedFloat32Array([0.0, 0.0, 0.016, 0.1])]) and not Session.room_ask_is_valid(Platter.SCRATCH_VERB, [cassette.id, [0.0]]))
 	# A guest's, asked: sampled from the host's render, as hers.
 	sampler.armed_by = 5
-	studio._on_room_asked(Platter.SCRATCH_VERB, [cassette.id, path], 5)
+	studio.room_rows._on_room_asked(Platter.SCRATCH_VERB, [cassette.id, path], 5)
 	check("a guest's scratch, asked, is sampled from the host's own render (%s)" % [_samples_of(&"platter_scratch")],
 			_samples_of(&"platter_scratch") == ["platter_scratch_1.wav", "platter_scratch_2.wav"] and sampler.armed_by == 0
 			and _wav_body(DAW.backend.media_path("platter_scratch_2.wav"))[0] == wanted.data)
 	sampler.armed_by = 5
-	studio._on_room_asked(Platter.SCRATCH_VERB, [&"cassette99", path], 5)
+	studio.room_rows._on_room_asked(Platter.SCRATCH_VERB, [&"cassette99", path], 5)
 	check("one of a cassette not in the slot is not", _samples_of(&"platter_scratch").size() == 2 and sampler.armed_by == 5)
 	# Rendering is the host's work: an ask REC would not catch, or of a path past its bounds, is
 	# refused before any is done.
 	var rendered := platter.scratches_rendered
 	sampler.armed_by = 0
-	studio._on_room_asked(Platter.SCRATCH_VERB, [cassette.id, path], 5)
+	studio.room_rows._on_room_asked(Platter.SCRATCH_VERB, [cassette.id, path], 5)
 	check("with REC off, a guest's ask writes nothing and renders nothing (%d renders)" % (platter.scratches_rendered - rendered),
 			_samples_of(&"platter_scratch").size() == 2 and platter.scratches_rendered == rendered)
 	var long := PackedFloat32Array([0.0, 0.0])
@@ -36575,7 +36575,7 @@ func _test_a_cassette_on_the_platter_scratches_on_monitor() -> void:
 		long.append(Varispeed.STEP_MOST)
 		long.append(float(n) * 0.01)
 	sampler.armed_by = 5
-	studio._on_room_asked(Platter.SCRATCH_VERB, [cassette.id, long], 5)
+	studio.room_rows._on_room_asked(Platter.SCRATCH_VERB, [cassette.id, long], 5)
 	check("a path longer than %d s is refused unrendered (%.0f s)" % [Varispeed.PATH_SECONDS, Varispeed.path_seconds(long)],
 			not Varispeed.fits(long) and _samples_of(&"platter_scratch").size() == 2
 			and platter.scratches_rendered == rendered and sampler.armed_by == 5)
@@ -38220,7 +38220,7 @@ func _test_a_chord_into_a_player_is_their_chord() -> void:
 	var notices: Array[String] = []
 	var listen := func(t: String) -> void: notices.append(t)
 	Session.notice.connect(listen)
-	studio._on_room_asked(&"plug", [grace, &"player_1"], 7)
+	studio.room_rows._on_room_asked(&"plug", [grace, &"player_1"], 7)
 	check("Grace plugs her chord hand into me, and I am told what it does (%s)" % [notices],
 			jacks.sink_of(grace) == &"player_1" and notices.size() == 1
 			and notices[0].begins_with("Grace plugged their chord hand into you: the chord they hold is yours"))
@@ -38244,15 +38244,15 @@ func _test_a_chord_into_a_player_is_their_chord() -> void:
 	jacks.received(grace, Jack.Kind.CHORD, 0, 0, 7, s.position_seconds)
 	check("her hand opened: the song's C again", chord_now.call() == "C" and not chords.plays_theirs())
 	jacks.received(grace, Jack.Kind.CHORD, 5, Jack.chord_quality("F"), 7, s.position_seconds)
-	studio._on_room_asked(&"plug", [grace, &""], 1)
+	studio.room_rows._on_room_asked(&"plug", [grace, &""], 1)
 	check("unplugged by me, whom it goes into: let go (%s)" % chord_now.call(),
 			jacks.sink_of(grace) == &"" and chord_now.call() == "C" and not chords.plays_theirs())
 	jacks.received(grace, Jack.Kind.CHORD, 7, Jack.chord_quality("G"), 7, s.position_seconds)
 	check("a late chord from it after the unplug is dropped", not chords.plays_theirs())
-	studio._on_room_asked(&"plug", [grace, &"player_1"], 7)
+	studio.room_rows._on_room_asked(&"plug", [grace, &"player_1"], 7)
 	jacks.received(grace, Jack.Kind.CHORD, 5, Jack.chord_quality("F"), 7, s.position_seconds)
 	check("plugged in again, it plays once more", chords.plays_theirs())
-	studio._on_jack_player_left(7)
+	studio.patch_host._on_jack_player_left(7)
 	check("Grace leaves: her chord hand's jack comes out and her chord is let go (%s)" % [jacks.patch],
 			jacks.patch.is_empty() and not chords.plays_theirs() and chord_now.call() == "C")
 	Session.notice.disconnect(listen)
@@ -38418,21 +38418,21 @@ func _test_a_replugged_chord_hand_is_not_lost_to_the_rooms_late_word() -> void:
 	check("IV held: F goes at once (%s)" % [sent], sent == [[to, mine, Jack.Kind.CHORD, 5, f]])
 	var room := {"venue": studio.venue.venue_id(), "variant": studio.venue.variant,
 			"jacks": {String(mine): String(into)}, "acks": {5: seq}}
-	studio.apply_room(room)
+	studio.room_rows.apply_room(room)
 	jacks.tick(0.0)
 	check("the host's room says it goes into them: F goes again, after it (%s)" % [sent],
 			sent.size() == 2 and sent[-1] == [to, mine, Jack.Kind.CHORD, 5, f])
 	jacks.tick(0.0)
-	studio.apply_room(room)
+	studio.room_rows.apply_room(room)
 	jacks.tick(0.0)
 	check("and not again at the same word", sent.size() == 2)
 	chords._chord_key(KEY_0, false, true)
 	jacks.tick(0.0)
 	check("my hand opens: quality 0 (%s)" % [sent[-1]], sent.size() == 3 and sent[-1][4] == 0)
 	room["jacks"] = {}
-	studio.apply_room(room)
+	studio.room_rows.apply_room(room)
 	room["jacks"] = {String(mine): String(into)}
-	studio.apply_room(room)
+	studio.room_rows.apply_room(room)
 	jacks.tick(0.0)
 	check("plugged again by the room's word with my hand open: the open hand goes too, for a chord held there (%s)"
 			% [sent[-1]], sent.size() == 4 and sent[-1] == [to, mine, Jack.Kind.CHORD, 0, 0])
@@ -38468,13 +38468,13 @@ func _test_the_host_says_who_may_send_a_chord() -> void:
 		played.append([source, kind, pitch, velocity, from])
 	Session.jack_played.connect(hear)
 	var grace := Jack.chord_source(7)
-	studio._on_room_asked(&"plug", [grace, &"player_1"], 9)
+	studio.room_rows._on_room_asked(&"plug", [grace, &"player_1"], 9)
 	check("Lin may not plug Grace's chord hand (%s)" % Jacks.plug_refusal(grace, null, &"player_1", 9, 0, &"", [1, 7, 9]),
 			jacks.sink_of(grace) == &"" and Jacks.plug_refusal(grace, null, &"player_1", 9, 0, &"", [1, 7, 9])
 			== "only Grace plugs their own chord hand")
 	check("nor does it go onto a track", Jacks.plug_refusal(grace, null, &"track_2", 7, 0, &"", [1, 7, 9])
 			== "a chord hand goes into a bandmate, not onto a track")
-	studio._on_room_asked(&"plug", [grace, &"player_1"], 7)
+	studio.room_rows._on_room_asked(&"plug", [grace, &"player_1"], 7)
 	check("Grace plugs it into me", jacks.sink_of(grace) == &"player_1")
 	var refused := Session.jacks_refused
 	check("Lin's chord down it is refused (%s)" % Session.jack_refusal(1, grace, 9),
@@ -38540,7 +38540,7 @@ func _test_my_chord_hands_jack_is_worn_on_its_wrist() -> void:
 	check("and again unplugs it", studio.jacks.sink_of(Jack.chord_source(1)) == &"")
 	studio.ergonomics.handedness = -1
 	var before := studio.wrist_jacks.size()
-	studio._wear_chord_jacks()
+	studio.patch_host._wear_chord_jacks()
 	var right := rig.skeletons[rig.right] as HandSkeleton
 	var lefty := studio.wrist_jacks.slice(before)
 	check("a left-handed player's chord hand is the right: it wears MY CHORDS there",
@@ -38662,7 +38662,7 @@ func _test_the_miniature_is_the_session_to_hold() -> void:
 	s.loop_end = s.loop_start
 	mini._process(0.0)
 	check("and none without one", not mini._bracket.visible)
-	var ids := studio.station_ids()
+	var ids := studio.station_host.station_ids()
 	var pinned: Array = mini.pins.keys()
 	pinned.sort()
 	var wanted: Array = Array(ids)
@@ -38829,7 +38829,7 @@ func _test_a_pin_on_the_miniature_goes_to_its_station() -> void:
 	if mini != null:
 		_press(mini.pins[&"wheel"])
 		var frame_of := studio.venue.global_transform
-		var bells: Transform3D = frame_of * (Stations.seat(studio.venue, &"wheel", studio._station_fits()) as Transform3D)
+		var bells: Transform3D = frame_of * (Stations.seat(studio.venue, &"wheel", studio.station_host._station_fits()) as Transform3D)
 		check("in a headset a press travels there (%s)" % studio.rig.global_position, studio.station == &"wheel" and studio.rig.away
 				and Vector2(studio.rig.global_position.x - bells.origin.x, studio.rig.global_position.z - bells.origin.z).length() < 0.05)
 	remove_child(studio)
@@ -40256,7 +40256,7 @@ func _test_f_visits_the_eq_wall_on_its_trolley() -> void:
 					continue
 				if FloorPlan.separation(mine, f) != Vector2.ZERO:
 					crowded.append("%s: %s" % [tag, f["c"]])
-			var room := studio._room_bounds()
+			var room := studio.venue_switch._room_bounds()
 			for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
 				var p := trolley.transform * Vector3(trolley.footprint_centre.x + c.x * trolley.footprint_half.x, 0,
 						trolley.footprint_centre.y + c.y * trolley.footprint_half.y)
@@ -40322,7 +40322,7 @@ func _test_f_visits_levels_in_its_niche_in_the_wall() -> void:
 		for v in Venue.variant_titles(id).size():
 			studio.set_venue(id, false, v)
 			var tag := "%s:%d" % [id, v]
-			var want := studio._levels_niche_at()
+			var want := studio.furniture_host._levels_niche_at()
 			if not niche.transform.is_equal_approx(want):
 				crowded.append("%s: not in its niche (%s)" % [tag, niche.position])
 			# In the front wall, or standing in from where it would be, facing the room; left of the
@@ -40340,7 +40340,7 @@ func _test_f_visits_levels_in_its_niche_in_the_wall() -> void:
 					continue
 				if FloorPlan.separation(mine, f) != Vector2.ZERO:
 					crowded.append("%s: %s" % [tag, f["c"]])
-			var room := studio._room_bounds()
+			var room := studio.venue_switch._room_bounds()
 			for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
 				var p := niche.transform * Vector3(niche.footprint_centre.x + c.x * niche.footprint_half.x, 0,
 						niche.footprint_centre.y + c.y * niche.footprint_half.y)
@@ -40368,7 +40368,7 @@ func _test_f_visits_levels_in_its_niche_in_the_wall() -> void:
 	check("F visits it", visited)
 	studio.focus.release()
 	var home := niche.transform
-	studio._reseat(&"levels", Transform3D(Basis.IDENTITY, niche.position + Vector3(0.5, 0, 1.0)))
+	studio.surface_host._reseat(&"levels", Transform3D(Basis.IDENTITY, niche.position + Vector3(0.5, 0, 1.0)))
 	check("put down elsewhere by its handle, the niche stays in the wall", niche.transform.is_equal_approx(home))
 	studio.queue_free()
 	await get_tree().process_frame
@@ -40945,7 +40945,7 @@ func _test_the_studio_plays_hits_on_its_helper_while_it_runs() -> void:
 	keys._io.flush()
 	check("it plays a sound it holds and not one it does not (%s)" % FileAccess.get_file_as_string(said).strip_edges(),
 			played and not unloaded and FileAccess.get_file_as_string(said) == NativeKeys.hit_line(slot, 0.5, -0.3) + "\n")
-	studio._follow_hit_voices()
+	studio.input_host._follow_hit_voices()
 	check("a helper that is not running is dropped, and hits are on MONITOR again", studio.hit_voices == null
 			and not InstrumentItem.on_fast_path() and not bool(InstrumentItem.fast_path.call(&"conga", 1, 0.5, 0.0, 1.0)))
 	studio.queue_free()
@@ -41703,7 +41703,7 @@ func _test_the_desks_pads_play_the_drum_track() -> void:
 	heard["seconds"] = 50.0
 	heard["recording"] = true
 	rec.follow(heard)
-	studio.strike_desk_pad(1)
+	studio.view_host.strike_desk_pad(1)
 	heard["seconds"] = 51.0
 	heard["recording"] = false
 	rec.follow(heard)
@@ -41949,7 +41949,7 @@ func _test_every_venue_has_something_to_play_in_its_key() -> void:
 				row["title"] == title and row["desk"] == VenueInstrument.KINDS[kind]["desk"]
 				and page.filter(func(r: Dictionary) -> bool: return r["id"] != Weather.STATION).size() == 1
 				and page[0]["title"] == title and Stations.ids(venue).has(VenueInstrument.STATION)
-				and studio.station_ids().has(VenueInstrument.STATION))
+				and studio.station_host.station_ids().has(VenueInstrument.STATION))
 	var without: Array = Venue.IDS.filter(func(id: StringName) -> bool: return not VENUE_SETS.has(id))
 	check("every venue in Venue.IDS has one (without: %s)" % [without], without.is_empty() and VENUE_SETS.size() == 14)
 	studio.set_venue(Venue.ROULETTE_ID, false, 0)
@@ -41958,7 +41958,7 @@ func _test_every_venue_has_something_to_play_in_its_key() -> void:
 	check("and the Rig Roulette room has none, every bar put away, and says nothing of one", studio.venue_instrument == null
 			and VenueInstrument.spec_of(studio.venue).is_empty() and away
 			and Stations.spot(studio.venue, VenueInstrument.STATION) == null and not Stations.ids(studio.venue).has(VenueInstrument.STATION)
-			and (board.get(Stations.VENUE, []) as Array).is_empty() and not studio.station_ids().has(VenueInstrument.STATION))
+			and (board.get(Stations.VENUE, []) as Array).is_empty() and not studio.station_host.station_ids().has(VenueInstrument.STATION))
 	InstrumentItem.clock = saved_clock
 	studio.queue_free()
 	await get_tree().process_frame
@@ -42194,8 +42194,8 @@ func _test_plugging_the_venue_records_every_bar_onto_a_track() -> void:
 			socket != null and socket.source_id() == VenueInstrument.SOURCE and socket.get_parent() == mount
 			and studio.items.source_item(VenueInstrument.SOURCE) == studio.items.items[&"venue1"]
 			and Jack.is_item(VenueInstrument.SOURCE))
-	check("the host's word lets anyone plug it into a track while it stands (%s)" % [studio._plug_refusal(VenueInstrument.SOURCE, Jack.track_sink(5), 1)],
-			studio._plug_refusal(VenueInstrument.SOURCE, Jack.track_sink(5), 1) == ""
+	check("the host's word lets anyone plug it into a track while it stands (%s)" % [studio.patch_host._plug_refusal(VenueInstrument.SOURCE, Jack.track_sink(5), 1)],
+			studio.patch_host._plug_refusal(VenueInstrument.SOURCE, Jack.track_sink(5), 1) == ""
 			and Jacks.sinks(VenueInstrument.SOURCE).has(Jack.track_sink(5)))
 	var said: Array = []
 	var listen := func(text: String) -> void: said.append(text)
@@ -42511,7 +42511,7 @@ func _check_venue_station(studio: Studio, spot: Transform3D, tag: String) -> voi
 			reach.append(n)
 	check("%s: mounted on the venue, clear of the zones %s, solids %s, props %s and stations %s, outside the control room, at the floor's edge, every bar in reach from a headset's seat (out: %s), room to stand at it"
 			% [tag, zoned, blocked, near, crowded, reach], zoned.is_empty() and blocked.is_empty() and near.is_empty()
-			and crowded.is_empty() and not rect.intersects(studio._room_bounds()) and edge and reach.is_empty()
+			and crowded.is_empty() and not rect.intersects(studio.venue_switch._room_bounds()) and edge and reach.is_empty()
 			and walker.fits(Vector2(player.x, player.z)))
 	check("%s: and solid where the room is solid" % tag, venue.solids().has(mine) == venue.prop_shelf_solid())
 
@@ -42688,7 +42688,7 @@ func _test_the_weathers_switch_is_the_rooms_and_off_is_silent() -> void:
 			and w.jack.source_id() == Weather.SOURCE and w.spec["kind"] == &"storm")
 	check("it starts OFF, said in words on its legend and its card, its lever down (%s, %s)" % [w.switch.legend.text, w.switch.readout()],
 			not w.listening and w.switch.legend.text == "OFF" and w.switch.readout().begins_with("OFF")
-			and w.switch.lever.rotation.x > 0.0 and studio.room_state()["weather"] == false)
+			and w.switch.lever.rotation.x > 0.0 and studio.room_rows.room_state()["weather"] == false)
 	var heard := {"seconds": 0.0, "playing": true, "valid": true}
 	w.heard_source = func() -> Dictionary: return heard
 	var run := func(from: float, to: float) -> void:
@@ -42711,7 +42711,7 @@ func _test_the_weathers_switch_is_the_rooms_and_off_is_silent() -> void:
 	w.switch.grab_begin(studio, w.switch.global_position)
 	Session.notice.disconnect(listen)
 	check("pressed, it is LISTEN at once: the room's row, its legend and its lever say so, and a notice says what it does (%s)" % [said],
-			w.listening and studio.weather_listening and studio.room_state()["weather"] == true and w.switch.legend.text == "LISTEN"
+			w.listening and studio.weather_listening and studio.room_rows.room_state()["weather"] == true and w.switch.legend.text == "LISTEN"
 			and w.switch.lever.rotation.x < 0.0 and said.size() == 1 and said[0].begins_with("Thunderstorm: LISTEN"))
 	var before := w.landed
 	run.call(two, DAW.state.bar_to_seconds(9.0))
@@ -42725,9 +42725,9 @@ func _test_the_weathers_switch_is_the_rooms_and_off_is_silent() -> void:
 
 	check("the switch's ask is a room verb of one bool", Session.room_ask_is_valid(Weather.VERB, [true])
 			and not Session.room_ask_is_valid(Weather.VERB, [1]))
-	studio._on_room_asked(Weather.VERB, [false], 2)
-	check("a guest's ask is the host's to do: OFF, for everyone", not w.listening and studio.room_state()["weather"] == false)
-	studio.apply_room({"weather": true})
+	studio.room_rows._on_room_asked(Weather.VERB, [false], 2)
+	check("a guest's ask is the host's to do: OFF, for everyone", not w.listening and studio.room_rows.room_state()["weather"] == false)
+	studio.room_rows.apply_room({"weather": true})
 	check("and the host's room is the truth on a guest: LISTEN", w.listening and studio.weather_listening)
 	studio.set_venue(&"studio", false, 0)
 	check("a venue with no weather stands none", studio.weather == null and Stations.spot(studio.venue, Weather.STATION) == null)
@@ -42736,7 +42736,7 @@ func _test_the_weathers_switch_is_the_rooms_and_off_is_silent() -> void:
 			studio.weather != null and studio.weather.listening and studio.weather.spec["kind"] == &"drips"
 			and studio.weather.find_child("Post", false, false) != null and studio.weather.jack.source_id() == Weather.DRIPS
 			and studio.venue.find_child("Pool0", false, false) != null)
-	studio._on_room_asked(Weather.VERB, [false], 2)
+	studio.room_rows._on_room_asked(Weather.VERB, [false], 2)
 	var cave_hint := studio.weather.switch.hint()
 	said.clear()
 	Session.notice.connect(listen)
@@ -42771,7 +42771,7 @@ func _test_the_weathers_jack_records_exactly_the_scheduled_drops() -> void:
 			sinks[0] == &"" and sinks.has(Jack.track_sink(5)) and not sinks.any(func(x: StringName) -> bool: return Jack.player_of(x) > 0)
 			and Jack.is_world(Weather.SOURCE) and Jack.is_world(Weather.DRIPS) and not Jack.is_item(Weather.SOURCE))
 	check("anyone may plug it onto a track; into a bandmate it is refused (%s)" % [Jacks.plug_refusal(Weather.SOURCE, null, Jack.player_sink(2), 3, 0, &"", [1, 2, 3])],
-			studio._plug_refusal(Weather.SOURCE, Jack.track_sink(5), 2) == ""
+			studio.patch_host._plug_refusal(Weather.SOURCE, Jack.track_sink(5), 2) == ""
 			and Jacks.plug_refusal(Weather.SOURCE, null, Jack.player_sink(2), 3, 0, &"", [1, 2, 3]).contains("onto a track"))
 	var said: Array = []
 	var listen := func(t: String) -> void: said.append(t)
@@ -42956,7 +42956,7 @@ func _check_weather_station(studio: Studio, spot: Transform3D, tag: String) -> v
 			out.append(p)
 	check("%s: on the venue, clear of the zones %s, solids %s, props %s and stations %s, outside the control room, at the floor's edge, its switch and jack in reach from a headset's seat (out: %s), room to stand at it"
 			% [tag, zoned, blocked, near, crowded, out], zoned.is_empty() and blocked.is_empty() and near.is_empty()
-			and crowded.is_empty() and not rect.intersects(studio._room_bounds()) and edge and out.is_empty()
+			and crowded.is_empty() and not rect.intersects(studio.venue_switch._room_bounds()) and edge and out.is_empty()
 			and walker.fits(Vector2(player.x, player.z)))
 	check("%s: its post, where it has one, solid where the room is" % tag,
 			post.is_empty() or venue.solids().has(post) == venue.prop_shelf_solid())
@@ -43071,7 +43071,7 @@ func _test_a_slap_loops_the_next_bars_onto_a_track_of_your_own() -> void:
 	check("it starts READY, said in words beside its square, and its card says a slap loops LENGTH's 2 bars (%s, %s)" % [ready["line"], looper.pad.readout()],
 			ready["word"] == "READY" and ready["mark"] == &"ready" and ready["line"] == "SLAP TO LOOP 2 BARS"
 			and looper.pad.readout().begins_with("READY") and looper.pad.hint().contains("click to loop")
-			and studio.room_state()["looper"] == [])
+			and studio.room_rows.room_state()["looper"] == [])
 	# Bar 3, its third beat: the playhead at 5 s.
 	DAW.state.playing = true
 	DAW.state.position_seconds = 5.0
@@ -43083,7 +43083,7 @@ func _test_a_slap_loops_the_next_bars_onto_a_track_of_your_own() -> void:
 	looper.pad.strike(100, &"")
 	var count := looper.display(heard)
 	check("slapped in bar 3, it is armed from bar 4 for 2 bars: the room's row (%s), COUNT on the screen with its two beats left as large dots, and a notice says what it takes (%s)" % [looper.row, said],
-			looper.row == [1, 4, 2] and studio.room_state()["looper"] == [1, 4, 2] and looper.phase == Looper.Phase.COUNT
+			looper.row == [1, 4, 2] and studio.room_rows.room_state()["looper"] == [1, 4, 2] and looper.phase == Looper.Phase.COUNT
 			and count["word"] == "COUNT" and count["line"] == "ADA · FROM BAR 4" and count["big"] == [true, true, false, false]
 			and said.size() == 1 and said[0].begins_with("Looping: a bar's count") and said[0].contains("everything you play"))
 	check("the first layer sets the loop range to its span, bars 4 and 5, and turns looping on (%.2f to %.2f)" % [DAW.state.loop_start, DAW.state.loop_end],
@@ -43127,7 +43127,7 @@ func _test_a_slap_loops_the_next_bars_onto_a_track_of_your_own() -> void:
 			hits_ok and (parts[0] as PackedFloat64Array).size() == 5 and (parts[1] as PackedFloat64Array).size() == 5
 			and ItemVoices.drum(int((parts[1] as PackedFloat64Array)[2]))[0] == &"conga")
 	check("the row is clear for anyone, the loop range is the layer's, and a notice says where it went (%s)" % [said],
-			looper.row.is_empty() and studio.room_state()["looper"] == [] and DAW.state.looping
+			looper.row.is_empty() and studio.room_rows.room_state()["looper"] == [] and DAW.state.looping
 			and is_equal_approx(DAW.state.loop_start, 6.0) and is_equal_approx(DAW.state.loop_end, 10.0)
 			and said.size() == 1 and said[0].begins_with("ADA LOOP 1: 2 notes"))
 	var playing := looper.display(heard)
@@ -43265,10 +43265,10 @@ func _test_one_player_loops_at_a_time_and_a_guests_layer_lands_on_the_host() -> 
 	check("the ask and the layer are room verbs", Session.room_ask_is_valid(Looper.VERB, [4, 2])
 			and Session.room_ask_is_valid(Looper.LAYER_VERB, [6.0, 10.0, []])
 			and not Session.room_ask_is_valid(Looper.VERB, [4.0, 2]))
-	var refused := Looper.answer(looper.row, 4, 2, 2, studio._looper_name)
+	var refused := Looper.answer(looper.row, 4, 2, 2, studio.item_host._looper_name)
 	check("the host refuses Grace's ask while Ada loops, with the reason (%s)" % refused["said"],
 			bool(refused["refused"]) and refused["said"] == "Ada is looping." and refused["row"] == [1, 4, 2])
-	studio._on_room_asked(Looper.VERB, [4, 2], 2)
+	studio.room_rows._on_room_asked(Looper.VERB, [4, 2], 2)
 	check("and her ask leaves the row Ada's", looper.row == [1, 4, 2] and studio.looper_row == [1, 4, 2])
 	var said: Array = []
 	var listen := func(t: String) -> void: said.append(t)
@@ -43280,10 +43280,10 @@ func _test_one_player_loops_at_a_time_and_a_guests_layer_lands_on_the_host() -> 
 	check("on Grace's own machine her slap is refused at once, said in words (%s)" % [said],
 			looper.row == [1, 4, 2] and said.size() == 1 and said[0].begins_with("Ada is looping"))
 	var tracks := DAW.state.track_indices().size()
-	studio._on_room_asked(Looper.LAYER_VERB, [6.0, 10.0, [[6.5, 6.9, 64, 90, 0]]], 2)
+	studio.room_rows._on_room_asked(Looper.LAYER_VERB, [6.0, 10.0, [[6.5, 6.9, 64, 90, 0]]], 2)
 	check("a layer from Grace while the row is Ada's is not written", DAW.state.track_indices().size() == tracks
 			and looper.row == [1, 4, 2])
-	studio._on_looper_player_left(1)
+	studio.item_host._on_looper_player_left(1)
 	check("Ada leaving clears the row", looper.row.is_empty())
 	studio.queue_free()
 	await get_tree().process_frame
@@ -43296,7 +43296,7 @@ func _test_one_player_loops_at_a_time_and_a_guests_layer_lands_on_the_host() -> 
 	DAW.state.looping = true
 	DAW.state.loop_start = 6.0
 	DAW.state.loop_end = 10.0
-	studio.apply_room({"looper": [2, 4, 2]})
+	studio.room_rows.apply_room({"looper": [2, 4, 2]})
 	check("on a guest the host's row is the truth: Grace is counting in from bar 4 (%s)" % [looper.display(heard)["line"]],
 			looper.row == [2, 4, 2] and looper.mine() and looper.phase == Looper.Phase.COUNT
 			and looper.display(heard)["line"] == "GRACE · FROM BAR 4")
@@ -43321,7 +43321,7 @@ func _test_one_player_loops_at_a_time_and_a_guests_layer_lands_on_the_host() -> 
 	looper = studio.looper
 	DAW.state.playing = true
 	DAW.state.position_seconds = 5.0
-	studio._on_room_asked(Looper.VERB, [4, 2], 2)
+	studio.room_rows._on_room_asked(Looper.VERB, [4, 2], 2)
 	check("the host arms the looper for Grace's ask, from the bar she heard next (%s)" % [looper.row],
 			looper.row == [2, 4, 2] and DAW.state.looping and is_equal_approx(DAW.state.loop_end, 10.0))
 	tracks = DAW.state.track_indices().size()
@@ -43329,7 +43329,7 @@ func _test_one_player_loops_at_a_time_and_a_guests_layer_lands_on_the_host() -> 
 	# note begun outside them is not taken.
 	var args: Array = [sent[0][0] - 4.0, sent[0][1] + 20.0, (sent[0][2] as Array) + [[21.0, 21.5, 70, 90, 0]]] \
 			if sent.size() == 1 else [6.0, 10.0, []]
-	studio._on_room_asked(Looper.LAYER_VERB, args, 2)
+	studio.room_rows._on_room_asked(Looper.LAYER_VERB, args, 2)
 	var grace := Looper.track_named(DAW.state, "GRACE LOOP 1")
 	var notes := _loop_notes(grace)
 	var placed: MixState.ItemState = DAW.state.track(grace).items[0] if grace > 0 and DAW.state.track(grace).items.size() == 1 else null
@@ -43566,7 +43566,7 @@ func _test_the_looper_layers_list_mutes_and_deletes_at_a_desk() -> void:
 	# list leave its keys clear.
 	var saved_motion := studio.ergonomics.motion_scale
 	studio.ergonomics.motion_scale = 0.0
-	studio.go_to_station(&"looper")
+	studio.station_host.go_to_station(&"looper")
 	await get_tree().physics_frame
 	var mouse: Interactor = studio.get_node("MouseHand")
 	var cam := studio.camera.global_transform
@@ -44192,7 +44192,7 @@ func _test_the_lyric_board_stands_clear_of_the_mic_stand_in_every_booth() -> voi
 			asked.size() == 1 and Lyrics.parse(asked[0]).lines[5]["t"] == 71.0)
 	# Esc through the viewport, as a desk player's: the board, deep under the studio, hears it first.
 	erg.motion_scale = 0.0
-	studio.go_to_station(LyricBoard.STATION)
+	studio.station_host.go_to_station(LyricBoard.STATION)
 	var stood_at := studio.walker.global_position
 	var esc := InputEventKey.new()
 	esc.keycode = KEY_ESCAPE
@@ -44868,25 +44868,25 @@ func _test_the_studios_rack_is_edited_through_the_room_and_lit_by_its_level() ->
 		studio.queue_free()
 		return
 	var before := RackPatch.module_ids(studio.rack_row["patch"]).size()
-	studio.ask_rack("add", ["builtin.lfo", -1, 0])
+	studio.rack_host.ask_rack("add", ["builtin.lfo", -1, 0])
 	check("a module asked for is in the room's row", RackPatch.module_ids(studio.rack_row["patch"]).size() == before + 1)
 	check("and on the wall", _rack_panels(wall) == before + 1)
 	var said: Array = []
 	var listen := func(text: String) -> void: said.append(text)
 	Session.notice.connect(listen)
-	studio.ask_rack("remove", ["out"])
+	studio.rack_host.ask_rack("remove", ["out"])
 	check("taking OUT out is refused and said", not said.is_empty() and RackPatch.has_type(studio.rack_row["patch"], "builtin.out"))
 	Session.notice.disconnect(listen)
-	studio.ask_rack("preset", ["drum_machine"])
+	studio.rack_host.ask_rack("preset", ["drum_machine"])
 	check("a preset replaces the case", RackPatch.has_type(studio.rack_row["patch"], "builtin.seq") or RackPatch.has_type(studio.rack_row["patch"], "builtin.drums")
 			or RackPatch.module_ids(studio.rack_row["patch"]).size() > 0)
-	studio.ask_rack("knob", ["out", "level", 0.4])
+	studio.rack_host.ask_rack("knob", ["out", "level", 0.4])
 	check("a knob asked is in the row", is_equal_approx(RackPatch.knob_of(studio.rack_row["patch"], "out", "level"), 0.4)
 			or not studio.rack_row["patch"]["modules"]["out"]["knobs"].has("level"))
-	check("the row is the room's", studio.room_state().has(RackPatch.ROW))
-	var state: Dictionary = studio.room_state().duplicate(true)
+	check("the row is the room's", studio.room_rows.room_state().has(RackPatch.ROW))
+	var state: Dictionary = studio.room_rows.room_state().duplicate(true)
 	state[RackPatch.ROW]["patch"] = RackPatch.preset(&"fm_bass")
-	studio.apply_room(state)
+	studio.room_rows.apply_room(state)
 	check("a room from the host is shown", RackPatch.has_type(studio.rack_row["patch"], "builtin.out")
 			and _rack_panels(wall) == RackPatch.module_ids(studio.rack_row["patch"]).size())
 	wall.glow_with(1.0, 1.0)
@@ -44917,7 +44917,7 @@ func _test_a_key_played_in_the_studio_is_heard_and_lights_the_room() -> void:
 	if voice == null:
 		studio.queue_free()
 		return
-	studio._modular_play(true)
+	studio.rack_host._modular_play(true)
 	check("the keys are on", studio.modular_keys.is_active())
 	for i in 5:
 		await get_tree().process_frame
@@ -44941,11 +44941,11 @@ func _test_a_key_played_in_the_studio_is_heard_and_lights_the_room() -> void:
 	check("its meters move (%.3f)" % out_peak, out_peak > 0.0 and voice.level > 0.0)
 	check("and the annex's lights follow them", studio.modular_annex == null or studio.modular_annex._level > 0.0)
 	studio.modular_keys.handle(KEY_A, false)
-	studio._on_rack_heard(7, Session.Note.ON, 60, 100)
+	studio.rack_host._on_rack_heard(7, Session.Note.ON, 60, 100)
 	check("a bandmate's note is held in the host's rack", voice._held.has(60))
-	studio._on_rack_heard(7, Session.Note.OFF, 60, 0)
+	studio.rack_host._on_rack_heard(7, Session.Note.OFF, 60, 0)
 	check("and let go", not voice._held.has(60))
-	studio._modular_play(false)
+	studio.rack_host._modular_play(false)
 	studio.queue_free()
 	await get_tree().process_frame
 
@@ -45077,7 +45077,7 @@ func _test_the_big_rigs_far_end_is_patched_and_turned_by_hand() -> void:
 	add_child(studio)
 	await get_tree().physics_frame
 	var wall: RackWall = studio.rack_wall
-	studio.ask_rack("preset", ["big_rig"])
+	studio.rack_host.ask_rack("preset", ["big_rig"])
 	await get_tree().physics_frame
 	var patch: Dictionary = studio.rack_row["patch"]
 	check("the big rig is in the case", RackPatch.module_ids(patch).size() >= 33)
@@ -45138,15 +45138,15 @@ func _test_a_beat_is_made_in_the_rack_and_recorded_onto_a_track_of_the_song() ->
 	var track: int = DAW.state.track_indices()[1]
 	DAW.state.track(track).items.clear()
 	var before: int = DAW.state.track(track).items.size()
-	studio.ask_rack("preset", ["drum_machine"])
+	studio.rack_host.ask_rack("preset", ["drum_machine"])
 	studio.rack_row["track"] = track
-	studio._rack_wake()
+	studio.rack_host._rack_wake()
 	var voice: RackVoice = studio.rack_voice
 	check("the rack is awake on the song's track", voice.running() and voice.track == track
 			and InputMonitor.feeds.get(track) == voice.source)
 	DAW.seek(0.0)
 	DAW.transport_play()
-	studio._rack_toggle_record()
+	studio.rack_host._rack_toggle_record()
 	check("REC is catching it", voice.recording())
 	var peak := 0.0
 	for i in 50:
@@ -45156,7 +45156,7 @@ func _test_a_beat_is_made_in_the_rack_and_recorded_onto_a_track_of_the_song() ->
 	check("the beat is audible through the track (%.3f)" % peak, peak > 0.01)
 	check("the room's lights follow it", voice.meters.size() > 0)
 	DAW.transport_stop()
-	studio._rack_toggle_record()
+	studio.rack_host._rack_toggle_record()
 	var items: Array = DAW.state.track(track).items
 	check("the take is an item on that track (%d -> %d)" % [before, items.size()], items.size() == before + 1)
 	studio.queue_free()
@@ -45171,9 +45171,9 @@ func _test_a_mouse_at_the_modular_seat_turns_knobs_and_patches_jacks_through_the
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
 	await get_tree().physics_frame
-	studio.ask_rack("preset", ["big_rig"])
+	studio.rack_host.ask_rack("preset", ["big_rig"])
 	await get_tree().physics_frame
-	check("the walker goes to the modular station", studio.go_to_station(&"modular"))
+	check("the walker goes to the modular station", studio.station_host.go_to_station(&"modular"))
 	get_window().size = Vector2i(1280, 720)
 	for i in 240:
 		await get_tree().physics_frame
@@ -45257,7 +45257,7 @@ func _test_a_bandmates_first_note_wakes_the_rack_and_is_heard() -> void:
 	await get_tree().physics_frame
 	var voice: RackVoice = studio.rack_voice
 	check("the rack is asleep", voice != null and not voice.running())
-	studio._on_rack_heard(7, Session.Note.ON, 60, 100)
+	studio.rack_host._on_rack_heard(7, Session.Note.ON, 60, 100)
 	check("a bandmate's note wakes it", voice.running())
 	var peak := 0.0
 	for i in 40:
@@ -45265,7 +45265,7 @@ func _test_a_bandmates_first_note_wakes_the_rack_and_is_heard() -> void:
 		for f in voice.source.read():
 			peak = maxf(peak, absf(f.x))
 	check("and is heard (%.3f)" % peak, peak > 0.005)
-	studio._on_rack_heard(7, Session.Note.OFF, 60, 0)
+	studio.rack_host._on_rack_heard(7, Session.Note.OFF, 60, 0)
 	studio.queue_free()
 	await get_tree().process_frame
 
@@ -45298,7 +45298,7 @@ func _test_a_rack_module_is_carried_to_a_free_place_by_its_grip() -> void:
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
 	await get_tree().physics_frame
-	studio.ask_rack("preset", ["keys_voice"])
+	studio.rack_host.ask_rack("preset", ["keys_voice"])
 	await get_tree().process_frame
 	var wall: RackWall = studio.rack_wall
 	var asked := []
@@ -45330,7 +45330,7 @@ func _test_a_module_has_a_second_face_that_moves_its_knobs() -> void:
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
 	await get_tree().physics_frame
-	studio.ask_rack("preset", ["acid_line"])
+	studio.rack_host.ask_rack("preset", ["acid_line"])
 	await get_tree().process_frame
 	var wall: RackWall = studio.rack_wall
 	var pad: RackPad = wall.module_nodes["ladder"].get_node_or_null("Orb")
@@ -45354,7 +45354,7 @@ func _test_a_module_has_a_second_face_that_moves_its_knobs() -> void:
 	bars.grab_end(self)
 	check("painting sets the steps it crosses", wall.knobs["seq.s1"].value > 0.7 and wall.knobs["seq.s4"].value > 0.7)
 	check("the bars stand as high as their steps", bars.values[0] > 0.7)
-	studio.ask_rack("knob", ["ladder", "cutoff", 0.2])
+	studio.rack_host.ask_rack("knob", ["ladder", "cutoff", 0.2])
 	check("a knob turned elsewhere moves the orb", absf(pad.x - 0.2) < 0.01)
 	check("a filter's pad draws its response", pad.get_node_or_null("Curve") != null)
 	wall.show_steps({"seq": 5})
@@ -45388,7 +45388,7 @@ func _test_letting_go_of_a_rack_module_builds_only_what_moved() -> void:
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
 	await get_tree().physics_frame
-	studio.ask_rack("preset", ["heavy_machine"])
+	studio.rack_host.ask_rack("preset", ["heavy_machine"])
 	await get_tree().process_frame
 	var wall: RackWall = studio.rack_wall
 	var ids: Array = wall.patch["modules"].keys()
@@ -45411,7 +45411,7 @@ func _test_letting_go_of_a_rack_module_builds_only_what_moved() -> void:
 			break
 	check("the case has a free place to carry a module to", free.x >= 0)
 	var t0 := Time.get_ticks_usec()
-	studio.ask_rack("move", [id, free.x, free.y])
+	studio.rack_host.ask_rack("move", [id, free.x, free.y])
 	var took := (Time.get_ticks_usec() - t0) / 1000.0
 	check("a module let go is the same module, set down in its new place", wall.module_nodes[id] == holder_was and not holder_was.is_queued_for_deletion()
 			and is_equal_approx(holder_was.position.x, wall._x_of(free.x + RackLayout.width_of(String(wall.patch["modules"][id]["type"])) * 0.5)))

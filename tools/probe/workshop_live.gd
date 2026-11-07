@@ -38,9 +38,9 @@ func _ready() -> void:
 
 func _before_reload() -> void:
 	var studio := workshop.studio
-	_say("phase 1: venue %s, %d stations, the Workshop's among them: %s" % [studio.venue.venue_id(), studio.station_ids().size(),
-			studio.station_ids().has(STATION)])
-	studio.go_to_station(STATION)
+	_say("phase 1: venue %s, %d stations, the Workshop's among them: %s" % [studio.venue.venue_id(), studio.station_host.station_ids().size(),
+			studio.station_host.station_ids().has(STATION)])
+	studio.station_host.go_to_station(STATION)
 	DAW.transport_stop()
 	DAW.seek(8.0)
 	await _wait(2.5)

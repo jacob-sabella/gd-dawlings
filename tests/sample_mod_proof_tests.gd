@@ -154,10 +154,10 @@ func the_proof() -> void:
 	host.medium = Presentation.Medium.SCREEN
 	t.add_child(host)
 	await t.get_tree().physics_frame
-	var state: Dictionary = host.room_state().duplicate(true)
+	var state: Dictionary = host.room_rows.room_state().duplicate(true)
 	state[RackPatch.ROW]["patch"] = demo.duplicate(true)
-	host.apply_room(state)
-	host.ask_rack("add", ["builtin.lfo", -1, 0])
+	host.room_rows.apply_room(state)
+	host.rack_host.ask_rack("add", ["builtin.lfo", -1, 0])
 	var ids := RackPatch.module_ids(host.rack_row["patch"])
 	host.rack_files.flush()
 	var saved := RackPatchFile.text_of(RackPatch.to_dict(host.rack_row["patch"]))
@@ -196,16 +196,16 @@ func the_proof() -> void:
 	h.medium = Presentation.Medium.SCREEN
 	t.add_child(h)
 	await t.get_tree().physics_frame
-	var hs: Dictionary = h.room_state().duplicate(true)
+	var hs: Dictionary = h.room_rows.room_state().duplicate(true)
 	hs[RackPatch.ROW]["patch"] = demo.duplicate(true)
-	h.apply_room(hs)
-	var row: Dictionary = h.room_state()[RackPatch.ROW]
+	h.room_rows.apply_room(hs)
+	var row: Dictionary = h.room_rows.room_state()[RackPatch.ROW]
 	check("(d) the host's row says which mod the plate needs", row["patch"]["uses"][ID]["mod"] == ID and row["patch"]["uses"][ID]["version"] == "0.1.0" and row["patch"]["uses"][ID]["title"] == "PLUCK")
 	var heard := PackedVector2Array()
 	if RackEngine.available():
 		heard = RackEngine.render(h.rack_voice.patch, PackedStringArray(["note_on 60 100", "run 0.3"]))
 		check("(d) the host's engine plays the plate (peak %.3f)" % _peak(heard, 0, heard.size()), _peak(heard, 0, heard.size()) > 0.001)
-	var other := h.room_state().duplicate(true)
+	var other := h.room_rows.room_state().duplicate(true)
 	other[RackPatch.ROW] = row
 	Session.start_solo()
 	Session.role = Session.Role.GUEST
@@ -214,7 +214,7 @@ func the_proof() -> void:
 	with_mod.medium = Presentation.Medium.SCREEN
 	t.add_child(with_mod)
 	await t.get_tree().physics_frame
-	with_mod.apply_room(other)
+	with_mod.room_rows.apply_room(other)
 	check("(d) a guest with the mod sees the real plate, in the host's place", with_mod.rack_wall.module_nodes.has("pl") and not RackPatch.is_missing(with_mod.rack_row["patch"], "pl")
 			and not _labels(with_mod.rack_wall.module_nodes["pl"]).has("PLUCK not installed"))
 	with_mod.queue_free()
@@ -225,7 +225,7 @@ func the_proof() -> void:
 	without.medium = Presentation.Medium.SCREEN
 	t.add_child(without)
 	await t.get_tree().physics_frame
-	without.apply_room(other)
+	without.room_rows.apply_room(other)
 	var words := _labels(without.rack_wall.module_nodes["pl"]) if without.rack_wall.module_nodes.has("pl") else []
 	check("(d) a guest without it sees the plate naming the mod (%s)" % str(words), "PLUCK not installed" in words and ("%s 0.1.0" % ID) in words)
 	check("(d) in the host's place with the rest of the case the host's", RackPatch.module_ids(without.rack_row["patch"]) == RackPatch.module_ids(h.rack_row["patch"])

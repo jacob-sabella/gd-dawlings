@@ -5,6 +5,12 @@ extends RefCounted
 ## and the chaos it telegraphs, strikes and lets fix (`core/tour/tour.gd` owns the run itself). Moved out of
 ## `scenes/studio.gd` without change of behaviour; the state stays on the studio, which delegates the calls other code makes.
 
+## Up to three of the room's loose, unheld things, thrown in from the back of house at the desk:
+## the room's own flight (ItemRoom.fly), so a guest sees exactly the same throw through the room
+## state -- nothing new rides the wire. Seeded off the run, so a replay throws the same things at
+## the same spots. Host only: the room is the host's.
+const CROWD_PROPS: Array[StringName] = [&"duck", &"ball", &"toy", &"plane"]
+
 var studio: Studio
 
 
@@ -18,7 +24,7 @@ func _init(of: Studio) -> void:
 func _build_tour_case() -> void:
 	studio.tour_case = TourCase.new()
 	studio.studio_set.add_child(studio.tour_case)
-	studio.tour_case.transform = studio._venue_to_set(studio.venue.tour_case_spot())
+	studio.tour_case.transform = studio.venue_switch._venue_to_set(studio.venue.tour_case_spot())
 	studio.tour_case.local_peer = func() -> int: return Session.local_peer_id
 	if studio.items != null:
 		studio.items.targets = [{"node": studio.tour_case, "radius": TourCase.STRIKE_RADIUS}]
@@ -92,11 +98,11 @@ func _on_tour_run_ended(won: bool) -> void:
 	if studio.items != null:
 		for id in studio.items.spawned_ids():
 			studio.items.despawn(id)
-		studio._publish_room_soon()
+		studio.player_host._publish_room_soon()
 	_sync_tour_roll()
 	# A run can end mid-`power_flicker`'s blackout (the boss brief lost with the lights still
 	# out): never leave the room dark once there is no run left to light it back up for.
-	studio._relight()
+	studio.venue_look._relight()
 
 
 ## Host only (see core/tour/tour.gd's class note): a new brief is in, which may have a different
@@ -122,7 +128,7 @@ func _on_session_tour_changed() -> void:
 		return
 	if Session.tour.is_empty():
 		studio.tour_case.reset(Tour.unlocks.runs, Tour.unlocks.wins)
-		studio._relight()
+		studio.venue_look._relight()
 	elif not Session.is_authority():
 		studio.tour_case.sync_broken()
 		# Off `Session.tour` directly, not `Tour.run`: `Tour`'s own `Session.tour_changed`
@@ -157,7 +163,7 @@ func _spill_instrument(id: StringName, kind: StringName, curse: StringName, boun
 	var seed := Tour.run.attempt_seed if Tour.run != null else 0
 	studio.items.spill(item, mouth, home.origin, hash([String(id), seed]))
 	_announce_spill(item, curse)
-	studio._publish_room_soon()
+	studio.player_host._publish_room_soon()
 
 
 ## The case's thump and the toast, on every machine an instrument falls out on: the host's as
@@ -236,7 +242,7 @@ func _sync_spilled() -> void:
 			item.bound_to = bound
 			item.bound_name = Session.name_of(bound) if bound != 0 else ""
 	if spawned_any:
-		studio.apply_room(Session.room, false)
+		studio.room_rows.apply_room(Session.room, false)
 
 
 ## A hand here was refused an item it is not marked for (ItemRoom.refused, Item.may_hold): the
@@ -300,7 +306,7 @@ func _on_tour_chaos_telegraphed(index: int) -> void:
 	var event := TourChaos.by_id(run.events[index])
 	if event == null or studio.tour_case == null:
 		return
-	studio._flicker_lights()
+	studio.venue_look._flicker_lights()
 	studio.tour_case.rattle()
 	if event.id == &"crowd_throws":
 		_play_at(_crowd_house_point(), Foley.crowd_rumble(0))
@@ -324,7 +330,7 @@ func _on_tour_chaos_struck(index: int) -> void:
 		Foley.play(studio.tour_case, Foley.chaos_strike())
 	match id:
 		&"power_flicker":
-			studio._lights_out(Tour.take_roll_seconds() * TourChaos.LIGHTS_OUT_BARS)
+			studio.venue_look._lights_out(Tour.take_roll_seconds() * TourChaos.LIGHTS_OUT_BARS)
 		&"crowd_throws":
 			if Session.is_authority():
 				_throw_crowd_things(index)
@@ -386,7 +392,7 @@ func _throw_crowd_things(event_index: int) -> void:
 		return
 	var from := _crowd_house_point()
 	var thrown := 0
-	for kind in studio.CROWD_PROPS:
+	for kind in CROWD_PROPS:
 		if thrown >= 3:
 			break
 		var item: Item = studio.items.items.get(kind)
@@ -401,4 +407,4 @@ func _throw_crowd_things(event_index: int) -> void:
 		studio.items.fly(item, from, ItemRoom.lob(from, to, 6.0), spin, 1)
 		thrown += 1
 	if thrown > 0:
-		studio._publish_room_soon()
+		studio.player_host._publish_room_soon()

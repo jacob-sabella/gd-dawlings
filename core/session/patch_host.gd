@@ -5,6 +5,13 @@ extends RefCounted
 ## patch lines drawn between them and the ON AIR light. Moved out of `scenes/studio.gd` without change of behaviour;
 ## the state stays on the studio, which delegates the calls other code makes.
 
+## How far up the arm from MY KEYS the wrist's INTO ME socket is worn (m): clear of both reaches.
+const WRIST_IN_APART := 0.06
+
+## How far down onto the back of the hand from MY KEYS the chord hand's MY CHORDS socket is worn,
+## and across the controller from it (m): clear of both reaches, as INTO ME is the other way.
+const WRIST_CHORD_APART := 0.056
+
 var studio: Studio
 
 
@@ -20,9 +27,9 @@ func _on_patch_asked(receiver: int, socket: StringName) -> void:
 	var letter: String = PersonalMix.LETTERS[receiver]
 	_set_patch(Session.local_peer_id, receiver, socket)
 	if Session.is_authority():
-		studio._publish_room_soon()
+		studio.player_host._publish_room_soon()
 	else:
-		studio._predict(&"patch", [receiver, socket])
+		studio.room_rows._predict(&"patch", [receiver, socket])
 	if socket == &"":
 		Session.notice.emit("Plug %s is back in the tray." % letter)
 	elif studio.personal.unheard(receiver):
@@ -59,8 +66,8 @@ func _on_item_played(item: InstrumentItem, velocity: int, struck: bool, at: floa
 	# And into this player's loop, while they loop (slice 45).
 	if studio.looper != null and is_instance_valid(studio.looper):
 		studio.looper.hit(item, velocity, at, zone)
-	if studio._sampling():
-		studio._sample(item, item.kind_of_hit(struck, zone), item.sound_take(), Session.local_peer_id, item.tune_at(at))
+	if studio.sampler_host._sampling():
+		studio.sampler_host._sample(item, item.kind_of_hit(struck, zone), item.sound_take(), Session.local_peer_id, item.tune_at(at))
 	if not struck or item.pitched() or item.fixed:
 		studio.send_item_hit.call(item.id, velocity, at, HitRecorder.snaps(), item.sound_take(), zone)
 
@@ -88,9 +95,9 @@ func _on_plug_asked(source: StringName, sink: StringName) -> void:
 		return
 	if Session.is_authority():
 		_tell_plugged(source, was, sink, Session.local_peer_id)
-		studio._publish_room_soon()
+		studio.player_host._publish_room_soon()
 	else:
-		studio._predict(&"plug", [source, sink])
+		studio.room_rows._predict(&"plug", [source, sink])
 	Session.notice.emit(studio.plugged_text(source, item, was, sink))
 
 
@@ -155,7 +162,7 @@ func _on_jack_player_left(peer: int) -> void:
 	if not is_instance_valid(studio):
 		return  # a signal outliving the studio it was connected for
 	if Session.role == Session.Role.HOST and studio.jacks != null and studio.jacks.drop_player(peer):
-		studio._publish_room_soon()
+		studio.player_host._publish_room_soon()
 
 
 ## P with nothing in the mouse's hand: this player's own keys' jack steps on (a headset wears it on
@@ -193,12 +200,12 @@ func _wear_wrist_jacks() -> void:
 	in_hand.into_me = true
 	in_hand.label = "INTO ME"
 	# The wrist mount's +Y runs out toward the fingers: up the forearm, clear of MY KEYS' reach.
-	in_hand.position = Vector3(0, -studio.WRIST_IN_APART, 0)
+	in_hand.position = Vector3(0, -WRIST_IN_APART, 0)
 	skeleton.wrist.add_child(in_hand)
 	var in_controller := JackSocket.new(null)
 	in_controller.into_me = true
 	in_controller.label = "INTO ME"
-	in_controller.transform = on_controller.transform.translated(Vector3(0, 0, studio.WRIST_IN_APART))
+	in_controller.transform = on_controller.transform.translated(Vector3(0, 0, WRIST_IN_APART))
 	in_controller.available = on_controller.available
 	studio.rig.left.add_child(in_controller)
 	studio.wrist_jacks = [on_hand, on_controller, in_hand, in_controller]
@@ -220,14 +227,14 @@ func _wear_chord_jacks() -> void:
 	var on_hand := JackSocket.new(null)
 	on_hand.mine_chord = true
 	on_hand.label = "MY CHORDS"
-	on_hand.position = Vector3(0, studio.WRIST_CHORD_APART if beside else 0.0, 0)
+	on_hand.position = Vector3(0, WRIST_CHORD_APART if beside else 0.0, 0)
 	skeleton.wrist.add_child(on_hand)
 	var on_controller := JackSocket.new(null)
 	on_controller.mine_chord = true
 	on_controller.label = "MY CHORDS"
 	on_controller.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 0.03, 0.09))
 	if beside:
-		on_controller.transform = on_controller.transform.translated(Vector3(studio.WRIST_CHORD_APART, 0, 0))
+		on_controller.transform = on_controller.transform.translated(Vector3(WRIST_CHORD_APART, 0, 0))
 	on_controller.available = func() -> bool: return poke == null or not poke.tracked()
 	controller.add_child(on_controller)
 	studio.wrist_jacks.append_array([on_hand, on_controller])
@@ -251,7 +258,7 @@ func _on_item_leaving(node: Node) -> void:
 	if item == null or studio.jacks == null or studio.items == null or studio.items.items.has(item.id):
 		return
 	if studio.jacks.drop(item.id):
-		studio._publish_room_soon()
+		studio.player_host._publish_room_soon()
 
 
 ## Why a single track is not heard on this machine (`_hears_tracks`).
@@ -282,7 +289,7 @@ func _set_patch(peer: int, receiver: int, socket: StringName, show := true) -> v
 
 ## Everyone's plugs in the sockets, in their colours, and this person's own in their ears.
 func _show_patches() -> void:
-	studio.personal.hears_tracks = studio._hears_tracks()
+	studio.personal.hears_tracks = studio.mix_follow._hears_tracks()
 	studio.personal.set_sockets(studio.patches.get(Session.local_peer_id, []))
 	var peers := studio.patches.keys()
 	peers.sort()
@@ -349,11 +356,11 @@ func _on_roster_for_patches() -> void:
 		for peer in studio.patches.keys():
 			if not Session.participants.has(peer):
 				studio.patches.erase(peer)
-				studio._publish_room_soon()
+				studio.player_host._publish_room_soon()
 		for peer in studio.on_air.duplicate():
 			if not Session.participants.has(peer):
 				_set_on_air(peer, false, false)
-				studio._publish_room_soon()
+				studio.player_host._publish_room_soon()
 		# And the plugs in the keys of whoever left come back to their trays.
 		for peer in studio.patches.keys():
 			var row: Array = studio.patches[peer]
@@ -361,7 +368,7 @@ func _on_roster_for_patches() -> void:
 				var into := PersonalMix.player_of(StringName(row[i]))
 				if into > 0 and not Session.participants.has(into):
 					_set_patch(peer, i, &"", false)
-					studio._publish_room_soon()
+					studio.player_host._publish_room_soon()
 	# After the ghosts: a new one's pack is made on the same news.
 	_show_patches.call_deferred()
 
@@ -370,9 +377,9 @@ func _on_roster_for_patches() -> void:
 func _on_air_asked(on: bool) -> void:
 	_set_on_air(Session.local_peer_id, on)
 	if Session.is_authority():
-		studio._publish_room_soon()
+		studio.player_host._publish_room_soon()
 	else:
-		studio._predict(&"on_air", [on])
+		studio.room_rows._predict(&"on_air", [on])
 	if on:
 		Session.notice.emit("On air: anyone can plug into the MONITOR on your pack and hear your keys in time with the backing you play to.")
 	else:
@@ -400,3 +407,44 @@ func _set_on_air(peer: int, on: bool, show := true) -> void:
 func _colour_of(peer: int) -> Color:
 	var p: Session.Participant = Session.participants.get(peer)
 	return p.colour if p != null else SendSocket.LAMP
+
+
+## What this player is told on plugging `source` (its `item`, if it is one) from `was` into
+## `sink`: where what it plays goes now.
+static func plugged_text(source: StringName, item: Item, was: StringName, sink: StringName) -> String:
+	var the := "Your keys" if Jack.keys_player(source) > 0 else "The " + Jacks.source_name(source, item)
+	var player := Jack.player_of(sink)
+	if Jack.chord_player(source) > 0:
+		# A chord hand (part two, slice 33): no notes, a chord for their fingertips.
+		if player > 0:
+			return "Your chord hand goes into %s: the chord you hold is theirs, on their fingertips." \
+					% Session.name_of(player)
+		return "Your chord hand is unplugged."
+	if player > 0:
+		var plays := "its hits play chord tones" if item is InstrumentItem and not (item as InstrumentItem).pitched() \
+				else "its notes play"
+		if Jack.keys_player(source) > 0:
+			plays = "what you play plays"
+		return "%s go%s into %s: %s on their keys." % [the, "" if Jack.keys_player(source) > 0 else "es",
+				Session.name_of(player), plays]
+	if sink != &"" and Jack.is_world(source):
+		return "%s's jack is in %s: every drop is recorded there while the song records, heard or not." % [the, Jacks.sink_name(sink)]
+	if sink != &"":
+		return "%s's jack is in %s: its hits are recorded there, armed or not." % [the, Jacks.sink_name(sink)]
+	if Jack.player_of(was) == Session.local_peer_id and Session.local_peer_id != 0:
+		return "%s is unplugged from you." % the
+	if Jack.is_world(source):
+		return "%s is unplugged: its drops are recorded nowhere." % the
+	if not Jack.is_item(source):
+		return "%s %s unplugged." % [the, "are" if Jack.keys_player(source) > 0 else "is"]
+	return "%s is unplugged: its hits go on the armed track again." % the
+
+
+## How a player at `medium` (Presentation.Medium) takes out a jack that goes into them, in words:
+## at a desk Shift+P with an empty hand, in a headset a press on the INTO ME jack on their left
+## wrist; and, `own_jack` (an item, not a bandmate's keys, whose socket is on the
+## bandmate), a press on its own jack as well.
+static func unplug_how(medium: int, own_jack: bool) -> String:
+	var how := "Shift+P with an empty hand" if medium == Presentation.Medium.SCREEN \
+			else "A press on the INTO ME jack on your left wrist"
+	return "%s%s unplugs it." % [how, ", or a press on its jack," if own_jack else ""]

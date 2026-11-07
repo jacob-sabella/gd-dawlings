@@ -49,9 +49,9 @@ func _drop(pair: Dictionary) -> void:
 
 ## The host publishes; the guest applies, as the session would deliver it.
 func _send(pair: Dictionary) -> Dictionary:
-	var state: Dictionary = _as(Session.Role.HOST, func() -> Variant: return (pair["host"] as Studio).room_state())
+	var state: Dictionary = _as(Session.Role.HOST, func() -> Variant: return (pair["host"] as Studio).room_rows.room_state())
 	_as(Session.Role.GUEST, func() -> Variant:
-		(pair["guest"] as Studio).apply_room(state, false)
+		(pair["guest"] as Studio).room_rows.apply_room(state, false)
 		return null)
 	return state
 
@@ -77,8 +77,8 @@ func guest_sees_the_host_and_cannot_edit() -> void:
 	var guest: Studio = pair["guest"]
 	var home := _at(host.live_pieces[&"hoop"])
 	check("both start with the whole studio", host.wheel != null and guest.wheel != null and host.sampler != null and guest.sampler != null)
-	var said := [host.ask_layout("add", ["hoop", home.x + 1.2, home.y, 0.0]), host.ask_layout("remove", ["sampler"]),
-			host.ask_layout("remove", ["wheel"]), host.ask_layout("move", ["hoop", home.x - 0.3, home.y, 0.0])]
+	var said := [host.rack_host.ask_layout("add", ["hoop", home.x + 1.2, home.y, 0.0]), host.rack_host.ask_layout("remove", ["sampler"]),
+			host.rack_host.ask_layout("remove", ["wheel"]), host.rack_host.ask_layout("move", ["hoop", home.x - 0.3, home.y, 0.0])]
 	check("the host arranges the room (%s)" % [said], said == ["", "", "", ""])
 	_host_has_a_gong(host)
 	var state := _send(pair)
@@ -103,7 +103,7 @@ func guest_sees_the_host_and_cannot_edit() -> void:
 	var refusals := []
 	for op: Array in [["remove", ["hoop"]], ["add", ["sampler", 0.0, 0.0, 0.0]], ["add", ["hoop", 0.0, 0.0, 0.0]], ["rotate", ["hoop", 1.0]],
 			["reset", ["all"]], ["remove", ["gong_2"]], ["move", ["gong_2", 1.0, 1.0]]]:
-		refusals.append(_as(Session.Role.GUEST, func() -> Variant: return guest.ask_layout(op[0], op[1])))
+		refusals.append(_as(Session.Role.GUEST, func() -> Variant: return guest.rack_host.ask_layout(op[0], op[1])))
 	check("every arranging op from the guest is host only (%s)" % [refusals], refusals.all(func(w: String) -> bool: return w == LayoutEdit.HOST_ONLY))
 	check("and nothing of the guest's room changed", guest.room_deltas.delta.rev == kept[0] and guest.sampler == kept[1] and guest.wheel == kept[2]
 			and guest.room_deltas.delta.added.size() == 2 and guest.room_deltas.writes == 0)
@@ -111,7 +111,7 @@ func guest_sees_the_host_and_cannot_edit() -> void:
 	var answer: Variant = _as(Session.Role.GUEST, func() -> Variant:
 		return guest.layout_edit.answer("move", ["hoop", pushed.x, pushed.y, guest.live_pieces[&"hoop"].rotation.y], Session.local_peer_id))
 	check("a guest may still push a piece with wheels", answer == HOST_OK and _at(guest.live_pieces[&"hoop"]).distance_to(pushed) < 0.02)
-	check("the host can take the stranger out; the guest then has no plate", host.ask_layout("remove", ["gong_2"]) == ""
+	check("the host can take the stranger out; the guest then has no plate", host.rack_host.ask_layout("remove", ["gong_2"]) == ""
 			and _send(pair).size() > 0 and guest.venue.get_node_or_null(RoomSync.node_name(&"gong_2")) == null
 			and host.venue.get_node_or_null(RoomSync.node_name(&"gong_2")) == null)
 	_drop(pair)
@@ -129,25 +129,25 @@ func reset_returns_the_default() -> void:
 	var home_hoop := _at(guest.live_pieces[&"hoop"])
 	var home_sampler := _at(guest.live_pieces[&"sampler"])
 	var at := _at(host.live_pieces[&"hoop"])
-	host.ask_layout("add", ["hoop", at.x + 1.2, at.y, 0.0])
-	host.ask_layout("move", ["hoop", at.x - 0.4, at.y, 0.0])
-	host.ask_layout("remove", ["cassette_rack"])
-	host.ask_layout("remove", ["looper"])
-	host.ask_layout("remove", ["lyrics"])
+	host.rack_host.ask_layout("add", ["hoop", at.x + 1.2, at.y, 0.0])
+	host.rack_host.ask_layout("move", ["hoop", at.x - 0.4, at.y, 0.0])
+	host.rack_host.ask_layout("remove", ["cassette_rack"])
+	host.rack_host.ask_layout("remove", ["looper"])
+	host.rack_host.ask_layout("remove", ["lyrics"])
 	_host_has_a_gong(host)
 	_send(pair)
 	check("the guest follows the host: moved, taken out, added", _at(guest.live_pieces[&"hoop"]).distance_to(home_hoop) > 0.3 and guest.cassette_rack == null
 			and guest.looper == null and guest.lyric_board == null and guest.room_deltas.delta.added.size() == 2)
-	check("a reset from the guest is host only, and changes nothing", _as(Session.Role.GUEST, func() -> Variant: return guest.ask_layout("reset", ["all"])) == LayoutEdit.HOST_ONLY
+	check("a reset from the guest is host only, and changes nothing", _as(Session.Role.GUEST, func() -> Variant: return guest.rack_host.ask_layout("reset", ["all"])) == LayoutEdit.HOST_ONLY
 			and guest.cassette_rack == null)
-	check("one reset on the host", host.ask_layout("reset", ["all"]) == "" and host.room_deltas.delta.is_empty())
+	check("one reset on the host", host.rack_host.ask_layout("reset", ["all"]) == "" and host.room_deltas.delta.is_empty())
 	_send(pair)
 	check("takes the guest back to the default: every piece in the room again", guest.cassette_rack != null and guest.looper != null and guest.lyric_board != null
 			and guest.sampler != null and guest.room_deltas.delta.added.is_empty() and guest.room_deltas.delta.removed.is_empty()
 			and not guest.room_deltas.delta.moved.has("hoop"))
 	check("at its own spots", _at(guest.live_pieces[&"hoop"]).distance_to(home_hoop) < 0.02 and _at(guest.live_pieces[&"sampler"]).distance_to(home_sampler) < 0.02)
 	check("with no copy and no plate left", guest.venue.get_children().all(func(c: Node) -> bool: return not (c is PieceGap) and not String(c.name).begins_with("Copy_")))
-	check("and the host's row is the default's", host.room_state()["layout"]["added"].is_empty() and host.room_state()["layout"]["removed"].is_empty())
+	check("and the host's row is the default's", host.room_rows.room_state()["layout"]["added"].is_empty() and host.room_rows.room_state()["layout"]["removed"].is_empty())
 	_drop(pair)
 	base._off()
 
@@ -161,22 +161,22 @@ func zone_pieces_come_out_and_go_back() -> void:
 	check("the catalogue lists the seven removable kinds, each titled", PieceCatalogue.kinds().size() == 7 and PieceCatalogue.kinds().all(func(k: StringName) -> bool: return PieceCatalogue.title(k) != ""))
 	for kind: StringName in stood:
 		check("%s stands in the studio" % kind, s.get(stood[kind]) != null)
-		check("%s is taken out" % kind, s.ask_layout("remove", [String(kind)]) == "" and s.get(stood[kind]) == null and s.room_deltas.delta.is_removed(kind))
-		check("%s cannot be taken out twice or moved" % kind, s.ask_layout("remove", [String(kind)]) != "" and s.ask_layout("move", [String(kind), 0.0, 0.0]) != "")
-	var why: String = s.ask_layout("add", ["wheel", 0.0, 0.0, 0.0])
+		check("%s is taken out" % kind, s.rack_host.ask_layout("remove", [String(kind)]) == "" and s.get(stood[kind]) == null and s.room_deltas.delta.is_removed(kind))
+		check("%s cannot be taken out twice or moved" % kind, s.rack_host.ask_layout("remove", [String(kind)]) != "" and s.rack_host.ask_layout("move", [String(kind), 0.0, 0.0]) != "")
+	var why: String = s.rack_host.ask_layout("add", ["wheel", 0.0, 0.0, 0.0])
 	check("put back with add: it asks for no spot, the zone is the place (%s)" % why, why == "" and s.wheel != null and not s.room_deltas.delta.moved.has("wheel"))
-	check("reset puts back another", s.ask_layout("reset", ["sections"]) == "" and s.sections != null)
-	check("and a piece that is there is not added again", s.ask_layout("add", ["looper", 0.0, 0.0, 0.0]) == "" and s.looper != null
-			and s.ask_layout("add", ["wheel", 0.0, 0.0, 0.0]) != "")
-	check("reset all puts back the rest", s.ask_layout("reset", ["all"]) == "" and s.looper != null and s.lyric_board != null and s.wheel != null and s.sections != null)
+	check("reset puts back another", s.rack_host.ask_layout("reset", ["sections"]) == "" and s.sections != null)
+	check("and a piece that is there is not added again", s.rack_host.ask_layout("add", ["looper", 0.0, 0.0, 0.0]) == "" and s.looper != null
+			and s.rack_host.ask_layout("add", ["wheel", 0.0, 0.0, 0.0]) != "")
+	check("reset all puts back the rest", s.rack_host.ask_layout("reset", ["all"]) == "" and s.looper != null and s.lyric_board != null and s.wheel != null and s.sections != null)
 	# The rack, the sampler and the hoop still do what they did.
 	for kind: StringName in [&"cassette_rack", &"sampler", &"hoop"]:
-		check("%s comes out and goes back" % kind, s.ask_layout("remove", [String(kind)]) == "" and s.ask_layout("reset", [String(kind)]) == "")
+		check("%s comes out and goes back" % kind, s.rack_host.ask_layout("remove", [String(kind)]) == "" and s.rack_host.ask_layout("reset", [String(kind)]) == "")
 	# A venue with no bricks table has no wheel to take out or put back.
 	var bare := _venue_without(s, &"wheel")
 	if bare != &"":
 		s.set_venue(bare, false, 0)
-		check("%s has no wheel: there is none to take out" % bare, s.wheel == null and s.ask_layout("remove", ["wheel"]).contains("no wheel"))
+		check("%s has no wheel: there is none to take out" % bare, s.wheel == null and s.rack_host.ask_layout("remove", ["wheel"]).contains("no wheel"))
 		check("and the layout does not carry one", s.room_deltas.delta.removed.is_empty())
 	else:
 		check("every venue has a place for the wheel (nothing to refuse)", true)
@@ -220,13 +220,13 @@ func a_piece_this_build_cannot_make_is_a_plate() -> void:
 		RoomSync.sync(s)
 		return s.venue.get_children().filter(func(c: Node) -> bool: return c is PieceGap).size() == 4).call())
 	check("the plate is in the room's delta untouched, so nothing is lost", s.room_deltas.delta.added.size() == 4 and s.room_deltas.delta.added[0]["piece"] == "dawlings.gong")
-	check("a plate cannot be moved, and says why", s.ask_layout("move", ["gong_2", 1.0, 1.0]).contains("not installed"))
-	check("taking one out is one verb", s.ask_layout("remove", ["no_words"]) == "" and s.venue.get_node_or_null("Copy_no_words") == null and s.venue.get_node_or_null("Copy_gong_2") != null)
+	check("a plate cannot be moved, and says why", s.rack_host.ask_layout("move", ["gong_2", 1.0, 1.0]).contains("not installed"))
+	check("taking one out is one verb", s.rack_host.ask_layout("remove", ["no_words"]) == "" and s.venue.get_node_or_null("Copy_no_words") == null and s.venue.get_node_or_null("Copy_gong_2") != null)
 	s.set_venue(&"rooftop", false, 0)
 	check("another room has none of this room's plates", s.venue.get_children().all(func(c: Node) -> bool: return not (c is PieceGap)))
 	s.set_venue(&"studio", false, 0)
 	check("and the studio has them again when it is back", s.venue.get_children().filter(func(c: Node) -> bool: return c is PieceGap).size() == 3)
-	s.ask_layout("reset", ["all"])
+	s.rack_host.ask_layout("reset", ["all"])
 	check("reset takes them all down", s.venue.get_children().all(func(c: Node) -> bool: return not (c is PieceGap)))
 	base._off()
 	t._drop_floor_studio(rig)
@@ -240,11 +240,11 @@ func deleting_and_adding_survives_a_restart() -> void:
 	var s: Studio = rig["studio"]
 	s.room_deltas.delay = 0.05
 	check("the first venue has a wheel and a rack", s.venue.venue_id() == &"studio" and s.wheel != null and s.cassette_rack != null)
-	check("delete in the first: the wheel and the cassette rack go", s.ask_layout("remove", ["wheel"]) == "" and s.ask_layout("remove", ["cassette_rack"]) == "")
+	check("delete in the first: the wheel and the cassette rack go", s.rack_host.ask_layout("remove", ["wheel"]) == "" and s.rack_host.ask_layout("remove", ["cassette_rack"]) == "")
 	s.set_venue(&"rooftop", false, 0)
 	check("the second venue still has them", s.wheel != null and s.cassette_rack != null and s.room_deltas.delta.is_empty())
 	var home := _at(s.live_pieces[&"hoop"])
-	var said: String = s.ask_layout("add", ["hoop", home.x + 1.2, home.y, 0.0])
+	var said: String = s.rack_host.ask_layout("add", ["hoop", home.x + 1.2, home.y, 0.0])
 	check("add in the second: another hoop (%s)" % said, said == "" and s.room_deltas.delta.added.size() == 1)
 	var copy := StringName(s.room_deltas.delta.added[0]["id"])
 	await t.get_tree().create_timer(0.3).timeout
@@ -272,9 +272,9 @@ func deleting_and_adding_survives_a_restart() -> void:
 	host.set_venue(&"studio", false, 0)
 	_send(pair)
 	check("and back in the first, both follow it", guest.wheel == null and guest.cassette_rack == null and guest.venue.get_node_or_null(RoomSync.node_name(copy)) == null)
-	host.ask_layout("reset", ["all"])
+	host.rack_host.ask_layout("reset", ["all"])
 	host.set_venue(&"rooftop", false, 0)
-	host.ask_layout("reset", ["all"])
+	host.rack_host.ask_layout("reset", ["all"])
 	await t.get_tree().create_timer(0.3).timeout
 	host.room_deltas.flush()
 	host.room_deltas.wait()

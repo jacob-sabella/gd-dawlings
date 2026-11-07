@@ -265,7 +265,7 @@ func a_studio_saves_the_host_rack_and_opens_with_it() -> void:
 	t.add_child(studio)
 	await t.get_tree().physics_frame
 	check("a studio with no saved rack opens with the default", RackPatch.has_type(studio.rack_row["patch"], "builtin.plaits") or RackPatch.has_type(studio.rack_row["patch"], "builtin.out"))
-	studio.ask_rack("add", ["builtin.lfo", -1, 0])
+	studio.rack_host.ask_rack("add", ["builtin.lfo", -1, 0])
 	var ids := RackPatch.module_ids(studio.rack_row["patch"])
 	studio.rack_files.flush()
 	check("an edit is saved", FileAccess.file_exists(path))
@@ -278,9 +278,9 @@ func a_studio_saves_the_host_rack_and_opens_with_it() -> void:
 	check("the next studio opens with the rack as it was left", RackPatch.module_ids(again.rack_row["patch"]) == ids
 			and _panels(again.rack_wall) == ids.size())
 	# A stranger in the host's row is a plate on the wall, in its place.
-	var state: Dictionary = again.room_state().duplicate(true)
+	var state: Dictionary = again.room_rows.room_state().duplicate(true)
 	state[RackPatch.ROW]["patch"] = _patch_with_a_stranger()
-	again.apply_room(state)
+	again.room_rows.apply_room(state)
 	var wall: RackWall = again.rack_wall
 	check("a module nobody here provides is kept in the row", RackPatch.is_missing(again.rack_row["patch"], "pl"))
 	check("and is a plate on the wall in its place, wide as it was", wall.module_nodes.has("pl") and wall.module_nodes.has("pl2")

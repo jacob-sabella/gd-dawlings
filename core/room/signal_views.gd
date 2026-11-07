@@ -5,6 +5,51 @@ extends RefCounted
 ## back to its source. Moved out of `scenes/studio.gd` without change of behaviour; the state stays on the studio, which
 ## delegates the calls other code makes.
 
+## The graph the view last drew, rebuilt at SIGNAL_GRAPH_HZ.
+var signal_graph: SignalGraph = null
+
+const SIGNAL_GRAPH_HZ := 15.0
+
+var _signal_clock := 0.0
+
+## What the last trace was traced from (a stage id) and called, so a fix can trace it again.
+var _traced_from := ""
+
+var _traced_title := ""
+
+## A trace again this long after a fix, when the host has had time to answer (s).
+const RETRACE_AFTER := 0.35
+
+var _retrace_in := -1.0
+
+## The headset's held trigger: the hand, what it is held on, and for how long (s).
+const TRACE_HOLD := 0.6
+
+var _trace_holds := {}
+
+## Where OUT stands over the master section.
+const OUT_RISE := 0.9
+
+var _signal_rows: Array = []
+
+# --- look to solo (docs/spatial_loop.md part three, G) -------------------------------------------
+
+## A hand held to an ear this near (m) of it, a little out from the head's middle, is cupped to it.
+const EAR_REACH := 0.16
+
+const EAR_OUT := 0.09
+
+## Held there this long (s) before it solos, and away by this much (m) more to let go.
+const EAR_DWELL := 0.2
+
+## A hand at the ear, and for how long (s).
+var _ear_for := 0.0
+
+## A guest's: the track asked for last, and the look resting on another (track, s).
+var _look_asked := 0
+
+var _look_resting := [0, 0.0]
+
 var studio: Studio
 
 
@@ -74,14 +119,14 @@ func signal_sources() -> Array:
 ## the stage table, else its channel strip; the master at the console's master section, OUT over it.
 func signal_place(id: String) -> Variant:
 	if id.begins_with("src:"):
-		for r in studio._signal_rows:
+		for r in _signal_rows:
 			if r["id"] == id.trim_prefix("src:"):
 				return (r["node"] as Node3D).global_position + Vector3.UP * 0.12 if is_instance_valid(r["node"]) else null
 		return null
 	if id == "master" or id == "out":
 		if studio.console == null or studio.console.master == null or not studio.console.master.is_inside_tree():
 			return null
-		return studio.console.master.global_position + Vector3.UP * (0.3 if id == "master" else Studio.OUT_RISE)
+		return studio.console.master.global_position + Vector3.UP * (0.3 if id == "master" else OUT_RISE)
 	if id.begins_with("t"):
 		var track := int(id.substr(1, id.find(":") - 1))
 		return track_place(track)
@@ -123,18 +168,18 @@ func _follow_signal(delta: float) -> void:
 	studio.signal_view.visible = true
 	studio.signal_view.motion = studio.ergonomics.motion_scale
 	DAW.backend.want_signal_meters()
-	studio._signal_clock += delta
-	if studio.signal_graph == null or studio._signal_clock >= 1.0 / Studio.SIGNAL_GRAPH_HZ:
-		studio._signal_clock = 0.0
-		studio._signal_rows = signal_sources()
-		studio.signal_graph = SignalGraph.build(DAW.state, studio._signal_rows)
+	_signal_clock += delta
+	if signal_graph == null or _signal_clock >= 1.0 / SIGNAL_GRAPH_HZ:
+		_signal_clock = 0.0
+		_signal_rows = signal_sources()
+		signal_graph = SignalGraph.build(DAW.state, _signal_rows)
 	studio.signal_view.quiet = [SignalGraph.SOLOED_OUT] if look_solo_held() else []
-	studio.signal_view.update(studio.signal_graph, delta)
-	if studio._retrace_in >= 0.0:
-		studio._retrace_in -= delta
-		if studio._retrace_in < 0.0 and studio._traced_from != "":
-			studio.signal_graph = SignalGraph.build(DAW.state, signal_sources())
-			studio.signal_view.trace(studio.signal_graph.trace(studio._traced_from), studio._traced_title)
+	studio.signal_view.update(signal_graph, delta)
+	if _retrace_in >= 0.0:
+		_retrace_in -= delta
+		if _retrace_in < 0.0 and _traced_from != "":
+			signal_graph = SignalGraph.build(DAW.state, signal_sources())
+			studio.signal_view.trace(signal_graph.trace(_traced_from), _traced_title)
 	_follow_trace_holds(delta)
 
 
@@ -171,7 +216,7 @@ func looked_track() -> int:
 		return 0
 	var id: String = target[0]
 	if id.begins_with("src:"):
-		for r in studio._signal_rows if not studio._signal_rows.is_empty() else signal_sources():
+		for r in _signal_rows if not _signal_rows.is_empty() else signal_sources():
 			if SignalGraph.source_id(r["id"]) == id:
 				return int(r["track"])
 		return 0
@@ -200,8 +245,8 @@ func look_solo_press(by: StringName) -> void:
 		if words != "":
 			Session.notice.emit(words)
 		return
-	studio._look_asked = on
-	studio._look_resting = [on, 0.0]
+	_look_asked = on
+	_look_resting = [on, 0.0]
 	Session.ask_room(&"look_solo", [on, true])
 	Session.notice.emit("Look to solo asks the host: the whole room hears %s alone while you hold, as a guest hears only the host's mix." % (LookSolo._title(on) if on > 0 else "what you look at"))
 
@@ -217,7 +262,7 @@ func look_solo_release(by: StringName = &"") -> void:
 			Session.notice.emit(words)
 		return
 	Session.ask_room(&"look_solo", [0, false])
-	studio._look_asked = 0
+	_look_asked = 0
 
 
 ## Whether a look-solo is held in this room as far as this machine knows: its own (or, on a guest,
@@ -292,14 +337,14 @@ func _follow_look_solo(delta: float) -> void:
 			Session.notice.emit(words)
 		return
 	# A guest's look rests FOLLOW_AFTER on another track before it is asked.
-	if on <= 0 or on == studio._look_asked:
-		studio._look_resting = [on, 0.0]
+	if on <= 0 or on == _look_asked:
+		_look_resting = [on, 0.0]
 		return
-	if on != int(studio._look_resting[0]):
-		studio._look_resting = [on, 0.0]
-	studio._look_resting[1] = float(studio._look_resting[1]) + delta
-	if float(studio._look_resting[1]) >= LookSolo.FOLLOW_AFTER:
-		studio._look_asked = on
+	if on != int(_look_resting[0]):
+		_look_resting = [on, 0.0]
+	_look_resting[1] = float(_look_resting[1]) + delta
+	if float(_look_resting[1]) >= LookSolo.FOLLOW_AFTER:
+		_look_asked = on
 		Session.ask_room(&"look_solo", [on, true])
 
 
@@ -322,17 +367,17 @@ func _follow_ear_cup(delta: float) -> void:
 			continue
 		var at: Vector3 = palm[0]
 		for side in [-1.0, 1.0]:
-			nearest = minf(nearest, at.distance_to(head.origin + head.basis.x.normalized() * side * Studio.EAR_OUT))
+			nearest = minf(nearest, at.distance_to(head.origin + head.basis.x.normalized() * side * EAR_OUT))
 	if studio._look_by == &"ear":
-		if nearest > Studio.EAR_REACH + Studio.EAR_LEAVE:
+		if nearest > EAR_REACH + Studio.EAR_LEAVE:
 			look_solo_release(&"ear")
 		return
-	if nearest <= Studio.EAR_REACH and signal_view_on() and studio._look_by == &"":
-		studio._ear_for += delta
-		if studio._ear_for >= Studio.EAR_DWELL:
+	if nearest <= EAR_REACH and signal_view_on() and studio._look_by == &"":
+		_ear_for += delta
+		if _ear_for >= EAR_DWELL:
 			look_solo_press(&"ear")
 	else:
-		studio._ear_for = 0.0
+		_ear_for = 0.0
 
 
 ## The stage a trace of what `node` is starts from, and what it is called: an instrument or a
@@ -341,7 +386,7 @@ func _follow_ear_cup(delta: float) -> void:
 func signal_target_of(node: Node, point := Vector3.ZERO) -> Array:
 	if node == null:
 		return []
-	for r in studio._signal_rows if not studio._signal_rows.is_empty() else signal_sources():
+	for r in _signal_rows if not _signal_rows.is_empty() else signal_sources():
 		var n: Node = r["node"]
 		if is_instance_valid(n) and (n == node or n.is_ancestor_of(node)):
 			return [SignalGraph.source_id(r["id"]), str(r["title"])]
@@ -371,13 +416,13 @@ func trace_pointed(hand: Interactor) -> bool:
 func trace_from(from: String, title: String) -> bool:
 	if studio.signal_view == null:
 		_follow_signal(0.0)
-	studio._signal_rows = signal_sources()
-	studio.signal_graph = SignalGraph.build(DAW.state, studio._signal_rows)
-	if studio.signal_graph.stage(from) == null:
+	_signal_rows = signal_sources()
+	signal_graph = SignalGraph.build(DAW.state, _signal_rows)
+	if signal_graph.stage(from) == null:
 		return false
-	studio._traced_from = from
-	studio._traced_title = title
-	var tr := studio.signal_graph.trace(from)
+	_traced_from = from
+	_traced_title = title
+	var tr := signal_graph.trace(from)
 	studio.signal_view.trace(tr, title)
 	if tr.heard():
 		Session.notice.emit("%s is heard: it reaches the speakers." % title)
@@ -400,7 +445,7 @@ func _do_signal_fix(fix: Dictionary) -> void:
 	if not SignalGraph.apply_fix(fix):
 		return
 	Session.notice.emit("%s: done, one undo step (Ctrl-Z puts it back)." % fix["label"])
-	studio._retrace_in = 0.0 if Session.is_authority() else Studio.RETRACE_AFTER
+	_retrace_in = 0.0 if Session.is_authority() else RETRACE_AFTER
 
 
 ## A headset's trigger held still on something for TRACE_HOLD, with the view on, traces it.
@@ -412,12 +457,12 @@ func _follow_trace_holds(delta: float) -> void:
 		if hand == null or not is_instance_valid(hand):
 			continue
 		var on: Node = hand.held if hand.held != null else hand.hovered
-		var held: Array = studio._trace_holds.get(hand, [null, 0.0, false])
+		var held: Array = _trace_holds.get(hand, [null, 0.0, false])
 		if hand.is_pressing() and on != null and on == held[0]:
 			held[1] = float(held[1]) + delta
-			if float(held[1]) >= Studio.TRACE_HOLD and not held[2]:
+			if float(held[1]) >= TRACE_HOLD and not held[2]:
 				held[2] = true
 				trace_pointed(hand)
 		else:
 			held = [on if hand.is_pressing() else null, 0.0, false]
-		studio._trace_holds[hand] = held
+		_trace_holds[hand] = held

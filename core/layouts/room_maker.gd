@@ -162,7 +162,7 @@ func make() -> String:
 	else:
 		var made := MadeRooms.make(spec)
 		if made["ok"]:
-			studio.choose_venue(StringName(made["id"]))
+			studio.venue_switch.choose_venue(StringName(made["id"]))
 			said = ""
 			_panel.visible = false
 			Session.notice.emit("Made the room %s." % str(spec["title"]))

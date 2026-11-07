@@ -24,7 +24,7 @@ func _ready() -> void:
 	for surface in studio.focus.surfaces:
 		var box: AABB = surface.global_transform * surface.content_aabb()
 		print("  %-10s size=%s at=%s" % [surface.surface_id, box.size, box.get_center()])
-	print("  desk footprint ", studio._desk_footprint())
+	print("  desk footprint ", studio.venue_switch._desk_footprint())
 	print("  room width %.2f" % studio.room_width)
 	for piece in studio.floor_plan.pieces:
 		print("  %-14s at (%.2f, %.2f) clear=%s" % [piece.piece_id, piece.position.x, piece.position.z,

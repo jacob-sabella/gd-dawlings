@@ -5,6 +5,19 @@ extends RefCounted
 ## (docs/architecture.md). Moved out of `scenes/studio.gd` without change of behaviour: the state (`roll_settings`,
 ## `roll_presets_path`, `rig_roulette_station`, the board) stays on the studio, which delegates to this for the calls other code makes.
 
+## How much bigger the setup wall in the room is than the panel it was.
+const SETUP_WALL_SCALE := 2.9
+
+var _roll_shown := 0
+
+## How many rolls back an undo can go.
+const ROLL_HISTORY_MAX := 8
+
+## What the project was before each roll, newest last: {file, original, prev_roll}.
+var _roll_history: Array = []
+
+var _history_swept := false
+
 var studio: Studio
 
 
@@ -30,7 +43,7 @@ func _build_rig_roulette_station() -> void:
 ## venue does; its wheels start from `roll_settings` and write back to it.
 func _stand_the_setup_wall() -> void:
 	studio.rig_roulette_station = null
-	if studio.venue == null or not studio.in_roulette_room():
+	if studio.venue == null or not studio.venue_switch.in_roulette_room():
 		return
 	var wall := RigRouletteStation.new()
 	wall.name = "SetupWall"
@@ -51,7 +64,7 @@ func _stand_the_setup_wall() -> void:
 	wall.weights = studio.roll_settings.weights.duplicate()
 	wall.transform = studio.venue.rig_roulette_spot()
 	# A wall for the whole room to read from the seat, not a panel to stand at.
-	wall.scale = Vector3.ONE * studio.SETUP_WALL_SCALE
+	wall.scale = Vector3.ONE * SETUP_WALL_SCALE
 	wall.roll_requested.connect(_on_rig_roulette_roll_requested)
 	wall.changed.connect(func() -> void:
 		if not Session.is_authority():
@@ -156,7 +169,7 @@ func _build_roll_board() -> void:
 	studio.roll_board.chalky = studio.venue.roll_board_chalky()
 	studio.roll_board.free_standing = studio.venue.back_wall_gear_stands()
 	studio.roll_board.transform = studio.venue.roll_board_spot()
-	studio.roll_board.rich = studio.rich_rendering()
+	studio.roll_board.rich = studio.venue_switch.rich_rendering()
 	studio.roll_board.environment_from = studio.world_env.environment if studio.world_env != null else null
 	studio.studio_set.add_child(studio.roll_board)
 	_on_session_roll_changed()
@@ -179,9 +192,9 @@ func choose_board_source(source: StringName) -> void:
 		return
 	if Session.is_authority():
 		_show_board(source)
-		studio._publish_room()
+		studio.room_rows._publish_room()
 	else:
-		studio._predict(&"board_source", [source])
+		studio.room_rows._predict(&"board_source", [source])
 		_show_board(source)
 
 
@@ -222,8 +235,8 @@ func _on_session_roll_changed() -> void:
 	# A roll not seen yet lands part by part; the same one sent again (a guest admitted late) is
 	# simply written up.
 	var n: int = Session.roll.get("n", 0)
-	var fresh := n != 0 and n != studio._roll_shown
-	studio._roll_shown = n
+	var fresh := n != 0 and n != _roll_shown
+	_roll_shown = n
 	studio.roll_board.show_roll(Session.roll, fresh)
 	if fresh and studio.venue.has_method("pulse"):
 		studio.venue.pulse(1.0)
@@ -290,12 +303,12 @@ func _roll_rig() -> void:
 	studio._rolls_this_visit += 1
 	# The board is for the write-up now, whatever it was showing.
 	_show_board(&"")
-	studio._publish_room()
+	studio.room_rows._publish_room()
 
 	if not before.is_empty():
-		studio._roll_history.append(before)
-		while studio._roll_history.size() > studio.ROLL_HISTORY_MAX:
-			_forget(studio._roll_history.pop_front())
+		_roll_history.append(before)
+		while _roll_history.size() > ROLL_HISTORY_MAX:
+			_forget(_roll_history.pop_front())
 	Session.publish_roll({"by": Session.name_of(Session.local_peer_id), "n": Session.roll.get("n", 0) + 1, "past": _past_rolls(),
 			"tracks": tracks, "key": key, "pedals": pedals, "seed": settings.seed_value, "chaos": settings.chaos, "tempo": tempo,
 			"left": -1 if limit < 0 else limit - studio._rolls_this_visit + 1})
@@ -326,12 +339,12 @@ func _throw_the_knobs(track: int, fx: MixState.FXState, rng: RandomNumberGenerat
 func _remember_before_roll() -> Dictionary:
 	if not DAW.backend is OfflineBackend:
 		return {}
-	if not studio._history_swept:
+	if not _history_swept:
 		# What an earlier run left (a quit, a crash) is no history of this one.
-		studio._history_swept = true
+		_history_swept = true
 		for f in DirAccess.get_files_at("user://roll_history"):
 			DirAccess.remove_absolute("user://roll_history".path_join(f))
-	var file := "user://roll_history/before_%d_%d.%s" % [Time.get_ticks_msec(), studio._roll_history.size(), ProjectFiles.EXTENSION]
+	var file := "user://roll_history/before_%d_%d.%s" % [Time.get_ticks_msec(), _roll_history.size(), ProjectFiles.EXTENSION]
 	if not ProjectFiles.save(DAW.backend, file, true).is_empty() and not FileAccess.file_exists(file):
 		return {}
 	return {"file": file, "original": DAW.backend.project_path, "prev_roll": Session.roll.duplicate(true)}
@@ -345,8 +358,8 @@ func _forget(entry: Dictionary) -> void:
 ## The rolls before the one on the board, newest first, a few of them.
 func _past_rolls() -> Array:
 	var out := []
-	for i in range(studio._roll_history.size() - 1, -1, -1):
-		var prev: Dictionary = studio._roll_history[i]["prev_roll"]
+	for i in range(_roll_history.size() - 1, -1, -1):
+		var prev: Dictionary = _roll_history[i]["prev_roll"]
 		if not prev.is_empty():
 			out.append(studio.roll_summary(prev))
 		if out.size() >= 3:
@@ -360,18 +373,18 @@ func undo_the_roll() -> void:
 	if not Session.is_authority():
 		Session.notice.emit("Only %s can undo a roll." % Session.name_of(1))
 		return
-	if studio._roll_history.is_empty():
+	if _roll_history.is_empty():
 		Session.notice.emit("Nothing to undo." if DAW.backend is OfflineBackend else "This engine cannot undo a roll.")
 		return
 	if DAW.has_unsaved_changes():
 		Session.notice.emit("Save the project first: undoing a roll replaces it.")
 		return
-	var entry: Dictionary = studio._roll_history.back()
+	var entry: Dictionary = _roll_history.back()
 	var refused := DAW.open_project(entry["file"])
 	if not refused.is_empty():
 		Session.notice.emit("Could not bring it back: %s" % "; ".join(refused))
 		return
-	studio._roll_history.pop_back()
+	_roll_history.pop_back()
 	# It is the project it was, not the file it was kept in.
 	DAW.backend.project_path = entry["original"]
 	DAW.backend.name_project()
@@ -381,8 +394,8 @@ func undo_the_roll() -> void:
 	var prev: Dictionary = entry["prev_roll"].duplicate(true)
 	if not prev.is_empty():
 		prev["past"] = _past_rolls()
-	studio._roll_shown = int(prev.get("n", 0))
-	studio._publish_room()
+	_roll_shown = int(prev.get("n", 0))
+	studio.room_rows._publish_room()
 	Session.publish_roll(prev)
 	Session.tell_room("%s undid the roll." % Session.name_of(Session.local_peer_id))
 
@@ -392,3 +405,22 @@ func undo_the_roll() -> void:
 ## filter by), is the whole thing.
 func _rig_roulette_pool(settings: RollSettings) -> Array:
 	return RigRoll.pool_of(settings, DAW.state.fx_choices, not DAW.backend is ReaperBackend)
+
+
+static func wall_pool(pool: RollSettings.Pool) -> RigRouletteStation.Pool:
+	return int(pool) as RigRouletteStation.Pool
+
+
+static func board_title(source: StringName) -> String:
+	match source:
+		&"": return "ROLL"
+		&"rack": return "FX RACK"
+		&"tape_deck": return "TAPE DECK"
+	return String(source).replace("_", " ").to_upper()
+
+
+## A roll in a few words, for the board's list of the ones before.
+static func roll_summary(roll: Dictionary) -> String:
+	var key: String = roll.get("key", "")
+	return "#%d  %d tracks, %d pedal%s%s" % [roll.get("n", 0), roll.get("tracks", 0), (roll.get("pedals", []) as Array).size(),
+			"" if (roll.get("pedals", []) as Array).size() == 1 else "s", (", " + key) if not key.is_empty() else ""]

@@ -5,6 +5,36 @@ extends RefCounted
 ## live pieces and the hood signs. Moved out of `scenes/studio.gd` without change of behaviour; the state stays on the
 ## studio, which delegates the calls other code makes.
 
+## The legs: how far either side of the middle, and how far behind the screen's face.
+const PATCH_WALL_LEG_X := 1.3
+
+const PATCH_WALL_LEG_Z := -0.04
+
+## The plaque's top edge on the trolley's front, under the rail.
+const STAGE_PLAQUE_TOP := 0.6
+
+## The niche's measures (m): the surround either side, its depth out of the wall (shallower where
+## it stands on its own, to keep 0.6 m from the patch wall's legs), how far its back goes into the
+## wall (or, standing, how deep the cabinet is behind the board), how high it stands, the sill the
+## board stands on, and how far the lintel and the sill sit back from the cheeks' faces.
+const NICHE_SIDE := 0.16
+
+const NICHE_OUT := 0.3
+
+const NICHE_STANDING_OUT := 0.2
+
+const NICHE_INTO_WALL := 0.12
+
+const NICHE_STANDING_BACK := 0.16
+
+const NICHE_TOP := 3.3
+
+const NICHE_SILL := 0.38
+
+const NICHE_STEP := 0.025
+
+const NICHE_PLASTER := Color(0.36, 0.35, 0.33)
+
 var studio: Studio
 
 
@@ -18,9 +48,9 @@ func _build_furniture() -> void:
 	FloorImport.into_room(Session.layout, studio.room_deltas)
 	studio.floor_plan = FloorPlan.new()
 	studio.floor_plan.name = "FloorPlan"
-	studio.floor_plan.bounds = studio._room_bounds()
-	studio.floor_plan.fixtures.append(studio._desk_footprint)
-	studio.floor_plan.fixtures.append(studio._door_footprint)
+	studio.floor_plan.bounds = studio.venue_switch._room_bounds()
+	studio.floor_plan.fixtures.append(studio.venue_switch._desk_footprint)
+	studio.floor_plan.fixtures.append(studio.venue_switch._door_footprint)
 	studio.add_child(studio.floor_plan)
 
 	studio.surface_host._build_lamp_stands()
@@ -34,7 +64,7 @@ func _build_furniture() -> void:
 	# A trolley for the deck. Two uprights and a shelf on a caster base; a tape machine on a
 	# cart is what the right-hand side of a control room looks like, and it is the thing in
 	# the room most often wheeled somewhere else.
-	studio.deck_trolley = studio._authored("DeckTrolley", &"deck_trolley")
+	studio.deck_trolley = studio.rack_host._authored("DeckTrolley", &"deck_trolley")
 	studio.deck_trolley.footprint_half = Vector2(0.28, 0.21)
 	studio.deck_trolley.follow = 10.0
 	var base := MeshInstance3D.new()
@@ -72,7 +102,7 @@ func _build_furniture() -> void:
 	# A plinth under the rack. A floor-standing rack puts its lowest unit at ankle height; every
 	# control room that has one has it up on something -- and here the something has wheels,
 	# because a rack of outboard is the piece of a studio people actually push about.
-	studio.rack_trolley = studio._authored("RackTrolley", &"rack")
+	studio.rack_trolley = studio.rack_host._authored("RackTrolley", &"rack")
 	studio.rack_trolley.footprint_centre = Vector2(0, -0.15)
 	studio.rack_trolley.footprint_half = Vector2(0.30, 0.17)
 	# Heavier than anything else on the floor. It is a cabinet full of steel.
@@ -98,7 +128,7 @@ func _build_furniture() -> void:
 	# Two legs and a crossbar, deliberately the same vocabulary as the patch stand rather than
 	# a new idea: a room furnished out of three kinds of part looks like a room, and one
 	# furnished out of six looks like a kit. The feet are on casters, like a whiteboard's.
-	studio.timeline_stand = studio._trolley("TimelineStand", &"timeline_stand",
+	studio.timeline_stand = studio.rack_host._trolley("TimelineStand", &"timeline_stand",
 			Vector3(0, 0, Studio.TIMELINE_STAND_Z), 0.0)
 	studio.timeline_stand.footprint_half = Vector2(Studio.TIMELINE_LEG_X + 0.05, 0.11)
 	var foot_top := Caster.HEIGHT + 0.022
@@ -183,21 +213,21 @@ func _build_platter_leaf() -> void:
 	studio.platter = Platter.new()
 	studio.platter.transform = Platter.ON_CART
 	studio.platter.authority = Session.is_authority
-	studio.platter.find_file = studio._platter_file
+	studio.platter.find_file = studio.sampler_host._platter_file
 	studio.platter.fetching = func(source: String) -> bool:
 		return Session.role == Session.Role.GUEST and Session.files != null \
 				and Session.files.fetch_state(source) == FileSend.FETCHING
-	studio.platter.scratched.connect(studio._on_scratched)
+	studio.platter.scratched.connect(studio.sampler_host._on_scratched)
 	studio.deck_trolley.add_child(studio.platter)
-	studio.deck_trolley.moved.connect(studio._hold_the_platter)
-	studio.deck_trolley.settled.connect(studio._hold_the_platter)
+	studio.deck_trolley.moved.connect(studio.venue_switch._hold_the_platter)
+	studio.deck_trolley.settled.connect(studio.venue_switch._hold_the_platter)
 
 
 ## The stage table's trolley: four legs under an apron, a shelf low down, casters, and the
 ## table's plaque on its front under the rail (Stations.plaque). The table itself is a surface
 ## and rides it (`_ride`, in `_build_surfaces`).
 func _build_stage_trolley() -> void:
-	studio.stage_trolley = studio._authored("StageTrolley", &"stage_trolley")
+	studio.stage_trolley = studio.rack_host._authored("StageTrolley", &"stage_trolley")
 	# The table and the rail along its front, on the floor.
 	studio.stage_trolley.footprint_centre = Vector2(0, 0.065)
 	studio.stage_trolley.footprint_half = Vector2(0.62, 0.53)
@@ -234,7 +264,7 @@ func _build_stage_trolley() -> void:
 	var plaque := Stations.plaque(&"stage_table")
 	# Hung by its top edge, which is where a folded plaque's title and key row stay: low enough
 	# under the rail that its title key is not in the way of the rail's tags from the seat.
-	plaque.position = Vector3(0, Studio.STAGE_PLAQUE_TOP - float(plaque.get_meta(&"plaque_tall")) * 0.5,
+	plaque.position = Vector3(0, STAGE_PLAQUE_TOP - float(plaque.get_meta(&"plaque_tall")) * 0.5,
 			StageTable.SIZE.y * 0.5 + 0.135)
 	studio.stage_trolley.add_child(plaque)
 
@@ -252,7 +282,7 @@ func _build_stage_trolley() -> void:
 ## wall's plaque on the board's right-hand column, under SHOW (Stations.plaque, narrowed to the
 ## column). The board itself is a surface and rides it (`_ride`, in `_build_surfaces`).
 func _build_eq_wall_trolley() -> void:
-	studio.eq_wall_trolley = studio._authored("EqWallTrolley", &"eq_wall")
+	studio.eq_wall_trolley = studio.rack_host._authored("EqWallTrolley", &"eq_wall")
 	var wide := EqWall.PLATE_WIDE + EqWall.BORDER * 2.0
 	studio.eq_wall_trolley.footprint_centre = Vector2(0, -0.06)
 	studio.eq_wall_trolley.footprint_half = Vector2(wide * 0.5, 0.16)
@@ -288,7 +318,7 @@ func _build_eq_wall_trolley() -> void:
 ## The LEVELS niche (slice 66; 2026-10-30, "its own like divet in the wall so it can be an entire
 ## wall"): where it is is the venue's (Venue.levels_niche_spot), in the set's frame.
 func _levels_niche_at() -> Transform3D:
-	return studio._venue_to_set(studio.venue.levels_niche_spot()) if studio.venue != null \
+	return studio.venue_switch._venue_to_set(studio.venue.levels_niche_spot()) if studio.venue != null \
 			else Transform3D(Basis.IDENTITY, Vector3(-studio.room_width * 0.5 + Venue.LEVELS_NICHE_FROM_LEFT, 0,
 					Studio.ROOM_FRONT + Venue.LEVELS_NICHE_IN))
 
@@ -301,7 +331,7 @@ func _levels_niche_at() -> Transform3D:
 ## (`_set_levels_niche`), and a board put down by its handle goes back into it (`_reseat`).
 func _build_levels_niche() -> void:
 	var at := _levels_niche_at()
-	studio.levels_niche = studio._trolley("LevelsNiche", &"levels", at.origin, rad_to_deg(at.basis.get_euler().y))
+	studio.levels_niche = studio.rack_host._trolley("LevelsNiche", &"levels", at.origin, rad_to_deg(at.basis.get_euler().y))
 	studio.levels_niche.built_in = true
 	studio.levels_niche.follow = 9.0
 	_set_levels_niche()
@@ -318,35 +348,35 @@ func _set_levels_niche() -> void:
 			studio.levels_niche.remove_child(old)
 			old.queue_free()
 	var standing := studio.venue != null and studio.venue.back_wall_gear_stands()
-	var out := Studio.NICHE_STANDING_OUT if standing else Studio.NICHE_OUT
+	var out := NICHE_STANDING_OUT if standing else NICHE_OUT
 	var board := LevelsWall.room_y(LevelsWall.WIDE * 0.5 + LevelsWall.BORDER)
 	# Room either side for the board's handle, on its left (LevelsWall.handle_left).
 	var open := board + 0.12
-	var outer := open + Studio.NICHE_SIDE
-	var back := -(Studio.NICHE_STANDING_BACK if standing else Studio.NICHE_INTO_WALL)
+	var outer := open + NICHE_SIDE
+	var back := -(NICHE_STANDING_BACK if standing else NICHE_INTO_WALL)
 	var lintel := LevelsWall.room_y(LevelsWall.BOTTOM + LevelsWall.TALL + LevelsWall.BORDER + 0.08) + 0.06
 	var behind_board := -LevelsWall.room_y(0.031) - 0.004
 	# Plaster a shade off every venue's walls, so it reads as the wall built out round a hollow and
 	# not as one more black cabinet against it.
-	var surround := Materials.painted_wall(Studio.NICHE_PLASTER)
+	var surround := Materials.painted_wall(NICHE_PLASTER)
 	for side in [-1.0, 1.0]:
 		# A hair off the floor, which the wall's own foot is on.
-		_niche_box("Cheek", Vector3(Studio.NICHE_SIDE, Studio.NICHE_TOP - 0.002, out - back),
-				Vector3(side * (open + Studio.NICHE_SIDE * 0.5), Studio.NICHE_TOP * 0.5 + 0.001, (out + back) * 0.5), surround)
+		_niche_box("Cheek", Vector3(NICHE_SIDE, NICHE_TOP - 0.002, out - back),
+				Vector3(side * (open + NICHE_SIDE * 0.5), NICHE_TOP * 0.5 + 0.001, (out + back) * 0.5), surround)
 	# Into the cheeks either side; a step back from their faces, and short of their tops and backs.
-	var span := open * 2.0 + Studio.NICHE_SIDE
-	var front := out - Studio.NICHE_STEP
+	var span := open * 2.0 + NICHE_SIDE
+	var front := out - NICHE_STEP
 	var rear := back + 0.01
-	_niche_box("Lintel", Vector3(span, Studio.NICHE_TOP - 0.01 - lintel, front - rear),
-			Vector3(0, (Studio.NICHE_TOP - 0.01 + lintel) * 0.5, (front + rear) * 0.5), surround)
-	_niche_box("Sill", Vector3(span, Studio.NICHE_SILL - 0.004, front - rear),
-			Vector3(0, (Studio.NICHE_SILL + 0.004) * 0.5, (front + rear) * 0.5), surround)
-	_niche_box("Back", Vector3(span - 0.02, lintel - Studio.NICHE_SILL + 0.04, 0.02),
-			Vector3(0, (lintel + Studio.NICHE_SILL) * 0.5, behind_board - 0.01), Materials.recess())
+	_niche_box("Lintel", Vector3(span, NICHE_TOP - 0.01 - lintel, front - rear),
+			Vector3(0, (NICHE_TOP - 0.01 + lintel) * 0.5, (front + rear) * 0.5), surround)
+	_niche_box("Sill", Vector3(span, NICHE_SILL - 0.004, front - rear),
+			Vector3(0, (NICHE_SILL + 0.004) * 0.5, (front + rear) * 0.5), surround)
+	_niche_box("Back", Vector3(span - 0.02, lintel - NICHE_SILL + 0.04, 0.02),
+			Vector3(0, (lintel + NICHE_SILL) * 0.5, behind_board - 0.01), Materials.recess())
 	if standing:
 		# Its back: behind the cheeks' and a little inside their sides and top.
-		_niche_box("Cabinet", Vector3(outer * 2.0 - 0.02, Studio.NICHE_TOP - 0.02, behind_board - 0.02 - (back - 0.01)),
-				Vector3(0, Studio.NICHE_TOP * 0.5 - 0.005, (behind_board - 0.02 + back - 0.01) * 0.5), surround)
+		_niche_box("Cabinet", Vector3(outer * 2.0 - 0.02, NICHE_TOP - 0.02, behind_board - 0.02 - (back - 0.01)),
+				Vector3(0, NICHE_TOP * 0.5 - 0.005, (behind_board - 0.02 + back - 0.01) * 0.5), surround)
 	# Light along the lintel's underside, to the board.
 	var strip := MeshInstance3D.new()
 	var strip_mesh := BoxMesh.new()
@@ -374,14 +404,14 @@ func _set_levels_niche() -> void:
 ## The TV's bracket (docs/sampling_station.md): where it is is the venue's (Venue.tv_mount_spot), in
 ## the set's frame.
 func _tv_mount_at() -> Transform3D:
-	return studio._venue_to_set(studio.venue.tv_mount_spot()) if studio.venue != null \
+	return studio.venue_switch._venue_to_set(studio.venue.tv_mount_spot()) if studio.venue != null \
 			else Transform3D(Basis.IDENTITY, Vector3(studio.room_width * 0.5 - Venue.TV_FROM_RIGHT, 0,
 					Studio.ROOM_FRONT + Venue.TV_IN))
 
 
 func _build_tv_mount() -> void:
 	var at := _tv_mount_at()
-	studio.tv_mount = studio._trolley("TvMount", &"tv", at.origin, rad_to_deg(at.basis.get_euler().y))
+	studio.tv_mount = studio.rack_host._trolley("TvMount", &"tv", at.origin, rad_to_deg(at.basis.get_euler().y))
 	studio.tv_mount.built_in = true
 	studio.tv_mount.follow = 9.0
 	_set_tv_mount()
@@ -495,7 +525,7 @@ func _niche_box(of_name: String, size: Vector3, at: Vector3, paint: Material) ->
 ## running up past its top, so the bay stands in a frame rather than on a post. The carcass and
 ## cheeks are sized to the bay once it knows how many rows it has (`_fit_stand_to_bay`).
 func _build_patch_stand() -> void:
-	studio.patch_stand = studio._authored("PatchStand", &"patch_stand")
+	studio.patch_stand = studio.rack_host._authored("PatchStand", &"patch_stand")
 	studio.patch_stand.footprint_centre = Vector2(0, -0.03)
 	studio.patch_stand.footprint_half = Vector2(0.62, 0.15)
 	studio.patch_stand.follow = 9.0
@@ -519,7 +549,7 @@ func _build_patch_stand() -> void:
 		studio.patch_stand.add_part(cheek)
 		studio._patch_cheeks.append(cheek)
 	studio.patch_stand.add_corner_casters(0.06)
-	studio._fit_stand_to_bay()
+	studio.venue_switch._fit_stand_to_bay()
 
 
 # --- what stands out in the venue on its own ------------------------------------------------
@@ -541,7 +571,7 @@ func _build_patch_stand() -> void:
 ## this venue has them (`RoomSync.wheel_in`) and what stands on them taken there.
 func _build_live_pieces() -> void:
 	studio.floor_plan.rooms = studio.venue.rooms() if studio.venue != null else []
-	studio.floor_plan.stops.append(studio._venue_stops)
+	studio.floor_plan.stops.append(studio.venue_switch._venue_stops)
 	studio.pieces.build()
 	_build_patch_wall_legs()
 	RoomSync.wheel_in(studio)
@@ -570,9 +600,9 @@ func _go_live(t: Trolley) -> void:
 ## The patch wall's two legs, on a trolley; the screen is the venue's child (`_stand_a_patch_wall`),
 ## and goes where the legs are.
 func _build_patch_wall_legs() -> void:
-	var legs := studio._authored("PatchWallLegs", &"patch_wall")
-	legs.footprint_centre = Vector2(0, Studio.PATCH_WALL_LEG_Z)
-	legs.footprint_half = Vector2(Studio.PATCH_WALL_LEG_X + 0.06, 0.06)
+	var legs := studio.rack_host._authored("PatchWallLegs", &"patch_wall")
+	legs.footprint_centre = Vector2(0, PATCH_WALL_LEG_Z)
+	legs.footprint_half = Vector2(PATCH_WALL_LEG_X + 0.06, 0.06)
 	legs.follow = 8.0
 	legs.rolls = false
 	for side in [-1.0, 1.0]:
@@ -581,7 +611,7 @@ func _build_patch_wall_legs() -> void:
 		var post := BoxMesh.new()
 		post.size = Vector3(0.06, 1.6, 0.06)
 		leg.mesh = post
-		leg.position = Vector3(side * Studio.PATCH_WALL_LEG_X, 0.8, Studio.PATCH_WALL_LEG_Z)
+		leg.position = Vector3(side * PATCH_WALL_LEG_X, 0.8, PATCH_WALL_LEG_Z)
 		leg.material_override = Materials.furniture()
 		legs.add_part(leg)
 	_go_live(legs)
@@ -605,7 +635,7 @@ func _live_default(id: StringName) -> Variant:
 				return null
 			return ControlRoom.spot(&"patch_wall", studio.room_width)
 	var spot: Variant = studio.venue.default_spot(id)
-	return studio._venue_to_set(spot) if spot != null else null
+	return studio.venue_switch._venue_to_set(spot) if spot != null else null
 
 
 func _carry_all_live() -> void:
@@ -629,7 +659,7 @@ func _carry_live(id: StringName) -> void:
 			&"patch_wall":
 				var wall := studio.venue.get_node_or_null("PatchWall") as Node3D
 				if wall != null and wall.has_meta(&"on_legs"):
-					wall.transform = studio._patch_wall_frame()
+					wall.transform = studio.venue_switch._patch_wall_frame()
 	_place_hood_signs()
 
 

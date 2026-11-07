@@ -175,7 +175,7 @@ func _ready() -> void:
 		# `grid:1` is the grid's second arrangement (Venue.variant_titles).
 		var asked := (args["venue"] as String).split(":")
 		if Venue.is_known(StringName(asked[0])):
-			studio.set_venue(StringName(asked[0]), false, int(asked[1]) if asked.size() > 1 else 0)
+			studio.venue_switch.set_venue(StringName(asked[0]), false, int(asked[1]) if asked.size() > 1 else 0)
 		else:
 			push_warning("bootstrap: --venue %s is not one of %s" % [args["venue"], Venue.IDS])
 
@@ -236,7 +236,7 @@ func _ready() -> void:
 	if args["play"]:
 		DAW.transport_play()
 	if args["slap"] and studio.looper != null:
-		studio._on_looper_slapped()
+		studio.item_host._on_looper_slapped()
 	# `--rings N`: N layers already on the looper (docs/spatial_loop.md part two, slice 46), for a shot
 	# of its rings: two bars each from bar 2, the players taking turns, the second muted.
 	if args["rings"] > 0 and studio.looper != null:
@@ -257,9 +257,9 @@ func _ready() -> void:
 	# `--modular`: the rack with the drum machine preset put in, for a shot of it, and an A held on its
 	# touch keys.
 	if args["modular"] and studio.rack_wall != null:
-		studio._rack_wake()
+		studio.rack_host._rack_wake()
 		print("RACKRUN ", studio.rack_voice.running(), " ", RackEngine.available())
-		studio.ask_rack("preset", [args["rack_preset"]])
+		studio.rack_host.ask_rack("preset", [args["rack_preset"]])
 		if args["rack_preset"] == "big_rig":
 			studio.rack_voice.engine.say("play 0")
 		studio.rack_wall.touch_keys[9].grab_begin(studio, studio.rack_wall.touch_keys[9].global_position)
@@ -681,7 +681,7 @@ func _apply_cli_tablet(wanted: Vector3i) -> void:
 		push_warning("bootstrap: --tablet %d:%d is not a plugin in this session" % [wanted.x, wanted.y])
 		return
 	var at := studio.rack.global_position
-	studio._on_tear_requested(wanted.x, wanted.y, at)
+	studio.tablet_host._on_tear_requested(wanted.x, wanted.y, at)
 	if wanted.z == 1:
 		return
 	for id in studio.tablets:
@@ -731,7 +731,7 @@ func _apply_cli_focus(wanted: String) -> void:
 			studio.ergonomics.motion_scale = motion
 			# Same as pressing F: summoning gear to the mix position and leaving the camera
 			# across the room shows you the back of it. See studio._sit_down.
-			studio._sit_down()
+			studio.station_host._sit_down()
 			return
 	push_warning("bootstrap: --focus %s is not one of %s" % [wanted,
 			studio.focus.surfaces.map(func(s): return String(s.surface_id))])

@@ -65,7 +65,7 @@ func _ready() -> void:
 
 func _dump(studio: Studio, variant: int) -> Dictionary:
 	var venue := studio.venue
-	var walk := studio._walkable()
+	var walk := studio.venue_look._walkable()
 	var out := {
 		"venue": String(venue.venue_id()),
 		"title": venue.title(),
@@ -78,7 +78,7 @@ func _dump(studio: Studio, variant: int) -> Dictionary:
 		"wall_height": Studio.WALL_HEIGHT,
 		"live_room_back": Venue.LIVE_ROOM_BACK,
 		"live_room_half": venue.live_room_half(),
-		"control_room": _rect(studio._room_bounds()),
+		"control_room": _rect(studio.venue_switch._room_bounds()),
 		"floor_plan_bounds": _rect(studio.floor_plan.bounds),
 		"floor_plan_rooms": studio.floor_plan.rooms.map(_rect),
 		"walkable": walk.map(_rect),
@@ -98,7 +98,7 @@ func _dump(studio: Studio, variant: int) -> Dictionary:
 		out["zones"][String(z)] = {"rect": [b.position.x, b.position.z, b.size.x, b.size.z], "height": b.size.y}
 
 	# The seat and the desk.
-	var desk := studio._desk_footprint()
+	var desk := studio.venue_switch._desk_footprint()
 	out["seat"] = {"at": [0.0, Studio.MIX_POSITION_Z], "eye": studio.ergonomics.eye_height,
 			"walker_at": _v3xz(studio.walker.global_position), "fov": Studio.ROOM_FOV,
 			"seated_fov": Studio.SEATED_FOV}
@@ -310,7 +310,7 @@ func _where(studio: Studio, p: Vector2) -> String:
 		var b: AABB = venue.zones()[z]
 		if Rect2(b.position.x, b.position.z, b.size.x, b.size.z).has_point(p):
 			return "zone:%s" % z
-	if studio._room_bounds().has_point(p):
+	if studio.venue_switch._room_bounds().has_point(p):
 		return "control_room"
 	var rooms := venue.rooms()
 	for i in rooms.size():

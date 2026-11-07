@@ -161,11 +161,11 @@ func persistence() -> void:
 	var rack := studio.rack_trolley
 	var home := Vector2(rack.position.x, rack.position.z)
 	rack.place(home + Vector2(-0.3, 0.2), 0.4)
-	studio._on_trolley_settled(rack)
+	studio.rack_host._on_trolley_settled(rack)
 	var hoop: Trolley = studio.live_pieces[&"hoop"]
 	var hoop_home := Vector2(hoop.position.x, hoop.position.z)
 	hoop.place(hoop_home + Vector2(0.4, 0.4), 1.0)
-	studio._on_trolley_settled(hoop)
+	studio.rack_host._on_trolley_settled(hoop)
 	check("a settled piece is the room's moved piece", studio.room_deltas.delta.moved.has("rack") and studio.room_deltas.delta.moved.has("hoop"))
 	var rack_at := Vector2(rack.position.x, rack.position.z)
 	var path := RoomDeltaFile.path_of("studio.0")
@@ -230,12 +230,12 @@ func a_guest_adopts_the_hosts_row() -> void:
 	var rack := host.rack_trolley
 	var rack_home := Vector2(rack.position.x, rack.position.z)
 	rack.place(rack_home + Vector2(-0.4, 0.3), 0.5)
-	host._on_trolley_settled(rack)
-	var row: Dictionary = host.room_state()["layout"]
+	host.rack_host._on_trolley_settled(rack)
+	var row: Dictionary = host.room_rows.room_state()["layout"]
 	check("the host's row is its delta with the pushed rack in it", row["moved"].has("rack") and row["room"] == "studio.0" and row["rev"] > 0
 			and RoomDelta.problem(row) == "")
 	var at := Vector2(rack.position.x, rack.position.z)
-	var state := host.room_state()
+	var state := host.room_rows.room_state()
 	host.room_deltas.flush()
 	var file := FileAccess.get_file_as_string(RoomDeltaFile.path_of("studio.0"))
 	t._drop_floor_studio(rig)
@@ -245,7 +245,7 @@ func a_guest_adopts_the_hosts_row() -> void:
 	var guest: Studio = rig2["studio"]
 	var kept_role := Session.role
 	Session.role = Session.Role.GUEST
-	guest.apply_room(state, false)
+	guest.room_rows.apply_room(state, false)
 	check("the guest's rack is where the host's is", Vector2(guest.rack_trolley.position.x, guest.rack_trolley.position.z).distance_to(at) < 0.01)
 	check("it is following the host's room, which it did not read from a file", guest.room_deltas.following and guest.room_deltas.delta.moved.has("rack"))
 	guest.room_deltas.settle(&"rack", guest.rack_trolley.transform, false, null)
@@ -255,10 +255,10 @@ func a_guest_adopts_the_hosts_row() -> void:
 	var back := state.duplicate(true)
 	back["layout"]["moved"].erase("rack")
 	back["layout"]["rev"] += 1
-	guest.apply_room(back, false)
+	guest.room_rows.apply_room(back, false)
 	check("a piece the host put back goes back to where the room stands it",
 			Vector2(guest.rack_trolley.position.x, guest.rack_trolley.position.z).distance_to(Vector2(RoomFloor.default_of(guest, &"rack").origin.x, RoomFloor.default_of(guest, &"rack").origin.z)) < 0.01)
-	guest.apply_room({"venue": &"studio", "variant": 0, "layout": "junk"}, false)
+	guest.room_rows.apply_room({"venue": &"studio", "variant": 0, "layout": "junk"}, false)
 	check("a row that is not a delta changes nothing", guest.room_deltas.following and guest.room_deltas.delta.rev == back["layout"]["rev"])
 	Session.role = kept_role
 	check("the host's file is as the host wrote it", file != "" and file.contains('"rack"'))

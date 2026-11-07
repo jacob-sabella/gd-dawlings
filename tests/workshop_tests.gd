@@ -318,7 +318,7 @@ func journal() -> void:
 	await t.get_tree().process_frame
 	j.tick()
 	var first_trail := j.trail.size()
-	studio.go_to_station(&"wheel")
+	studio.station_host.go_to_station(&"wheel")
 	j.tick()
 	var visit: Array = j.events.filter(func(e: Dictionary) -> bool: return e["kind"] == &"station")
 	check("journal: a station visit is an event with its id (%s)" % [visit],

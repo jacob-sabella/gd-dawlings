@@ -37,7 +37,7 @@ static func sync(studio: Studio) -> void:
 			_zoned(studio, id)
 			continue
 		var t: Trolley = studio.live_pieces.get(id)
-		var wanted: bool = studio._live_default(id) != null
+		var wanted: bool = studio.furniture_host._live_default(id) != null
 		if t != null:
 			t.visible = wanted
 		if id in NODES:
@@ -46,7 +46,7 @@ static func sync(studio: Studio) -> void:
 				studio.pieces.unstand(id)
 			elif wanted and not stands:
 				studio.pieces.stand(id)
-				studio._carry_live(id)
+				studio.furniture_host._carry_live(id)
 	_baskets(studio)
 
 
@@ -68,7 +68,7 @@ static func carry_copy(studio: Studio, id: StringName) -> bool:
 		return false
 	var node := studio.venue.get_node_or_null(node_name(id)) as Node3D
 	if node != null:
-		node.transform = studio._set_to_venue(t.transform)
+		node.transform = studio.venue_switch._set_to_venue(t.transform)
 	_baskets(studio)
 	return true
 
@@ -89,7 +89,7 @@ static func hoops(studio: Studio) -> Array:
 		var t: Trolley = studio.live_pieces[id]
 		var node := studio.venue.get_node_or_null(node_name(id)) as Node3D
 		if t.has_meta(COPY_OF) and node != null and t.visible:
-			var shape := Hoop.shape(studio._set_to_venue(t.transform))
+			var shape := Hoop.shape(studio.venue_switch._set_to_venue(t.transform))
 			shape["node"] = node
 			out.append(shape)
 	return out
@@ -127,7 +127,7 @@ static func _copies(studio: Studio, delta: RoomDelta) -> void:
 			var node: Node3D = _node_of(wanted[id])
 			node.name = node_name(id)
 			studio.venue.add_child(node)
-			node.transform = studio._set_to_venue(t.transform)
+			node.transform = studio.venue_switch._set_to_venue(t.transform)
 		t.visible = true
 
 
@@ -149,16 +149,16 @@ static func _gaps(studio: Studio, delta: RoomDelta) -> void:
 		if gap == null:
 			gap = PieceGap.for_entry(entry)
 			studio.venue.add_child(gap)
-		gap.transform = studio._set_to_venue(delta.transform_of(StringName(entry["id"])))
+		gap.transform = studio.venue_switch._set_to_venue(delta.transform_of(StringName(entry["id"])))
 
 
 ## The trolley of a copy of `kind`, a hoop's: its footprint, weight and grips from the `PieceDef`, as the hoop's own.
 static func _build(studio: Studio, id: StringName, kind: StringName, delta: RoomDelta) -> Trolley:
 	var at: Transform3D = delta.transform_of(id)
-	var t := studio._trolley("Copy%sTrolley" % String(id).capitalize().replace(" ", ""), id, at.origin, rad_to_deg(at.basis.get_euler().y))
+	var t := studio.rack_host._trolley("Copy%sTrolley" % String(id).capitalize().replace(" ", ""), id, at.origin, rad_to_deg(at.basis.get_euler().y))
 	t.set_meta(COPY_OF, kind)
 	studio.pieces.equip(t, PieceDef.of(kind))
-	studio._go_live(t)
+	studio.furniture_host._go_live(t)
 	return t
 
 
@@ -196,7 +196,7 @@ static func wheel_in(studio: Studio) -> void:
 	var placing: Array[Trolley] = []
 	for id: StringName in studio.live_pieces:
 		var t: Trolley = studio.live_pieces[id]
-		var spot: Variant = studio._live_default(id)
+		var spot: Variant = studio.furniture_host._live_default(id)
 		t.visible = spot != null
 		# Where the venue only draws the shelf, what stands about with it is drawn to walk through.
 		t.walk_through = Venue.WHEELED.has(id) and not studio.venue.prop_shelf_solid()

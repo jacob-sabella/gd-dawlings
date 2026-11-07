@@ -252,7 +252,7 @@ func _input(event: InputEvent) -> void:
 	var id: StringName = _lines[at][1] if at >= 0 else &""
 	close()
 	if id != &"" and studio != null:
-		studio.go_to_station(id)
+		studio.station_host.go_to_station(id)
 
 
 ## The PLAY line under `point` (an index into the shown lines), or -1.

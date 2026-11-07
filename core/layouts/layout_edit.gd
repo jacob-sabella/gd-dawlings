@@ -58,7 +58,7 @@ func answer(op: String, args: Array, from: int) -> String:
 func _push(args: Array) -> bool:
 	if args.size() < 3 or not _numbers(args.slice(1)):
 		return false
-	var t := studio._floor_piece(StringName(args[0]))
+	var t := studio.room_rows._floor_piece(StringName(args[0]))
 	if t == null or not t.visible or RoomDelta.owned_by_player(t.piece_id):
 		return false
 	t.place(Vector2(float(args[1]), float(args[2])), float(args[3]) if args.size() > 3 else t.rotation.y)
@@ -94,7 +94,7 @@ func _edit(op: String, args: Array) -> String:
 		return why
 	studio.room_deltas.commit(candidate)
 	RoomFloor.follow(studio, {}, false)
-	studio._publish_room_soon()
+	studio.player_host._publish_room_soon()
 	return ""
 
 
@@ -212,7 +212,7 @@ func _movable(d: RoomDelta, id: StringName) -> String:
 		return "The %s is out of the room." % LayoutChecks.name_of(id)
 	if not _in_layout(d, id) and d.added_index(id) < 0:
 		return "There is no '%s' in this room." % id
-	var t := studio._floor_piece(id)
+	var t := studio.room_rows._floor_piece(id)
 	if d.added_index(id) >= 0 and not PieceCatalogue.buildable(StringName(d.added[d.added_index(id)]["piece"])):
 		return "The %s is not installed here; it can be taken out, not moved." % LayoutChecks.name_of(d.added[d.added_index(id)]["piece"])
 	if t == null or RoomDelta.owned_by_player(id) or t.built_in:
@@ -222,7 +222,7 @@ func _movable(d: RoomDelta, id: StringName) -> String:
 
 ## Where piece `id` stands now: [x, z, yaw], from its trolley.
 func _spot(id: StringName) -> Array:
-	var t := studio._floor_piece(id)
+	var t := studio.room_rows._floor_piece(id)
 	return [t.position.x, t.position.z, t.rotation.y] if t != null else [0.0, 0.0, 0.0]
 
 

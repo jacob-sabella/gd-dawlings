@@ -5,6 +5,37 @@ extends RefCounted
 ## stands and the looms. Moved out of `scenes/studio.gd` without change of behaviour; the state stays on the studio, which
 ## delegates the calls other code makes.
 
+## The clip editor (ClipEditorSurface): clamped to the timeline stand's right-hand leg, just in
+## front of it, under the lanes and right of the timeline's deck: the one stretch of the seated
+## view with nothing in it, so the clip being trimmed and the arrangement it is in are seen
+## together from the desk. Beside the timeline's shoulder it ran off the edge of the frame; above
+## it, out of the top. Turned a few degrees away from the seat, not toward it: turned in, its right
+## end came within 0.3 m of the tape deck's cart, and the room keeps 0.6 m between its pieces
+## (`_test_the_studio_hangs_the_clip_editor_by_the_timeline`). Scaled as the timeline is, a little
+## less. Where its board's left edge is on the floor, the height of its origin, and its turn.
+const CLIP_EDITOR_SCALE := 1.35
+
+const CLIP_EDITOR_Y := 0.925
+
+const CLIP_EDITOR_LEFT := Vector2(0.43, -0.985)
+
+const CLIP_EDITOR_YAW := 7.0
+
+## The lamp head. Wide and low rather than tall and thin: the first pass put a 105mm shade on a
+## two-metre pole, which from across the room is a street light. A floor lamp is shorter than
+## the people using it and its head is the part you notice.
+const LAMP_SHADE_RADIUS := 0.165
+
+var _told_fingertips := false
+
+var _told_chords := false
+
+var _loom_clock := 0.0
+
+## Signal you can see (SignalBeads, docs/spatial_loop.md part two, slice 21): one bank of beads
+## riding every cable in the room, and how far the practicals were last lifted by a clip.
+var signal_beads: SignalBeads
+
 var studio: Studio
 
 
@@ -24,13 +55,13 @@ func _init(of: Studio) -> void:
 func _build_clip_editor() -> void:
 	studio.clip_editor = ClipEditorSurface.new()
 	studio.clip_editor.name = "ClipEditor"
-	var yaw := deg_to_rad(Studio.CLIP_EDITOR_YAW)
-	var basis := Basis(Vector3.UP, yaw).scaled(Vector3.ONE * Studio.CLIP_EDITOR_SCALE)
-	var left := Vector3(Studio.CLIP_EDITOR_LEFT.x, Studio.CLIP_EDITOR_Y, Studio.CLIP_EDITOR_LEFT.y)
+	var yaw := deg_to_rad(CLIP_EDITOR_YAW)
+	var basis := Basis(Vector3.UP, yaw).scaled(Vector3.ONE * CLIP_EDITOR_SCALE)
+	var left := Vector3(CLIP_EDITOR_LEFT.x, CLIP_EDITOR_Y, CLIP_EDITOR_LEFT.y)
 	var at := Transform3D(basis, left - basis * Vector3(-ClipEditorSurface.WIDE * 0.5, 0, 0))
 	studio.clip_editor.transform = at
 	# Held by an arm from the stand's right-hand leg, which stands just behind it.
-	studio.clip_editor.arm_to = at.affine_inverse() * Vector3(Studio.TIMELINE_LEG_X, Studio.CLIP_EDITOR_Y + 0.1, Studio.TIMELINE_STAND_Z)
+	studio.clip_editor.arm_to = at.affine_inverse() * Vector3(Studio.TIMELINE_LEG_X, CLIP_EDITOR_Y + 0.1, Studio.TIMELINE_STAND_Z)
 	studio.studio_set.add_child(studio.clip_editor)
 	studio.mount.register(studio.clip_editor)
 	studio.timeline.edit_asked.connect(studio.clip_editor.open)
@@ -100,7 +131,7 @@ func _build_anchors() -> void:
 		studio.rig.simulated = studio.xr_bootstrap != null and studio.xr_bootstrap.simulated
 		studio.add_child(studio.rig)
 		head = studio.rig.head
-		studio.rig.escape_requested.connect(studio._on_escape)
+		studio.rig.escape_requested.connect(studio.view_host._on_escape)
 		studio.rig.travelled.connect(func(_home: bool) -> void:
 			if studio.body != null:
 				studio.body.recentre())
@@ -132,8 +163,8 @@ func _build_anchors() -> void:
 	studio.screen_stage.name = "ScreenStage"
 	studio.screen_stage.position = Vector3(0, 0, -0.75)
 	head.add_child(studio.screen_stage)
-	if not studio.get_tree().node_added.is_connected(studio._keep_out_of_mirrors):
-		studio.get_tree().node_added.connect(studio._keep_out_of_mirrors)
+	if not studio.get_tree().node_added.is_connected(studio.venue_look._keep_out_of_mirrors):
+		studio.get_tree().node_added.connect(studio.venue_look._keep_out_of_mirrors)
 
 	studio.room_anchor = RoomAnchor.new()
 	studio.room_anchor.name = "RoomAnchor"
@@ -173,10 +204,10 @@ func _build_anchors() -> void:
 	# in a headset it is the visor, which is far wider, and sizing gear to a 54-degree crop
 	# there would stack a patchbay into four units that would have fitted in one.
 	studio.ergonomics.seated_fov = Studio.SEATED_FOV if studio.medium == Presentation.Medium.SCREEN else Studio.HEADSET_FOV
-	studio._follow_viewport_shape()
+	studio.view_host._follow_viewport_shape()
 	var view := studio.get_viewport()
-	if view != null and not view.size_changed.is_connected(studio._follow_viewport_shape):
-		view.size_changed.connect(studio._follow_viewport_shape)
+	if view != null and not view.size_changed.is_connected(studio.view_host._follow_viewport_shape):
+		view.size_changed.connect(studio.view_host._follow_viewport_shape)
 
 	# A light that travels with the person. Summoned gear leaves the room's lamps behind -- the
 	# first rack pulled to arm's length arrived in total darkness, which is both useless and a
@@ -280,8 +311,8 @@ func toggle_chords() -> void:
 	if studio.chord_hand == null or studio.camera == null:
 		return
 	studio.chord_hand.set_layer(not studio.chord_hand.layer)
-	if studio.chord_hand.layer and not studio._told_chords:
-		studio._told_chords = true
+	if studio.chord_hand.layer and not _told_chords:
+		_told_chords = true
 		Session.notice.emit("Chords: 1 to 7 play the key's I to vii° on the fingertips (J K L ;); Shift adds the seventh, 0 the song's own. C or Esc ends it.")
 
 
@@ -291,8 +322,8 @@ func toggle_fingertips() -> void:
 		return
 	var on := not studio.fingertip_keys.is_active()
 	studio.fingertip_keys.set_active(on)
-	if on and not studio._told_fingertips:
-		studio._told_fingertips = true
+	if on and not _told_fingertips:
+		_told_fingertips = true
 		Session.notice.emit("Fingertips: J K L ; play the chord's root, third, fifth and top, held as long as the key. T, Esc or a click gives the keys back.")
 
 
@@ -334,14 +365,14 @@ func _build_surfaces() -> void:
 	studio.timeline.scale = Vector3.ONE * Studio.TIMELINE_SCALE
 	# Shelves or flat lanes, as this person last chose.
 	studio.timeline.shelf = Session.layout != null and Session.layout.timeline_shelves
-	studio.timeline.shelf_chosen.connect(studio._on_timeline_shelf_chosen)
+	studio.timeline.shelf_chosen.connect(studio.venue_switch._on_timeline_shelf_chosen)
 	if Session.layout != null:
 		studio.timeline.set_size(Session.layout.timeline_width_scale, Session.layout.timeline_lane_height)
-	studio.timeline.size_chosen.connect(studio._on_timeline_size_chosen)
+	studio.timeline.size_chosen.connect(studio.venue_switch._on_timeline_size_chosen)
 	studio.studio_set.add_child(studio.timeline)
 	studio.mount.register(studio.timeline)
 	# A write bead pulled out shows its lane on the timeline, so the pass is seen to land there.
-	WriteBead.on_pull = studio._show_written_lane
+	WriteBead.on_pull = studio.view_host._show_written_lane
 	_build_clip_editor()
 
 	studio.deck = TapeDeck.new()
@@ -365,7 +396,7 @@ func _build_surfaces() -> void:
 		studio.stage.transform = studio.stage_trolley.transform * Transform3D(Basis.IDENTITY, Vector3(0, Studio.STAGE_TOP, 0))
 		studio.studio_set.add_child(studio.stage)
 		studio.mount.register(studio.stage)
-		studio.stage.ropes_changed.connect(studio._publish_room_soon)
+		studio.stage.ropes_changed.connect(studio.player_host._publish_room_soon)
 		studio.focus.surfaces.append(studio.stage)
 	# The spectra the EQ wall shows: measured here on the built-in engine, sent on to guests, or a
 	# guest's host's (slice 36). And the wall, on its trolley at the side wall; none in AR.
@@ -415,7 +446,7 @@ func _build_surfaces() -> void:
 		studio.focus.surfaces.append(studio.tv)
 	# The modular wall, over the synth zone's keyboard stand (slice 51); none in AR.
 	if studio.medium != Presentation.Medium.AR:
-		studio._build_rack()
+		studio.rack_host._build_rack()
 		studio.focus.surfaces.append(studio.rack_wall)
 	studio.focus.show_halo = studio.medium != Presentation.Medium.SCREEN
 	studio.focus.visits = studio.medium == Presentation.Medium.SCREEN
@@ -438,11 +469,11 @@ func _build_surfaces() -> void:
 		if id == &"" and studio.focus.visits:
 			studio.station_host._stand_down_screen(false))
 	studio.focus.room = studio.studio_set
-	studio.focus.move = studio._glide
+	studio.focus.move = studio.view_host._glide
 	studio.add_child(studio.focus)
 	if studio.mount != null:
 		studio.mount.held = studio.focus.holds
-	studio._stand_the_modular()
+	studio.rack_host._stand_the_modular()
 
 	# What rides on what. After the rig, because a surface that is summoned rides by its home,
 	# and the rig is what holds that.
@@ -470,15 +501,15 @@ func _build_surfaces() -> void:
 	refresh_looms()
 	# The beads ride whatever cables there are, found every frame, so a cable rebuilt or freed
 	# needs telling nobody.
-	studio.signal_beads = SignalBeads.create()
-	studio.add_child(studio.signal_beads)
+	signal_beads = SignalBeads.create()
+	studio.add_child(signal_beads)
 
 	# The room is fitted to the desk every time the desk changes shape: a live session's tracks
 	# arrive after the room is built, and a project that gains a bank gains a metre of console.
-	studio.console.rebuilt.connect(studio._forget_desk_box)
-	studio.console.rebuilt.connect(studio._fit_room_to_session)
-	studio.patchbay.rebuilt.connect(studio._fit_stand_to_bay)
-	studio._fit_room_to_session()
+	studio.console.rebuilt.connect(studio.venue_switch._forget_desk_box)
+	studio.console.rebuilt.connect(studio.venue_switch._fit_room_to_session)
+	studio.patchbay.rebuilt.connect(studio.venue_switch._fit_stand_to_bay)
+	studio.venue_switch._fit_room_to_session()
 
 	if studio.floor_plan != null:
 		studio.rack.tear_requested.connect(studio.tablet_host._on_tear_requested)
@@ -496,7 +527,7 @@ func _build_surfaces() -> void:
 		studio.look_solo.forget()
 		studio._look_by = &""
 		studio.guest_look_solos.clear())
-	Session.role_changed.connect(studio._on_role_changed)
+	Session.role_changed.connect(studio.venue_switch._on_role_changed)
 	Session.room_motion.connect(studio.room_rows._on_room_motion)
 	studio.room_rows._publish_room()
 
@@ -522,7 +553,7 @@ func _after_tracks_renumbered() -> void:
 		return
 	studio.tablet_host._remember_tablets()
 	studio.tablet_host._fold_orphaned_track_racks()
-	studio._publish_room_soon()
+	studio.player_host._publish_room_soon()
 
 
 ## A stand under every practical.
@@ -541,7 +572,7 @@ func _build_lamp_stands() -> void:
 		var at: Vector3 = spec[0]
 		var tint: Color = spec[1]
 		var number := Studio.PRACTICALS.find(spec) + 1
-		var stand := studio._trolley("LampStand", StringName("lamp_%d" % number),
+		var stand := studio.rack_host._trolley("LampStand", StringName("lamp_%d" % number),
 				Vector3(at.x, 0.0, at.z), 0.0)
 		stand.add_to_group(&"lamp_stand")
 		stand.rolls = false
@@ -581,8 +612,8 @@ func _build_lamp_stands() -> void:
 		var shade := MeshInstance3D.new()
 		shade.name = "Shade"
 		var shade_mesh := CylinderMesh.new()
-		shade_mesh.top_radius = Studio.LAMP_SHADE_RADIUS * 0.42
-		shade_mesh.bottom_radius = Studio.LAMP_SHADE_RADIUS
+		shade_mesh.top_radius = LAMP_SHADE_RADIUS * 0.42
+		shade_mesh.bottom_radius = LAMP_SHADE_RADIUS
 		shade_mesh.height = Studio.LAMP_SHADE_HEIGHT
 		shade_mesh.radial_segments = 20
 		shade_mesh.cap_bottom = false
@@ -595,8 +626,8 @@ func _build_lamp_stands() -> void:
 		# which is what stops a lamp pointing down reading as a bare bulb from across the room.
 		var glow := MeshInstance3D.new()
 		var glow_mesh := CylinderMesh.new()
-		glow_mesh.top_radius = Studio.LAMP_SHADE_RADIUS * 0.80
-		glow_mesh.bottom_radius = Studio.LAMP_SHADE_RADIUS * 0.80
+		glow_mesh.top_radius = LAMP_SHADE_RADIUS * 0.80
+		glow_mesh.bottom_radius = LAMP_SHADE_RADIUS * 0.80
 		glow_mesh.height = 0.004
 		glow_mesh.radial_segments = 20
 		glow.mesh = glow_mesh
@@ -678,10 +709,10 @@ func _stand_of(machine: String) -> Trolley:
 ## mesh, and rebuilding three of them sixty times a second for a rack moving two centimetres is
 ## the furniture costing more than the console.
 func _refresh_looms_if_moved(delta: float) -> void:
-	studio._loom_clock += delta
-	if studio._looms_dirty and studio._loom_clock >= 0.05:
+	_loom_clock += delta
+	if studio._looms_dirty and _loom_clock >= 0.05:
 		studio._looms_dirty = false
-		studio._loom_clock = 0.0
+		_loom_clock = 0.0
 		refresh_looms()
 
 
@@ -707,3 +738,18 @@ func edit_lyrics() -> void:
 		Session.notice.emit("M opens the session panel: its LYRICS box has the song's lyrics.")
 		return
 	studio.lyrics_edit_asked.emit()
+
+
+## What a machine's loom carries to the bay, for its beads: the console's every heard track (so a
+## desk of muted strips sends nothing down it), the rack's every heard track with a plugin on it,
+## and the deck's the master it records and plays.
+static func loom_level(machine: String) -> Callable:
+	match machine:
+		"console":
+			return func() -> float: return SignalBeads.loudest()
+		"rack":
+			return func() -> float: return SignalBeads.loudest(
+					func(i: int) -> bool: return not DAW.state.track(i).plugins().is_empty())
+		"deck":
+			return func() -> float: return SignalBeads.master_level()
+	return Callable()

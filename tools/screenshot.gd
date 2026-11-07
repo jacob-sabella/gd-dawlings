@@ -573,7 +573,7 @@ func _shelve_cassettes() -> void:
 			break
 		if DAW.state.track(index).items.is_empty():
 			continue
-		var item := studio._mint_for(CassetteItem.KIND, "clip:%d:0" % index, Session.local_peer_id)
+		var item := studio.item_host._mint_for(CassetteItem.KIND, "clip:%d:0" % index, Session.local_peer_id)
 		if item == null:
 			continue
 		studio.items.slot_item(item, CassetteRack.RACK, made)
@@ -582,7 +582,7 @@ func _shelve_cassettes() -> void:
 	# Where the rack stands and which way its front faces, for a SHOT_CAM framed on its slots.
 	var rack := studio.cassette_rack.global_transform
 	print("SHOT_CASSETTES ", studio.items.made_ids(), " rack at ", rack.origin, " facing ", rack.basis.z)
-	studio.go_to_station(&"cassette_rack")
+	studio.station_host.go_to_station(&"cassette_rack")
 
 
 ## `--platter`: a clip's cassette, minted as the host mints a pull, stood in the platter's slot.
@@ -593,7 +593,7 @@ func _slot_the_platter() -> void:
 	for index in DAW.state.track_indices():
 		if DAW.state.track(index).items.is_empty():
 			continue
-		var item := studio._mint_for(CassetteItem.KIND, "clip:%d:0" % index, Session.local_peer_id)
+		var item := studio.item_host._mint_for(CassetteItem.KIND, "clip:%d:0" % index, Session.local_peer_id)
 		if item == null:
 			continue
 		studio.items.slot_item(item, Platter.HOLDER, 0)
@@ -602,7 +602,7 @@ func _slot_the_platter() -> void:
 	var at := studio.platter.global_transform
 	print("SHOT_PLATTER ", studio.items.made_ids(), " platter at ", at.origin, " facing ", at.basis.z)
 	if _cam.size() != 6:
-		studio.go_to_station(&"platter")
+		studio.station_host.go_to_station(&"platter")
 
 
 func _play_the_pads() -> void:
@@ -673,7 +673,7 @@ func _make_the_sections() -> void:
 	print("SHOT_SECTIONS ", DAW.state.regions.map(func(r): return r[2]), " shown ", blocks.shown_order(),
 			" at ", blocks.global_position, " facing ", blocks.global_basis.z)
 	if _cam.size() != 6:
-		studio.go_to_station(&"sections")
+		studio.station_host.go_to_station(&"sections")
 
 
 ## `--samples`: REC, then a use, that many times, by the mouse's hand, as a desktop player samples:
@@ -693,20 +693,20 @@ func _make_samples() -> void:
 		var item: Item = studio.items.items.get(kinds[n % kinds.size()])
 		if item == null or hand == null:
 			continue
-		studio._on_rec_pressed(true)
+		studio.sampler_host._on_rec_pressed(true)
 		hand.pick_up(item)
 		item.work(true)
 		item.work(false)
 		hand.lose_carrying()
 		item.snap_home()
-	studio._on_rec_pressed(true)
+	studio.sampler_host._on_rec_pressed(true)
 	var at := studio.sampler.global_transform
 	print("SHOT_SAMPLES ", studio.items.made_ids(), " sampler at ", at.origin, " facing ", at.basis.z,
 			" rack at ", studio.cassette_rack.global_position if studio.cassette_rack != null else Vector3.ZERO)
 	# Framed by SHOT_CAM, it stays framed there, the rack beside it in the shot too, and the room is
 	# the picture: the toasts it said are let go.
 	if _cam.size() != 6:
-		studio.go_to_station(&"sampler")
+		studio.station_host.go_to_station(&"sampler")
 		return
 	var panel := get_tree().current_scene.find_child("SessionPanel", true, false) as SessionPanel
 	if panel != null and panel._toasts != null:
@@ -904,11 +904,11 @@ func _process(_delta: float) -> void:
 	if _frames == 12 and not _board.is_empty():
 		var studio_node := get_tree().current_scene.get_node_or_null("Studio")
 		if studio_node != null:
-			studio_node.choose_board_source(StringName(_board))
+			studio_node.roll_room.choose_board_source(StringName(_board))
 	if _frames == 9 and _rig_roll:
 		var rolled := get_tree().current_scene.get_node_or_null("Studio")
 		if rolled != null:
-			rolled._roll_rig()
+			rolled.roll_room._roll_rig()
 
 
 	# Later than the camera, so a visit the studio makes on its own at startup has landed first.
@@ -1000,8 +1000,8 @@ func _process(_delta: float) -> void:
 	if _frames == 10 and _chords >= 0:
 		var chords_at := get_tree().current_scene.get_node_or_null("Studio") as Studio
 		if chords_at != null and chords_at.chord_hand != null:
-			chords_at.go_to_station(&"wheel")
-			chords_at.toggle_chords()
+			chords_at.station_host.go_to_station(&"wheel")
+			chords_at.surface_host.toggle_chords()
 			chords_at.chord_hand.pick(_chords - 1)
 			print("SHOT_CHORDS ", chords_at.chord_hand.hud_text())
 	if _frames == 10 and _chord_from >= 1:
@@ -1014,7 +1014,7 @@ func _process(_delta: float) -> void:
 				lin.colour_index = 2
 				Session.participants[7] = lin
 				Session.roster_changed.emit()
-			from_studio.go_to_station(&"wheel")
+			from_studio.station_host.go_to_station(&"wheel")
 			var source := Jack.chord_source(7)
 			from_studio.jacks.plug(source, Jack.player_sink(Session.local_peer_id))
 			var key := Harmony.at(DAW.state, DAW.state.position_seconds)
@@ -1354,7 +1354,7 @@ func _paste_a_cassette() -> void:
 	var s := DAW.state
 	var bar_at := s.bar_to_seconds(float(_paste[2]))
 	if _frames == 6:
-		studio._on_clip_pulled(int(_paste[0]), 0, mouse)
+		studio.item_host._on_clip_pulled(int(_paste[0]), 0, mouse)
 		studio.timeline.set_view(s.bar_to_seconds(float(_paste[2]) - 2.0), s.bar_to_seconds(float(_paste[2]) + 6.0) - s.bar_to_seconds(float(_paste[2]) - 2.0))
 	if _frames == 9:
 		var timeline: TimelineSurface = studio.timeline
@@ -1379,7 +1379,7 @@ func _hold_a_cassette_to_the_ear() -> void:
 	if studio == null or mouse == null:
 		return
 	if _frames == 6:
-		studio._on_clip_pulled(_ear, 0, mouse)
+		studio.item_host._on_clip_pulled(_ear, 0, mouse)
 	if _frames == 8:
 		mouse.ear_held = true
 	if _frames == 238:
@@ -1475,14 +1475,14 @@ func _see_the_signal() -> void:
 			match w[0]:
 				"clip": DAW.set_track_volume(track, 1.0)
 				"mute": DAW.set_track_mute(track, true)
-				"x": studio.toggle_signal_view()
+				"x": studio.signal_views.toggle_signal_view()
 		if w[0] == "look" and _frames == 12:
 			# Look to solo held over the track (docs/spatial_loop.md part three, G), as U held does.
 			var said := studio.look_solo.press(track)
 			if said != "":
 				Session.notice.emit(said)
 		if w[0] == "trace" and _frames == maxi(_shot_frame - (int(w[2]) if w.size() > 2 else 14), 10):
-			studio.trace_from(SignalGraph.play_id(track), DAW.state.track(track).display_name())
+			studio.signal_views.trace_from(SignalGraph.play_id(track), DAW.state.track(track).display_name())
 
 
 const CLIP_HANDLES := {"start": ClipEditorSurface.START, "end": ClipEditorSurface.END,

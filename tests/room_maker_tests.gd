@@ -163,7 +163,7 @@ func persists_and_a_guest_sees_it() -> void:
 	var made := MadeRooms.make(spec)
 	check("the maker makes the room (%s)" % [made["errors"]], made["ok"])
 	var id := StringName(made["id"])
-	check("the host takes the band into it", s.choose_venue(id) and s.venue is BoxVenue and s.venue.venue_id() == id)
+	check("the host takes the band into it", s.venue_switch.choose_venue(id) and s.venue is BoxVenue and s.venue.venue_id() == id)
 	check("the room has its zones, the wheel in the table's zone, no sampler (no keyboard zone), no rack", s.venue.zones().size() == 3 and s.wheel != null
 			and s.sampler == null and s.cassette_rack == null and s.venue.get_node_or_null("ModularAnnex") != null)
 	check("and no basket: the hoop was unticked", not s.live_pieces.has(&"hoop") or not s.live_pieces[&"hoop"].visible)
@@ -183,13 +183,13 @@ func persists_and_a_guest_sees_it() -> void:
 	# A guest, on a machine that has none of the host's files.
 	var guest_rig: Dictionary = t._floor_studio()
 	var guest: Studio = guest_rig["studio"]
-	var state: Dictionary = share._as(Session.Role.HOST, func() -> Variant: return again.room_state())
+	var state: Dictionary = share._as(Session.Role.HOST, func() -> Variant: return again.room_rows.room_state())
 	check("the host's row carries the room, within 16 kB", state["made_room"].get("id") == String(id)
 			and JSON.stringify(state["made_room"]).to_utf8_buffer().size() <= MadeRoom.MAX_BYTES)
 	_live(GUEST_DIR)
 	check("the guest's machine has no such room", not MadeRooms.has(id) and not Venue.is_known(id))
 	share._as(Session.Role.GUEST, func() -> Variant:
-		guest.apply_room(state, false)
+		guest.room_rows.apply_room(state, false)
 		return null)
 	check("the guest stands in the host's made room", guest.venue is BoxVenue and guest.venue.venue_id() == id and guest.venue.zones().size() == 3
 			and guest.wheel != null and guest.sampler == null)

@@ -4,6 +4,18 @@ extends RefCounted
 ## Sitting, walking to a seat or a station, the station board, the desk wing and the point-and-mark pad. Moved out of
 ## `scenes/studio.gd` without change of behaviour; the state stays on the studio, which delegates the calls other code makes.
 
+## How fast going to a station covers the floor (m/s), at motion 1: a brisk walk, so the live
+## room's far wall is a second and a half from the desk rather than a lurch.
+const STATION_PACE := 4.0
+
+## The stand's grip, round the board's foot and post.
+var _board_grip: CollisionShape3D
+
+## Where the table stands at home, on the floor under the middle of its board, and its turn: its
+## reader's edge (+Z, the side the miniature is read from) toward the mix position.
+## How far into the timeline's window an item it is brought to starts, of the window's span.
+const SHOWN_IN := 0.1
+
 var studio: Studio
 
 
@@ -62,7 +74,7 @@ func _sit_down() -> void:
 	# arc outward at the edges and spends most of the frame on everything that is not the desk.
 	# Nobody photographs a console on a wide angle either, and for the same reason.
 	studio.camera.fov = Studio.SEATED_FOV if studio.focus.is_focused() else Studio.ROOM_FOV
-	studio.frame(at, back.length(), atan2(back.x, back.z),
+	studio.view_host.frame(at, back.length(), atan2(back.x, back.z),
 			-atan2(back.y, Vector2(back.x, back.z).length()))
 
 
@@ -98,7 +110,7 @@ func _walk_to_seat() -> void:
 			# Inside the room and at a height a person's eyes can be at. A rack's bottom unit
 			# asks for a seat on the floor; nobody mixes lying down.
 			var bounds := studio.floor_plan.bounds if studio.floor_plan != null \
-					else studio._room_bounds()
+					else studio.venue_switch._room_bounds()
 			seat.origin = Vector3(
 					clampf(seat.origin.x, bounds.position.x + 0.2, bounds.end.x - 0.2),
 					clampf(seat.origin.y, 0.95, 1.95),
@@ -117,7 +129,7 @@ func _walk_to_seat() -> void:
 	var seconds := 0.55 * clampf(studio.ergonomics.motion_scale, 0.0, 2.0)
 	if seconds <= 0.01 or not studio.is_inside_tree():
 		studio.body.transform = seat
-		studio.frame(to[0], to[1], to[2], to[3])
+		studio.view_host.frame(to[0], to[1], to[2], to[3])
 		return
 	# Both at once, on one curve. A body that arrived before its camera would leave the work
 	# light lighting the gear from an empty spot for half a second; a camera that arrived first
@@ -133,7 +145,7 @@ func _walk_to_seat() -> void:
 		return
 	var body_from := studio.body.transform
 	var cam_from := studio.camera.global_transform
-	studio.frame(to[0], to[1], to[2], to[3])
+	studio.view_host.frame(to[0], to[1], to[2], to[3])
 	var cam_to := studio.camera.global_transform
 	studio.camera.global_transform = cam_from
 	if studio._walk != null and studio._walk.is_valid():
@@ -221,7 +233,7 @@ func go_to_station(id: StringName) -> bool:
 		return _travel_to_station(id)
 	_put_away_beside()
 	if studio.god_mode:
-		studio.set_god_mode(false)
+		studio.player_host.set_god_mode(false)
 	if studio.focus != null and studio.focus.is_focused():
 		studio.focus.release()
 	studio.station = id
@@ -245,7 +257,7 @@ func _walk_to_station(id: StringName) -> void:
 	var look: Vector3 = frame_of * (Stations.look_from(studio.venue, id, frame_of.affine_inverse() * eye, studio.camera.fov) as Vector3)
 	var from := studio.walker.global_position if studio.walker != null else studio.camera.global_position
 	var way := Vector2(eye.x - from.x, eye.z - from.z).length()
-	var seconds := clampf(way / Studio.STATION_PACE, 0.55, 2.0) * clampf(studio.ergonomics.motion_scale, 0.0, 2.0)
+	var seconds := clampf(way / STATION_PACE, 0.55, 2.0) * clampf(studio.ergonomics.motion_scale, 0.0, 2.0)
 	if not studio.is_inside_tree():
 		seconds = 0.0
 	var stand := Transform3D(seat.basis, eye)
@@ -255,7 +267,7 @@ func _walk_to_station(id: StringName) -> void:
 		studio.walker.travel_to(eye, look, seconds)
 	else:
 		var back := eye - look
-		studio.frame(look, back.length(), atan2(back.x, back.z), -atan2(back.y, Vector2(back.x, back.z).length()))
+		studio.view_host.frame(look, back.length(), atan2(back.x, back.z), -atan2(back.y, Vector2(back.x, back.z).length()))
 	if studio.body != null and studio.focus != null and studio.focus.visits:
 		if studio._walk != null and studio._walk.is_valid():
 			studio._walk.kill()
@@ -278,10 +290,10 @@ func _build_station_board() -> void:
 	studio.station_board.transform = ControlRoom.spot(&"station_board", studio.room_width)
 	studio.station_board.chosen.connect(_on_board_chosen)
 	studio.studio_set.add_child(studio.station_board)
-	var stand := studio._authored("StationBoardStand", &"station_board")
+	var stand := studio.rack_host._authored("StationBoardStand", &"station_board")
 	stand.follow = 11.0
 	stand.rolls = false
-	studio._board_grip = studio.furniture_host._grip(stand, Vector3.ONE * 0.1, Vector3.ZERO)
+	_board_grip = studio.furniture_host._grip(stand, Vector3.ONE * 0.1, Vector3.ZERO)
 	studio.furniture_host._go_live(stand)
 	_fit_board_stand()
 	studio.furniture_host._carry_live(&"station_board")
@@ -301,8 +313,8 @@ func _fit_board_stand() -> void:
 	stand.footprint_centre = Vector2(0, z)
 	stand.footprint_half = StationBoard.FOOT
 	var top := StationBoard.FACE_TOP - studio.station_board._height * 0.5 * cos(StationBoard.TILT)
-	(studio._board_grip.shape as BoxShape3D).size = Vector3(StationBoard.FOOT.x * 2.0, maxf(top - 0.05, 0.1), 0.12)
-	studio._board_grip.position = Vector3(0, maxf(top - 0.05, 0.1) * 0.5, z - 0.03)
+	(_board_grip.shape as BoxShape3D).size = Vector3(StationBoard.FOOT.x * 2.0, maxf(top - 0.05, 0.1), 0.12)
+	_board_grip.position = Vector3(0, maxf(top - 0.05, 0.1) * 0.5, z - 0.03)
 
 
 func _on_board_chosen(id: StringName) -> void:
@@ -413,7 +425,7 @@ func go_home() -> void:
 		else:
 			Session.notice.emit("Already at the desk.")
 		return
-	studio._on_escape()
+	studio.view_host._on_escape()
 
 
 ## How long the blink closes, and opens, on a travel: XRRig.FADE, or none at motion 0.
@@ -431,7 +443,7 @@ func _station_fits() -> Callable:
 	if studio._seat_finder == null:
 		studio._seat_finder = Walker.new()
 	studio._seat_finder.floor_plan = studio.floor_plan
-	studio._seat_finder.walkable = studio._walkable()
+	studio._seat_finder.walkable = studio.venue_look._walkable()
 	studio._seat_finder.fixed = studio.venue.solids() if studio.venue != null else []
 	return studio._seat_finder.fits
 
@@ -440,7 +452,7 @@ func _station_fits() -> Callable:
 ## any of it, the tray's bed still being pressed. The apron first, the grip a click from the seat
 ## finds: the board's top is under the tray.
 func _build_desk_wing() -> void:
-	studio.desk_wing = studio._authored("MiniTable", &"mini_table")
+	studio.desk_wing = studio.rack_host._authored("MiniTable", &"mini_table")
 	studio.desk_wing.follow = 10.0
 	studio.desk_wing.rolls = false
 	studio.desk_wing.footprint_centre = Vector2(-Studio.WING_PAD * 0.5, 0)
@@ -551,7 +563,7 @@ func _pin_stations() -> void:
 		var spot: Variant = Stations.spot(studio.venue, id)
 		if spot == null:
 			continue
-		var at := studio._venue_to_set(spot as Transform3D).origin
+		var at := studio.venue_switch._venue_to_set(spot as Transform3D).origin
 		var r := Stations.row(id)
 		rows.append([id, r["title"], r["area"], Vector2(at.x, at.z - Studio.MIX_POSITION_Z)])
 	mini.set_stations(rows)
@@ -571,7 +583,7 @@ func _on_miniature_pressed(track: int, seconds: float, item: int) -> void:
 		if studio.timeline != null and is_instance_valid(studio.timeline):
 			studio.timeline.pick_track(track)
 			var span := studio.timeline.view_span if studio.timeline.view_span > 0.0 else DAW.state.timeline_length()
-			studio.timeline.set_view(maxf(0.0, it.start - span * Studio.SHOWN_IN), span)
+			studio.timeline.set_view(maxf(0.0, it.start - span * SHOWN_IN), span)
 			_bring(&"timeline")
 		return
 	if track > 0 and studio.console != null:

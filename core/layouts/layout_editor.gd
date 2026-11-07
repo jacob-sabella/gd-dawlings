@@ -127,13 +127,13 @@ func _pick(id: StringName) -> void:
 
 
 func _nudge(dx: float, dz: float) -> void:
-	var t := studio._floor_piece(_picked)
+	var t := studio.room_rows._floor_piece(_picked)
 	if t != null:
 		_ask("move", [String(_picked), t.position.x + dx, t.position.z + dz, t.rotation.y])
 
 
 func _turn(degrees: float) -> void:
-	var t := studio._floor_piece(_picked)
+	var t := studio.room_rows._floor_piece(_picked)
 	if t != null:
 		_ask("rotate", [String(_picked), t.rotation.y + deg_to_rad(degrees)])
 
@@ -151,7 +151,7 @@ func _add(kind: StringName) -> void:
 
 ## One ask, then what the validator said, or that it was done.
 func _ask(op: String, args: Array) -> void:
-	var why := studio.ask_layout(op, args)
+	var why := studio.rack_host.ask_layout(op, args)
 	_status.text = why if why != "" else "Done: %s." % op
 	_status.add_theme_color_override("font_color", Color(1.0, 0.6, 0.5) if why != "" else Color(0.6, 0.9, 0.7))
 	rebuild()

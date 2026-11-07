@@ -169,7 +169,7 @@ func _in_view(s: Studio) -> String:
 	var size := s.get_viewport().get_visible_rect().size
 	var rows := PackedStringArray(["| station | distance m | on screen (px) |", "| --- | --- | --- |"])
 	var frame := s.venue.global_transform if s.venue.is_inside_tree() else s.venue.transform
-	for id in s.station_ids():
+	for id in s.station_host.station_ids():
 		var lp: Variant = Stations.look_point(s.venue, id)
 		if lp == null:
 			continue

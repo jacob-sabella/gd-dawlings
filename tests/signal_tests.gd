@@ -594,8 +594,8 @@ func the_glasses_are_yours_alone() -> void:
 	studio.set_venue(&"studio", false)
 	studio.console._rebuild()
 	studio.stage._rebuild()
-	check("no glasses, no signal", not studio.signal_view_on())
-	studio._follow_signal(0.1)
+	check("no glasses, no signal", not studio.signal_views.signal_view_on())
+	studio.signal_views._follow_signal(0.1)
 	check("and no view made", studio.signal_view == null)
 
 	t._as_session(Session.Role.HOST, 1)
@@ -608,73 +608,73 @@ func the_glasses_are_yours_alone() -> void:
 	check("taken, a pair of my own (%s)" % (mine.id if mine != null else &""), mine != null and mine.id == &"glasses1")
 	mine.use(true)
 	check("a click puts them on", hand.worn == mine and hand.carrying == null)
-	check("and I see the signal", studio.signal_view_on())
+	check("and I see the signal", studio.signal_views.signal_view_on())
 	DAW.state.playing = true
-	studio._follow_signal(0.1)
+	studio.signal_views._follow_signal(0.1)
 	check("the view is made and drawn (%d segments)" % studio.signal_view.segments,
 			studio.signal_view != null and studio.signal_view.visible and studio.signal_view.segments > 20)
 	check("in this room: a track's pipe from its voice or strip to the master",
-			studio.signal_place("master") is Vector3 and studio.signal_place("t7:fader") is Vector3)
+			studio.signal_views.signal_place("master") is Vector3 and studio.signal_views.signal_place("t7:fader") is Vector3)
 	var keys := str(room.state().keys()) + str(studio.signal_view.get_meta_list())
 	check("nothing of the view is room state (%s)" % [room.state().keys()], not keys.to_lower().contains("signal"))
 	var phones := room.take_personal(&"headphones", 1)
 	hand.pick_up(phones)
 	hand.wear()
 	check("headphones on send the glasses home: one head (%s)" % [hand.worn], hand.worn is HeadphonesItem
-			and hand.worn == phones and not studio.signal_view_on())
-	studio._follow_signal(0.1)
+			and hand.worn == phones and not studio.signal_views.signal_view_on())
+	studio.signal_views._follow_signal(0.1)
 	check("and the view goes", not studio.signal_view.visible)
 	hand.take_off()
 	room.send_home(hand.carrying)
 
 	var theirs := room.take_personal(&"glasses", 2)
 	room.wear(theirs, true)
-	check("a bandmate's pair on their head shows me nothing", not studio.signal_view_on())
+	check("a bandmate's pair on their head shows me nothing", not studio.signal_views.signal_view_on())
 
-	studio.toggle_signal_view()
-	check("X shows it with no glasses", studio.signal_view_on())
-	studio._follow_signal(0.1)
+	studio.signal_views.toggle_signal_view()
+	check("X shows it with no glasses", studio.signal_views.signal_view_on())
+	studio.signal_views._follow_signal(0.1)
 	check("drawn", studio.signal_view.visible)
 
 	DAW.state.track(7).mute = true
-	studio._follow_signal(0.1)
-	var sources := studio.signal_sources()
+	studio.signal_views._follow_signal(0.1)
+	var sources := studio.signal_views.signal_sources()
 	check("the room's sources are listed (%s)" % [sources.map(func(r): return r["id"])], sources.any(
 			func(r: Dictionary) -> bool: return r["kind"] == SignalGraph.LOCAL_SOURCE))
 	var told: Array = []
 	var listen := func(text: String) -> void: told.append(text)
 	Session.notice.connect(listen)
-	check("nothing to trace says so", not studio.trace_pointed(hand) and told.size() == 1
+	check("nothing to trace says so", not studio.signal_views.trace_pointed(hand) and told.size() == 1
 			and (told[0] as String).contains("Nothing that sounds"))
 	var strip: Node = null
 	for s in studio.console.strips:
 		if s.track_index == 7:
 			strip = s
-	var target := studio.signal_target_of(strip.find_children("*", "ControlAffordance", true, false)[0], Vector3.ZERO)
+	var target := studio.signal_views.signal_target_of(strip.find_children("*", "ControlAffordance", true, false)[0], Vector3.ZERO)
 	check("a control on a strip traces its track (%s)" % [target], target == [SignalGraph.play_id(7), "Rhodes"])
-	check("Y traces it", studio.trace_from(target[0], target[1]) and studio.signal_view.tracing != null
+	check("Y traces it", studio.signal_views.trace_from(target[0], target[1]) and studio.signal_view.tracing != null
 			and studio.signal_view.tracing.reason == SignalGraph.MUTED)
 	check("and the toast says where and why, and the fix key", (told[-1] as String).contains("stops at RHODES fader")
 			and (told[-1] as String).contains("Shift-Y: UNMUTE"))
 	var depth := (DAW.backend as OfflineBackend)._undo.size()
-	check("Shift-Y fixes it, one undo step", studio.fix_traced() and not DAW.state.track(7).mute
+	check("Shift-Y fixes it, one undo step", studio.signal_views.fix_traced() and not DAW.state.track(7).mute
 			and (DAW.backend as OfflineBackend)._undo.size() == depth + 1)
-	studio._follow_signal(0.1)
+	studio.signal_views._follow_signal(0.1)
 	check("and the trace runs again, past it", studio.signal_view.tracing != null and studio.signal_view.tracing.heard())
-	check("with nothing traced, Shift-Y says so", studio.signal_view.tracing.fix.is_empty() and not studio.fix_traced())
+	check("with nothing traced, Shift-Y says so", studio.signal_view.tracing.fix.is_empty() and not studio.signal_views.fix_traced())
 
 	DAW.state.track(7).mute = true
-	studio.trace_from(target[0], target[1])
+	studio.signal_views.trace_from(target[0], target[1])
 	t._as_session(Session.Role.GUEST, 5)
 	Session.keep_intents = true
 	Session.kept_intents.clear()
-	studio.fix_traced()
+	studio.signal_views.fix_traced()
 	var verbs: Array = Session.kept_intents.map(func(c): return c[0])
 	check("on a guest the fix is asked of the host (%s)" % [verbs], &"set_track_mute" in verbs and DAW.state.track(7).mute)
 	Session.keep_intents = false
 	Session.notice.disconnect(listen)
-	studio.toggle_signal_view()
-	check("X again: off", not studio.signal_view_on())
+	studio.signal_views.toggle_signal_view()
+	check("X again: off", not studio.signal_views.signal_view_on())
 	Session.start_solo()
 	Session.layout = saved_layout
 	studio.queue_free()
@@ -1179,13 +1179,13 @@ func look_solo_in_the_studio() -> void:
 				break
 	check("a strip to look at (%s, %s, %s)" % [strip, control, hand], control != null and hand != null)
 	hand.hovered = control
-	check("what is looked at is that strip's track (%d)" % k, k > 0 and k != pre and studio.looked_track() == k)
+	check("what is looked at is that strip's track (%d)" % k, k > 0 and k != pre and studio.signal_views.looked_track() == k)
 	s.track(pre).solo = true
 	said.clear()
 	studio._unhandled_input(key)
 	check("U held over it solos it alone (%s)" % [said], studio.look_solo.held and s.track(k).solo and not s.track(pre).solo
 			and said.size() == 1 and said[0].begins_with("%s alone" % LookSolo._title(k)))
-	studio._follow_signal(0.016)
+	studio.signal_views._follow_signal(0.016)
 	check("meanwhile the view signs no SOLOED OUT on every other track", studio.signal_view.quiet.has(SignalGraph.SOLOED_OUT))
 	var up := InputEventKey.new()
 	up.keycode = KEY_U
@@ -1202,20 +1202,20 @@ func look_solo_in_the_studio() -> void:
 	studio._unhandled_input(up)
 	studio.signal_key_on = true
 	check("a guest's look-solo is a room verb", Session.room_ask_is_valid(&"look_solo", [6, true]))
-	studio._on_room_asked(&"look_solo", [other, true], 5)
+	studio.room_rows._on_room_asked(&"look_solo", [other, true], 5)
 	check("the host runs it for the guest", s.track(other).solo and not s.track(pre).solo)
 	said.clear()
 	studio._unhandled_input(key)
 	check("one at a time: the host's own is refused and told why (%s)" % [said], not studio.look_solo.held
 			and said.size() == 1 and said[0].contains("one at a time"))
 	studio._unhandled_input(up)
-	studio._on_room_asked(&"look_solo", [third, true], 5)
+	studio.room_rows._on_room_asked(&"look_solo", [third, true], 5)
 	check("the guest's follows their look", s.track(third).solo and not s.track(other).solo)
 	Session.participant_left.emit(5)
 	check("and the guest leaving lets it go", not s.track(third).solo and not s.track(other).solo and s.track(pre).solo
 			and studio.guest_look_solos.is_empty())
-	studio._on_room_asked(&"look_solo", [6, true], 5)
-	studio._on_room_asked(&"look_solo", [0, false], 5)
+	studio.room_rows._on_room_asked(&"look_solo", [6, true], 5)
+	studio.room_rows._on_room_asked(&"look_solo", [0, false], 5)
 	check("as their let-go does", not s.track(6).solo and s.track(pre).solo)
 	s.track(pre).solo = false
 	Session.notice.disconnect(listen)

@@ -5,6 +5,20 @@ extends RefCounted
 ## verbs a player asks of the room (`_on_room_asked`), with the prediction and motion that go with them. Moved out of
 ## `scenes/studio.gd` without change of behaviour; the state stays on the studio, which delegates the calls other code makes.
 
+var _motion_sent_msec := 0
+
+## The pads' row (PadShare): what the host's sampling station holds, for the room.
+var pads_row := {}
+
+var _pads_rev := -1
+
+var _pads_file := ""
+
+const MOTION_MSEC := 50
+
+## The stands someone else is pushing, by id: what their push sent, played back.
+var _pushed_trails := {}
+
 var studio: Studio
 
 
@@ -47,7 +61,7 @@ func room_state() -> Dictionary:
 			"sampler": studio.sampler.armed_by if studio.sampler != null and is_instance_valid(studio.sampler) else 0,
 			"weather": studio.weather_listening, "looper": studio.looper_row.duplicate(),
 			RackPatch.ROW: RackGaps.published(studio.rack_row),
-			"tv": studio.tv.row() if studio.tv != null and is_instance_valid(studio.tv) else {}, "pads": studio.pads_row.duplicate(true)}
+			"tv": studio.tv.row() if studio.tv != null and is_instance_valid(studio.tv) else {}, "pads": pads_row.duplicate(true)}
 
 
 ## The host's TV changed what it plays: the room is told.
@@ -61,12 +75,12 @@ func _on_pads_changed() -> void:
 	if Session.role != Session.Role.HOST or studio.tv == null or not is_instance_valid(studio.tv):
 		return
 	var bank := studio.tv.bank
-	if bank.revision != studio._pads_rev:
-		studio._pads_rev = bank.revision
-		studio._pads_file = PadShare.write(bank)
-	var made := PadShare.row(bank, studio._pads_file)
-	if made != studio.pads_row:
-		studio.pads_row = made
+	if bank.revision != _pads_rev:
+		_pads_rev = bank.revision
+		_pads_file = PadShare.write(bank)
+	var made := PadShare.row(bank, _pads_file)
+	if made != pads_row:
+		pads_row = made
 		_publish_room()
 
 
@@ -177,7 +191,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	var variant_wanted := Venue.known_variant(id_wanted, int(state.get("variant", 0)))
 	if studio.venue != null and Venue.is_known(id_wanted) \
 			and (studio.venue.venue_id() != id_wanted or studio.venue.variant != variant_wanted):
-		studio.set_venue(id_wanted, false, variant_wanted)
+		studio.venue_switch.set_venue(id_wanted, false, variant_wanted)
 
 	var wanted: Dictionary = state.get("tablets", {})
 	for id in studio.tablets.keys():
@@ -245,14 +259,14 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		studio.on_air = (state["on_air"] as Array).duplicate()
 		for p in studio._predictions:
 			if p["verb"] == &"on_air":
-				studio._set_on_air(Session.local_peer_id, p["args"][0], false)
+				studio.patch_host._set_on_air(Session.local_peer_id, p["args"][0], false)
 	if state.has("patches"):
 		studio.patches = (state["patches"] as Dictionary).duplicate(true)
 		# This guest's plugs it has moved and not heard back about, on top.
 		for p in studio._predictions:
 			if p["verb"] == &"patch":
 				studio.patch_host._set_patch(Session.local_peer_id, p["args"][0], p["args"][1], false)
-		studio._show_patches()
+		studio.patch_host._show_patches()
 	if studio.jacks != null and state.has("jacks"):
 		var rows: Dictionary = (state["jacks"] as Dictionary).duplicate()
 		# The host's word alone first: a chord hand it now says goes into a bandmate sends again.
@@ -282,8 +296,8 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		row["patch"] = RackPatch.sanitize(row.get("patch", {}))
 		for p in studio._predictions:
 			if p["verb"] == &"rack":
-				studio._rack_apply(row, String(p["args"][0]), p["args"][1])
-		studio._show_rack(row)
+				studio.rack_host._rack_apply(row, String(p["args"][0]), p["args"][1])
+		studio.rack_host._show_rack(row)
 	if state.has("board") and not studio._predictions.any(func(p): return p["verb"] == &"board_source"):
 		studio.roll_room._show_board(StringName(state["board"]))
 	studio._applying_room = false
@@ -343,9 +357,9 @@ func _on_trolley_moved(piece: Trolley) -> void:
 	if piece.held_by == null or not Session.is_networked():
 		return
 	var now := Time.get_ticks_msec()
-	if now - studio._motion_sent_msec < Studio.MOTION_MSEC:
+	if now - _motion_sent_msec < MOTION_MSEC:
 		return
-	studio._motion_sent_msec = now
+	_motion_sent_msec = now
 	Session.send_motion(piece.piece_id, piece.position.x, piece.position.z, piece.rotation.y)
 
 
@@ -361,26 +375,26 @@ func _on_room_motion(id: StringName, x: float, z: float, heading: float, _from: 
 		if (p["verb"] == &"move_piece" or p["verb"] == &"move_tablet") and p["args"][0] == id:
 			return
 	# Kept and played back a moment behind (_drive_pushed), rather than sprung after.
-	var trail: PoseTrail = studio._pushed_trails.get(id)
+	var trail: PoseTrail = _pushed_trails.get(id)
 	if trail == null:
 		trail = PoseTrail.new()
-		studio._pushed_trails[id] = trail
+		_pushed_trails[id] = trail
 	trail.push(PoseTrail.now(), Transform3D(Basis(Vector3.UP, heading), Vector3(x, 0, z)))
 
 
 func _drive_pushed() -> void:
 	var now := PoseTrail.now()
-	for id in studio._pushed_trails.keys():
-		var trail: PoseTrail = studio._pushed_trails[id]
+	for id in _pushed_trails.keys():
+		var trail: PoseTrail = _pushed_trails[id]
 		var t := _floor_piece(id)
 		if t == null or t.held_by != null:
-			studio._pushed_trails.erase(id)
+			_pushed_trails.erase(id)
 			continue
 		var pose := trail.sample(now)
 		var heading := pose.basis.get_euler().y
 		if trail.settled(now):
 			# Let go over there: the spring brings it the last of the way and it settles.
-			studio._pushed_trails.erase(id)
+			_pushed_trails.erase(id)
 			t.roll_to(Vector2(trail.latest().origin.x, trail.latest().origin.z), trail.latest().basis.get_euler().y)
 			continue
 		t.drive_to(Vector2(pose.origin.x, pose.origin.z), heading)
@@ -399,18 +413,18 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 			var into := PersonalMix.monitor_of(args[1])
 			if PersonalMix.valid_socket(args[1]) and (into == 0 or into in studio.on_air):
 				studio.patch_host._set_patch(from, args[0], args[1])
-				studio._publish_room_soon()
+				studio.player_host._publish_room_soon()
 		&"on_air":
-			studio._set_on_air(from, args[0])
-			studio._publish_room_soon()
+			studio.patch_host._set_on_air(from, args[0])
+			studio.player_host._publish_room_soon()
 		&"plug":
 			# The hand that holds it, or anyone while it is home; into a track there is or a
 			# bandmate in the room; and whoever a jack goes into may take it out.
-			if studio.jacks != null and studio._plug_refusal(args[0], args[1], from) == "":
+			if studio.jacks != null and studio.patch_host._plug_refusal(args[0], args[1], from) == "":
 				var was := studio.jacks.sink_of(args[0])
 				studio.jacks.plug(args[0], args[1])
 				studio.patch_host._tell_plugged(args[0], was, args[1], from)
-				studio._publish_room_soon()
+				studio.player_host._publish_room_soon()
 		&"open_tablet":
 			if studio.floor_plan != null and DAW.state.fx(args[0], args[1], false) != null:
 				studio.tablet_host.open_tablet(args[0], args[1], args[2], Vector2(args[3], args[4]))
@@ -445,7 +459,7 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"make":
 			# A guest's pull: the host packs the clip from its own song, mints it, and it is in
 			# their hand -- or it is refused, and they are told why.
-			var made := studio._mint_for(args[0], args[1], from)
+			var made := studio.item_host._mint_for(args[0], args[1], from)
 			if made != null:
 				studio.item_host._hand_made(made, from)
 		&"slot_item":
@@ -481,7 +495,7 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 			_answer_tv(args[0], args[1], args[2])
 		&"sampler":
 			# A guest's REC: on for their next sound, or off.
-			studio._arm_sampler(args[0], from)
+			studio.sampler_host._arm_sampler(args[0], from)
 		&"weather":
 			# A guest's press on the weather's switch: LISTEN or OFF, for everyone.
 			studio.item_host._set_weather(args[0])
@@ -493,7 +507,7 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 			studio.item_host._write_looper_layer(args[0], args[1], args[2], from)
 		&"rack":
 			# A guest's edit of the rack, or its track: the room's row, or told why not.
-			studio._answer_rack(String(args[0]), args[1], from)
+			studio.rack_host._answer_rack(String(args[0]), args[1], from)
 		&"layout":
 			studio.layout_edit.answer(String(args[0]), args[1], from)
 		&"scratch":
@@ -503,9 +517,9 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 			var path: PackedFloat32Array = args[1]
 			var there: Item = studio.items.in_slot(Platter.HOLDER, 0) if studio.items != null else null
 			if there != null and there.id == args[0] and there is CassetteItem and Varispeed.fits(path):
-				studio._sample_scratch(there as CassetteItem, path, from)
+				studio.sampler_host._sample_scratch(there as CassetteItem, path, from)
 		&"board_source":
-			if studio.board_sources().has(args[0]):
+			if studio.roll_room.board_sources().has(args[0]):
 				studio.roll_room._show_board(args[0])
 				_publish_room()
 
@@ -535,7 +549,7 @@ func _place_in_studio(surface_id: StringName, where: Transform3D) -> void:
 	Session.layout.save()
 	studio.mount.share_studio({})
 	if surface_id == &"console":
-		studio._fit_room_to_session()
+		studio.venue_switch._fit_room_to_session()
 	_publish_room()
 
 

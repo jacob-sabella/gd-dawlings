@@ -122,8 +122,8 @@ static func restore(studio: Studio, data: Dictionary) -> void:
 		walker.eye_height = float(w.get("eye", walker.eye_height))
 		walker.velocity = Vector3.ZERO
 		walker._place_camera()
-	elif station != &"" and studio.station_ids().has(station):
-		studio.go_to_station(station)
+	elif station != &"" and studio.station_host.station_ids().has(station):
+		studio.station_host.go_to_station(station)
 	var t: Dictionary = data.get("transport", {})
 	if not t.is_empty() and Session.is_authority():
 		# Stopped where it was stopped: a new game may start the song playing.

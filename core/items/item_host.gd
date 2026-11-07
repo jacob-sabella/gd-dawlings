@@ -6,6 +6,9 @@ extends RefCounted
 ## looper's replies. Moved out of `scenes/studio.gd` without change of behaviour; the state stays on the studio, which delegates the
 ## calls other code makes.
 
+## The hands a made item the host has answered for is to go into, oldest first (`_take_given`).
+var _awaiting_hands: Array = []
+
 var studio: Studio
 
 
@@ -45,7 +48,7 @@ func _item_homes() -> Dictionary:
 ## `homes` with the drum pads' kit's (slice 41): on the console's front rail, wherever the desk is,
 ## in AR too; none (put away) with no console built yet.
 func _kit_homes(homes: Dictionary) -> Dictionary:
-	var at: Variant = studio.kit_home()
+	var at: Variant = studio.view_host.kit_home()
 	if at != null:
 		homes[KitItem.KIND] = at
 	return homes
@@ -90,7 +93,7 @@ func _build_items() -> void:
 	var shelf: Array[Transform3D] = []
 	if studio.venue != null:
 		shelf = studio.venue.item_spots()
-	studio._dress_venue_bars()
+	studio.venue_switch._dress_venue_bars()
 	studio.items.set_spots(shelf, _item_homes())
 	var mic := studio.items.items.get(&"mic") as MicItem
 	if mic != null:
@@ -101,16 +104,16 @@ func _build_items() -> void:
 				studio.mic_arm.let_go())
 	var phones := studio.items.items.get(&"headphones") as HeadphonesItem
 	if phones != null:
-		phones.worn_changed.connect(studio._on_phones_changed)
-		phones.state_changed.connect(func(_s: Item.State) -> void: studio._on_phones_changed())
+		phones.worn_changed.connect(studio.mix_follow._on_phones_changed)
+		phones.state_changed.connect(func(_s: Item.State) -> void: studio.mix_follow._on_phones_changed())
 	var tablet := studio.items.items.get(&"tablet") as TabletItem
 	if tablet != null:
 		tablet.mix = studio.personal
 		tablet.colour = studio.patch_host._colour_of(Session.local_peer_id)
 		tablet.patch_asked.connect(studio.patch_host._on_patch_asked)
 		tablet.on_air_asked.connect(studio.patch_host._on_air_asked)
-	studio.personal.changed.connect(studio._on_personal_changed)
-	studio._wire_miniature()
+	studio.personal.changed.connect(studio.mix_follow._on_personal_changed)
+	studio.station_host._wire_miniature()
 	studio.their_keys = TheirKeys.new()
 	studio.their_keys.name = "TheirKeys"
 	studio.add_child(studio.their_keys)
@@ -138,14 +141,14 @@ func _build_items() -> void:
 		studio.rack.rebuilt.connect(studio.patch_host._show_patches)
 	Session.roster_changed.connect(studio.patch_host._on_roster_for_patches)
 	studio.patch_host._show_patches()
-	studio.items.asked.connect(studio._on_items_asked)
+	studio.items.asked.connect(studio.player_host._on_items_asked)
 	studio.items.refused.connect(studio.tour_room._on_item_refused)
 	studio.items.used.connect(func(item: Item, down: bool) -> void: Session.send_item_use(item.id, down, item.use_take))
 	# What the sampler catches (slice 26): a use or a hit by a hand here, or anyone's the host hears.
-	studio.items.used.connect(studio._sample_use_here)
-	studio.items.rang.connect(studio._sample_ring)
-	Session.item_used.connect(studio._on_someones_use)
-	Session.item_hit.connect(studio._on_someones_hit)
+	studio.items.used.connect(studio.sampler_host._sample_use_here)
+	studio.items.rang.connect(studio.sampler_host._sample_ring)
+	Session.item_used.connect(studio.sampler_host._on_someones_use)
+	Session.item_hit.connect(studio.sampler_host._on_someones_hit)
 	studio.items.personal_taken.connect(studio.tour_room._on_item_personal_taken)
 	studio.hit_recorder = HitRecorder.new()
 	studio.hit_recorder.name = "HitRecorder"
@@ -161,9 +164,9 @@ func _build_items() -> void:
 	studio.strike.name = "Strike"
 	studio.add_child(studio.strike)
 	# This player's own hits a few milliseconds after the hand, where the helper can run.
-	InstrumentItem.fast_path = studio._hit_on_fast_path
-	InstrumentItem.fast_latency = studio._fast_path_latency
-	studio._start_hit_voices()
+	InstrumentItem.fast_path = studio.input_host._hit_on_fast_path
+	InstrumentItem.fast_latency = studio.input_host._fast_path_latency
+	studio.input_host._start_hit_voices()
 	studio.jacks = Jacks.new()
 	studio.jacks.name = "Jacks"
 	studio.jacks.recorder = studio.hit_recorder
@@ -207,8 +210,8 @@ func _build_items() -> void:
 func _wire_made_items() -> void:
 	studio.items.made = Session.made
 	studio.items.authority = Session.is_authority
-	studio.items.made_home = studio._made_home
-	studio.items.press_ahead = studio._press_ahead
+	studio.items.made_home = studio.venue_switch._made_home
+	studio.items.press_ahead = studio.sampler_host._press_ahead
 	studio.items.minted.connect(_on_minted)
 	studio.items.unmade.connect(_on_unmade)
 	studio.items.told.connect(_on_items_told)
@@ -219,14 +222,14 @@ func _wire_made_items() -> void:
 	if studio.timeline != null:
 		studio.timeline.clip_pulled.connect(_on_clip_pulled)
 	studio.pieces.hold_the_rack()
-	studio._restore_made()
+	studio.sampler_host._restore_made()
 
 
 ## Something in the room moved: told to the room, and a made item's place kept with the layout.
 func _on_item_moved(item: Item) -> void:
-	studio._publish_room_soon()
+	studio.player_host._publish_room_soon()
 	if ItemRoom.is_made(item.id) and Session.is_authority():
-		studio._remember_made_soon()
+		studio.player_host._remember_made_soon()
 
 
 func _on_items_told(text: String) -> void:
@@ -236,16 +239,16 @@ func _on_items_told(text: String) -> void:
 ## Minted here, on the host: its row to everyone once, and kept with this host's layout.
 func _on_minted(item: Item) -> void:
 	Session.publish_made(item.id)
-	studio._remember_made()
-	studio._publish_room_soon()
+	studio.sampler_host._remember_made()
+	studio.player_host._publish_room_soon()
 
 
 ## Binned here, on the host: gone everywhere, row and all.
 func _on_unmade(id: StringName) -> void:
 	Session.drop_made(id)
 	Session.notice.emit("Binned %s." % _made_name(id))
-	studio._remember_made()
-	studio._publish_room_soon()
+	studio.sampler_host._remember_made()
+	studio.player_host._publish_room_soon()
 
 
 func _made_name(id: StringName) -> String:
@@ -274,7 +277,7 @@ func _on_clip_pulled(track: int, index: int, hand: Node) -> void:
 			interactor.pick_up(made)
 			_say_cassette(made)
 		return
-	var seq := studio._predict(&"make", [CassetteItem.KIND, from])
+	var seq := studio.room_rows._predict(&"make", [CassetteItem.KIND, from])
 	if seq > 0:
 		var look := ItemRoom.look_of(CassetteItem.KIND)
 		look.top_level = true
@@ -303,7 +306,7 @@ func _hand_made(made: Item, maker: int) -> void:
 			hand.pick_up(made)
 	else:
 		Session.hand_to(maker, made.network_key())
-	studio._publish_room_soon()
+	studio.player_host._publish_room_soon()
 
 
 ## How a cassette just put in a hand is used, said once. A tracked bare hand has no trigger, so it is
@@ -336,10 +339,10 @@ func _settle_makes(answered: int) -> void:
 			continue
 		if is_instance_valid(m["look"]):
 			(m["look"] as Node3D).queue_free()
-		studio._awaiting_hands.append(m["hand"])
+		_awaiting_hands.append(m["hand"])
 	studio._making = still
 	_take_given()
-	studio._awaiting_hands.clear()
+	_awaiting_hands.clear()
 
 
 func _take_given_soon() -> void:
@@ -364,8 +367,8 @@ func _take_given() -> void:
 				or not (item.is_held_elsewhere() or item.state == Item.State.HOME):
 			continue
 		var hand: Interactor = null
-		while hand == null and not studio._awaiting_hands.is_empty():
-			var waiting = studio._awaiting_hands.pop_front()
+		while hand == null and not _awaiting_hands.is_empty():
+			var waiting = _awaiting_hands.pop_front()
 			if is_instance_valid(waiting) and (waiting as Interactor).carrying == null:
 				hand = waiting
 		if hand == null:
@@ -401,7 +404,7 @@ func give_item(item: Item, peer: int) -> void:
 		item.carried_by.lose_carrying()
 	if studio.presence != null:
 		item.follow(studio.presence.palm_of(peer, item))
-	studio._predict(&"give", [item.id, peer])
+	studio.room_rows._predict(&"give", [item.id, peer])
 	Session.notice.emit("Handed %s to %s." % [_given_name(item), Session.name_of(peer)])
 
 
@@ -419,7 +422,7 @@ func _give(item: Item, peer: int, from: int) -> void:
 	Session.tell(peer, "%s handed you %s." % [Session.name_of(from), what])
 	if from == Session.local_peer_id:
 		Session.notice.emit("Handed %s to %s." % [what, Session.name_of(peer)])
-	studio._publish_room_soon()
+	studio.player_host._publish_room_soon()
 
 
 ## A cassette pressed onto `track` at `seconds` by a hand here (ItemRoom.paste_pressed;
@@ -432,7 +435,7 @@ func _on_paste_pressed(item: Item, track: int, seconds: float) -> void:
 	if Session.is_authority():
 		paste_cassette(cassette, track, seconds, Session.local_peer_id)
 		return
-	if studio._predict(&"paste", [cassette.id, track, seconds]) > 0:
+	if studio.room_rows._predict(&"paste", [cassette.id, track, seconds]) > 0:
 		var t := DAW.state.track(track, false)
 		Session.notice.emit("Asking %s to paste the %s cassette onto %s at %s..." % [Session.name_of(1),
 				cassette.clip_name(), t.display_name() if t != null else "track %d" % track, DAW.state.bar_beat(seconds)])
@@ -485,7 +488,7 @@ func _on_item_used_here(item: Item, down: bool) -> void:
 func _on_weather_pressed(on: bool) -> void:
 	if Session.is_authority():
 		_set_weather(on)
-	elif studio._predict(Weather.VERB, [on]) > 0:
+	elif studio.room_rows._predict(Weather.VERB, [on]) > 0:
 		_show_weather(on)
 	var what := str(studio.weather.spec.get("title", "the weather")).to_lower() if studio.weather != null else "the weather"
 	var said := what.left(1).to_upper() + what.substr(1)
@@ -496,7 +499,7 @@ func _on_weather_pressed(on: bool) -> void:
 ## The room's word on the switch: LISTEN or OFF, shown here and told to the room.
 func _set_weather(on: bool) -> void:
 	_show_weather(on)
-	studio._publish_room_soon()
+	studio.player_host._publish_room_soon()
 
 
 ## The switch shown as the room has it, on this weather and any stood later.
@@ -558,7 +561,7 @@ func _on_looper_slapped() -> void:
 	var stacking := Looper.loop_set(DAW.state)
 	if Session.is_authority():
 		_answer_looper(plan[0], plan[1], me)
-	elif studio._predict(Looper.VERB, plan) > 0:
+	elif studio.room_rows._predict(Looper.VERB, plan) > 0:
 		_show_looper([me, plan[0], plan[1]])
 	var bars := int(plan[1])
 	Session.notice.emit(("Stacking a layer: the rest of this pass counts in, then %d bar%s of everything you play." \
@@ -573,14 +576,14 @@ func _answer_looper(from_bar: int, bars: int, from: int) -> void:
 	if bool(out["refused"]):
 		Session.tell(from, "%s One player at a time." % out["said"])
 	_show_looper(out["row"])
-	studio._publish_room_soon()
+	studio.player_host._publish_room_soon()
 
 
 ## This player's layer is taken down (Looper.layer_done): the host's written at once, a guest's sent.
 func _on_looper_layer(start: float, end: float, notes: Array) -> void:
 	if Session.is_authority():
 		_write_looper_layer(start, end, notes, Session.local_peer_id)
-	elif studio._predict(Looper.LAYER_VERB, [start, end, notes]) > 0:
+	elif studio.room_rows._predict(Looper.LAYER_VERB, [start, end, notes]) > 0:
 		_show_looper([])
 
 
@@ -593,7 +596,7 @@ func _write_looper_layer(_start: float, _end: float, notes: Array, from: int) ->
 		return
 	var span := Looper.span_of(studio.looper_row, DAW.state)
 	_show_looper([])
-	studio._publish_room_soon()
+	studio.player_host._publish_room_soon()
 	var kept := Looper.inside(notes, span).slice(0, MidiTake.MAX_NOTES)
 	if kept.is_empty():
 		Session.tell(from, "Nothing was played into the loop, so there is no layer. Slap again to try another.")
@@ -608,7 +611,7 @@ func _write_looper_layer(_start: float, _end: float, notes: Array, from: int) ->
 func _on_looper_called_off() -> void:
 	if Session.is_authority():
 		_answer_looper(0, 0, Session.local_peer_id)
-	elif studio._predict(Looper.VERB, [0, 0]) > 0:
+	elif studio.room_rows._predict(Looper.VERB, [0, 0]) > 0:
 		_show_looper([])
 
 
@@ -633,4 +636,4 @@ func _on_looper_player_left(peer: int) -> void:
 		return  # a signal outliving the studio it was connected for
 	if Session.is_authority() and not studio.looper_row.is_empty() and int(studio.looper_row[0]) == peer:
 		_show_looper([])
-		studio._publish_room_soon()
+		studio.player_host._publish_room_soon()

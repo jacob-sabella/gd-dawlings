@@ -28,9 +28,9 @@ func build() -> void:
 		var def := PieceDef.of(id)
 		var spot: Variant = venue.default_spot(id) if venue != null else null
 		var at: Transform3D = spot if spot != null else Transform3D.IDENTITY
-		var t := studio._trolley(def.trolley_name, id, at.origin, rad_to_deg(at.basis.get_euler().y))
+		var t := studio.rack_host._trolley(def.trolley_name, id, at.origin, rad_to_deg(at.basis.get_euler().y))
 		equip(t, def)
-		studio._go_live(t)
+		studio.furniture_host._go_live(t)
 
 
 ## Give trolley `t` the feet of definition `def`: its footprint, how heavy it is to push, what it is taken
@@ -41,7 +41,7 @@ func equip(t: Trolley, def: PieceDef) -> void:
 	t.follow = def.weight
 	t.rolls = false
 	for grip: Array in def.grips:
-		studio._grip(t, grip[0], grip[1])
+		studio.furniture_host._grip(t, grip[0], grip[1])
 	if def.body_half != Vector2.ZERO:
 		t.body_centre = def.body_centre
 		t.body_half = def.body_half
@@ -83,9 +83,9 @@ func stand(id: StringName) -> void:
 		_hung(id, node)
 	elif id == Looper.STATION and was != null and (was as Looper).mine():
 		# A layer it was taking down in the last venue has nowhere to finish.
-		studio._on_looper_called_off()
+		studio.item_host._on_looper_called_off()
 	if id == VenueInstrument.STATION:
-		studio._dress_venue_bars()
+		studio.venue_switch._dress_venue_bars()
 
 
 ## Take piece `id`'s node down (a room that does without it): freed, the studio's variable null as where
@@ -95,7 +95,7 @@ func unstand(id: StringName) -> void:
 	var held: Variant = studio.get(def.studio_node)
 	if id == Looper.STATION and _stands(held) and (held as Looper).mine():
 		# A layer this player was taking down has nowhere to finish.
-		studio._on_looper_called_off()
+		studio.item_host._on_looper_called_off()
 	if _stands(held):
 		(held as Node).get_parent().remove_child(held)
 		(held as Node).queue_free()
@@ -130,9 +130,9 @@ func _make(id: StringName, at: Transform3D, spec: Dictionary, was: Node3D) -> No
 			sampler.local_peer = func() -> int: return Session.local_peer_id
 			sampler.name_of = Session.name_of
 			sampler.armed_by = (was as Sampler).armed_by if was != null else 0
-			sampler.rec_pressed.connect(studio._on_rec_pressed)
+			sampler.rec_pressed.connect(studio.sampler_host._on_rec_pressed)
 			sampler.told.connect(func(peer: int, text: String) -> void: Session.tell(peer, text))
-			sampler.armed_changed.connect(studio._publish_room_soon)
+			sampler.armed_changed.connect(studio.player_host._publish_room_soon)
 			return sampler
 		&"drums":
 			return _drum_circle(at)
@@ -140,21 +140,21 @@ func _make(id: StringName, at: Transform3D, spec: Dictionary, was: Node3D) -> No
 			var looper := Looper.new()
 			looper.transform = at
 			looper.local_peer = func() -> int: return Session.local_peer_id
-			looper.name_of = studio._looper_name
+			looper.name_of = studio.item_host._looper_name
 			looper.length = studio.looper_length
 			looper.row = studio.looper_row
 			if was != null:
 				looper.take_over(was as Looper)
-			looper.slapped.connect(studio._on_looper_slapped)
+			looper.slapped.connect(studio.item_host._on_looper_slapped)
 			looper.length_changed.connect(func(bars: int) -> void: studio.looper_length = bars)
-			looper.layer_done.connect(studio._on_looper_layer)
-			looper.called_off.connect(studio._on_looper_called_off)
+			looper.layer_done.connect(studio.item_host._on_looper_layer)
+			looper.called_off.connect(studio.item_host._on_looper_called_off)
 			return looper
 		&"lyrics":
 			var board := LyricBoard.new()
 			board.transform = at
 			board.told.connect(func(text: String) -> void: Session.notice.emit(text))
-			board.edit_asked.connect(studio.edit_lyrics)
+			board.edit_asked.connect(studio.surface_host.edit_lyrics)
 			return board
 		&"venue":
 			var instrument := VenueInstrument.new(spec)
@@ -164,8 +164,8 @@ func _make(id: StringName, at: Transform3D, spec: Dictionary, was: Node3D) -> No
 			var weather := Weather.new(spec, Weather.seed_of(studio.venue.venue_id()))
 			weather.transform = at
 			weather.listening = studio.weather_listening
-			weather.switch_pressed.connect(studio._on_weather_pressed)
-			weather.dropped.connect(studio._on_weather_dropped)
+			weather.switch_pressed.connect(studio.item_host._on_weather_pressed)
+			weather.dropped.connect(studio.item_host._on_weather_dropped)
 			return weather
 	return null
 
@@ -216,7 +216,7 @@ func carry(id: StringName) -> bool:
 	var spot: Variant = venue.call(StringName("%s_spot" % id))
 	var standing := node != null and spot != null
 	if standing:
-		node.transform = studio._venue_to_set(spot) if def.node_in_set else spot
+		node.transform = studio.venue_switch._venue_to_set(spot) if def.node_in_set else spot
 	for follower in def.followers:
 		match follower:
 			PieceDef.HOLD_RACK:
@@ -257,7 +257,7 @@ static func _stands(node: Variant) -> bool:
 ## (ItemRoom.set_spots).
 func rehome_items() -> void:
 	if studio.items != null and studio.venue != null:
-		studio.items.set_spots(studio.venue.item_spots(), studio._item_homes())
+		studio.items.set_spots(studio.venue.item_spots(), studio.item_host._item_homes())
 
 
 ## What the Tour case spilled, homed round where the case now stands (`Studio._spill_home`).
@@ -269,7 +269,7 @@ func rehome_spills() -> void:
 	for n in spilled.size():
 		var item: Item = items.items.get(spilled[n])
 		if item != null:
-			item.home = studio._spill_home(n)
+			item.home = studio.tour_room._spill_home(n)
 
 
 ## The rack's slots and bin as the room's holders, and each made item's home its tray, in the
@@ -281,7 +281,7 @@ func hold_the_rack() -> void:
 	var rack := studio.cassette_rack
 	if not _stands(rack):
 		items.holders.clear()
-		studio._hold_the_platter()
+		studio.venue_switch._hold_the_platter()
 		return
 	rack.items = items
 	if _stands(studio.sampler):
@@ -292,7 +292,7 @@ func hold_the_rack() -> void:
 	items.set_holder(CassetteRack.BIN, bin)
 	for id in items.made_ids():
 		var item: Item = items.items[id]
-		item.home = studio._made_home(ItemRoom.kind_of(id), int(String(id).trim_prefix(String(ItemRoom.kind_of(id)))))
+		item.home = studio.venue_switch._made_home(ItemRoom.kind_of(id), int(String(id).trim_prefix(String(ItemRoom.kind_of(id)))))
 		if item.state == Item.State.HOME:
 			item.snap_home()
-	studio._hold_the_platter()
+	studio.venue_switch._hold_the_platter()

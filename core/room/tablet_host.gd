@@ -5,6 +5,43 @@ extends RefCounted
 ## room, putting it back, and remembering where the player left them. Moved out of `scenes/studio.gd` without change of
 ## behaviour; the state stays on the studio, which delegates the calls other code makes.
 
+## Guest: how many stands it has put out on its own say-so, for naming them until the host does.
+var _predicted_tablets := 0
+
+var _predicted_track_racks := 0
+
+# --- plugin tablets -------------------------------------------------------------------------
+#
+# A plugin pulled off the rack stands on its own music stand: a weighted round foot, a pole, and
+# a cradle holding the tablet tilted back at a standing reader's hands. On the floor rather than
+# on the desk because the desk is the console, and a tablet propped on the faders is in the way
+# of the faders; a stand can be wheeled up beside the chair, or across to the rack, or anywhere.
+
+## The top edge of the tablet on its stand, and how far it leans back. Desk height plus a little:
+## read standing, or pulled up beside the chair.
+const TABLET_TOP := 1.16
+
+const TABLET_LEAN := 28.0
+
+const TABLET_FOOT := 0.19
+
+## How far in front of the rack's face a pulled tablet lands, when it was not pulled anywhere
+## in particular.
+const TABLET_PULL := 0.6
+
+# --- pulled-out track racks -----------------------------------------------------------------
+#
+# The rack's track window has a grip like a unit's name strip. Pulled, the whole track's chain
+# comes out on a rack of its own: the same RackSurface, pinned to that track (no window to scroll
+# to another, a FOLD button instead), up on a short plinth on casters like the main rack's, so it
+# can be wheeled over beside whoever is working on that track. FOLD puts it back in.
+
+## How far in front of the rack's face a pulled-out track's rack lands, when it was not pulled
+## anywhere in particular. Further than a tablet: it is a rack, half a metre deep.
+const TRACK_RACK_PULL := 0.9
+
+const TRACK_RACK_PLINTH := 0.30
+
 var studio: Studio
 
 
@@ -19,7 +56,7 @@ func _on_tear_requested(track: int, fx: int, at: Vector3, from: Node3D = null) -
 	# Out from the rack along its facing, so a tablet pulled straight off lands in front of it
 	# rather than inside it.
 	var out := (from if from != null else studio.rack).global_basis.z.normalized()
-	var landing := at + Vector3(out.x, 0, out.z).normalized() * Studio.TABLET_PULL
+	var landing := at + Vector3(out.x, 0, out.z).normalized() * TABLET_PULL
 	var id: StringName
 	if Session.is_authority():
 		id = open_tablet(track, fx, f.name, Vector2(landing.x, landing.z))
@@ -58,15 +95,15 @@ func _facing_mix(from: Vector2) -> float:
 
 
 func _build_tablet(id: StringName, track: int, fx: int, plugin_name: String) -> void:
-	var stand := studio._trolley("PluginStand_%s" % id, id, Vector3(0, 0, 0.6), 0.0)
+	var stand := studio.rack_host._trolley("PluginStand_%s" % id, id, Vector3(0, 0, 0.6), 0.0)
 	stand.rolls = false
 	stand.follow = 14.0
-	stand.footprint_half = Vector2(Studio.TABLET_FOOT, Studio.TABLET_FOOT)
+	stand.footprint_half = Vector2(TABLET_FOOT, TABLET_FOOT)
 	var foot := MeshInstance3D.new()
 	foot.name = "Foot"
 	var disc := CylinderMesh.new()
-	disc.top_radius = Studio.TABLET_FOOT * 0.92
-	disc.bottom_radius = Studio.TABLET_FOOT
+	disc.top_radius = TABLET_FOOT * 0.92
+	disc.bottom_radius = TABLET_FOOT
 	disc.height = 0.025
 	disc.radial_segments = 40
 	foot.mesh = disc
@@ -78,7 +115,7 @@ func _build_tablet(id: StringName, track: int, fx: int, plugin_name: String) -> 
 	var tube := CylinderMesh.new()
 	tube.top_radius = 0.012
 	tube.bottom_radius = 0.016
-	var pole_top := Studio.TABLET_TOP - PluginTablet.HEIGHT * cos(deg_to_rad(Studio.TABLET_LEAN)) * 0.5
+	var pole_top := TABLET_TOP - PluginTablet.HEIGHT * cos(deg_to_rad(TABLET_LEAN)) * 0.5
 	tube.height = pole_top
 	tube.radial_segments = 16
 	pole.mesh = tube
@@ -89,8 +126,8 @@ func _build_tablet(id: StringName, track: int, fx: int, plugin_name: String) -> 
 	var tablet := PluginTablet.create(track, fx, plugin_name)
 	tablet.surface_id = id
 	# Hung from its top edge's middle, leaning back: the cradle's lip is under its bottom edge.
-	var lean := Basis(Vector3.RIGHT, -deg_to_rad(Studio.TABLET_LEAN))
-	tablet.transform = Transform3D(lean, Vector3(0, Studio.TABLET_TOP, 0.0)) \
+	var lean := Basis(Vector3.RIGHT, -deg_to_rad(TABLET_LEAN))
+	tablet.transform = Transform3D(lean, Vector3(0, TABLET_TOP, 0.0)) \
 			* Transform3D(Basis.IDENTITY, Vector3(0, -PluginTablet.HEIGHT * 0.5, 0))
 	var lip := MeshInstance3D.new()
 	lip.name = "Cradle"
@@ -149,8 +186,8 @@ func _predicted_tablet(track: int, fx: int, plugin_name: String, where: Vector2)
 		if t.track_index == track and t.fx_index == fx:
 			(studio.tablets[id][0] as Trolley).place(where, _facing_mix(where))
 			return id
-	studio._predicted_tablets += 1
-	var id := StringName("mine_%d" % studio._predicted_tablets)
+	_predicted_tablets += 1
+	var id := StringName("mine_%d" % _predicted_tablets)
 	if studio.room_rows._predict(&"open_tablet", [track, fx, plugin_name, where.x, where.y], id) == 0:
 		return StringName()
 	_build_tablet(id, track, fx, plugin_name)
@@ -189,7 +226,7 @@ func _on_track_tear_requested(track: int, at: Vector3, from: Node3D) -> void:
 	if not DAW.state.tracks.has(track):
 		return
 	var out := from.global_basis.z.normalized()
-	var landing := at + Vector3(out.x, 0, out.z).normalized() * Studio.TRACK_RACK_PULL
+	var landing := at + Vector3(out.x, 0, out.z).normalized() * TRACK_RACK_PULL
 	var where := Vector2(landing.x, landing.z)
 	var id: StringName
 	if Session.is_authority():
@@ -220,16 +257,16 @@ func open_track_rack(track: int, where: Vector2) -> StringName:
 
 
 func _build_track_rack(id: StringName, track: int) -> void:
-	var stand := studio._trolley("TrackRackTrolley_%s" % id, id, Vector3(0, 0, 0.6), 0.0)
+	var stand := studio.rack_host._trolley("TrackRackTrolley_%s" % id, id, Vector3(0, 0, 0.6), 0.0)
 	stand.footprint_centre = Vector2(0, -0.15)
 	stand.footprint_half = Vector2(0.30, 0.17)
 	stand.follow = 9.0
 	var plinth := MeshInstance3D.new()
 	plinth.name = "Plinth"
 	var plinth_mesh := BoxMesh.new()
-	plinth_mesh.size = Vector3(0.60, Studio.TRACK_RACK_PLINTH - Caster.HEIGHT, 0.34)
+	plinth_mesh.size = Vector3(0.60, TRACK_RACK_PLINTH - Caster.HEIGHT, 0.34)
 	plinth.mesh = plinth_mesh
-	plinth.position = Vector3(0, (Studio.TRACK_RACK_PLINTH + Caster.HEIGHT) * 0.5, -0.15)
+	plinth.position = Vector3(0, (TRACK_RACK_PLINTH + Caster.HEIGHT) * 0.5, -0.15)
 	plinth.material_override = Materials.furniture()
 	GearTrim.edges(plinth)
 	stand.add_part(plinth)
@@ -240,7 +277,7 @@ func _build_track_rack(id: StringName, track: int) -> void:
 	var band_mesh := BoxMesh.new()
 	band_mesh.size = Vector3(0.56, 0.035, 0.004)
 	band.mesh = band_mesh
-	band.position = Vector3(0, (Studio.TRACK_RACK_PLINTH + Caster.HEIGHT) * 0.5, 0.024)
+	band.position = Vector3(0, (TRACK_RACK_PLINTH + Caster.HEIGHT) * 0.5, 0.024)
 	band.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	stand.add_part(band, false)
 	stand.add_corner_casters(0.05)
@@ -250,7 +287,7 @@ func _build_track_rack(id: StringName, track: int) -> void:
 	pulled.surface_id = id
 	pulled.pinned = true
 	pulled.track_index = track
-	pulled.position = Vector3(0, Studio.TRACK_RACK_PLINTH, 0)
+	pulled.position = Vector3(0, TRACK_RACK_PLINTH, 0)
 	stand.add_child(pulled)
 	pulled.tear_requested.connect(func(t: int, f: int, at: Vector3) -> void: _on_tear_requested(t, f, at, pulled))
 	pulled.fold_requested.connect(_fold_track_rack.bind(id))
@@ -258,7 +295,7 @@ func _build_track_rack(id: StringName, track: int) -> void:
 	pulled.rebuilt.connect(func() -> void:
 		if studio.track_racks.has(id):
 			_paint_track_band(id))
-	pulled.rebuilt.connect(studio._show_patches)
+	pulled.rebuilt.connect(studio.patch_host._show_patches)
 	if studio.focus != null:
 		studio.focus.surfaces.append(pulled)
 		pulled.rebuilt.connect(studio.focus._on_surface_rebuilt.bind(pulled))
@@ -324,8 +361,8 @@ func _predicted_track_rack(track: int, where: Vector2) -> StringName:
 		if (studio.track_racks[id][1] as RackSurface).track_index == track:
 			(studio.track_racks[id][0] as Trolley).place(where, _facing_mix(where))
 			return id
-	studio._predicted_track_racks += 1
-	var id := StringName("mine_rack_%d" % studio._predicted_track_racks)
+	_predicted_track_racks += 1
+	var id := StringName("mine_rack_%d" % _predicted_track_racks)
 	if studio.room_rows._predict(&"open_track_rack", [track, where.x, where.y], id) == 0:
 		return StringName()
 	_build_track_rack(id, track)

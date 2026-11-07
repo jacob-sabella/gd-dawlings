@@ -178,10 +178,10 @@ func _variant_row() -> void:
 
 
 func _on_venue_chosen(id: StringName) -> void:
-	studio.choose_venue(id)
+	studio.venue_switch.choose_venue(id)
 	rebuild()
 
 
 func _on_variant_chosen(variant: int) -> void:
-	studio.choose_variant(variant)
+	studio.venue_switch.choose_variant(variant)
 	rebuild()
