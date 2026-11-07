@@ -68,6 +68,24 @@ static func combinations() -> Array:
 	return out
 
 
+## The old transforms, frozen before docs/layouts.md step 5 deleted the code that computed them
+## (`Venue.default_*_spot`): for each venue, arrangement and width, each wheeled piece as 12 numbers
+## (basis columns, origin) or null where the venue had no room for it.
+const LEGACY_SPOTS := "res://tests/fixtures/layouts/live_room_legacy_spots.json"
+
+
+static func _legacy_rows() -> Array:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(LEGACY_SPOTS))
+	return parsed["rows"] if parsed is Dictionary else []
+
+
+static func _transform(n: Array) -> Transform3D:
+	return Transform3D(Basis(Vector3(n[0], n[1], n[2]), Vector3(n[3], n[4], n[5]), Vector3(n[6], n[7], n[8])), Vector3(n[9], n[10], n[11]))
+
+
+## Regression check against the frozen fixture of the old transforms: what the venue gives now, which
+## is the shipped layout read through `Venue.default_spot`, and what the test's own in-memory rooms
+## resolve to, both equal the code that stood for the five pieces before it was deleted.
 func equals_the_venue() -> void:
 	var set := fragments()
 	var fragment := set.layouts.get("common.live_room") as LayoutData
@@ -77,31 +95,49 @@ func equals_the_venue() -> void:
 	placed.sort()
 	var wheeled_ids: Array = Venue.WHEELED.map(func(p: StringName) -> String: return String(p))
 	wheeled_ids.sort()
-	check("and places exactly the five wheeled pieces, the venue's own list (%s)" % [placed], placed == wheeled_ids)
+	check("and places exactly the five wheeled pieces, the venue's own list (%s)" % [placed], placed == wheeled_ids and placed.size() == 5)
+	check("in the order the studio has always built their trolleys", Venue.WHEELED == [&"cassette_rack", &"sampler",
+			&"tour_case", &"prop_shelf", &"hoop"])
+	var studio_file := LiveRoom.layouts().layouts.get("studio") as LayoutData
+	check("the studio's own shipped layout names the arrangements the venue does",
+			studio_file != null and PackedStringArray(studio_file.variant_titles()) == Venue.variant_titles(&"studio"))
+	var rows := _legacy_rows()
+	check("the frozen fixture holds 43 rooms at two widths (86 rows)", rows.size() == 86)
 	var compared := 0
 	var nulls := 0
-	for width in WIDTHS:
-		for combo: Array in combinations():
-			var id: StringName = combo[0]
-			var venue := Venue.make(id, combo[1])
-			venue.room_width = width
-			var facts := ShellFacts.of(venue)
-			var layout := room(set, id, combo[1])
-			var tag := "%s/%d at %.1f m" % [id, combo[1], width]
-			check("%s: the room resolves (%s)" % [tag, layout.problems], layout.status == LayoutData.STATUS_OK)
-			for wheeled in Venue.WHEELED:
-				var want: Variant = venue.default_spot(wheeled)
-				var got: Variant = LayoutResolver.transform(layout, wheeled, facts)
-				if want == null:
-					nulls += 1
-					check("%s: %s has no room here, in code and in data" % [tag, wheeled], got == null)
-				else:
-					compared += 1
-					check("%s: %s resolves to the venue's default (%s, wanted %s)" % [tag, wheeled, got, want],
-							got != null and same(got, want))
-			venue.free()
-	check("every wheeled piece was compared: 5 x 43 x 2 = 430, the roulette room's sampler (2) being null on both sides (%d + %d)"
+	for row: Dictionary in rows:
+		var id := StringName(row["venue"])
+		var variant := int(row["variant"])
+		var venue := Venue.make(id, variant)
+		venue.room_width = row["room_width"]
+		var layout := room(set, id, variant)
+		var facts := ShellFacts.of(venue)
+		var tag := "%s/%d at %.1f m" % [id, variant, venue.room_width]
+		check("%s: the room resolves (%s)" % [tag, layout.problems], layout.status == LayoutData.STATUS_OK)
+		for wheeled: StringName in Venue.WHEELED:
+			var frozen: Variant = row["spots"].get(String(wheeled))
+			var now: Variant = venue.default_spot(wheeled)
+			var data: Variant = LayoutResolver.transform(layout, wheeled, facts)
+			if frozen == null:
+				nulls += 1
+				check("%s: %s had no room here, and still has none" % [tag, wheeled], now == null and data == null)
+			else:
+				compared += 1
+				var want := _transform(frozen)
+				check("%s: %s stands where the old code stood it (%s, wanted %s)" % [tag, wheeled, now, want],
+						now != null and same(now, want) and data != null and same(data, want))
+		venue.free()
+	check("every wheeled piece was compared: 5 x 43 x 2 = 430, the roulette room's sampler (2) being null (%d + %d)"
 			% [compared, nulls], compared == 428 and nulls == 2)
+	var cached := Venue.make(&"studio", 1)
+	var before: Variant = cached.default_spot(&"prop_shelf")
+	cached.room_width += 0.8
+	var wider: Variant = cached.default_spot(&"prop_shelf")
+	cached.variant = 0
+	var behind: Variant = cached.default_spot(&"prop_shelf")
+	check("the venue's cache follows its width and its arrangement (the shelf moves with each)",
+			before != null and wider != null and behind != null and not same(before, wider) and not same(wider, behind))
+	cached.free()
 
 
 func placement_rules() -> void:

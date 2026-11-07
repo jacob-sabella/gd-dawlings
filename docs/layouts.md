@@ -1,8 +1,8 @@
 # Layouts: rooms as data
 
-Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 to 4 (11) are built and unused by the game:
+Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 to 5 (11) are built; from step 5 the game reads them for the five wheeled pieces (`LiveRoom`):
 `core/layouts/` (`LayoutData`, `LayoutCheck`, `LayoutMerge`, `LayoutSet`, `LayoutProblem`, `ShellFacts`, `LayoutResolver`,
-`LayoutValidator` with `LayoutChecks`, `LayoutIssue`, `LayoutReach`, `LayoutGeometry`, `PieceFeet`), `layouts/common/live_room.layout.json`,
+`LayoutValidator` with `LayoutChecks`, `LayoutIssue`, `LayoutReach`, `LayoutGeometry`, `PieceFeet`, `LiveRoom`), `layouts/common/live_room.layout.json`, `layouts/venues/studio.layout.json`,
 `layouts/layout.schema.json`, fixtures in `tests/fixtures/layouts/`. Where they differ from the text below, the
 text says so ("Built:"). It is queue item 2 of `docs/refactor_loop.md` and feeds items 6-8. "Today" claims cite `docs/refactor_state_map.md` (SM) or
 a file:line. Companion: `docs/mods.md` (manifests, registry; a piece is delivered as a mod entry).
@@ -91,7 +91,7 @@ this by comparing `ShellFacts` from an un-readied venue with one from a built ve
 * `solids` is the shell's own: `zone_solids()`, the instrument's, the weather's and the roulette door (what `Venue.solids()` holds),
   **without the five wheeled pieces**. They are pieces, and `Venue.solids()` adds them only when no trolley stands in for them. It is
   `Venue.solids()` minus `Venue.wheeled_solids()`, so a shell that adds a solid of its own in `solids()` (the roulette room's
-  setup-wall post) is kept. Step 5, when the wheeled pieces leave the venue, turns this into a plain call.
+  setup-wall post) is kept. Step 5 did not turn this into a plain call: `wheeled_solids()` (the pieces' walker footprints) is still the venue's, and moves with the pieces in step 6.
 * `anchor(name)` returns a float for a line (`wall.left`, `control_rear`, `annex_edge`, `zone.<id>.cx|cz`), a `Vector2` for a point
   (`zone.<id>` is the middle, `.min`/`.max` the corners) and null when the shell has no such anchor (a zone it lacks). `anchor_axis(name,
   "x"|"z")` reads either as a number. `ShellFacts.is_anchor_name` is the syntax (`ANCHOR_RE`, also in the schema).
@@ -110,6 +110,8 @@ a constant" (below) turned out to be needed nowhere. `lyrics_spot`/`mic_spot` wi
 the booth's felt height is then a constant of the zone kit.
 
 `ShellFacts.can_cut(wall, z, width)` (step 4) answers whether a doorway can be cut in a side wall; see 6.
+
+`ShellFacts.anchors_of(venue)` (step 5) is the part `of` starts from: id, arrangement, width, zones, `live_room_half`, `annex_edge`, and no solid. `Venue.default_spot` resolves against it, because `of` asks the venue for `solids()`, which asks for the wheeled pieces' spots, which are `default_spot`.
 
 Anchors the shell provides (names are the contract): `wall.left`, `wall.right` (x of the live room's
 side walls, +-`live_room_half`), `control_wall.left|right` (+-`room_width/2`), `control_rear` (z =
@@ -263,6 +265,25 @@ venues; a made room that puts the synth zone on the left or in front must place 
 `side`/`away` signs have no data form yet). Yaws are written to 16 digits. `_test_the_layout_resolves_to_the_venues_own_defaults`
 holds all five to `Venue.default_spot` within 1e-4 for 14 x 3 + 1 rooms at two widths (428 transforms, the
 roulette room's two missing samplers null on both sides).
+
+**Built (step 5)**: the game reads this. `LiveRoom` (`core/layouts/live_room.gd`) scans `res://layouts/` once (static, kept), resolves a
+venue's room (`layouts/venues/<id>.layout.json` when there is one, else `common.live_room`; a venue without a file has no arrangements
+of its own, so variant 0 whatever its arrangement) and `Venue.default_spot(id)` reads the transform from it against `ShellFacts.anchors_of(self)`,
+kept on the venue until its arrangement or width changes. What was deleted from `venue.gd`: the bodies of `default_prop_shelf_spot`,
+`default_hoop_spot`, `default_tour_case_spot`, `default_cassette_rack_spot`, `default_sampler_spot` (kept as one-line readers because tests and
+`studio_venue.gd` call them), the `match` of `default_spot`, `_toys_wall`, and the constants `TOYS_IN`, `HOOP_ALONG`, `TOUR_CASE_ALONG`,
+`RACK_GAP`, `SAMPLER_RING`; from `studio_venue.gd` the whole `default_prop_shelf_spot` override and `BESIDE_TOYS_IN`, now the one variant
+entry of `layouts/venues/studio.layout.json` (arrangement 1, the shelf at `control_wall.left` + (0.34, 2.4)). `Venue.WHEELED` is no longer a
+constant list but `LiveRoom.wheeled_ids()`: the `mobility: wheeled` pieces of the fragment, in file order (the fragment's pieces are written
+in the order the studio has always built the trolleys, which decides the order they are settled in). `TOYS_ACROSS` and `SYNTH_MIDDLE` stay: the
+venues' pendants and `synth_middle()` measure from them, and they are the neighbourhood's, not a piece's position. The 428-transform test
+`_test_the_layout_resolves_to_the_venues_own_defaults` is now a regression check against the frozen fixture
+`tests/fixtures/layouts/live_room_legacy_spots.json` (the old code's output for 43 rooms at two widths, dumped before the code was deleted).
+**Not switched, and why**: `Studio.LIVE_TROLLEYS` is the trolleys' footprints, weights and grips, built from the classes' own constants
+(`CassetteRack.FOOT`, `Hoop.BASE_HALF`, ...); a layout file has a placement and no such field, and writing the numbers into JSON would
+duplicate the classes' constants. It waits for the piece definitions of step 6 (4.1 `footprint`, `trolley`); `PieceFeet` reads it until then.
+The five `_carry_live` arms hold no position, only what rides on the piece (rehome the items, hold the rack, the hoops, the spills): they
+already take the spot from `venue.*_spot()`, which now reads the layout, and are the `followers` of step 6.
 
 The rooftop (`rooftop_venue.gd`, 858 lines) overrides none of the placement functions; it stands on the base
 class (SM 2.2), at base width (`room_width` 11.2, so `live_room_half` 8.8 and zone growth 0). The five
@@ -552,7 +573,8 @@ item 7, 11-12 item 8.
    equal `Venue.default_spot` for every combination (1e-4). Venues untouched. **Done** (see 5.2 "Built").
 4. **`LayoutValidator`** and `_test_every_layout_is_valid`, with seeded violations. Old tests unchanged. **Done** (see 6 "Built").
 5. **Switch the five.** `default_*_spot` bodies, `WHEELED`, `LIVE_TROLLEYS`, the five `_carry_live` arms read
-   the layout; studio's shelf override becomes its variant entry. Old placement tests must pass untouched.
+   the layout; studio's shelf override becomes its variant entry. Old placement tests must pass untouched. **Done** for
+   the spots, `WHEELED` and the studio entry (see 5.2 "Built (step 5)"); `LIVE_TROLLEYS` and the `_carry_live` arms move with step 6.
 6. **The rest of `Stations.ALL`**, zone-mounted pieces, the control-room fragment and `Neighbourhoods` to
    data; `PieceHost` replaces `_stand_the_*`. Old Studio placement tests deleted once equal (each deletion
    noted in the commit).
@@ -572,7 +594,7 @@ item 7, 11-12 item 8.
 |---|---|
 | `_test_a_layout_parses_and_names_every_error`, `_test_layout_fragments_and_variants_merge_and_resolve`, `_test_a_layout_that_cannot_be_resolved_says_why`, `_test_the_layout_schema_agrees_with_the_parser` (`tests/layout_data_tests.gd`) | step 1 (built) |
 | `_test_shell_facts_from_an_unreadied_venue_match_the_built_one`, `_test_shell_facts_of_a_venue_in_a_studio_are_the_unreadied_ones`, `_test_shell_anchors_have_the_values_placement_uses` (`tests/shell_facts_tests.gd`) | step 2 (built) |
-| `_test_the_layout_resolves_to_the_venues_own_defaults` (temporary), `_test_a_placement_is_anchors_plus_an_offset_or_a_frame` (`tests/layout_resolver_tests.gd`) | step 3 (built) |
+| `_test_the_layout_resolves_to_the_venues_own_defaults` (since step 5 a regression check of 428 transforms against the frozen `live_room_legacy_spots.json`, for the venue and for the layout), `_test_a_placement_is_anchors_plus_an_offset_or_a_frame` (`tests/layout_resolver_tests.gd`) | steps 3, 5 (built) |
 | `_test_every_layout_is_valid` | the 42 guarantees as far as a layout holds them, no Studio (built; 86 runs, 8 s with start-up) |
 | `_test_the_validator_names_each_seeded_violation` | each code in 6 fires (built, `tests/layout_validator_tests.gd`) |
 | `_test_deleting_and_adding_a_piece_survives_a_restart` | brief proof: delete in one venue, add in another, make a room, reload |

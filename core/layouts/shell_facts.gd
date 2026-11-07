@@ -43,12 +43,23 @@ static func is_anchor_name(name: String) -> bool:
 	return RegEx.create_from_string(ANCHOR_RE).search(name) != null
 
 
-## The facts of `venue`, which need not be in a tree (and must not have been given a studio).
-static func of(venue: Venue) -> ShellFacts:
+## Only what the anchors read, from `venue`: its id, arrangement, width, zones, live-room half and
+## annex edge. It asks for no solid, so it is safe to call from a placement question (the venue's
+## own `default_spot`, which `solids()` itself reaches through the wheeled pieces); `of` is the whole.
+static func anchors_of(venue: Venue) -> ShellFacts:
 	var f := ShellFacts.new()
 	f.venue_id = venue.venue_id()
 	f.variant = venue.variant
 	f.room_width = venue.room_width
+	f.zones = venue.zones()
+	f.live_room_half = venue.live_room_half()
+	f.annex_edge = venue.annex_edge()
+	return f
+
+
+## The facts of `venue`, which need not be in a tree (and must not have been given a studio).
+static func of(venue: Venue) -> ShellFacts:
+	var f := anchors_of(venue)
 	var bounds := Rect2()
 	for i in venue.footprint_corners().size():
 		var corner := venue.footprint_corners()[i]
@@ -56,9 +67,6 @@ static func of(venue: Venue) -> ShellFacts:
 	f.footprint = bounds
 	f.rooms = venue.rooms()
 	f.solids.assign(_shell_solids(venue))
-	f.zones = venue.zones()
-	f.live_room_half = venue.live_room_half()
-	f.annex_edge = venue.annex_edge()
 	f.has_walls = venue.has_walls()
 	f.ceiling = venue.ceiling_height()
 	return f

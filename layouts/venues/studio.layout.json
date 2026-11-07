@@ -1,0 +1,14 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "studio",
+  "title": "Studio",
+  "extends": ["common.live_room"],
+  "variants": [
+    {"title": "Live room behind"},
+    {"title": "Live room beside", "pieces": [
+      {"id": "prop_shelf", "at": {"anchor": {"x": "control_wall.left", "z": "control_rear"}, "pos": [0.34, 2.4], "yaw": 1.5707963267948966}}
+    ]},
+    {"title": "Through the glass"}
+  ]
+}

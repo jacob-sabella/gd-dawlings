@@ -386,25 +386,18 @@ func prop_shelf_spot() -> Transform3D:
 	return _spot_of(&"prop_shelf")
 
 
-## Where the venue stands the prop shelf until it is pushed somewhere else: the tape and toys
-## neighbourhood (Neighbourhoods), against the left wall at the front of the live room, TOYS_IN back
-## from the control room's open rear, facing across the neighbourhood's middle to the hoop and the
-## Tour case. Turn round from the desk and it is on your right as you come out, short of the booth.
-const TOYS_IN := 1.0
-## How far across the neighbourhood from the left wall the hoop and the Tour case stand, facing back
-## at the shelf and the cassette rack: a throw across the middle.
-const TOYS_ACROSS := 3.5
-
-
+## Where the venue stands the prop shelf until it is pushed somewhere else: the layout's
+## (`common.live_room`, or the venue's own file; see LiveRoom): the tape and toys neighbourhood
+## (Neighbourhoods), against the left wall at the front of the live room, facing across the
+## neighbourhood's middle to the hoop and the Tour case.
 func default_prop_shelf_spot() -> Transform3D:
-	var x := -live_room_half() + 0.08 + ZoneKit.SHELF.z * 0.5
-	var z := Studio.ROOM_BACK + TOYS_IN
-	return Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(x, 0, z))
+	var spot: Transform3D = default_spot(&"prop_shelf")
+	return spot
 
 
-## The wall the shelf at `shelf` (facing +X) has its back to, along x.
-static func _toys_wall(shelf: Transform3D) -> float:
-	return shelf.origin.x - 0.08 - ZoneKit.SHELF.z * 0.5
+## How far across the tape and toys neighbourhood from the left wall the hoop and the Tour case
+## stand (the layout's numbers); the pendants over it hang by the same measure.
+const TOYS_ACROSS := 3.5
 
 
 ## Where the items live, in studio space, one per item (ItemRoom.KINDS) and a few spare: in a
@@ -497,16 +490,11 @@ func hoop_spot() -> Transform3D:
 	return _spot_of(&"hoop")
 
 
-## Where the venue stands the hoop until it is pushed somewhere else: across the tape and toys
-## neighbourhood from the shelf the ball lives on, its board facing back at it, level with the
-## shelf's far end: a throw across the middle, the toy and the plane on the floor between.
-const HOOP_ALONG := 0.4
-
-
+## Where the venue stands the hoop until it is pushed somewhere else: the layout's, across the
+## neighbourhood from the shelf the ball lives on, its board facing back at it.
 func default_hoop_spot() -> Transform3D:
-	var shelf := default_prop_shelf_spot()
-	var x := _toys_wall(shelf) + TOYS_ACROSS + 0.1
-	return Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(x, 0, shelf.origin.z + HOOP_ALONG))
+	var spot: Transform3D = default_spot(&"hoop")
+	return spot
 
 
 ## Where the venue's own toy (ToyItem) lies, in studio space: on the floor a little in front of
@@ -531,18 +519,12 @@ func tour_case_spot() -> Transform3D:
 	return _spot_of(&"tour_case")
 
 
-## Where the venue stands the Tour case until it is pushed somewhere else: in the tape and toys
-## neighbourhood beside the hoop, across the middle from the cassette rack, its stencilled front
-## facing back at the shelf and the rack -- the run's opening move, where everyone walks past.
-const TOUR_CASE_ALONG := 2.0
-
-
+## Where the venue stands the Tour case until it is pushed somewhere else: the layout's, beside
+## the hoop, across the middle from the cassette rack, its stencilled front facing back at the
+## shelf and the rack -- the run's opening move, where everyone walks past.
 func default_tour_case_spot() -> Transform3D:
-	var shelf := default_prop_shelf_spot()
-	var x := _toys_wall(shelf) + TOYS_ACROSS
-	# Turned a quarter from identity: the case's front (+Z, tools/blender/tour_case.py) then faces
-	# -X, back across the middle at the shelf.
-	return Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(x, 0, shelf.origin.z + TOUR_CASE_ALONG))
+	var spot: Transform3D = default_spot(&"tour_case")
+	return spot
 
 
 ## The harmony neighbourhood (Neighbourhoods): HARMONY_AISLE is the aisle the venues keep out from
@@ -557,9 +539,8 @@ static func _away(c: Vector3) -> float:
 
 ## The synth and sound design neighbourhood (Neighbourhoods) round the synth zone's keyboard stand
 ## and the modular wall over it: its middle SYNTH_MIDDLE out from the zone's middle into the room;
-## the sampler on the side away from the control room, SAMPLER_RING from the middle, facing it.
+## the sampler (the layout's) on the side away from the control room, facing it.
 const SYNTH_MIDDLE := 1.7
-const SAMPLER_RING := 1.1
 
 
 ## The synth neighbourhood's middle, on the floor, and which way across the room the stand is from
@@ -626,42 +607,33 @@ func lyrics_spot() -> Variant:
 
 ## Where the cassette rack stands (CassetteRack, docs/spatial_loop.md part two, slice 23), in
 ## studio space: on its trolley (WHEELED) wherever that has been pushed, else on the floor beside the
-## prop shelf, RACK_GAP clear of it on the side away from the control room, its back in line with the
+## prop shelf, clear of it on the side away from the control room, its back in line with the
 ## shelf's against the same wall and facing into the room the same way. So the clips the band pulls
 ## out of the timeline stand beside the toys, where everyone walks past.
-const RACK_GAP := 0.65
-
-
 func cassette_rack_spot() -> Transform3D:
 	return _spot_of(&"cassette_rack")
 
 
-## Where the venue stands the cassette rack until it is pushed somewhere else: beside where it
-## stands the prop shelf.
+## Where the venue stands the cassette rack until it is pushed somewhere else: the layout's,
+## beside where it stands the prop shelf (placed in the shelf's own frame).
 func default_cassette_rack_spot() -> Transform3D:
-	var along := ZoneKit.SHELF.x * 0.5 + RACK_GAP + CassetteRack.FOOT.x
-	return default_prop_shelf_spot() * Transform3D(Basis.IDENTITY,
-			Vector3(-along, 0, -ZoneKit.SHELF.z * 0.5 + CassetteRack.FOOT.y))
+	var spot: Transform3D = default_spot(&"cassette_rack")
+	return spot
 
 
 ## Where the sampler stands (Sampler, docs/spatial_loop.md part two, slice 26), in studio space: on
 ## its trolley (WHEELED) wherever that has been pushed, else in the synth neighbourhood on its
-## middle's side away from the control room, SAMPLER_RING out, facing the middle: the pads and
+## middle's side away from the control room, facing the middle: the pads and
 ## the modular one turn apart. Null where there is no synth zone (the Rig Roulette
 ## room has no zones).
 func sampler_spot() -> Variant:
 	return _spot_of(&"sampler")
 
 
-## Where the venue stands the sampler until it is pushed somewhere else; null where it has no synth
-## zone.
+## Where the venue stands the sampler until it is pushed somewhere else: the layout's; null where
+## it has no synth zone.
 func default_sampler_spot() -> Variant:
-	var m: Variant = synth_middle()
-	if m == null:
-		return null
-	var mid: Vector3 = m[0]
-	var away := _away(mid)
-	return Transform3D(Basis(Vector3.UP, PI if away > 0.0 else 0.0), mid + Vector3(0, 0, away * SAMPLER_RING))
+	return default_spot(&"sampler")
 
 
 ## Where the fifths wheel stands (FifthsWheel.on_stand), in studio space: on the bricks table,
@@ -882,29 +854,28 @@ func floor_at(p: Vector2) -> float:
 
 ## The stations and the furniture of the back of house that stand on the floor by themselves, and
 ## so are pushed about it like the gear in the control room: each is a trolley of the studio's
-## (Studio.live_pieces), and its `*_spot` is wherever that trolley has been wheeled. The venue says
-## only where each stands until somebody moves it (`default_spot`), and null where it has no room
+## (Studio.live_pieces), and its `*_spot` is wherever that trolley has been wheeled. Which they are
+## is the layout's (the pieces of `common.live_room` that are `mobility: wheeled`, LiveRoom), and so
+## is where each stands until somebody moves it (`default_spot`): null where the venue has no room
 ## for it at all. The fifths wheel is not here: it is mounted on the bricks table, which is the
 ## venue's and does not move.
-const WHEELED: Array[StringName] = [&"cassette_rack", &"sampler", &"tour_case",
-		&"prop_shelf", &"hoop"]
+static var WHEELED: Array[StringName] = LiveRoom.wheeled_ids()
+
+## The layout's spots for this venue (id -> Transform3D) and the arrangement and width they were
+## resolved for, kept until either changes.
+var _spots: Dictionary = {}
+var _spots_for: Array = []
 
 
 ## Where the venue stands wheeled piece `id` (WHEELED) until it is pushed somewhere else, in
-## studio space; null where the venue has no room for it.
+## studio space; null where the venue has no room for it. Read from the layout (LiveRoom) against
+## this venue's anchors; kept while its arrangement and width stay as they are.
 func default_spot(id: StringName) -> Variant:
-	match id:
-		&"cassette_rack":
-			return default_cassette_rack_spot()
-		&"sampler":
-			return default_sampler_spot()
-		&"tour_case":
-			return default_tour_case_spot()
-		&"prop_shelf":
-			return default_prop_shelf_spot()
-		&"hoop":
-			return default_hoop_spot()
-	return null
+	var key := [variant, room_width]
+	if _spots_for != key:
+		_spots = LiveRoom.spots(ShellFacts.anchors_of(self))
+		_spots_for = key
+	return _spots.get(id)
 
 
 ## The trolley that wheeled piece `id` stands on, in the studio this venue stands in; null in no

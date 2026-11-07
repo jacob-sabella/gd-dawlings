@@ -56,9 +56,6 @@ const SIDE_ZONES := {
 ## Beside: the tubular bells against the side room's back wall in its far corner, past the
 ## lattice, under the patch wall's end (x at the base width).
 const SIDE_BELLS_X := -12.9
-## Beside: how far back from the control room's open rear the prop shelf stands in the room
-## behind, which has no riser in front of it now, so the toys stand in the middle of the left wall.
-const BESIDE_TOYS_IN := 2.4
 
 ## The third arrangement: the classic tracking studio. The control room's back is closed by a
 ## thick wall with a big double-glazed window in it and a heavy door beside it, and the live room
@@ -177,17 +174,6 @@ func rooms() -> Array[Rect2]:
 	return [Rect2(left, behind.position.y, behind.end.x - left, behind.size.y),
 			Rect2(-cr - SIDE_ROOM_WIDTH + 0.05, Studio.ROOM_FRONT + 0.05, SIDE_ROOM_WIDTH,
 					Studio.ROOM_DEPTH - 0.05)]
-
-
-## Beside: the room behind is no wider than the control room on the left, so the shelf stands
-## against that wall instead; and with the riser gone to the side room, halfway down it rather
-## than at its front, so the toys have the room's left side round them.
-func default_prop_shelf_spot() -> Transform3D:
-	var spot := super()
-	if variant == BESIDE:
-		spot.origin.x = -room_width * 0.5 + 0.05 + 0.08 + ZoneKit.SHELF.z * 0.5
-		spot.origin.z = Studio.ROOM_BACK + BESIDE_TOYS_IN
-	return spot
 
 
 func dress(env: Environment, key: DirectionalLight3D) -> void:
