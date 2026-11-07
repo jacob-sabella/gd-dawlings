@@ -94,7 +94,7 @@ func _sync_patch() -> void:
 			lines.append("remove %s" % id)
 	for id in now["modules"]:
 		if not was["modules"].has(id) or now["modules"][id]["type"] != was["modules"][id]["type"]:
-			lines.append("add %s %s" % [id, now["modules"][id]["type"]])
+			lines.append("add %s %s" % [id, RackCatalogue.engine_type(now["modules"][id]["type"])])
 			fresh[id] = true
 	for c in was["cables"]:
 		if not now["cables"].has(c) and now["modules"].has(String(c[1]).get_slice(".", 0)) \
@@ -261,7 +261,7 @@ func _process(delta: float) -> void:
 	steps = engine.steps
 	var peak := 0.0
 	for id in patch["modules"]:
-		if patch["modules"][id]["type"] == "out":
+		if patch["modules"][id]["type"] == RackPatch.OUT_MODULE:
 			peak = float(meters.get(id, 0.0))
 	level = lerpf(level, clampf(peak, 0.0, 1.0), clampf(delta * 8.0, 0.0, 1.0))
 	hit = maxf(hit - delta * 3.0, 0.0)

@@ -93,7 +93,7 @@
           "description": "engine: title/group/blurb optional, no interface (read from the engine). composite: title, group, blurb, and sound.modules/ins/outs required."
         },
         {"properties": {"kind": {"const": "rack_preset"}, "name": {"type": "string"}, "title": {"type": "string"}, "patch": {"type": "object"}}, "required": ["kind", "name", "title", "patch"]},
-        {"properties": {"kind": {"const": "plugin"}, "plugin": {"type": "object", "required": ["format", "id"], "properties": {"format": {"enum": ["clap", "vst3", "lv2"]}, "id": {"type": "string"}}}, "display": {"type": "object"}}, "required": ["kind", "plugin"]},
+        {"properties": {"kind": {"const": "plugin"}, "plugin": {"type": "object", "required": ["format", "id"], "properties": {"format": {"enum": ["clap", "vst3", "lv2", "godot"]}, "id": {"type": "string"}}}, "display": {"type": "object"}}, "required": ["kind", "plugin"]},
         {"properties": {"kind": {"const": "skin"}, "for": {"type": "string"}, "skin": {"$ref": "#/$defs/skin"}}, "required": ["kind", "for", "skin"]},
         {"properties": {"kind": {"const": "piece"}, "id": {"type": "string"}, "title": {"type": "string"}, "class": {"enum": ["single", "room_scale"]}, "builder": {"type": "string"}, "mount": {"enum": ["floor", "wall", "zone", "surface", "venue", "shelf"]}}, "required": ["kind", "id", "title", "class", "builder", "mount"]}
       ]

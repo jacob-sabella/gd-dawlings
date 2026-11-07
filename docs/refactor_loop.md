@@ -135,9 +135,11 @@ Do the first unchecked item. Break it down in the log if it is too big for one p
 - [x] 2. **Design on paper**: the mod manifest, the registry, the layout file format and the piece
       kinds (single item vs room-scale mod), in `docs/mods.md` and `docs/layouts.md`. The owner reads
       them before any code (stop the loop and ask).
-- [ ] 3. Registry and manifest loader beside the old path, with bad-mod degradation; move one rack
+- [x] 3. Registry and manifest loader beside the old path, with bad-mod degradation; move one rack
       module (Plaits) onto it.
-- [ ] 4. Move the rest of the rack modules, then the DAW plugins.
+- [ ] 4. Move the rest of the rack modules, then the DAW plugins. (Rack modules, presets and the
+      `builtin.<name>` rename done; plugin catalogue names done; what remains of the plugins is in the log
+      line of slice 4b.)
 - [ ] 5. Sample mod as a folder: appears, plays, saves, reloads, replicates (the proof test).
 - [ ] 6. Layouts as data: one venue first, then all of them, keeping the placement guarantees.
 - [ ] 7. In-game editing (move, add, remove, save, reset) and sharing the layout with the room.
@@ -152,6 +154,7 @@ Do the first unchecked item. Break it down in the log if it is too big for one p
 
 (newest first; one line per pass: date, slice, commit, what changed, numbers)
 
+- 2026-11-07 — slice 4b, `builtin.<name>` rename and the DAW plugin catalogue: all 29 rack module types, the 17 preset patch files, the catalogue, skin, pad-knob and curve lookups, `rack_layout`/`rack_wall`/`rack_voice`, three `studio.gd` comparisons (`RackPatch.OUT_MODULE`/`WORLD_MODULE`) and the tests now use `builtin.<name>` with no alias (a bare-name patch is dropped); engine names (`modules.json`, `sound.type`, the `add` lines) unchanged, mapped by `ModRegistry.rack_engine_type`; ids stay short (`vco`, `vco2`); `tools/mods_from_legacy.py` retired (manifests are the source of truth). New mod `builtin.effects` (10 `plugin` entries, format `godot`) gives `FXCatalogue` its names; `ModRegistry.plugin_display/plugin_title/plugin_ids`, `PluginCatalogue.display_name` for scanned plugins. 69 tests that touch rack/plugin/catalogue/registry classes: 2658 checks, only the known cv-bench failure; 2 new tests. Item 4 stays open: plugin `display.skin`/`first_params`/`param_key` not applied in `RackUnit`/`PluginTablet`, no unavailable slot for a missing plugin, Reaper's `fx_choices` untouched, `plugin_not_found` not raised.
 - 2026-11-07 — slice 4a, rack modules and presets on the registry: `tools/mods_from_legacy.py` writes `builtin.core`, `builtin.daisysp`, `builtin.mutable` (29 modules) and `builtin.presets` (17 presets as patch files) from the frozen old tables (`tests/fixtures/rack_legacy_tables.json`); `RackSkin.SKINS`, `PAD_KNOBS`, `RackCatalogue.GROUPS` and the preset bodies deleted (rack_patch.gd 672 -> 347 lines); new `tests/rack_mod_tests.gd` (`_test_the_manifests_equal_the_old_tables`, bad-preset-file test; old Plaits test replaced); 525 checks over 26 rack/registry tests, only the known cv-bench failure; still to do: the `builtin.<name>` rename and the DAW plugins (queue 4).
 - 2026-11-07 — slice 3 step 3, Plaits on the registry: `res://mods/builtin/mutable/mod.json` (type stays `plaits`, rename to `builtin.*` is step 4), `ModRegistry.ensure_current`, catalogue/skin/pad_knobs read the registry first; new test `_test_the_registry_says_what_the_old_tables_say_for_plaits` (25 checks), 356 checks 0 failed over the rack/registry subset; shipped root is now `res://mods/builtin/`.
 

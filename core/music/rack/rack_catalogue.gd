@@ -4,6 +4,10 @@ extends RefCounted
 ## The modules the modular room can hold: their jacks and knobs, as the engine (native/rack) declares
 ## them. The engine is the source of truth; `modules.json` is its `--describe`, committed so the
 ## room needs no compiler to be drawn, and a test holds the two to each other.
+##
+## A module is known by its *type*, the one a mod gives it (`builtin.plaits`); the engine knows it by
+## its own name (`plaits`, `engine_type`). A patch and everything on the wall speak types, and only
+## the lines sent to the engine speak engine names.
 
 const PATH := "res://core/music/rack/modules.json"
 
@@ -27,18 +31,21 @@ static func _load() -> void:
 		_watching = reg
 		reg.changed.connect(_forget)
 	for m in data["modules"]:
-		_order.append(m["type"])
-		_modules[m["type"]] = _from_registry(m, reg)
+		var type := reg.rack_type_of_engine(m["type"])
+		if type == "":
+			type = m["type"]
+		_order.append(type)
+		_modules[type] = _from_registry(m, type, reg)
 
 
 ## A module a mod provides takes its title, group and blurb from the manifest. The jacks and knobs
 ## stay the engine's own (docs/mods.md section 7), and an engine module no mod claims keeps the
 ## engine snapshot's text.
-static func _from_registry(m: Dictionary, reg: ModRegistry) -> Dictionary:
-	var e := reg.rack_module_entry(m["type"])
-	if e.is_empty():
-		return m
+static func _from_registry(m: Dictionary, type: String, reg: ModRegistry) -> Dictionary:
 	var out := m.duplicate()
+	out["engine"] = m["type"]
+	out["type"] = type
+	var e := reg.rack_module_entry(type)
 	for f in ["title", "group", "blurb"]:
 		if e.get(f) is String:
 			out[f] = e[f]
@@ -65,16 +72,30 @@ static func types() -> Array[String]:
 	return _order.duplicate()
 
 
+## True when a module of this type can be put in the case.
 static func has(type: String) -> bool:
 	_load()
 	return _modules.has(type)
 
 
+## The module's description: type, engine, title, group, blurb, ins, outs, knobs. Empty for an unknown type.
 static func spec(type: String) -> Dictionary:
 	_load()
 	return _modules.get(type, {})
 
 
+## The native engine's name for a type (`builtin.vco` -> `vco`), or "" for an unknown type.
+static func engine_type(type: String) -> String:
+	return spec(type).get("engine", "")
+
+
+## What a module's type is called without its mod's prefix (`builtin.vco` -> `vco`): the stem of the
+## ids it gets in a patch (`vco`, `vco2`).
+static func short_name(type: String) -> String:
+	return type.get_slice(".", type.count("."))
+
+
+## The types of a palette group, in palette order.
 static func in_group(group: String) -> Array[String]:
 	_load()
 	var out: Array[String] = []

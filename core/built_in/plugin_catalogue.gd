@@ -59,6 +59,12 @@ func instruments() -> Array:
 	return _plugins.filter(func(p: Dictionary) -> bool: return p["instrument"])
 
 
+## The name a plugin goes by: the title an available mod gives it (a `plugin` entry's `display`, docs/mods.md
+## section 4.3), else the name it reports itself.
+static func display_name(info: Dictionary) -> String:
+	return ModRegistry.ensure_current().plugin_title(str(info["format"]), str(info["id"]), str(info["name"]))
+
+
 ## The plugin `format` calls `id`, or {} when it is not installed.
 func find(format: String, id: String) -> Dictionary:
 	for p in _plugins:

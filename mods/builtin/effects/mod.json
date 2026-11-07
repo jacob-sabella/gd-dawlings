@@ -1,0 +1,23 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "builtin.effects",
+  "name": "Built-in effects",
+  "version": "1.0.0",
+  "author": "dawlings",
+  "description": "The audio effects the built-in engine ships (Godot AudioEffects), as DAW plugins: the name each is called by in a track's chain and in the ADD PLUGIN list. Their parameters and ranges are the binding in core/built_in/fx_catalogue.gd.",
+  "licence": {"spdx": "MIT", "copyright": "Copyright (c) 2026 Jacob Sabella"},
+  "source": {"kind": "in_tree", "path": "core/built_in"},
+  "provides": [
+    {"kind": "plugin", "plugin": {"format": "godot", "id": "eq"}, "display": {"title": "EQ6"}},
+    {"kind": "plugin", "plugin": {"format": "godot", "id": "eq21"}, "display": {"title": "EQ21"}},
+    {"kind": "plugin", "plugin": {"format": "godot", "id": "compressor"}, "display": {"title": "Compressor"}},
+    {"kind": "plugin", "plugin": {"format": "godot", "id": "reverb"}, "display": {"title": "Reverb"}},
+    {"kind": "plugin", "plugin": {"format": "godot", "id": "delay"}, "display": {"title": "Delay"}},
+    {"kind": "plugin", "plugin": {"format": "godot", "id": "chorus"}, "display": {"title": "Chorus"}},
+    {"kind": "plugin", "plugin": {"format": "godot", "id": "filter"}, "display": {"title": "Low-pass"}},
+    {"kind": "plugin", "plugin": {"format": "godot", "id": "distortion"}, "display": {"title": "Drive"}},
+    {"kind": "plugin", "plugin": {"format": "godot", "id": "phaser"}, "display": {"title": "Phaser"}},
+    {"kind": "plugin", "plugin": {"format": "godot", "id": "limiter"}, "display": {"title": "Limiter"}}
+  ]
+}

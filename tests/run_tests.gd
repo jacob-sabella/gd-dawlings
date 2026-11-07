@@ -735,6 +735,8 @@ func _ready() -> void:
 	_test_the_mod_roots_come_from_the_data_home_and_the_environment()
 	_test_the_manifests_equal_the_old_tables()
 	_test_a_preset_with_a_bad_file_is_empty_and_never_a_crash()
+	_test_builtin_types_are_prefixed_and_the_engine_keeps_its_names()
+	_test_plugins_are_described_by_the_registry()
 	_test_a_rack_catalogue_is_the_engines_own_description()
 	_test_a_rack_patch_checks_every_verb()
 	_test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input()
@@ -44557,9 +44559,9 @@ func _test_a_rack_catalogue_is_the_engines_own_description() -> void:
 	check("the catalogue has the modules", RackCatalogue.types().size() >= 25)
 	check("every group the palette lists has modules", RackCatalogue.groups().all(func(g: String) -> bool: return not RackCatalogue.in_group(g).is_empty()))
 	check("every module is in a group the palette shows", RackCatalogue.types().all(func(t: String) -> bool: return RackCatalogue.spec(t)["group"] in RackCatalogue.groups()))
-	var k := RackCatalogue.knob("vco", "wave")
+	var k := RackCatalogue.knob("builtin.vco", "wave")
 	check("a step knob reads out its name", RackCatalogue.readout(k, 0.0) == "SINE" and RackCatalogue.readout(k, 0.99) == "PULSE")
-	var cut := RackCatalogue.knob("ladder", "cutoff")
+	var cut := RackCatalogue.knob("builtin.ladder", "cutoff")
 	check("an exponential knob spans its range", absf(RackCatalogue.real(cut, 0.0) - 20.0) < 0.01 and absf(RackCatalogue.real(cut, 1.0) - 18000.0) < 1.0)
 	check("a position and its value agree", absf(RackCatalogue.position(cut, RackCatalogue.real(cut, 0.37)) - 0.37) < 1e-4)
 	for t in RackCatalogue.types():
@@ -44576,13 +44578,13 @@ func _test_a_rack_catalogue_is_the_engines_own_description() -> void:
 
 func _test_a_rack_patch_checks_every_verb() -> void:
 	var p := RackPatch.empty()
-	var k := RackPatch.add(p, "keys")
-	var v := RackPatch.add(p, "vco")
-	var o := RackPatch.add(p, "out")
+	var k := RackPatch.add(p, "builtin.keys")
+	var v := RackPatch.add(p, "builtin.vco")
+	var o := RackPatch.add(p, "builtin.out")
 	check("modules are added with their own ids", k == "keys" and v == "vco" and o == "out")
-	check("a second OUT is refused", RackPatch.add(p, "out") == "")
+	check("a second OUT is refused", RackPatch.add(p, "builtin.out") == "")
 	check("a made-up module is refused", RackPatch.add(p, "flux_capacitor") == "")
-	check("a second of a kind gets a new id", RackPatch.add(p, "vco") == "vco2")
+	check("a second of a kind gets a new id", RackPatch.add(p, "builtin.vco") == "vco2")
 	check("a cable goes output to input", RackPatch.connect_cable(p, "keys.pitch", "vco.pitch"))
 	check("not the same cable twice", not RackPatch.connect_cable(p, "keys.pitch", "vco.pitch"))
 	check("not input to input", not RackPatch.connect_cable(p, "vco.pitch", "out.l"))
@@ -44596,17 +44598,17 @@ func _test_a_rack_patch_checks_every_verb() -> void:
 	check("removing a module takes its cables", RackPatch.remove(p, "vco2") and (p["cables"] as Array).size() == 1)
 	var lines := RackPatch.lines(p)
 	check("the engine is told clear, then modules, knobs and cables", lines[0] == "clear" and "add vco vco" in lines and "cable keys.pitch vco.pitch" in lines)
-	var dirty := {"modules": {"x": {"type": "evil", "knobs": {}}, "vco": {"type": "vco", "at": [99, -4], "knobs": {"tune": 7, "zzz": 1}}, "bad id!": {"type": "vco"}},
+	var dirty := {"modules": {"x": {"type": "evil", "knobs": {}}, "vco": {"type": "builtin.vco", "at": [99, -4], "knobs": {"tune": 7, "zzz": 1}}, "bad id!": {"type": "builtin.vco"}},
 			"cables": [["vco.out", "nowhere.in"], ["vco.out", "vco.fm"], 5]}
 	var clean := RackPatch.sanitize(dirty)
 	check("a patch from anywhere keeps only what is real", clean["modules"].keys() == ["vco"] and clean["cables"].is_empty())
-	check("and clamps what it keeps", clean["modules"]["vco"]["at"] == [RackLayout.COLS - RackLayout.width_of("vco"), 0] and clean["modules"]["vco"]["knobs"]["tune"] == 1.0)
+	check("and clamps what it keeps", clean["modules"]["vco"]["at"] == [RackLayout.COLS - RackLayout.width_of("builtin.vco"), 0] and clean["modules"]["vco"]["knobs"]["tune"] == 1.0)
 	check("garbage is an empty patch", RackPatch.sanitize("nope")["modules"].is_empty())
 	for name in RackPatch.presets():
 		var pre := RackPatch.preset(name)
 		var again := RackPatch.sanitize(pre)
 		check("preset %s survives being sanitised whole" % name, str(again["cables"]) == str(pre["cables"]) and again["modules"].size() == pre["modules"].size())
-		check("preset %s has an OUT unless it is empty" % name, name == &"empty" or RackPatch.has_type(pre, "out"))
+		check("preset %s has an OUT unless it is empty" % name, name == &"empty" or RackPatch.has_type(pre, "builtin.out"))
 
 
 func _rack_loudness(frames: PackedVector2Array, from_s := 0.0, to_s := 1e9) -> float:
@@ -44623,14 +44625,14 @@ func _test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input()
 	# input takes one, stepped through the free inputs.
 	var p := RackPatch.preset(&"acid_line")
 	check("a rack with no WORLD module has nowhere to cable a socket from", RackPatch.world_out(p, &"world:weather") == "")
-	var id := RackPatch.add(p, "world", RackLayout.free_slot(p, "world"))
+	var id := RackPatch.add(p, "builtin.world", RackLayout.free_slot(p, "builtin.world"))
 	check("the WORLD module goes in the case", id == "world")
 	check("a level for an input that takes one", RackPatch.world_out(p, &"world:weather", "ladder.cutoff") == "world.weather")
 	check("a gate for an input that takes one", RackPatch.world_out(p, &"world:ring_3", "env.gate") == "world.ring3_g")
 	check("the marbles are a socket too", RackPatch.world_out(p, &"world:marbles") == "world.marbles")
 	check("every socket of the world is an output of the module",
-			Modular.WORLD.all(func(w): return RackCatalogue.has_out("world", RackPatch.WORLD_OUTS[Modular.WORLD.find(w)])))
-	check("and a gate besides", RackCatalogue.has_out("world", "marbles_g"))
+			Modular.WORLD.all(func(w): return RackCatalogue.has_out("builtin.world", RackPatch.WORLD_OUTS[Modular.WORLD.find(w)])))
+	check("and a gate besides", RackCatalogue.has_out("builtin.world", "marbles_g"))
 	var first := RackPatch.step_world(p, &"world:weather", 1)
 	check("a press patches the weather into the first free input", first != "" and RackPatch.is_in(p, first))
 	RackPatch.connect_cable(p, RackPatch.world_out(p, &"world:weather", first), first)
@@ -44643,9 +44645,9 @@ func _test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input()
 		return
 	# The world plays: a drop's gate strikes a voice; with no drop it is quiet.
 	var w := RackPatch.empty()
-	RackPatch.add(w, "world")
-	RackPatch.add(w, "plaits", Vector2i(4, 0))
-	RackPatch.add(w, "out", Vector2i(9, 0))
+	RackPatch.add(w, "builtin.world")
+	RackPatch.add(w, "builtin.plaits", Vector2i(4, 0))
+	RackPatch.add(w, "builtin.out", Vector2i(9, 0))
 	RackPatch.connect_cable(w, "world.drips_g", "plaits.trig")
 	RackPatch.connect_cable(w, "plaits.out", "out.l")
 	RackPatch.connect_cable(w, "plaits.out", "out.r")
@@ -44654,9 +44656,9 @@ func _test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input()
 	check("a drop of the world's strikes the voice patched to its gate", _rack_loudness(dripped) > _rack_loudness(quiet) + 0.005)
 	# A cloud of grains out of what goes in.
 	var c := RackPatch.empty()
-	RackPatch.add(c, "noise")
-	RackPatch.add(c, "clouds", Vector2i(3, 0))
-	RackPatch.add(c, "out", Vector2i(8, 0))
+	RackPatch.add(c, "builtin.noise")
+	RackPatch.add(c, "builtin.clouds", Vector2i(3, 0))
+	RackPatch.add(c, "builtin.out", Vector2i(8, 0))
 	RackPatch.connect_cable(c, "noise.pink", "clouds.l")
 	RackPatch.connect_cable(c, "clouds.l", "out.l")
 	RackPatch.connect_cable(c, "clouds.r", "out.r")
@@ -44697,12 +44699,12 @@ func _test_a_rack_engine_makes_the_sound_the_patch_says() -> void:
 			nan_free = false
 	check("and nothing it makes is broken", nan_free)
 	for type in RackCatalogue.types():
-		if type == "out":
+		if type == RackPatch.OUT_MODULE:
 			continue
 		var each := RackPatch.empty()
-		RackPatch.add(each, "keys")
-		RackPatch.add(each, "noise")
-		RackPatch.add(each, "out")
+		RackPatch.add(each, "builtin.keys")
+		RackPatch.add(each, "builtin.noise")
+		RackPatch.add(each, "builtin.out")
 		var id := RackPatch.add(each, type)
 		var spec := RackCatalogue.spec(type)
 		for pin in spec["ins"]:
@@ -44751,7 +44753,7 @@ func _test_a_rack_voice_plays_live_through_a_track() -> void:
 	check("a take is only kept once", voice.record_stop().has("error"))
 	# A patch with a module taken out and another put in reaches the engine without a restart.
 	var p := RackPatch.default_patch()
-	var added := RackPatch.add(p, "reverb", Vector2i(9, 0))
+	var added := RackPatch.add(p, "builtin.reverb", Vector2i(9, 0))
 	voice.set_patch(p)
 	check("a patch changed live is told as a difference", voice._sent["modules"].has(added))
 	voice.shutdown()
@@ -44761,10 +44763,10 @@ func _test_a_rack_voice_plays_live_through_a_track() -> void:
 
 func _test_a_rack_layout_keeps_modules_apart_and_answers_in_words() -> void:
 	var p := RackPatch.empty()
-	check("an empty case has a free place for a module", RackLayout.free_slot(p, "vco").x >= 0)
-	check("a sequencer is wider than a oscillator", RackLayout.width_of("seq") > RackLayout.width_of("vco"))
-	check("adding puts it in the free place", RackPatch.answer(p, "add", ["vco", -1, 0]) == "")
-	check("and again beside it", RackPatch.answer(p, "add", ["vco", -1, 0]) == "" and RackPatch.module_ids(p).size() == 2)
+	check("an empty case has a free place for a module", RackLayout.free_slot(p, "builtin.vco").x >= 0)
+	check("a sequencer is wider than a oscillator", RackLayout.width_of("builtin.seq") > RackLayout.width_of("builtin.vco"))
+	check("adding puts it in the free place", RackPatch.answer(p, "add", ["builtin.vco", -1, 0]) == "")
+	check("and again beside it", RackPatch.answer(p, "add", ["builtin.vco", -1, 0]) == "" and RackPatch.module_ids(p).size() == 2)
 	var spots := {}
 	for id in RackPatch.module_ids(p):
 		spots[Vector2i(int(p["modules"][id]["at"][0]), int(p["modules"][id]["at"][1]))] = true
@@ -44800,17 +44802,17 @@ func _test_the_studios_rack_is_edited_through_the_room_and_lit_by_its_level() ->
 		studio.queue_free()
 		return
 	var before := RackPatch.module_ids(studio.rack_row["patch"]).size()
-	studio.ask_rack("add", ["lfo", -1, 0])
+	studio.ask_rack("add", ["builtin.lfo", -1, 0])
 	check("a module asked for is in the room's row", RackPatch.module_ids(studio.rack_row["patch"]).size() == before + 1)
 	check("and on the wall", _rack_panels(wall) == before + 1)
 	var said: Array = []
 	var listen := func(text: String) -> void: said.append(text)
 	Session.notice.connect(listen)
 	studio.ask_rack("remove", ["out"])
-	check("taking OUT out is refused and said", not said.is_empty() and RackPatch.has_type(studio.rack_row["patch"], "out"))
+	check("taking OUT out is refused and said", not said.is_empty() and RackPatch.has_type(studio.rack_row["patch"], "builtin.out"))
 	Session.notice.disconnect(listen)
 	studio.ask_rack("preset", ["drum_machine"])
-	check("a preset replaces the case", RackPatch.has_type(studio.rack_row["patch"], "seq") or RackPatch.has_type(studio.rack_row["patch"], "drums")
+	check("a preset replaces the case", RackPatch.has_type(studio.rack_row["patch"], "builtin.seq") or RackPatch.has_type(studio.rack_row["patch"], "builtin.drums")
 			or RackPatch.module_ids(studio.rack_row["patch"]).size() > 0)
 	studio.ask_rack("knob", ["out", "level", 0.4])
 	check("a knob asked is in the row", is_equal_approx(RackPatch.knob_of(studio.rack_row["patch"], "out", "level"), 0.4)
@@ -44819,10 +44821,10 @@ func _test_the_studios_rack_is_edited_through_the_room_and_lit_by_its_level() ->
 	var state: Dictionary = studio.room_state().duplicate(true)
 	state[RackPatch.ROW]["patch"] = RackPatch.preset(&"fm_bass")
 	studio.apply_room(state)
-	check("a room from the host is shown", RackPatch.has_type(studio.rack_row["patch"], "out")
+	check("a room from the host is shown", RackPatch.has_type(studio.rack_row["patch"], "builtin.out")
 			and _rack_panels(wall) == RackPatch.module_ids(studio.rack_row["patch"]).size())
 	wall.glow_with(1.0, 1.0)
-	check("the Session accepts the rack verb's shape", Session.room_ask_is_valid(&"rack", [&"add", ["lfo", -1, 0]]))
+	check("the Session accepts the rack verb's shape", Session.room_ask_is_valid(&"rack", [&"add", ["builtin.lfo", -1, 0]]))
 	check("and refuses a wrong one", not Session.room_ask_is_valid(&"rack", [&"add"]))
 	studio.queue_free()
 	await get_tree().process_frame
@@ -44903,8 +44905,8 @@ func _test_every_module_has_a_skin_and_the_big_rig_fits_the_case() -> void:
 	var rig := RackPatch.preset(&"big_rig")
 	check("the big rig keeps all of its modules (%d)" % rig["modules"].size(), rig["modules"].size() >= 35)
 	check("the case is a wall of 40 columns by 4 rows", RackLayout.COLS == 40 and RackLayout.ROWS == 4)
-	check("a scope is wide, with a screen", RackLayout.width_of("scope") == RackLayout.SCOPE_WIDE)
-	var strip := RackSkin.print_pattern("clock", 0.1, 0.012)
+	check("a scope is wide, with a screen", RackLayout.width_of("builtin.scope") == RackLayout.SCOPE_WIDE)
+	var strip := RackSkin.print_pattern("builtin.clock", 0.1, 0.012)
 	check("a pattern is printed as one batch", strip != null and strip.multimesh.instance_count >= 3)
 	strip.free()
 	var screen := ScopeScreen.new()
@@ -44924,9 +44926,9 @@ func _test_a_scope_shows_the_wave_patched_into_it_even_when_unheard() -> void:
 	var voice := RackVoice.new()
 	add_child(voice)
 	var p := RackPatch.empty()
-	RackPatch.add(p, "vco", Vector2i(0, 0))
-	RackPatch.add(p, "scope", Vector2i(2, 0))
-	RackPatch.add(p, "out", Vector2i(8, 0))
+	RackPatch.add(p, "builtin.vco", Vector2i(0, 0))
+	RackPatch.add(p, "builtin.scope", Vector2i(2, 0))
+	RackPatch.add(p, "builtin.out", Vector2i(8, 0))
 	RackPatch.connect_cable(p, "vco.out", "scope.in")
 	voice.set_patch(p)
 	check("the voice starts", voice.start())
@@ -44951,8 +44953,8 @@ func _test_the_cv_bench_is_a_source_a_hand_sets() -> void:
 	var voice := RackVoice.new()
 	add_child(voice)
 	var p := RackPatch.empty()
-	RackPatch.add(p, "hand", Vector2i(0, 0))
-	RackPatch.add(p, "scope", Vector2i(4, 0))
+	RackPatch.add(p, "builtin.hand", Vector2i(0, 0))
+	RackPatch.add(p, "builtin.scope", Vector2i(4, 0))
 	RackPatch.connect_cable(p, "hand.s2", "scope.in")
 	voice.set_patch(p)
 	check("the voice starts", voice.start())
@@ -45211,7 +45213,7 @@ func _test_a_small_preset_is_laid_out_as_the_signal_flows() -> void:
 	check("the filter comes before the amp", col.call("ladder") < col.call("vca"))
 	check("the out is the last", col.call("vca") < col.call("delay") and col.call("delay") < col.call("out"))
 	check("the env sits level with the voice it gates", col.call("env") == col.call("vco"))
-	var right: int = col.call("out") + RackLayout.width_of("out")
+	var right: int = col.call("out") + RackLayout.width_of("builtin.out")
 	check("the patch is centred in the case", absi(col.call("clock") - (RackLayout.COLS - right)) <= 1)
 	var kept := RackPatch.sanitize(p)
 	check("a module far along the case is not thrown back to the left", int(kept["modules"]["out"]["at"][0]) == col.call("out"))
@@ -45240,7 +45242,7 @@ func _test_a_rack_module_is_carried_to_a_free_place_by_its_grip() -> void:
 	check("a module has a grip along its title", grip != null)
 	var here: Array = wall.patch["modules"]["reverb"]["at"]
 	# Carry it three columns right and one row down: the middle of the place, over the panel.
-	var w := RackLayout.width_of("reverb")
+	var w := RackLayout.width_of("builtin.reverb")
 	var to := Vector3(wall._x_of(int(here[0]) + 3 + w * 0.5), wall._row_foot(int(here[1]) + 1) + RackWall.ROW_TALL * 0.5, 0.0)
 	var start := holder.global_position + Vector3(0, RackWall.ROW_TALL - 0.026, 0)
 	wall._on_grip_began(grip, start)
@@ -45311,7 +45313,7 @@ func _test_a_knobs_shape_is_drawn_as_a_curve() -> void:
 	var calm := RackCurves.peak(RackCurves.filter("lp", 2, 1000.0, 0.7))
 	var sharp := RackCurves.peak(RackCurves.filter("lp", 2, 1000.0, 8.0))
 	check("resonance raises a peak at the cutoff", sharp > calm)
-	check("only the shaped modules have a curve", RackCurves.of("vco", {}).is_empty() and not RackCurves.of("svf", {}).is_empty())
+	check("only the shaped modules have a curve", RackCurves.of("builtin.vco", {}).is_empty() and not RackCurves.of("builtin.svf", {}).is_empty())
 
 
 func _test_letting_go_of_a_rack_module_builds_only_what_moved() -> void:
@@ -45647,3 +45649,11 @@ func _test_the_mod_roots_come_from_the_data_home_and_the_environment() -> void:
 	reg.scan(ModRegistry.default_roots(""))
 	check("the default roots scan without a crash", reg.problems().all(func(p: ModProblem) -> bool: return not p.is_error() or p.mod != ""))
 	check("the API range is one to one", ModRegistry.API_MIN == 1 and ModRegistry.API_MAX == 1)
+
+
+func _test_builtin_types_are_prefixed_and_the_engine_keeps_its_names() -> void:
+	RackModTests.new(self).builtin_types_are_prefixed_and_the_engine_keeps_its_names()
+
+
+func _test_plugins_are_described_by_the_registry() -> void:
+	RackModTests.new(self).plugins_are_described_by_the_registry()

@@ -35,6 +35,10 @@ var _by_id: Dictionary = {}
 var _problems: Array[ModProblem] = []
 var _owner: Dictionary = {}
 var _rack_modules: Dictionary = {}
+var _plate_of_engine: Dictionary = {}
+## "format:id" -> the `plugin` entry, and the ids of each format in manifest order.
+var _plugins: Dictionary = {}
+var _plugin_ids: Dictionary = {}
 var _preset_names: Array[StringName] = []
 ## Preset name -> {"entry": the manifest entry, "folder": the mod's folder, "patch": the patch once read}.
 var _presets: Dictionary = {}
@@ -80,6 +84,7 @@ func scan(roots: Array[String]) -> void:
 	_check_groups()
 	_index_rack_modules()
 	_index_presets()
+	_index_plugins()
 	for p in _problems:
 		problem_found.emit(p)
 	changed.emit()
@@ -209,14 +214,69 @@ func _read_patch(entry: Dictionary, folder: String) -> Dictionary:
 	return out
 
 
+## The native engine's name for a rack module type (`builtin.plaits` -> `plaits`): the `sound.type` of
+## its entry. "" for a type no available mod provides or one whose sound is not an engine module.
+func rack_engine_type(type: String) -> String:
+	var s: Variant = _rack_modules.get(type, {}).get("sound")
+	return str(s["type"]) if s is Dictionary and s.get("kind") == "engine" else ""
+
+
+## The rack module type that sounds as this engine module, or "" when no available mod claims it.
+## When two entries name the same engine module, the first in registry order.
+func rack_type_of_engine(engine_type: String) -> String:
+	return _plate_of_engine.get(engine_type, "")
+
+
+## What the available mods say about a plugin: the `display` object of its `plugin` entry
+## (`title`, and later `skin`, `first_params`, `param_key`), or an empty Dictionary when no available mod
+## has an entry for `(format, id)`. `format` is `clap`, `vst3`, `lv2`, or `godot` for the engine's own
+## effects. The caller must not modify it.
+func plugin_display(format: String, id: String) -> Dictionary:
+	var d: Variant = _plugins.get("%s:%s" % [format, id], {}).get("display")
+	return d if d is Dictionary else {}
+
+
+## The title a mod gives a plugin, or `fallback` when none does.
+func plugin_title(format: String, id: String, fallback: String = "") -> String:
+	var t: Variant = plugin_display(format, id).get("title")
+	return t if t is String and not (t as String).is_empty() else fallback
+
+
+## The ids of the plugins of `format` that available mods describe, in the order the mods and their
+## entries give them.
+func plugin_ids(format: String) -> Array[String]:
+	var out: Array[String] = []
+	out.assign(_plugin_ids.get(format, []))
+	return out
+
+
+func _index_plugins() -> void:
+	_plugins.clear()
+	_plugin_ids.clear()
+	for m in _mods:
+		if m.status != ModManifest.STATUS_OK:
+			continue
+		for e in m.entries:
+			if e.get("kind") == "plugin":
+				var p: Dictionary = e["plugin"]
+				_plugins["%s:%s" % [p["format"], p["id"]]] = e
+				if not _plugin_ids.has(p["format"]):
+					_plugin_ids[p["format"]] = []
+				_plugin_ids[p["format"]].append(str(p["id"]))
+
+
 func _index_rack_modules() -> void:
 	_rack_modules.clear()
+	_plate_of_engine.clear()
 	for m in _mods:
 		if m.status != ModManifest.STATUS_OK:
 			continue
 		for e in m.entries:
 			if e.get("kind") == "rack_module":
 				_rack_modules[str(e["type"])] = e
+				var snd: Variant = e.get("sound")
+				if snd is Dictionary and snd.get("kind") == "engine" and not _plate_of_engine.has(str(snd["type"])):
+					_plate_of_engine[str(snd["type"])] = str(e["type"])
 
 
 func _discover(root: String, found: Array[ModManifest]) -> void:

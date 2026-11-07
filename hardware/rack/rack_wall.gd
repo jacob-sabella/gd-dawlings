@@ -711,7 +711,7 @@ func _build_module(id: String) -> void:
 	lamp.material_override = _lamp_cold
 	holder.add_child(lamp)
 	_lamps[id] = lamp
-	if type != "out":
+	if type != RackPatch.OUT_MODULE:
 		var gone := _key("x", Vector2(0.02, 0.02), Vector3(wide * 0.5 - 0.014, ROW_TALL - 0.026, 0.0),
 				"take %s out of the case, and its cables with it" % title, func() -> void: edit_asked.emit("remove", [id]))
 		holder.add_child(gone)
@@ -736,7 +736,7 @@ func _build_module(id: String) -> void:
 		var c := n % per
 		var at := Vector3((c - (inrow - 1) * 0.5) * KNOB_PITCH, ROW_TALL - 0.1 - r * KNOB_ROW, 0.0)
 		_build_knob(holder, id, ks[n], at)
-	if type == "scope":
+	if type == "builtin.scope":
 		var screen := ScopeScreen.new()
 		screen.size = Vector2(wide - 0.03, 0.2)
 		screen.tint = _tint_of(type)
@@ -776,7 +776,7 @@ func _build_second_face(holder: Node3D, id: String, type: String, spec: Dictiona
 	var top := 0.05 + (jrows - 1) * JACK_ROW + 0.035
 	var bottom := ROW_TALL - 0.1 - (krows - 1) * KNOB_ROW - 0.03
 	var band := bottom - top
-	if type == "seq":
+	if type == "builtin.seq":
 		var bars := RackBars.new()
 		bars.name = "Steps"
 		bars.count = 16

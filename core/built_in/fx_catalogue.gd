@@ -9,7 +9,10 @@ extends RefCounted
 ## log curve, so the rest of the studio cannot tell a Godot compressor from a ReaComp.
 
 ## kind -> {"name": rack caption, "make": Callable() -> AudioEffect, "params": [Param...]}
+## The caption is the title the `builtin.effects` mod gives the plugin (`godot:<kind>`,
+## docs/mods.md section 4.3); the effect itself and its parameters are the binding in this file.
 static var _kinds: Dictionary = {}
+static var _watching: ModRegistry
 
 
 class Param:
@@ -66,6 +69,7 @@ class Param:
 			effect.set(property, value_of(v))
 
 
+## Every effect kind the built-in engine can put on a track, in the order ADD PLUGIN lists them.
 static func kinds() -> Dictionary:
 	if not _kinds.is_empty():
 		return _kinds
@@ -85,9 +89,9 @@ static func kinds() -> Dictionary:
 		p.apply = func(e: AudioEffect, x: float): (e as AudioEffectEQ21).set_band_gain_db(band, x)
 		eq21_params.append(p)
 	_kinds = {
-		&"eq": {"name": "EQ6", "make": func(): return AudioEffectEQ6.new(), "params": eq_params},
-		&"eq21": {"name": "EQ21", "make": func(): return AudioEffectEQ21.new(), "params": eq21_params},
-		&"compressor": {"name": "Compressor", "make": func(): return AudioEffectCompressor.new(),
+		&"eq": {"make": func(): return AudioEffectEQ6.new(), "params": eq_params},
+		&"eq21": {"make": func(): return AudioEffectEQ21.new(), "params": eq21_params},
+		&"compressor": {"make": func(): return AudioEffectCompressor.new(),
 			"params": [
 				Param.new("Thresh", "threshold", -60.0, 0.0, "dB"),
 				Param.new("Ratio", "ratio", 1.0, 48.0, ":1", true),
@@ -96,7 +100,7 @@ static func kinds() -> Dictionary:
 				Param.new("Release", "release_ms", 20.0, 2000.0, "ms", true),
 				Param.new("Mix", "mix", 0.0, 1.0, "%"),
 			]},
-		&"reverb": {"name": "Reverb", "make": func(): return AudioEffectReverb.new(),
+		&"reverb": {"make": func(): return AudioEffectReverb.new(),
 			"params": [
 				Param.new("Size", "room_size", 0.0, 1.0, "%"),
 				Param.new("Damping", "damping", 0.0, 1.0, "%"),
@@ -106,7 +110,7 @@ static func kinds() -> Dictionary:
 				Param.new("Wet", "wet", 0.0, 1.0, "%"),
 				Param.new("Dry", "dry", 0.0, 1.0, "%"),
 			]},
-		&"delay": {"name": "Delay", "make": func(): return AudioEffectDelay.new(),
+		&"delay": {"make": func(): return AudioEffectDelay.new(),
 			"params": [
 				Param.new("Time", "feedback_delay_ms", 20.0, 1500.0, "ms", true),
 				Param.new("Feedback", "feedback_level_db", -60.0, 0.0, "dB"),
@@ -114,26 +118,26 @@ static func kinds() -> Dictionary:
 				Param.new("Tap level", "tap1_level_db", -60.0, 0.0, "dB"),
 				Param.new("Dry", "dry", 0.0, 1.0, "%"),
 			]},
-		&"chorus": {"name": "Chorus", "make": func(): return AudioEffectChorus.new(),
+		&"chorus": {"make": func(): return AudioEffectChorus.new(),
 			"params": [
 				Param.new("Wet", "wet", 0.0, 1.0, "%"),
 				Param.new("Dry", "dry", 0.0, 1.0, "%"),
 				Param.new("Rate", "voice/1/rate_hz", 0.1, 20.0, "Hz", true),
 				Param.new("Depth", "voice/1/depth_ms", 0.0, 20.0, "ms"),
 			]},
-		&"filter": {"name": "Low-pass", "make": func(): return AudioEffectLowPassFilter.new(),
+		&"filter": {"make": func(): return AudioEffectLowPassFilter.new(),
 			"params": [
 				Param.new("Cutoff", "cutoff_hz", 20.0, 20000.0, "Hz", true),
 				Param.new("Resonance", "resonance", 0.0, 1.0, "%"),
 			]},
-		&"distortion": {"name": "Drive", "make": func(): return AudioEffectDistortion.new(),
+		&"distortion": {"make": func(): return AudioEffectDistortion.new(),
 			"params": [
 				Param.new("Drive", "drive", 0.0, 1.0, "%"),
 				Param.new("Pre-gain", "pre_gain", -24.0, 24.0, "dB"),
 				Param.new("Post-gain", "post_gain", -24.0, 24.0, "dB"),
 				Param.new("Keep HF", "keep_hf_hz", 1000.0, 20000.0, "Hz", true),
 			]},
-		&"phaser": {"name": "Phaser", "make": func(): return AudioEffectPhaser.new(),
+		&"phaser": {"make": func(): return AudioEffectPhaser.new(),
 			"params": [
 				Param.new("Rate", "rate_hz", 0.01, 10.0, "Hz", true),
 				Param.new("Depth", "depth", 0.1, 4.0, ""),
@@ -141,13 +145,19 @@ static func kinds() -> Dictionary:
 				Param.new("Low", "range_min_hz", 10.0, 10000.0, "Hz", true),
 				Param.new("High", "range_max_hz", 10.0, 10000.0, "Hz", true),
 			]},
-		&"limiter": {"name": "Limiter", "make": func(): return AudioEffectHardLimiter.new(),
+		&"limiter": {"make": func(): return AudioEffectHardLimiter.new(),
 			"params": [
 				Param.new("Ceiling", "ceiling_db", -24.0, 0.0, "dB"),
 				Param.new("Pre-gain", "pre_gain_db", 0.0, 24.0, "dB"),
 				Param.new("Release", "release", 0.01, 1.0, "s", true),
 			]},
 	}
+	var reg := ModRegistry.ensure_current()
+	if reg != _watching:
+		_watching = reg
+		reg.changed.connect(func() -> void: _kinds.clear())
+	for k in _kinds:
+		_kinds[k]["name"] = reg.plugin_title("godot", String(k), String(k))
 	return _kinds
 
 

@@ -496,7 +496,7 @@ func fx_choices() -> Array:
 		out.append([String(k), FXCatalogue.kinds()[k]["name"]])
 	if HostedPlugins.available():
 		for p in PluginCatalogue.shared().plugins():
-			out.append([plugin_choice(p), "%s%s: %s" % [p["format"], "i" if p["instrument"] else "", p["name"]]])
+			out.append([plugin_choice(p), "%s%s: %s" % [p["format"], "i" if p["instrument"] else "", PluginCatalogue.display_name(p)]])
 	return out
 
 

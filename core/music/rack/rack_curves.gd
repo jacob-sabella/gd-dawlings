@@ -96,11 +96,11 @@ static func peak_at(c: PackedFloat32Array) -> int:
 ## `values` is knob id -> real value.
 static func of(type: String, values: Dictionary) -> PackedFloat32Array:
 	match type:
-		"env":
+		"builtin.env":
 			return envelope(values.get("a", 0.01), values.get("d", 0.3), values.get("s", 0.6), values.get("r", 0.3))
-		"svf":
+		"builtin.svf":
 			return filter("lp", 2, values.get("cutoff", 1200.0), 0.6 + float(values.get("res", 0.3)) * 9.0)
-		"ladder":
+		"builtin.ladder":
 			var mode := int(values.get("mode", 0))
 			var kind: String = ["lp", "lp", "bp", "bp", "hp", "hp"][clampi(mode, 0, 5)]
 			var poles := 4 if mode % 2 == 0 else 2

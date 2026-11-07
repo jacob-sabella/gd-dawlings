@@ -8,7 +8,7 @@
 		"Time",
 		"Mix"
 	],
-	"note": "RackSkin.SKINS, RackWall.PAD_KNOBS, RackCatalogue.GROUPS and RackPatch presets as they stood at 26b79fc, before the registry replaced them. Input of tools/mods_from_legacy.py; the registry equivalence test holds the manifests to it.",
+	"note": "RackSkin.SKINS, RackWall.PAD_KNOBS, RackCatalogue.GROUPS and RackPatch presets as they stood at 26b79fc, before the registry replaced them. Bare module names, as the engine has them; the retired tools/mods_from_legacy.py wrote the manifests from it, and the registry equivalence test still holds them to it (with the builtin. prefix).",
 	"pad_knobs": {
 		"att": [
 			"gain",

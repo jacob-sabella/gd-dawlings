@@ -177,7 +177,7 @@ func row(key: String) -> Dictionary:
 	var p = plugin(key)
 	var i := info(key)
 	var type: String = i["format"] + ("i" if p.is_instrument() else "")
-	var out := {"name": "%s: %s" % [type, i["name"]], "enabled": true, "wet": 1.0, "preset": "",
+	var out := {"name": "%s: %s" % [type, PluginCatalogue.display_name(i)], "enabled": true, "wet": 1.0, "preset": "",
 			"params": {}, "param_names": {}, "key": key, "param_list": shown(key)}
 	for pi in shown(key):
 		out["params"][pi] = p.get_param(pi)

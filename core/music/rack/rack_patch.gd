@@ -9,6 +9,10 @@ extends RefCounted
 const ROW := &"rack"
 const MAX_MODULES := 64
 const MAX_CABLES := 160
+## The one module a rack must keep: the sound leaves the room through it.
+const OUT_MODULE := "builtin.out"
+## The module whose outputs are the room's world sockets.
+const WORLD_MODULE := "builtin.world"
 
 static func empty() -> Dictionary:
 	return {"modules": {}, "cables": []}
@@ -55,21 +59,23 @@ static func type_of(p: Dictionary, id: String) -> String:
 	return (p["modules"] as Dictionary).get(id, {}).get("type", "")
 
 
-## The next free id for a type: "vco", "vco2", "vco3".
+## The next free id for a type: "vco", "vco2", "vco3" (the type without its mod's prefix; an id is a
+## jack path's first part, so it holds no dot).
 static func new_id(p: Dictionary, type: String) -> String:
-	if not (p["modules"] as Dictionary).has(type):
-		return type
+	var stem := RackCatalogue.short_name(type)
+	if not (p["modules"] as Dictionary).has(stem):
+		return stem
 	var n := 2
-	while (p["modules"] as Dictionary).has("%s%d" % [type, n]):
+	while (p["modules"] as Dictionary).has("%s%d" % [stem, n]):
 		n += 1
-	return "%s%d" % [type, n]
+	return "%s%d" % [stem, n]
 
 
 ## Adds a module. "" when the catalogue has no such type, the rack is full, or it is a second OUT.
 static func add(p: Dictionary, type: String, at := Vector2i.ZERO) -> String:
 	if not RackCatalogue.has(type) or (p["modules"] as Dictionary).size() >= MAX_MODULES:
 		return ""
-	if type == "out" and has_type(p, "out"):
+	if type == OUT_MODULE and has_type(p, OUT_MODULE):
 		return ""
 	var id := new_id(p, type)
 	_put(p, id, type, at.x, at.y)
@@ -89,7 +95,7 @@ static func world_out(p: Dictionary, socket: StringName, to := "") -> String:
 	var at := Modular.WORLD.find(socket)
 	var id := ""
 	for m in p["modules"]:
-		if p["modules"][m]["type"] == "world":
+		if p["modules"][m]["type"] == WORLD_MODULE:
 			id = m
 			break
 	if at < 0 or id == "":
@@ -103,7 +109,7 @@ static func world_sink(p: Dictionary, socket: StringName) -> String:
 	var at := Modular.WORLD.find(socket)
 	for c in p["cables"]:
 		var id := String(c[0]).get_slice(".", 0)
-		if type_of(p, id) != "world" or at < 0:
+		if type_of(p, id) != WORLD_MODULE or at < 0:
 			continue
 		var port := String(c[0]).get_slice(".", 1).trim_suffix("_g")
 		if port == WORLD_OUTS[at]:
@@ -127,7 +133,7 @@ static func free_inputs(p: Dictionary) -> Array[String]:
 		var t: String = p["modules"][id]["type"]
 		for port in RackCatalogue.spec(t).get("ins", []):
 			var path := "%s.%s" % [id, port]
-			if not taken.has(path) and t != "out":
+			if not taken.has(path) and t != OUT_MODULE:
 				out.append(path)
 	return out
 
@@ -140,7 +146,7 @@ static func step_world(p: Dictionary, socket: StringName, way: int) -> String:
 	var bare := p.duplicate(true)
 	if now != "":
 		for c in (bare["cables"] as Array).duplicate():
-			if c[1] == now and type_of(bare, String(c[0]).get_slice(".", 0)) == "world" \
+			if c[1] == now and type_of(bare, String(c[0]).get_slice(".", 0)) == WORLD_MODULE \
 					and String(c[0]).get_slice(".", 1).trim_suffix("_g") == WORLD_OUTS[Modular.WORLD.find(socket)]:
 				(bare["cables"] as Array).erase(c)
 	var ring: Array[String] = [""]
@@ -254,7 +260,7 @@ static func sanitize(raw: Variant) -> Dictionary:
 		if not sid.is_valid_identifier() or sid.length() > 20:
 			continue
 		var type := String(m["type"])
-		if type == "out" and has_type(p, "out"):
+		if type == OUT_MODULE and has_type(p, OUT_MODULE):
 			continue
 		var at: Variant = m.get("at", [0, 0])
 		var col := int(at[0]) if at is Array and at.size() >= 2 else 0
@@ -277,7 +283,7 @@ static func sanitize(raw: Variant) -> Dictionary:
 static func lines(p: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray(["clear"])
 	for id in module_ids(p):
-		out.append("add %s %s" % [id, p["modules"][id]["type"]])
+		out.append("add %s %s" % [id, RackCatalogue.engine_type(p["modules"][id]["type"])])
 	for id in module_ids(p):
 		var knobs: Dictionary = p["modules"][id]["knobs"]
 		for k in knobs:
@@ -301,7 +307,7 @@ static func answer(p: Dictionary, op: String, args: Array) -> String:
 			var at := Vector2i(int(args[1]), int(args[2]))
 			if not RackCatalogue.has(type):
 				return "there is no module called %s" % type
-			if type == "out" and has_type(p, "out"):
+			if type == OUT_MODULE and has_type(p, OUT_MODULE):
 				return "the rack has its OUT already: one sound leaves the room"
 			if (p["modules"] as Dictionary).size() >= MAX_MODULES:
 				return "the case is full: take something out first"
@@ -311,7 +317,7 @@ static func answer(p: Dictionary, op: String, args: Array) -> String:
 				return "that does not fit there"
 			return "" if add(p, type, at) != "" else "that module could not be added"
 		"remove":
-			if type_of(p, String(args[0])) == "out":
+			if type_of(p, String(args[0])) == OUT_MODULE:
 				return "the OUT stays: without it nothing leaves the room"
 			return "" if remove(p, String(args[0])) else "there is no such module"
 		"move":

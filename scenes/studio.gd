@@ -4755,17 +4755,17 @@ func _stand_the_annex() -> void:
 ## next free one `way` on, the rack's WORLD module put in the case first if it has none.
 func _on_world_step(socket: StringName, way: int) -> void:
 	var patch: Dictionary = rack_row["patch"]
-	if not RackPatch.has_type(patch, "world"):
+	if not RackPatch.has_type(patch, RackPatch.WORLD_MODULE):
 		ask_rack("add", ["world", -1, 0])
 		patch = rack_row["patch"]
-		if not RackPatch.has_type(patch, "world"):
+		if not RackPatch.has_type(patch, RackPatch.WORLD_MODULE):
 			return
 	var now := RackPatch.world_sink(patch, socket)
 	var next := RackPatch.step_world(patch, socket, way)
 	if now != "":
 		var out := ""
 		for c in patch["cables"]:
-			if c[1] == now and RackPatch.type_of(patch, String(c[0]).get_slice(".", 0)) == "world":
+			if c[1] == now and RackPatch.type_of(patch, String(c[0]).get_slice(".", 0)) == RackPatch.WORLD_MODULE:
 				out = c[0]
 		if out != "":
 			ask_rack("pull_one", [out, now])

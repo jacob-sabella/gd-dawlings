@@ -120,8 +120,10 @@ Top level: as the schema. `format`, `api_version`, `id`, `name`, `version`, `lic
 `{"file":"presets/x.patch.json"}`). Replaces `RackPatch.preset()` (30 hand-coded presets,
 `rack_patch.gd:22-345`).
 
-`plugin`: `plugin.format` R (`clap`|`vst3`|`lv2`), `plugin.id` R, `display` O (skin, model,
-`first_params`, labels). Overlay on a plugin the user has (4.3).
+`plugin`: `plugin.format` R (`clap`|`vst3`|`lv2`, or `godot` for the audio effects the built-in engine
+ships), `plugin.id` R, `display` O (`title`; later skin, model, `first_params`, labels). Overlay on a
+plugin the user has (4.3). A plugin id is namespaced by its format, so it is not renamed `builtin.*`: the
+effect `compressor` is `godot:compressor`.
 
 `skin`: `for` R (a module `type`), then `skin` R. Lets a skin pack re-skin another mod's module.
 
@@ -158,7 +160,7 @@ How today's pieces map onto fields:
     "upstream": "https://github.com/pichenettes/eurorack"
   },
   "provides": [
-    {"kind": "rack_module", "type": "plaits", "title": "PLAITS", "group": "Voice", "blurb": "Mutable Instruments' macro oscillator: 24 engines from virtual analogue to modal, granular, drums and speech.", "sound": {"kind": "engine", "type": "plaits"}, "skin": {"face": "#421F47", "accent": "#FF8CFF", "pattern": "checker", "tagline": "ONE OF 16"}, "pad_knobs": ["harm", "timbre"]}
+    {"kind": "rack_module", "type": "builtin.plaits", "title": "PLAITS", "group": "Voice", "blurb": "Mutable Instruments' macro oscillator: 24 engines from virtual analogue to modal, granular, drums and speech.", "sound": {"kind": "engine", "type": "plaits"}, "skin": {"face": "#421F47", "accent": "#FF8CFF", "pattern": "checker", "tagline": "ONE OF 16"}, "pad_knobs": ["harm", "timbre"]}
   ]
 }
 ```
@@ -166,6 +168,9 @@ How today's pieces map onto fields:
 The real file lists `rings`, `reverb` and `clouds` the same way (`modules_mutable.cc:119,146,198`).
 
 ### 3.4 Worked example: a DAW plugin entry (CLAP via dawkit)
+
+The engine's own effects are `plugin` entries too (format `godot`, 4.3): see
+`res://mods/builtin/effects/mod.json`. What follows is the user-installed kind.
 
 A plugin is a file on the user's disk that `PluginCatalogue` already scans (`plugin_catalogue.gd`).
 The manifest does not install it; it says how the game should present it. A scanned plugin with no
@@ -192,8 +197,8 @@ The CLAP id is the one the plugin reports; verify with the scan on install. `fir
 
 ### 3.5 Worked example: the proof mod (pure data, composite)
 
-`dawlings.sample.pluck` is a composite module built from three existing modules (`plaits`, `env`,
-`vca`, ports and knobs as in `modules.json`), plus a skin and a preset. No engine change, no code. It
+`dawlings.sample.pluck` is a composite module built from three existing modules (`builtin.plaits`, `builtin.env`,
+`builtin.vca`, ports and knobs as in `modules.json`), plus a skin and a preset. No engine change, no code. It
 lives in the repo as `mods_examples/dawlings.sample.pluck/` (not exported) and the proof test copies
 it into a temporary user mods folder (section 10).
 
@@ -211,8 +216,8 @@ it into a temporary user mods folder (section 10).
   "source": {"kind": "data"},
   "requires": [{"mod": "builtin.mutable", "min": "1.0.0"}, {"mod": "builtin.core", "min": "1.0.0"}],
   "provides": [
-    {"kind": "rack_module", "type": "dawlings.sample.pluck", "title": "PLUCK", "group": "Voice", "blurb": "One note in, one pluck out: Plaits through a short envelope.", "sound": {"kind": "composite", "modules": {"osc": {"type": "plaits", "knobs": {"engine": 0.35, "harm": 0.4}}, "env": {"type": "env", "knobs": {"a": 0.0, "d": 0.25, "s": 0.0, "r": 0.2}}, "amp": {"type": "vca"}}, "cables": [["env.out", "amp.cv"], ["osc.out", "amp.in"]], "ins": {"pitch": ["osc.pitch"], "gate": ["env.gate", "osc.trig"]}, "outs": {"out": "amp.out"}, "knobs": {"timbre": {"to": "osc.timbre", "label": "TIMBRE"}, "decay": {"to": "env.d", "label": "DECAY"}}, "meter_from": "amp"}, "skin": {"face": "#1E2A1A", "accent": "#E6FF6A", "pattern": "dots", "tagline": "PLUCK IT"}, "pad_knobs": ["timbre", "decay"]},
-    {"kind": "rack_preset", "name": "pluck_demo", "title": "Pluck demo", "patch": {"modules": {"keys": {"type": "keys", "at": [0, 0], "knobs": {}}, "pl": {"type": "dawlings.sample.pluck", "at": [1, 0], "knobs": {"decay": 0.4}}, "out": {"type": "out", "at": [3, 0], "knobs": {}}}, "cables": [["keys.pitch", "pl.pitch"], ["keys.gate", "pl.gate"], ["pl.out", "out.l"], ["pl.out", "out.r"]]}}
+    {"kind": "rack_module", "type": "dawlings.sample.pluck", "title": "PLUCK", "group": "Voice", "blurb": "One note in, one pluck out: Plaits through a short envelope.", "sound": {"kind": "composite", "modules": {"osc": {"type": "builtin.plaits", "knobs": {"engine": 0.35, "harm": 0.4}}, "env": {"type": "builtin.env", "knobs": {"a": 0.0, "d": 0.25, "s": 0.0, "r": 0.2}}, "amp": {"type": "builtin.vca"}}, "cables": [["env.out", "amp.cv"], ["osc.out", "amp.in"]], "ins": {"pitch": ["osc.pitch"], "gate": ["env.gate", "osc.trig"]}, "outs": {"out": "amp.out"}, "knobs": {"timbre": {"to": "osc.timbre", "label": "TIMBRE"}, "decay": {"to": "env.d", "label": "DECAY"}}, "meter_from": "amp"}, "skin": {"face": "#1E2A1A", "accent": "#E6FF6A", "pattern": "dots", "tagline": "PLUCK IT"}, "pad_knobs": ["timbre", "decay"]},
+    {"kind": "rack_preset", "name": "pluck_demo", "title": "Pluck demo", "patch": {"modules": {"keys": {"type": "builtin.keys", "at": [0, 0], "knobs": {}}, "pl": {"type": "dawlings.sample.pluck", "at": [1, 0], "knobs": {"decay": 0.4}}, "out": {"type": "builtin.out", "at": [3, 0], "knobs": {}}}, "cables": [["keys.pitch", "pl.pitch"], ["keys.gate", "pl.gate"], ["pl.out", "out.l"], ["pl.out", "out.r"]]}}
   ]
 }
 ```
@@ -271,6 +276,21 @@ scanned plugin -> optional `plugin` entry matched on `(format, id)` -> `display`
 in a song whose plugin is not found is shown as unavailable and keeps its place (the chain already
 keys slots by name, `LayoutProfile.tablets`). Scope: the built-in backend (`GodotBackend`). Under
 Reaper the plugin is Reaper's; entries only supply a look (open question 6).
+
+**Built (2026-11-07, step 8, plugin part).** `res://mods/builtin/effects/mod.json` (`builtin.effects`) holds a
+`plugin` entry, format `godot`, for each of the ten effects of `FXCatalogue` (eq, eq21, compressor, reverb,
+delay, chorus, filter, distortion, phaser, limiter), with `display.title` the name the chain and ADD
+PLUGIN already used (EQ6, EQ21, Compressor, Reverb, Delay, Chorus, Low-pass, Drive, Phaser, Limiter).
+`FXCatalogue.kinds()[kind]["name"]` is read from `ModRegistry.plugin_title("godot", kind)`; the
+`AudioEffect` class and the parameter ranges stay in `fx_catalogue.gd` as the binding (they are code, not
+data, and the sound would not change by moving them). `ModRegistry.plugin_display/plugin_title/plugin_ids`
+serve the entries, and `PluginCatalogue.display_name(info)` gives a scanned plugin the title a mod
+gives it, else its own: used for its ADD PLUGIN label (`GodotBackend.fx_choices`) and its chain row name
+(`HostedPlugins.row`). No third-party plugin has a shipped entry, so nothing changes for them until a mod
+adds one. Not done: `display.skin`, `first_params` and `param_key` are accepted and ignored (the
+`RackUnit` and `PluginTablet` still look the same for every plugin); the unavailable slot for a plugin
+the machine lacks; the Reaper backend's own list (`ReaperBackend.fx_choices`, Reaper's stock FX); the
+`plugin_not_found` problem.
 
 ## 5. Discovery, order, collisions, failures
 
@@ -333,9 +353,9 @@ and the room row.
   "title": "Pluck demo",
   "track": 0,
   "modules": {
-    "keys": {"type": "keys", "at": [0, 0], "w": 3, "knobs": {}},
+    "keys": {"type": "builtin.keys", "at": [0, 0], "w": 3, "knobs": {}},
     "pl": {"type": "dawlings.sample.pluck", "at": [1, 0], "w": 4, "knobs": {"decay": 0.4}},
-    "out": {"type": "out", "at": [3, 0], "w": 2, "knobs": {}}
+    "out": {"type": "builtin.out", "at": [3, 0], "w": 2, "knobs": {}}
   },
   "cables": [["keys.pitch", "pl.pitch"], ["keys.gate", "pl.gate"], ["pl.out", "out.l"], ["pl.out", "out.r"]],
   "uses": {"dawlings.sample.pluck": {"mod": "dawlings.sample.pluck", "version": "0.1.0", "title": "PLUCK"}}
@@ -400,7 +420,11 @@ class_name ModRegistry extends RefCounted
   func module_types() -> Array[String]                  # palette order
   func groups() -> Array[Dictionary]                    # ordered, replaces RackCatalogue.GROUPS
   func presets() -> Array[RackPresetDef]
-  func plugin_display(format: String, id: String) -> PluginDisplayDef
+  func plugin_display(format: String, id: String) -> Dictionary   # the entry's `display`, {} if none (built)
+  func plugin_title(format: String, id: String, fallback := "") -> String   # built
+  func plugin_ids(format: String) -> Array[String]                 # built
+  func rack_engine_type(type: String) -> String                    # builtin.plaits -> plaits (built)
+  func rack_type_of_engine(engine_type: String) -> String          # plaits -> builtin.plaits (built)
   func uses(patch: Dictionary) -> Dictionary            # fills the `uses` map
 class_name ModManifest        # parsed + validated mod.json: id, version, licence, source, entries, status
 class_name ModProblem         # {code, mod, entry, message, severity}
@@ -471,7 +495,7 @@ Each step ends with the suite green and no behaviour change unless stated. Steps
 3. **Plaits.** `res://mods/builtin/mutable/mod.json` with `plaits` only; `RackCatalogue`, `RackSkin.of`
    and `PAD_KNOBS` consult the registry first and fall back to the old tables. Test: registry result for
    `plaits` equals the old tables. **Built (2026-11-07), and what differs from the sketch above:**
-   * The entry's `type` is still `plaits`, not `builtin.plaits`. Decision 2 (no alias table) means a
+   * The entry's `type` was still `plaits` at this step (renamed to `builtin.plaits` in step 4b). Decision 2 (no alias table) means a
      renamed type must be renamed everywhere at once: `modules.json`, the engine's `add` lines, the
      presets, `PAD_KNOBS`, `SKINS` and the tests. Renaming one module now would break every patch that
      names it, so the rename of all 29 types to `builtin.<name>` happens in step 4 with the generated
@@ -489,9 +513,26 @@ Each step ends with the suite green and no behaviour change unless stated. Steps
    * Skin colours are stored as hex, so they are the 8-bit rounding of the old floats (at most 0.002
      off per channel; invisible). The test holds them to 0.003; the old table stays for fallback.
 4. **The rest of the rack.** Part (a), built (2026-11-07): all 29 rack modules and the 17 presets are on
-   the registry and the old tables are deleted. Part (b), the `builtin.<name>` rename and the DAW plugins,
-   is still to do. What differs from the sketch:
-   * `tools/mods_from_legacy.py` generates the manifests. Its input is
+   the registry and the old tables are deleted. Part (b), built (2026-11-07): the `builtin.<name>` rename
+   and the DAW plugins' catalogue (4.3). What differs from the sketch:
+   * **The rename (part b).** Every rack module type, in the manifests, the preset patch files and the
+     tests, is `builtin.<name>`; there is no alias table, so a patch that still says `vco` is not carried
+     (`RackPatch.sanitize` drops it as an unknown module). The engine keeps its own names: `modules.json`,
+     the C++ `Registrar`s and each entry's `sound.type` are unchanged, and the registry maps a type to the
+     engine's name (`ModRegistry.rack_engine_type`, `RackCatalogue.engine_type`) where the engine is
+     spoken to (`RackPatch.lines`, `RackVoice._sync_patch`). The catalogue is keyed by type and each spec
+     has `type` (the mod's) and `engine`. An engine module no mod claims keeps its bare engine name as its
+     type. A module's id in a patch stays the short name (`vco`, `vco2`): an id is the first part of a jack
+     path `id.port`, so it cannot hold the dot (`RackCatalogue.short_name`). The special modules are named
+     once, `RackPatch.OUT_MODULE` and `WORLD_MODULE`; `rack_layout.gd` (SCOPE width), `rack_curves.gd`,
+     `rack_wall.gd` (the `seq` bars, the `scope` screen) name `builtin.scope`, `builtin.seq`, `builtin.env`,
+     `builtin.svf`, `builtin.ladder`. `studio.gd` changed in three comparisons with `"world"` only.
+   * **`tools/mods_from_legacy.py` is retired** (deleted in the same commit). It wrote the manifests once,
+     from tables that no longer exist; the manifests are now the source of truth and are edited by hand, and
+     a second generator that rewrites them in full would overwrite those edits. Its input stays as
+     `tests/fixtures/rack_legacy_tables.json` (bare names, the 26b79fc tables), which
+     `_test_the_manifests_equal_the_old_tables` holds the manifests to, adding the prefix.
+   * (Part a, as built:) the script `tools/mods_from_legacy.py` generated the manifests. Its input was
      `tests/fixtures/rack_legacy_tables.json`, the old `RackSkin.SKINS`, `RackWall.PAD_KNOBS`,
      `RackCatalogue.GROUPS` and `RackPatch` presets dumped from the live GDScript at `26b79fc` by a
      throw-away script, plus `modules.json` (title, group, blurb) and the C++ sources (which module uses
@@ -526,7 +567,8 @@ Each step ends with the suite green and no behaviour change unless stated. Steps
 6. **Unavailable plate and guests.** `RackWall` draws missing modules and dangling cables; `uses`
    filled on publish; room-row and guest tests.
 7. **Composite.** Expansion in `RackPatch.lines`; `interface` handling in `RackModuleDef`; meters.
-8. **Plugin overlays, MODS screen, notices tool.** `plugin_display` in the tablet/unit; the MODS plate;
+8. **Plugin overlays, MODS screen, notices tool.** Plugin part, catalogue built (4.3; the tablet/unit look,
+   the unavailable slot and `display.skin` remain); `plugin_display` in the tablet/unit; the MODS plate;
    `tools/mods_notices.py` and its `--check` in `tools/verify.sh`.
 9. **The proof.** `mods_examples/dawlings.sample.pluck/` and the proof test (section 10).
 10. **Source pins.** Manifests for `builtin.daisysp` and `builtin.dawkit`; the pin test.
