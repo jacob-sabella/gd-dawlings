@@ -758,6 +758,7 @@ func _ready() -> void:
 	_test_the_module_cap_is_counted_on_the_expansion()
 	_test_a_composite_plate_meters_its_inner_module()
 	_test_a_composite_plays()
+	await _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates()
 	_test_a_rack_catalogue_is_the_engines_own_description()
 	_test_a_rack_patch_checks_every_verb()
 	_test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input()
@@ -45763,3 +45764,11 @@ func _test_a_composite_plate_meters_its_inner_module() -> void:
 
 func _test_a_composite_plays() -> void:
 	RackCompositeTests.new(self).a_composite_plays()
+
+
+const SampleModProofTests := preload("res://tests/sample_mod_proof_tests.gd")
+
+
+## The proof of docs/mods.md step 9: a mod that is only a folder appears, plays, saves, reloads and replicates.
+func _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates() -> void:
+	await SampleModProofTests.new(self).the_proof()

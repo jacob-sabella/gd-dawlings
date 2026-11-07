@@ -183,7 +183,9 @@ func builtin_types_are_prefixed_and_the_engine_keeps_its_names() -> void:
 	check("the engine is told its own names", "add vco vco" in lines and "add vco2 vco" in lines and "add plaits plaits" in lines
 			and not "\n".join(lines).contains("builtin"))
 	var old := {"modules": {"vco": {"type": "vco", "at": [0, 0], "knobs": {}}}, "cables": []}
-	check("a patch that says a bare name is not carried (no alias table)", RackPatch.sanitize(old)["modules"].is_empty())
+	var kept := RackPatch.sanitize(old)
+	check("a bare name is no alias for the prefixed one (no alias table): it is a kept missing module, never played",
+			kept["modules"].has("vco") and RackPatch.is_missing(kept, "vco") and RackPatch.playable(kept)["modules"].is_empty())
 	var every := true
 	for name in RackPatch.presets():
 		var preset := RackPatch.preset(name)

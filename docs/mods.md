@@ -1,6 +1,6 @@
 # Mods: manifest, registry and save format
 
-Status: **DESIGN, draft for owner review** (2026-11-07). Nothing here is built. It is queue item 2
+Status: **DESIGN, built through step 7 and step 9 (the proof)**; steps 8, 10 and 11 remain. It is queue item 2
 of `docs/refactor_loop.md` and feeds items 3-5. "Today" claims cite `docs/refactor_state_map.md`
 (SM) by section or file:line. Companion: `docs/layouts.md` (rooms and pieces).
 
@@ -665,6 +665,19 @@ Each step ends with the suite green and no behaviour change unless stated. Steps
    the unavailable slot and `display.skin` remain); `plugin_display` in the tablet/unit; the MODS plate;
    `tools/mods_notices.py` and its `--check` in `tools/verify.sh`.
 9. **The proof.** `mods_examples/dawlings.sample.pluck/` and the proof test (section 10).
+   **Built (2026-11-07).** `mods_examples/dawlings.sample.pluck/` holds `mod.json` (section 3.5 verbatim: the composite
+   PLUCK, its skin and the `pluck_demo` preset; no model, no code) and a README. It is a folder only: no change to
+   `studio.gd`, the catalogue or the registry makes it appear. `mods_examples/*` is in each `exclude_filter` of
+   `export_presets.cfg`, so it ships in the repo and not in a build (a player installs it by copying the folder into
+   `user://mods/` or a root of `$DAWLINGS_MODS`). The proof is `tests/sample_mod_proof_tests.gd`, run as
+   `_test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates`; it copies the folder into
+   `user://sample_mod_proof/mods/` and scans it through `ModRegistry.default_roots`, the `$DAWLINGS_MODS` path.
+   (a) registry, catalogue, ADD list (group Voice), presets and skin; (b) engine render of the preset equals Plaits ->
+   ENV -> VCA patched by hand, is plucked (the tail is quieter than the start) and silent without a note (needs the
+   engine binary; without it only the expansion lines are checked and the test says so); (c) patch file round trip,
+   a fresh `Studio` opening the autosave, the folder removed (plate unavailable, place and cables kept, same bytes)
+   and put back; (d) host row `uses`, a guest with the mod sees the real plate, a guest without it sees "PLUCK not
+   installed" / "dawlings.sample.pluck 0.1.0" in the host's place and runs no engine, the host's render stays the sound.
 10. **Source pins.** Manifests for `builtin.daisysp` and `builtin.dawkit`; the pin test.
 11. **Remove old paths.** Delete forwarders, `modules.json` hand-edit paths, stale `architecture.md` rack
     section replaced by `docs/mods.md` pointers.

@@ -1,0 +1,155 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "dawlings.sample.pluck",
+  "name": "Pluck (sample mod)",
+  "version": "0.1.0",
+  "min_game_version": "0.0.14",
+  "author": "dawlings",
+  "description": "A plucked voice: Plaits, an envelope and a VCA in one plate.",
+  "licence": {
+    "spdx": "CC0-1.0"
+  },
+  "source": {
+    "kind": "data"
+  },
+  "requires": [
+    {
+      "mod": "builtin.mutable",
+      "min": "1.0.0"
+    },
+    {
+      "mod": "builtin.core",
+      "min": "1.0.0"
+    }
+  ],
+  "provides": [
+    {
+      "kind": "rack_module",
+      "type": "dawlings.sample.pluck",
+      "title": "PLUCK",
+      "group": "Voice",
+      "blurb": "One note in, one pluck out: Plaits through a short envelope.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "osc": {
+            "type": "builtin.plaits",
+            "knobs": {
+              "engine": 0.35,
+              "harm": 0.4
+            }
+          },
+          "env": {
+            "type": "builtin.env",
+            "knobs": {
+              "a": 0.0,
+              "d": 0.25,
+              "s": 0.0,
+              "r": 0.2
+            }
+          },
+          "amp": {
+            "type": "builtin.vca"
+          }
+        },
+        "cables": [
+          [
+            "env.out",
+            "amp.cv"
+          ],
+          [
+            "osc.out",
+            "amp.in"
+          ]
+        ],
+        "ins": {
+          "pitch": [
+            "osc.pitch"
+          ],
+          "gate": [
+            "env.gate",
+            "osc.trig"
+          ]
+        },
+        "outs": {
+          "out": "amp.out"
+        },
+        "knobs": {
+          "timbre": {
+            "to": "osc.timbre",
+            "label": "TIMBRE"
+          },
+          "decay": {
+            "to": "env.d",
+            "label": "DECAY"
+          }
+        },
+        "meter_from": "amp"
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "PLUCK IT"
+      },
+      "pad_knobs": [
+        "timbre",
+        "decay"
+      ]
+    },
+    {
+      "kind": "rack_preset",
+      "name": "pluck_demo",
+      "title": "Pluck demo",
+      "patch": {
+        "modules": {
+          "keys": {
+            "type": "builtin.keys",
+            "at": [
+              0,
+              0
+            ],
+            "knobs": {}
+          },
+          "pl": {
+            "type": "dawlings.sample.pluck",
+            "at": [
+              1,
+              0
+            ],
+            "knobs": {
+              "decay": 0.4
+            }
+          },
+          "out": {
+            "type": "builtin.out",
+            "at": [
+              3,
+              0
+            ],
+            "knobs": {}
+          }
+        },
+        "cables": [
+          [
+            "keys.pitch",
+            "pl.pitch"
+          ],
+          [
+            "keys.gate",
+            "pl.gate"
+          ],
+          [
+            "pl.out",
+            "out.l"
+          ],
+          [
+            "pl.out",
+            "out.r"
+          ]
+        ]
+      }
+    }
+  ]
+}
