@@ -89,6 +89,9 @@ func stand(id: StringName) -> void:
 func unstand(id: StringName) -> void:
 	var def := PieceDef.of(id)
 	var held: Variant = studio.get(def.studio_node)
+	if id == Looper.STATION and _stands(held) and (held as Looper).mine():
+		# A layer this player was taking down has nowhere to finish.
+		studio._on_looper_called_off()
 	if _stands(held):
 		(held as Node).get_parent().remove_child(held)
 		(held as Node).queue_free()

@@ -33,6 +33,9 @@ static func sync(studio: Studio) -> void:
 	if studio.floor_plan == null or studio.venue == null or not studio.venue.is_inside_tree():
 		return
 	for id in PieceCatalogue.REMOVABLE:
+		if PieceCatalogue.zoned(id):
+			_zoned(studio, id)
+			continue
 		var t: Trolley = studio.live_pieces.get(id)
 		var wanted: bool = studio._live_default(id) != null
 		if t != null:
@@ -45,6 +48,17 @@ static func sync(studio: Studio) -> void:
 				studio.pieces.stand(id)
 				studio._carry_live(id)
 	_baskets(studio)
+
+
+## A piece a zone holds, stood or taken down to match the delta: taken down when the room did without it,
+## stood again when it is back (and the venue has the zone).
+static func _zoned(studio: Studio, id: StringName) -> void:
+	var stands := PieceHost._stands(studio.get(PieceDef.of(id).studio_node))
+	var wanted: bool = not studio.room_deltas.delta.is_removed(id)
+	if stands and not wanted:
+		studio.pieces.unstand(id)
+	elif wanted and not stands:
+		studio.pieces.stand(id)
 
 
 ## Copy `id`'s node moved to where its trolley is, and the baskets told. False for an id that is no copy.
@@ -104,6 +118,7 @@ static func _copies(studio: Studio, delta: RoomDelta) -> void:
 		var t: Trolley = studio.live_pieces[id]
 		if t.has_meta(COPY_OF) and not wanted.has(id):
 			_take_down(studio, id, t)
+	_gaps(studio, delta)
 	for id: StringName in wanted:
 		var t: Trolley = studio.live_pieces.get(id)
 		if t == null:
@@ -114,6 +129,27 @@ static func _copies(studio: Studio, delta: RoomDelta) -> void:
 			studio.venue.add_child(node)
 			node.transform = studio._set_to_venue(t.transform)
 		t.visible = true
+
+
+## The plates for the pieces the delta adds that this build cannot make (`PieceGap`): one in each's place,
+## and any a delta no longer has taken down. They are nodes of the venue only; no trolley, nothing in the
+## floor plan.
+static func _gaps(studio: Studio, delta: RoomDelta) -> void:
+	var wanted := {}
+	for entry in delta.added:
+		if not PieceCatalogue.buildable(StringName(entry["piece"])):
+			wanted[node_name(StringName(entry["id"]))] = entry
+	for child in studio.venue.get_children():
+		if child is PieceGap and not wanted.has(child.name):
+			studio.venue.remove_child(child)
+			child.queue_free()
+	for node_id: String in wanted:
+		var entry: Dictionary = wanted[node_id]
+		var gap := studio.venue.get_node_or_null(node_id) as PieceGap
+		if gap == null:
+			gap = PieceGap.for_entry(entry)
+			studio.venue.add_child(gap)
+		gap.transform = studio._set_to_venue(delta.transform_of(StringName(entry["id"])))
 
 
 ## The trolley of a copy of `kind`, a hoop's: its footprint, weight and grips from the `PieceDef`, as the hoop's own.

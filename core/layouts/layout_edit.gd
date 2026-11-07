@@ -145,6 +145,12 @@ func _add(d: RoomDelta, args: Array) -> String:
 		return "The %s cannot be added to a room." % LayoutChecks.name_of(kind)
 	var yaw := wrapf(float(args[3]), -PI, PI)
 	if d.is_removed(kind):
+		if PieceCatalogue.zoned(kind):
+			# A zone holds it: no spot to choose, only a zone to have in the room.
+			if Stations.spot(studio.venue, kind) == null:
+				return "This room has no place for the %s." % LayoutChecks.name_of(kind)
+			d.put_back(kind)
+			return ""
 		d.put_back(kind)
 		d.move(kind, float(args[1]), float(args[2]), yaw)
 		_placing = kind
@@ -175,6 +181,8 @@ func _remove(d: RoomDelta, args: Array) -> String:
 				else "There is no '%s' in this room." % id
 	if d.is_removed(id):
 		return "The %s is already out of the room." % LayoutChecks.name_of(id)
+	if PieceCatalogue.zoned(id) and Stations.spot(studio.venue, id) == null:
+		return "This room has no %s to take out." % LayoutChecks.name_of(id)
 	d.take_out(id)
 	return ""
 
@@ -203,6 +211,8 @@ func _movable(d: RoomDelta, id: StringName) -> String:
 	if not _in_layout(d, id) and d.added_index(id) < 0:
 		return "There is no '%s' in this room." % id
 	var t := studio._floor_piece(id)
+	if d.added_index(id) >= 0 and not PieceCatalogue.buildable(StringName(d.added[d.added_index(id)]["piece"])):
+		return "The %s is not installed here; it can be taken out, not moved." % LayoutChecks.name_of(d.added[d.added_index(id)]["piece"])
 	if t == null or RoomDelta.owned_by_player(id) or t.built_in:
 		return "The %s is built into the room; it cannot be moved." % LayoutChecks.name_of(id)
 	return ""

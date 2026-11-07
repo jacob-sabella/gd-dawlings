@@ -792,6 +792,11 @@ func _ready() -> void:
 	await _test_a_layout_edit_survives_a_reload_in_a_fresh_studio()
 	_test_a_guest_sees_the_hosts_layout_edit_through_the_row()
 	_test_the_edit_panel_shows_the_validators_words_and_is_shut_to_a_guest()
+	_test_a_guest_sees_the_hosts_layout_and_cannot_edit_it()
+	_test_reset_returns_the_default()
+	_test_zone_pieces_come_out_of_a_room_and_go_back()
+	_test_a_piece_this_build_cannot_make_is_a_named_plate()
+	await _test_deleting_and_adding_a_piece_survives_a_restart()
 	await _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates()
 	_test_a_rack_catalogue_is_the_engines_own_description()
 	_test_a_rack_patch_checks_every_verb()
@@ -45995,6 +46000,35 @@ func _test_a_guest_sees_the_hosts_layout_edit_through_the_row() -> void:
 ## The F3 edit panel shows the validator's message and is shut to a guest.
 func _test_the_edit_panel_shows_the_validators_words_and_is_shut_to_a_guest() -> void:
 	LayoutEditTests.new(self).the_panel_shows_what_the_validator_said()
+
+
+const LayoutShareTests := preload("res://tests/layout_share_tests.gd")
+
+
+## Section 11 step 10: a host and a guest in the tree together; the guest sees the host's layout, is told host
+## only when it arranges, and a stranger's piece is a named plate.
+func _test_a_guest_sees_the_hosts_layout_and_cannot_edit_it() -> void:
+	LayoutShareTests.new(self).guest_sees_the_host_and_cannot_edit()
+
+
+## One reset on the host takes a guest, with every edit, back to the default.
+func _test_reset_returns_the_default() -> void:
+	LayoutShareTests.new(self).reset_returns_the_default()
+
+
+## The wheel, the section blocks, the looper and the lyric board come out of a room and go back.
+func _test_zone_pieces_come_out_of_a_room_and_go_back() -> void:
+	LayoutShareTests.new(self).zone_pieces_come_out_and_go_back()
+
+
+## An added piece of a kind this build cannot make is a plate naming it; odd entries never crash.
+func _test_a_piece_this_build_cannot_make_is_a_named_plate() -> void:
+	LayoutShareTests.new(self).a_piece_this_build_cannot_make_is_a_plate()
+
+
+## The brief's proof so far: delete in one venue, add in another, restart, a guest sees both.
+func _test_deleting_and_adding_a_piece_survives_a_restart() -> void:
+	await LayoutShareTests.new(self).deleting_and_adding_survives_a_restart()
 
 
 const VenueFilesTests := preload("res://tests/venue_files_tests.gd")
