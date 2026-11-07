@@ -132,7 +132,7 @@ Do the first unchecked item. Break it down in the log if it is too big for one p
 
 - [x] 1. **State map**: how a mod and a venue are represented today, with file and line counts
       (`docs/refactor_state_map.md`).
-- [x] 2. **Design on paper** (signed off 2026-11-07; docs/mods.md and docs/layouts.md need the Decisions 5-7 folded in): the mod manifest, the registry, the layout file format and the piece
+- [x] 2. **Design on paper**: the mod manifest, the registry, the layout file format and the piece
       kinds (single item vs room-scale mod), in `docs/mods.md` and `docs/layouts.md`. The owner reads
       them before any code (stop the loop and ask).
 - [ ] 3. Registry and manifest loader beside the old path, with bad-mod degradation; move one rack
@@ -151,6 +151,8 @@ Do the first unchecked item. Break it down in the log if it is too big for one p
 ## Log
 
 (newest first; one line per pass: date, slice, commit, what changed, numbers)
+
+- 2026-11-07 — slice 2 closed: owner answers folded into docs/mods.md §11 and docs/layouts.md §13; docs only.
 
 - 2026-11-07 — slice 1, state map: `docs/refactor_state_map.md` (mods, venues, studio.gd sections, doc and perf baselines, observations, 8 open questions); docs only, no code, no tests run.
 - 2026-11-07 — loop started; brief written.

@@ -476,21 +476,16 @@ item 7, 11-12 item 8.
 | `_test_a_made_room_validates_and_loads` | 8 |
 | existing `_test_every_venue_*`, neighbourhood and per-station tests | stay until replaced (6) |
 
-## 13. Open questions
+## 13. Decisions (owner, 2026-11-07)
 
-1. **Shell as code or data.** I propose existing venues keep their geometry in code (`shell.builder`) and only
-   placements, zones, groups and wiring become data; only the new `box` kit is data. SM question 5 asked this.
-   Accept?
-2. **Positions per room or global.** Today a pushed piece keeps its place across venues. Per-room deltas
-   change that. Per room (my proposal), or one global set re-spotted against each venue as now?
-3. **Who may edit.** Host-only add/remove/rotate/reset, guests only push wheeled pieces. Should a host be
-   able to open edit mode to the room (a setting), and may a guest "copy this room" to their own?
-4. **Room sizes.** Every venue has the same footprint and live room (8.4 x 17.6 m). Does the room maker offer
-   other sizes? Smaller rooms cannot hold the five zones.
-5. **Old data.** May `OLD_FLOOR_DEFAULTS`, `OLD_FIT_LINES`, `OLD_EQ_WALL` be dropped after one import step
-   (SM question 6), and the mixing neighbourhood's banner moved into the control-room fragment?
-6. **Zones in made rooms.** Must a made room have all five zones? Pieces with `needs` are skipped without
-   them (so no bricks table means no wheel). Is a room with no zones allowed?
-7. **A small modular.** `modular_annex` is the only room-scale piece. Do you want a single-item rack (a case
-   on a table) as a piece too, so the modular is usable in rooms that cannot claim space?
-8. **Limits.** 64 pieces and a 16 kB delta per room. Right?
+1. **Shell as code.** Venue shell geometry stays in code (`shell.builder`); placements, zones, groups and
+   wiring are data; only the new `box` kit is data.
+2. **Positions** are stored per room (per-room delta).
+3. **Editing** is host-only (add, remove, rotate, reset); guests only push wheeled pieces. No room-wide edit mode.
+4. **Room sizes.** The maker offers small, standard and large. Each size needs its own shell kit and
+   placement tests; the kit form is settled in queue slice 8.
+5. **Old data.** `OLD_FLOOR_DEFAULTS`, `OLD_FIT_LINES`, `OLD_EQ_WALL` are dropped after one import step;
+   the mixing neighbourhood's banner moves into the control-room fragment.
+6. **Zones.** A made room may have any subset of the zones; pieces with `needs` are skipped without them.
+7. **Single-item rack.** None: `modular_annex` stays the only room-scale piece.
+8. **Limits.** 64 pieces and a 16 kB delta per room.

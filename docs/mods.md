@@ -105,7 +105,7 @@ Top level: as the schema. `format`, `api_version`, `id`, `name`, `version`, `lic
 
 | Field | R/O | Meaning |
 |---|---|---|
-| `type` | R | The id patches use. Builtin mods keep today's short names (`plaits`); every other mod must be namespaced (`<mod id>.<name>`). |
+| `type` | R | The id patches use. Builtin mods are named `builtin.<name>` (`builtin.plaits`); every other mod is namespaced `<mod id>.<name>`. |
 | `title`, `group`, `blurb` | R | Plate title, palette group, tooltip. For `engine` modules `title`/`group`/`blurb` default to the engine's `--describe` values. |
 | `sound` | R | `{"kind":"engine","type":"plaits"}` or `{"kind":"composite", ...}` (4.1). Any other kind is rejected (4.2). |
 | `interface` | R for composite, forbidden for engine | `ins`, `outs`, `knobs`. For `engine` modules the interface is **not** repeated: it comes from the engine (6.2). |
@@ -493,23 +493,18 @@ Each step ends with the suite green and no behaviour change unless stated. Steps
 | `_test_a_composite_expands_plays_and_meters` | 3.5: render 0.3 s, finite and non-silent |
 | **`_test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates`** | the proof: copy `mods_examples/dawlings.sample.pluck` into a temp user root, `scan`, assert the module and preset are in the palette; load the preset, render audio from the engine; `to_dict` -> file -> `from_dict` equal; remove the folder, reload: plate unavailable, place and cables kept; host row -> guest `apply_room`: guest without the mod gets the named plate |
 
-## 11. Open questions
+## 11. Decisions (owner, 2026-11-07)
 
-1. **Manifest home.** Builtin manifests live in `res://mods/builtin/`, pointing at `vendor/` by pin,
-   because `vendor/` is not ours and is not exported. The brief says "discovers mods from `vendor/`".
-   Is the in-tree location acceptable?
-2. **Namespacing.** Builtin keeps short type names (`plaits`) forever; everyone else is
-   `<mod id>.<name>`. Accept, or rename builtins to `builtin.plaits` with a patch-version-2 alias table?
-3. **Engine on non-Linux.** The engine is built only on Linux and macOS and not in CI (SM 1.2). This design
-   makes the *snapshot* universal so plates draw everywhere, but sound still needs the engine. Should the
-   engine be built for Windows/Quest as a shipped binary (a `binary` source pin), and is that in scope?
-4. **Where a patch lives.** Per player in `user://patches/`, loaded only by whoever hosts. Should a
-   named patch also travel in the song/project file, and may a guest "save a copy" of the host's patch?
-5. **Model limits.** User `.glb` caps (2 MB, 20k triangles) and "decorative only" are my proposal. Are they right,
-   and are user textures allowed?
-6. **Reaper.** Plugin overlays apply only to the built-in backend. Under Reaper, should an `unavailable`
-   plugin slot be shown from the song, or is that Reaper's business?
-7. **Packaging.** Folders only for now. Should a `.zip`/`.pck` form of a mod (one file to share) be in scope
-   before the proof, or after?
-8. **Composite depth and cost.** Depth 3 and the 64-module patch cap count expanded modules, not
-   plates. Should a composite count as one plate against `MAX_MODULES`?
+1. **Manifest home.** Built-in manifests live in `res://mods/builtin/`, pointing at `vendor/` by pin.
+2. **Namespacing.** Built-in types are renamed `builtin.<name>` (`builtin.plaits`). There is no alias
+   table: nothing is in use yet, so old patches are not carried. Everyone else is `<mod id>.<name>`.
+   Native `sound.type` names (`plaits`) are engine names and do not change.
+3. **Engine builds.** Linux, macOS and Windows as shipped binaries (a `binary` source pin). Android/Quest
+   native support is dropped; those platforms see rack modules as unavailable plates.
+4. **Patch storage.** `user://patches/` only; the host loads it. A patch does not travel in the project
+   file, and guests cannot save a copy.
+5. **Model limits.** 2 MB and 20k triangles, decorative only, user textures allowed (counted in the 2 MB).
+6. **Reaper.** Plugin overlays apply only to the built-in backend; an unavailable slot under Reaper is
+   Reaper's business.
+7. **Packaging.** Folders only until the sample-mod proof passes; `.zip`/`.pck` after.
+8. **Composite cost.** A composite counts as its expanded modules against `MAX_MODULES`.
