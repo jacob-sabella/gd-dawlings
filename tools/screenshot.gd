@@ -102,10 +102,6 @@ var _pads_demo := false
 ## others have made room (docs/spatial_loop.md part two, slice 30).
 var _sections := -1
 var _sections_hand: Node = null
-## `--bricks N`: at frame 8 the fifths wheel's strip set to N chords of its key (vi IV I V, then on
-## round the key's seven), MAKE BRICKS pressed, the second and the last bricks nudged to 2 bars, and
-## the chord ledge gone to unless SHOT_CAM frames it (docs/spatial_loop.md part two, slice 31).
-var _bricks := 0
 ## `--plaque-rows`: after `--stations`, INSTRUMENTS pressed on the plaque of the station gone to,
 ## at frame 14, for a shot of the board's rows beside it (docs/spatial_loop.md slice 11).
 var _plaque_rows := false
@@ -370,8 +366,6 @@ func _ready() -> void:
 				if i + 1 < args.size(): _crank = int(args[i + 1])
 			"--sections":
 				if i + 1 < args.size(): _sections = int(args[i + 1])
-			"--bricks":
-				if i + 1 < args.size(): _bricks = int(args[i + 1])
 			"--plaque-rows":
 				_plaque_rows = true
 			"--help-page":
@@ -706,29 +700,6 @@ func _make_the_sections() -> void:
 		studio.go_to_station(&"sections")
 
 
-## `--bricks N`: the wheel's strip N chords of its key, made into bricks on the ledge by its own
-## MAKE BRICKS, two of them nudged to 2 bars.
-func _make_the_bricks() -> void:
-	var studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
-	if studio == null or studio.wheel == null or studio.ledge == null:
-		return
-	var wheel := studio.wheel
-	var seven := Harmony.diatonic(wheel.key())
-	var order := [4, 0, 1, 2, 3, 5, 6]
-	wheel.clear_strip()
-	for n in mini(_bricks, FifthsWheel.STRIP_MOST):
-		wheel.strip.append(seven[order[n % order.size()]])
-	wheel._show()
-	wheel.make_bricks()
-	var row := ChordBrick.ledge_row(studio.items)
-	for k in [1, row.size() - 1]:
-		if k > 0 and k < row.size():
-			row[k].bars = 2
-	print("SHOT_BRICKS ", ChordBrick.inside_of(row), " at ", studio.ledge.global_position, " facing ", studio.ledge.global_basis.z)
-	if _cam.size() != 6:
-		studio.go_to_station(&"ledge")
-
-
 ## `--samples`: REC, then a use, that many times, by the mouse's hand, as a desktop player samples:
 ## the sampler's own press (Studio._on_rec_pressed) and the item's own use (Item.work).
 func _make_samples() -> void:
@@ -1028,8 +999,6 @@ func _process(_delta: float) -> void:
 		_slot_the_platter()
 	if _frames == 8 and _sections >= 0:
 		_make_the_sections()
-	if _frames == 8 and _bricks > 0:
-		_make_the_bricks()
 	if _pads_demo:
 		_play_the_pads()
 	if _frames == 8 and _crank > 0:

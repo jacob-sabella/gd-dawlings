@@ -47,7 +47,7 @@ var tablets: Dictionary = {}
 var track_racks: Dictionary = {}
 ## The made items this participant's room has, as its host (docs/spatial_loop.md part two, slice
 ## 23): {id: [kind, maker, bytes, where]}, Session.made's row and where it was (ItemRoom.state's
-## entry, [] for at its home), and a chord brick's length in bars after that (slice 31). Kept beside the profile in a file of its own (`made_path`), written
+## entry, [] for at its home). Kept beside the profile in a file of its own (`made_path`), written
 ## only when it changes (`set_made`): a room's cassettes can be megabytes, and the profile is
 ## written whenever a stand is pushed.
 var made: Dictionary = {}

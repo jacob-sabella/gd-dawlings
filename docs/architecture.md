@@ -495,7 +495,7 @@ not colour, says which is which). Where each station stands is still the venue's
 | --- | --- | --- |
 | MIXING | the control room, a ring round the seat | desk, timeline, rack, deck and platter, patch stand, patch wall, EQ wall, stage table, station board |
 | RHYTHM | straight ahead turned round from the desk | drum riser with the hand drums and the looper; the open lattice floor; the venue's instrument on the back wall behind the riser |
-| HARMONY | front right | the bricks table (fifths wheel, chord ledge, section blocks); handbells across its far end |
+| HARMONY | front right | the bricks table (fifths wheel, section blocks); handbells across its far end |
 | SYNTH & SOUND DESIGN | back right | the keyboard stand and modular rack; the sampler round a middle in front of it |
 | VOCALS | back left | the booth (3.4 x 3.1 m, a 1.2 m door), the lyric board, room for a talk box |
 | TAPE & TOYS | front left | prop shelf and cassette rack on the wall, hoop and Tour case across the middle from them; the items' homes |
@@ -2965,7 +2965,7 @@ check refuses a locked item in the way, on tracks outside the bank too.
 the verb: the regions as a row of blocks along the bricks table's far long edge, each as long as its
 bars. The table is laid out in bands (`Venue.TABLE_BANDS`, in the table's own frame from
 `Venue.bricks_table`): the wheel's board at the end nearest the control room, the blocks along the
-far edge, and the ledge for chord bricks (slice 31) along the near one. `Venue.band_spot` stands a
+far edge. `Venue.band_spot` stands a
 band's station facing the near edge, and the clearance loop holds the bands apart by BAND_GAP
 instead of by each station's `air`. Each block is its own ControlAffordance whose frame's +Z is
 up, so a held ray moves it along the table (Interactor._plane_point). While it is held the others
@@ -2979,36 +2979,14 @@ With no regions the row is one key, MAKE SECTIONS FROM MARKERS: a region per sec
 (`spans`; brackets alone and `Harmony.is_note` notes skipped, the last to the song's end at a bar),
 added inside one open_edit, so it is one undo step and a guest's is that edit's intents.
 
-### Chord bricks: a progression you hold
+### Chord bricks and the chord ledge (removed)
 
-`ChordBrick` (core/items/chord_brick_item.gd, slice 31) is a made item of kind `brick`, and the
-wheel is what makes them. A strip tile pulled off the board is a brick in the hand that pulled it
-("chord:<key>:<chord>"), and MAKE BRICKS makes the strip into bricks on the ledge
-("ledge:<key>:<chord>"). The host packs {chord, key} from those words alone. A brick's length is
-not in its data but in the room's row `bricks` {id: bars}, so a nudge is one small row and never
-resends what the item carries. A bare hand has no stick, so the brick in a hand is also turned to
-another length (`ChordBrick.follow_turn` on Interactor.twist, a sixth of a turn a step), by the
-same nudge.
-
-The ledge (`ChordLedge`, station `ledge` in the bricks table's near band) is ItemRoom holder
-`ledge`, whose slots' order is the progression (`ledge_row`). Holders now differ in three ways,
-each a table in ItemRoom:
-- `IN_ORDER` holders fill from the row's end (`next_in_order`), except a let-go right on a free
-  slot (SLOT_EXACT), or a brick put back by, or aimed at, the free slot it was taken from;
-- `BINS` swallow what goes in;
-- `HOLDS` names the kinds a holder takes, so a cassette is refused by the ledge and a brick by the
-  rack, and each says why (`kind_refusal`). Aiming along an IN_ORDER holder skips only its
-  taken-slot check, never its kinds, so a cassette aimed along the ledge goes down instead.
-
-Pressing is the cassette's paste, made general. `ControlAffordance.paste_spot_for(item, at, fine)`
-lets a control take one kind of item and refuse another (a section block takes only a brick, at
-its region's start, track ChordBrick.SECTION), and `Item.paste_text(spot)` lets the item word the
-hover card. A brick pressed into a track is one `insert_midi_take` of block chords (a guest's is
-that take's intent). Pressed into a section block, it writes the row's harmony at that section's
-bar through `FifthsWheel.write`, the same one edit_marker the wheel's SET makes (a guest's is the
-wheel's `harmony` ask). So everything that reads Harmony follows it. A sticky note on that bar line
-is never renamed: it is moved `Harmony.NOTE_NUDGE` along and the brackets are added at the bar, in
-one edit (`DAW.open_edit`).
+The chord bricks (slice 31), the chord ledge that held them in order and the wheel's MAKE BRICKS
+and pull-a-tile-off-the-board were removed on 2026-11-06, with the other simple toys: only
+expressive instruments stay. The chord hand (`ChordHand`, chord shapes) stays: the fingertips, the
+carried instruments, the jacks and the wheel's follows-well segment all read it. The ItemRoom
+holder tables remain (`BINS`, `HOLDS`) for the cassette rack and the platter. Their history is in
+docs/spatial_loop.md.
 
 ## Spectra: what each track takes of the frequencies
 

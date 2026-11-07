@@ -224,13 +224,6 @@ var wheel: FifthsWheel
 ## The song's sections as blocks along the bricks table's far edge (SectionBlocks, docs/spatial_loop.md
 ## part two, slice 30), stood again with each venue at its `sections_spot`. Null in AR.
 var sections: SectionBlocks
-## The ledge for chord bricks along the bricks table's near edge (ChordLedge, docs/spatial_loop.md
-## part two, slice 31), stood again with each venue at its `ledge_spot`: a row of bricks is a
-## progression, its slots the room's holder ChordBrick.LEDGE. Null in AR.
-var ledge: ChordLedge
-## The last section harmony a guest's brick asked the host for, as [FifthsWheel.VERB, [bar, inside]]
-## (`press_brick`); empty before one.
-var brick_asked: Array = []
 ## The cassette rack beside the prop shelf (CassetteRack, docs/spatial_loop.md part two, slice 23),
 ## stood again with each venue at its `cassette_rack_spot`: the clips pulled out of the timeline,
 ## shelved. Null in AR.
@@ -665,7 +658,6 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_stand_the_bell_stand()
 	_stand_the_wheel()
 	_stand_the_sections()
-	_stand_the_ledge()
 	_stand_the_cassette_rack()
 	_stand_the_sampler()
 	_stand_the_drum_circle()
@@ -731,8 +723,6 @@ func _stand_the_wheel() -> void:
 		return
 	wheel = FifthsWheel.new()
 	wheel.transform = FifthsWheel.on_stand(spot)
-	wheel.brick_pulled.connect(_on_brick_pulled)
-	wheel.bricks_made.connect(make_bricks)
 	venue.add_child(wheel)
 
 
@@ -747,20 +737,6 @@ func _stand_the_sections() -> void:
 	sections = SectionBlocks.new()
 	sections.transform = spot
 	venue.add_child(sections)
-
-
-## The chord ledge, in the venue's own frame on the bricks table, along its near edge: a child of
-## the venue, so it goes with it. Its slots are the room's holder ChordBrick.LEDGE and its bin
-## ChordBrick.BIN (`_hold_the_ledge`). None in a venue with no bricks table.
-func _stand_the_ledge() -> void:
-	ledge = null
-	var spot: Variant = Stations.spot(venue, &"ledge")
-	if spot == null:
-		return
-	ledge = ChordLedge.new()
-	ledge.transform = spot
-	ledge.items = items
-	venue.add_child(ledge)
 
 
 ## The cassette rack, in the venue's own frame beside the prop shelf: a child of the venue, so it
@@ -904,7 +880,6 @@ func _hold_the_rack() -> void:
 	if cassette_rack == null or not is_instance_valid(cassette_rack):
 		items.holders.clear()
 		_hold_the_platter()
-		_hold_the_ledge()
 		return
 	cassette_rack.items = items
 	if sampler != null and is_instance_valid(sampler):
@@ -919,34 +894,6 @@ func _hold_the_rack() -> void:
 		if item.state == Item.State.HOME:
 			item.snap_home()
 	_hold_the_platter()
-	_hold_the_ledge()
-
-
-## The ledge's slots and its bin as the room's holders (slice 31), where the bricks table has it; a
-## venue with none has neither, and a brick that stood in it goes to its home.
-func _hold_the_ledge() -> void:
-	if items == null:
-		return
-	if ledge == null or not is_instance_valid(ledge):
-		items.holders.erase(ChordBrick.LEDGE)
-		items.holders.erase(ChordBrick.BIN)
-		for id in items.made_ids():
-			var item: Item = items.items[id]
-			if item.slot_in == ChordBrick.LEDGE:
-				item.snap_home()
-		return
-	ledge.items = items
-	var at := ledge.transform
-	items.set_holder(ChordBrick.LEDGE, ChordLedge.slots_in(at))
-	var bin: Array[Transform3D] = [at * ChordLedge.bin_pose()]
-	items.set_holder(ChordBrick.BIN, bin)
-	for id in items.made_ids():
-		var item: Item = items.items[id]
-		if not (item is ChordBrick):
-			continue
-		item.home = _made_home(ChordBrick.KIND, int(String(id).trim_prefix(String(ChordBrick.KIND))))
-		if item.state == Item.State.HOME:
-			item.snap_home()
 
 
 ## The platter's slot as a holder, where the deck cart stands now (slice 27): again whenever the
@@ -961,11 +908,8 @@ func _hold_the_platter() -> void:
 	items.set_holder(Platter.HOLDER, at)
 
 
-## Where made item number `n` lies with nowhere else to be: the rack's tray; a chord brick, the
-## ledge's tray behind its rail.
-func _made_home(kind: StringName, n: int) -> Transform3D:
-	if kind == ChordBrick.KIND and ledge != null and is_instance_valid(ledge):
-		return ledge.transform * ChordLedge.tray_spot(n)
+## Where made item number `n` lies with nowhere else to be: the rack's tray.
+func _made_home(_kind: StringName, n: int) -> Transform3D:
 	if cassette_rack == null or not is_instance_valid(cassette_rack):
 		return venue.prop_shelf_spot() if venue != null else Transform3D.IDENTITY
 	return cassette_rack.transform * CassetteRack.tray_spot(n)
@@ -2552,7 +2496,7 @@ func room_state() -> Dictionary:
 			"track_racks": pulled, "jacks": jacks.state() if jacks != null else {},
 			"ropes": stage.ropes.duplicate() if stage != null else {},
 			"sampler": sampler.armed_by if sampler != null and is_instance_valid(sampler) else 0,
-			"weather": weather_listening, "bricks": _bricks_row(), "looper": looper_row.duplicate(),
+			"weather": weather_listening, "looper": looper_row.duplicate(),
 			RackPatch.ROW: rack_row.duplicate(true),
 			"tv": tv.row() if tv != null and is_instance_valid(tv) else {}, "pads": pads_row.duplicate(true)}
 
@@ -2673,7 +2617,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		match p["verb"]:
 			&"put_item", &"home_item", &"throw_item", &"wear_item", &"pocket_item", &"slot_item", &"give":
 				pending_items[p["args"][0]] = true
-			&"patch", &"on_air", &"plug", &"rope", &"make", &"paste", &"sampler", &"weather", &"bricks", \
+			&"patch", &"on_air", &"plug", &"rope", &"make", &"paste", &"sampler", &"weather", \
 					&"looper", &"looper_layer", \
 					&"rack", &"tv": pass
 			&"open_tablet", &"open_track_rack": pending_open[p["id"]] = true
@@ -2754,8 +2698,6 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		items.apply_made(state["made"])
 	if items != null and state.has("items"):
 		items.apply(state["items"], pending_items)
-	if items != null and state.has("bricks"):
-		_apply_bricks(state["bricks"])
 	_settle_makes(answered)
 	if state.has("on_air"):
 		on_air = (state["on_air"] as Array).duplicate()
@@ -2967,20 +2909,10 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 				items.take_personal(args[0], from)
 		&"make":
 			# A guest's pull: the host packs the clip from its own song, mints it, and it is in
-			# their hand -- or it is refused, and they are told why. A brick of MAKE BRICKS goes
-			# onto the ledge instead (slice 31).
+			# their hand -- or it is refused, and they are told why.
 			var made := _mint_for(args[0], args[1], from)
-			if made != null and made is ChordBrick and ChordBrick.into_ledge(args[1]):
-				_onto_ledge(made as ChordBrick, from)
-			elif made != null:
+			if made != null:
 				_hand_made(made, from)
-		&"bricks":
-			# A guest's nudge of a chord brick's length: the room's row, if nobody else has it.
-			var brick := items.items.get(args[0]) as ChordBrick if items != null else null
-			if brick != null and _may_put(brick, from) and args[1] in ChordBrick.LENGTHS:
-				brick.bars = args[1]
-				_remember_made_soon()
-				_publish_room_soon()
 		&"slot_item":
 			var item: Item = items.items.get(args[0]) if items != null else null
 			if item != null and _may_put(item, from) and not items.slot(item, args[1], args[2]):
@@ -4301,7 +4233,6 @@ func _wire_made_items() -> void:
 	items.told.connect(_on_items_told)
 	items.used.connect(_on_item_used_here)
 	items.paste_pressed.connect(_on_paste_pressed)
-	items.resized.connect(_on_brick_resized)
 	Session.made_changed.connect(_on_made_changed)
 	Session.holds_changed.connect(_take_given_soon)
 	if timeline != null:
@@ -4338,7 +4269,7 @@ func _on_unmade(id: StringName) -> void:
 
 func _made_name(id: StringName) -> String:
 	var kind := ItemRoom.kind_of(id)
-	return "%s %s" % ["chord brick" if kind == ChordBrick.KIND else String(kind), String(id).trim_prefix(String(kind))]
+	return "%s %s" % [String(kind), String(id).trim_prefix(String(kind))]
 
 
 ## A guest heard the host take a made item away: here too.
@@ -4510,9 +4441,6 @@ func _give(item: Item, peer: int, from: int) -> void:
 ## docs/spatial_loop.md part two, slice 24): the host pastes it at once; a guest asks with the room's
 ## `paste` [id, track, time], and the host pastes the clip it holds. The cassette stays in the hand.
 func _on_paste_pressed(item: Item, track: int, seconds: float) -> void:
-	if item is ChordBrick:
-		press_brick(item as ChordBrick, track, seconds)
-		return
 	var cassette := item as CassetteItem
 	if cassette == null or not cassette.pastes():
 		return
@@ -4547,157 +4475,7 @@ func _given_name(item: Item) -> String:
 	var cassette := item as CassetteItem
 	if cassette != null:
 		return "the %s cassette" % cassette.clip_name()
-	var brick := item as ChordBrick
-	if brick != null:
-		return "the %s chord brick" % brick.chord
 	return item.item_title().to_lower()
-
-
-# --- chord bricks (docs/spatial_loop.md part two, slice 31) -----------------------------------
-#
-# The fifths wheel feeds them: a strip tile pulled off it is a brick of its chord in the hand that
-# pulled it, and MAKE BRICKS makes the strip as bricks at the end of the ledge's row. Both are made
-# items the host mints (`make`, "chord:<key>:<chord>" and "ledge:<key>:<chord>"). A brick's length
-# is the room's row `bricks` {id: bars}, its nudge; a guest's is the room's ask `bricks`. Pressed
-# into a track it writes its row's block chords as one take (a guest's is the take's intent, as any
-# take is); into a section block, its row's harmony at that section's marker (a guest's is the
-# wheel's `harmony` ask).
-
-## Every chord brick's length, {id: bars}: the room's row.
-func _bricks_row() -> Dictionary:
-	var out := {}
-	if items != null:
-		for id in items.items:
-			var brick := items.items[id] as ChordBrick
-			if brick != null:
-				out[id] = brick.bars
-	return out
-
-
-## The host's row of brick lengths, here: each brick its length, but one this guest has nudged and
-## not heard back about.
-func _apply_bricks(row: Dictionary) -> void:
-	var pending := {}
-	for p in _predictions:
-		if p["verb"] == &"bricks":
-			pending[p["args"][0]] = true
-	for id in row:
-		var brick := items.items.get(StringName(id)) as ChordBrick
-		if brick != null and not pending.has(StringName(id)) and int(row[id]) in ChordBrick.LENGTHS:
-			brick.bars = int(row[id])
-
-
-## A brick's length nudged by a hand here: the host's room is told; a guest asks.
-func _on_brick_resized(item: Item, bars: int) -> void:
-	if Session.is_authority():
-		_remember_made_soon()
-		_publish_room_soon()
-	else:
-		_predict(&"bricks", [item.id, bars])
-
-
-## Brick `made`, just minted for `maker`'s MAKE BRICKS: at the end of the ledge's row, or, the ledge
-## full, left on its tray and they are told. Whether it went on the ledge.
-func _onto_ledge(made: ChordBrick, maker: int) -> bool:
-	var n := items.next_in_order(ChordBrick.LEDGE) if items.holders.has(ChordBrick.LEDGE) else -1
-	if n < 0:
-		Session.tell(maker, "The ledge is full: the %s brick is on its tray. Bin some, or press CLEAR." % made.chord)
-		_publish_room_soon()
-		return false
-	items.slot(made, ChordBrick.LEDGE, n)
-	_publish_room_soon()
-	return true
-
-
-## The wheel's MAKE BRICKS: a brick of each of `chords`, in `key`, at the end of the ledge's row. The
-## host's are minted at once; a guest asks for each.
-func make_bricks(chords: PackedStringArray, key: String) -> void:
-	if items == null or chords.is_empty():
-		return
-	if not Session.is_authority():
-		for c in chords:
-			_predict(&"make", [ChordBrick.KIND, ChordBrick.from_text(true, key, c)])
-		Session.notice.emit("Asking %s for chord bricks of %s on the ledge..." % [Session.name_of(1), " ".join(chords)])
-		return
-	var made := PackedStringArray()
-	for c in chords:
-		var brick := _mint_for(ChordBrick.KIND, ChordBrick.from_text(true, key, c), Session.local_peer_id) as ChordBrick
-		if brick == null or not _onto_ledge(brick, Session.local_peer_id):
-			break
-		made.append(c)
-	if not made.is_empty():
-		var desk := medium == Presentation.Medium.SCREEN
-		Session.notice.emit(("Made %s as chord bricks on the ledge: %s." % [" ".join(made),
-				"click one to take it, then click a lane, a strip or a section block to write the row; the wheel over one makes it 1, 2 or 4 bars"
-				if desk else "take one and press it into a lane, a strip or a section block to write the row; turn one in your hand, or the stick over it, for 1, 2 or 4 bars"]))
-
-
-## A hand here pulled a strip tile off the wheel: the host's own is a brick of it in that hand at
-## once; a guest's is an ask, and a blank brick in the hand meanwhile.
-func _on_brick_pulled(chord: String, key: String, hand: Node) -> void:
-	var interactor := hand as Interactor
-	if items == null or interactor == null:
-		return
-	var from := ChordBrick.from_text(false, key, chord)
-	if Session.is_authority():
-		var made := _mint_for(ChordBrick.KIND, from, Session.local_peer_id)
-		if made != null:
-			interactor.pick_up(made)
-			_say_brick(made as ChordBrick)
-		return
-	var seq := _predict(&"make", [ChordBrick.KIND, from])
-	if seq > 0:
-		var look := ItemRoom.look_of(ChordBrick.KIND)
-		look.top_level = true
-		look.name = "MakingBrick"
-		add_child(look)
-		_making.append({"seq": seq, "hand": interactor, "look": look})
-		Session.notice.emit("Asking %s for a chord brick of %s..." % [Session.name_of(1), chord])
-
-
-## How a brick just put in a hand is used, said once.
-func _say_brick(made: ChordBrick) -> void:
-	var desk := medium == Presentation.Medium.SCREEN
-	var press := made.carried_by.paste_press_words() if is_instance_valid(made.carried_by) else "a press"
-	Session.notice.emit(("The %s chord brick is in your hand: click a timeline lane, a strip or a stage voice to write it there, a section block for its harmony, the ledge to stand it in the row; Q puts it down."
-			if desk else "The %s chord brick is in your hand: " + press + " on a timeline lane, a strip or a stage voice writes it there, on a section block its harmony; let it go by the ledge to stand it in the row.")
-			% made.chord)
-
-
-## A chord brick pressed by a hand here (ItemRoom.paste_pressed): its row (ChordBrick.row_of: the
-## ledge's, when it was taken from there) written. Into a track: its block chords from the bar of
-## `seconds` (the lane's bar, or the playhead's), one take named ChordBrick.TAKE_NAME, one undo step;
-## a guest's is the take's intent. Into a section block (`track` ChordBrick.SECTION, `seconds` its
-## start): the row's harmony at that section's bar, by the wheel's SET (FifthsWheel.write), or a
-## guest's `harmony` ask. The brick stays in the hand.
-func press_brick(brick: ChordBrick, track: int, seconds: float) -> void:
-	var s := DAW.state
-	if s == null or brick == null or not brick.pastes():
-		return
-	var row := ChordBrick.row_of(brick)
-	var chords := ChordBrick.chords_text(row)
-	if track == ChordBrick.SECTION:
-		var r := s.region_at(seconds + 0.001)
-		var section := str(s.regions[r][2]) if r >= 0 else "the section at %s" % s.bar_beat(seconds)
-		var asked := ChordBrick.section_ask(row, s, seconds)
-		if not Session.is_authority():
-			brick_asked = [FifthsWheel.VERB, asked]
-			Session.ask_room(FifthsWheel.VERB, asked)
-			Session.notice.emit("Asked %s to put %s in [%s]." % [Session.name_of(1), section, asked[1]])
-			return
-		var named := FifthsWheel.write(asked[0], asked[1])
-		Session.notice.emit("%s is in [%s] now: the bells and the fingertips follow it there." % [section, asked[1]]
-				if named != "" else "Those bricks do not read as a key and chords.")
-		return
-	var why := ChordBrick.write_refusal(s, track)
-	if not why.is_empty():
-		Session.notice.emit(why)
-		return
-	var first := ChordBrick.bar_of(s, seconds)
-	var span := ChordBrick.span_of(row, s, first)
-	DAW.insert_midi_take(track, span[0], span[1], ChordBrick.notes_of(row, s, first), ChordBrick.TAKE_NAME)
-	var said := "%s (%d bars) onto %s from bar %d" % [chords, ChordBrick.bars_in(row), s.track(track).display_name(), first + 1]
-	Session.notice.emit(("Wrote %s." if Session.is_authority() else "Asked %s to write %%s." % Session.name_of(1)) % said)
 
 
 ## A click with a made item in the mouse's hand and nothing under the cursor: on a bandmate's
@@ -5528,10 +5306,6 @@ func _remember_made() -> void:
 	for id in items.made:
 		var row: Array = items.made[id]
 		out[id] = [row[0], row[1], row[2], where.get(id, [])]
-		# A chord brick's length is the room's, not its data (slice 31): kept beside its place.
-		var brick := items.items.get(id) as ChordBrick
-		if brick != null:
-			out[id].append(brick.bars)
 	if out == Session.layout.made:
 		return
 	Session.layout.set_made(out)
@@ -5553,8 +5327,6 @@ func _restore_made(missing_only := false) -> void:
 				continue
 			items.made[id] = [row[0], int(row[1]), row[2]]
 		var item := items._make_real(id)
-		if item is ChordBrick and row.size() > 4:
-			(item as ChordBrick).bars = int(row[4])
 		var place: Variant = row[3]
 		if item == null or not (place is Array):
 			continue

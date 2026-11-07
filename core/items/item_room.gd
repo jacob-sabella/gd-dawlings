@@ -56,8 +56,8 @@ const PERSONAL_KINDS: Array[StringName] = [&"mic", &"headphones", &"glasses", &"
 ## the shape `kind_of` reads, `cassette1`, `cassette2`. What a made item carries is not room state:
 ## its row ({id: [kind, maker, bytes]}, `made`) is sent once on a message of its own and to each
 ## guest as it joins, and the room names only its id (`made_ids`), so a put-down never resends a
-## clip. Chord bricks (slice 31) are made too, from the fifths wheel: `brick1`, `brick2`.
-const MADE_KINDS: Array[StringName] = [&"cassette", &"brick"]
+## clip.
+const MADE_KINDS: Array[StringName] = [&"cassette"]
 ## What a made item may carry, packed (var_to_bytes): at most this much one item, this much the
 ## whole room, and this many items. Past any of them a mint is refused, and says which.
 const MADE_BYTES := 256 * 1024
@@ -65,21 +65,12 @@ const MADE_TOTAL := 4 * 1024 * 1024
 const MADE_MOST := 64
 ## How near a free slot (`holders`) a made item has to be let go to go into it (m).
 const SLOT_REACH := 0.08
-## The holders that swallow what goes in them (`unmake`, on the host): the cassette rack's BIN and
-## the chord ledge's (slice 31).
-const BINS: Array[StringName] = [&"bin", &"ledge_bin"]
-## The holders that hold a row in order (slice 31: the chord ledge, whose slots' order is a
-## progression): a made item let go near one goes into the first free slot after what is in it
-## (`next_in_order`), unless it is let go within SLOT_EXACT of a free slot, which takes it, or it
-## is a brick let go by, or aimed back at, the free slot it was taken from (ChordBrick.from_ledge),
-## which it goes back into: taken out to be turned to another length, it keeps its place.
-const IN_ORDER: Array[StringName] = [&"ledge"]
-const SLOT_EXACT := 0.03
+## The holders that swallow what goes in them (`unmake`, on the host): the cassette rack's BIN.
+const BINS: Array[StringName] = [&"bin"]
 ## What each holder takes, by kind, and what to call them when it refuses another: the rack and the
-## platter cassettes, the ledge chord bricks. A holder not here (a bin)
-## takes any made item.
-const HOLDS := {&"rack": [&"cassette"], &"platter": [&"cassette"], &"ledge": [&"brick"]}
-const HOLDS_SAID := {&"cassette": "cassettes", &"brick": "chord bricks"}
+## platter cassettes. A holder not here (a bin) takes any made item.
+const HOLDS := {&"rack": [&"cassette"], &"platter": [&"cassette"]}
+const HOLDS_SAID := {&"cassette": "cassettes"}
 
 ## A hand here put `item` somewhere: `put_item` [id, x, z, yaw] or `home_item` [id], already
 ## done here. The studio sends it to the host as an ask.
@@ -108,12 +99,8 @@ signal unmade(id: StringName)
 ## Something for this player to be told (a full rack, a taken slot): the studio's toast.
 signal told(text: String)
 ## A hand here pressed `item` (one that `pastes`: a cassette) onto `track` at `seconds` (docs/
-## spatial_loop.md part two, slice 24): for the studio to paste it, or ask the host to. A chord
-## brick's press on a section block (slice 31) names ChordBrick.SECTION and the section's start.
+## spatial_loop.md part two, slice 24): for the studio to paste it, or ask the host to.
 signal paste_pressed(item: Item, track: int, seconds: float)
-## A chord brick's length was nudged here (ChordBrick.resized, slice 31): for the room's `bricks`
-## row, the host's at once and a guest's asked.
-signal resized(item: Item, bars: int)
 
 ## {id: Item}.
 var items: Dictionary = {}
@@ -238,8 +225,6 @@ static func make(kind: StringName) -> Item:
 			return BongoItem.new()
 		&"cassette":
 			return CassetteItem.new()
-		&"brick":
-			return ChordBrick.new()
 		&"miniature":
 			return MiniatureItem.new()
 		&"testdrum":
@@ -309,8 +294,7 @@ static func made_refusal(rows: Dictionary, size: int) -> String:
 
 
 ## What a made item of `kind` made `from` something here carries: a cassette of a clip
-## ("clip:<track>:<item index>", CassetteItem.data_of the song as it is now), or a chord brick of a
-## chord in a key ("chord:<key>:<chord>" or "ledge:<key>:<chord>", ChordBrick.data_from). Empty
+## ("clip:<track>:<item index>", CassetteItem.data_of the song as it is now). Empty
 ## where there is nothing there to make one of. The host packs it from its own state: a guest asks
 ## with `from`, never with the data.
 static func made_data(kind: StringName, from: String) -> Dictionary:
@@ -319,8 +303,6 @@ static func made_data(kind: StringName, from: String) -> Dictionary:
 			var part := from.split(":")
 			if part.size() == 3 and part[0] == "clip" and part[1].is_valid_int() and part[2].is_valid_int():
 				return CassetteItem.data_of(DAW.state, int(part[1]), int(part[2]))
-		&"brick":
-			return ChordBrick.data_from(from)
 	return {}
 
 
@@ -364,8 +346,6 @@ func _adopt(item: Item) -> void:
 	item.used.connect(func(down: bool) -> void: used.emit(item, down))
 	item.rang.connect(func(kind: StringName, take: int, pitch: float) -> void: rang.emit(item, kind, take, pitch))
 	item.state_changed.connect(func(_s: Item.State) -> void: moved.emit(item))
-	if item is ChordBrick:
-		(item as ChordBrick).resized.connect(func(bars: int) -> void: resized.emit(item, bars))
 	item.landed.connect(func() -> void: moved.emit(item))
 	item.worn_changed.connect(func() -> void: moved.emit(item))
 	if item is InstrumentItem:
@@ -590,42 +570,6 @@ func _lay_in_slot(item: Item, holder: StringName, n: int) -> void:
 	item.slot_n = n
 
 
-## The first free slot of `holder` after everything in it (IN_ORDER: the end of the ledge's row),
-## or, with its last slot taken, the first free one at all; -1 when it is full.
-func next_in_order(holder: StringName) -> int:
-	var slots: Array = holders.get(holder, [])
-	var last := -1
-	for n in slots.size():
-		if in_slot(holder, n) != null:
-			last = n
-	for n in range(last + 1, slots.size()):
-		if in_slot(holder, n) == null:
-			return n
-	for n in slots.size():
-		if in_slot(holder, n) == null:
-			return n
-	return -1
-
-
-## Where `item`, let go at or aimed at `holder`'s slot `n`, goes: that slot, but for a holder kept
-## in order (IN_ORDER), where it is the first free slot after the row unless `at` (this node's
-## frame, null when aimed) is within SLOT_EXACT of `n` and `n` is free, or `n` is the free slot it
-## was taken from. -1 for nowhere.
-func _slot_for(item: Item, holder: StringName, n: int, at: Variant) -> int:
-	if not (holder in IN_ORDER):
-		return n
-	var slots: Array = holders.get(holder, [])
-	if item is ChordBrick and n >= 0 and n == (item as ChordBrick).from_ledge and in_slot(holder, n) == null:
-		return n
-	if at is Vector3 and n >= 0 and n < slots.size() and in_slot(holder, n) == null \
-			and ((slots[n] as Transform3D) * Vector3(0, ChordBrick.SIZE.y * 0.5, 0)).distance_to(at) <= SLOT_EXACT:
-		return n
-	var there := in_slot(holder, n) if n >= 0 else null
-	if there == item:
-		return n
-	return next_in_order(holder)
-
-
 ## The slot nearest `at` (global) within `reach`, [holder, n], taken or not; [] for none.
 func slot_near(at: Vector3, reach := SLOT_REACH) -> Array:
 	var best: Array = []
@@ -658,10 +602,7 @@ func free_slot_along(item: Item, aim: Transform3D) -> Array:
 			if along <= 0.0 or along > PUT_REACH:
 				continue
 			var off := (origin + toward * along).distance_to(at)
-			# A holder kept in order takes it at the end of its row, wherever along it is aimed:
-			# taken or not, the slot aimed at only says which holder. Still only what it holds.
-			var fits := kind_refusal(item, holder).is_empty() if holder in IN_ORDER \
-					else slot_refusal(item, holder, n).is_empty()
+			var fits := slot_refusal(item, holder, n).is_empty()
 			if off < nearest and fits:
 				nearest = off
 				best = [holder, n]
@@ -1101,8 +1042,7 @@ func send_home(item: Item) -> void:
 
 ## Put `item` down along `aim` (world space): where the aim meets the floor within reach, or at
 ## the aimer's feet when it does not. Home if neither is somewhere it can lie. A made item let go
-## within SLOT_REACH of a slot, or aimed at a free one, goes into it instead (`slot_item`); near a
-## holder kept in order (the chord ledge), at the end of its row (`_slot_for`).
+## within SLOT_REACH of a slot, or aimed at a free one, goes into it instead (`slot_item`).
 func put_down(item: Item, aim: Transform3D) -> void:
 	if item.fixed:
 		return
@@ -1112,12 +1052,11 @@ func put_down(item: Item, aim: Transform3D) -> void:
 		var middle := item.middle()
 		var near := slot_near(middle)
 		if not near.is_empty():
-			var local: Vector3 = global_transform.affine_inverse() * middle if is_inside_tree() else middle
-			_slot_or_tell(item, near[0], _slot_for(item, near[0], near[1], local))
+			_slot_or_tell(item, near[0], near[1])
 			return
 		var along := free_slot_along(item, aim)
 		if not along.is_empty():
-			_slot_or_tell(item, along[0], _slot_for(item, along[0], along[1], null))
+			_slot_or_tell(item, along[0], along[1])
 			return
 	var local := global_transform.affine_inverse() * aim
 	var origin := local.origin

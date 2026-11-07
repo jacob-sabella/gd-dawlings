@@ -625,11 +625,7 @@ func _ready() -> void:
 	await _test_a_guests_section_steps_wait_their_turn()
 	await _test_make_sections_from_markers_is_one_step()
 	await _test_the_section_mark_follows_the_playhead()
-	await _test_the_bricks_table_holds_its_three_bands_clear()
-	await _test_the_wheels_strip_is_bricks_on_the_ledge()
-	await _test_a_pressed_brick_writes_its_rows_chords()
-	await _test_a_bare_hand_turns_a_brick_and_the_desk_clicks_the_ledge()
-	await _test_a_guests_bricks_are_minted_on_the_host()
+	await _test_the_bricks_table_holds_its_two_bands_clear()
 	_test_chord_shapes_read_their_degrees_on_one_hand()
 	_test_a_chord_shape_retunes_what_you_play()
 	_test_the_chord_stick_latches_and_nudges_nothing()
@@ -26823,13 +26819,13 @@ func _test_every_venue_stands_every_station_clear() -> void:
 			var tag := "%s:%d" % [id, v]
 			var here := Stations.ids(venue)
 			# And the venue's own instrument where it has one (slice 42).
-			var stood: Array[StringName] = [&"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"modular", &"lyrics"]
+			var stood: Array[StringName] = [&"bells", &"wheel", &"sections", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"modular", &"lyrics"]
 			if VENUE_SETS.has(id):
 				stood.append(VenueInstrument.STATION)
 			# And its weather's switch where this arrangement has weather (slice 44).
 			if WEATHERS.any(func(w: Array) -> bool: return w[0] == id and w[1] == v):
 				stood.append(Weather.STATION)
-			check("%s: the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, the hand drums, the looper, the modular wall, the lyric board and any instrument and weather of its own stand here (%s)" % [tag, here],
+			check("%s: the bells, the wheel, the section blocks, the stage table, the cassette rack, the sampler, the platter, the EQ wall, the hand drums, the looper, the modular wall, the lyric board and any instrument and weather of its own stand here (%s)" % [tag, here],
 					here == stood)
 			for station: StringName in here:
 				var r := Stations.row(station)
@@ -27331,10 +27327,6 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 				return false
 		&"sections":
 			node = studio.sections
-			if node == null or not node.transform.is_equal_approx(spot):
-				return false
-		&"ledge":
-			node = studio.ledge
 			if node == null or not node.transform.is_equal_approx(spot):
 				return false
 		&"cassette_rack":
@@ -29946,8 +29938,8 @@ func _test_every_station_says_how_to_play_it() -> void:
 			is_equal_approx(Vector2(seat.origin.x - spot.origin.x, seat.origin.z - spot.origin.z).length(), Stations.SEAT)
 			and is_zero_approx(seat.origin.y))
 	var areas := Stations.by_area(venue)
-	check("by area: the twelve in the live room (the lyric board the twelfth, slice 56), none yet in the control room, and the venue's own its tubular bells",
-			(areas[Stations.LIVE] as Array).size() == 12 and (areas[Stations.CONTROL] as Array).is_empty()
+	check("by area: the nine in the live room (the lyric board the ninth, slice 56), none yet in the control room, and the venue's own its tubular bells",
+			(areas[Stations.LIVE] as Array).size() == 9 and (areas[Stations.CONTROL] as Array).is_empty()
 			and (areas[Stations.VENUE] as Array).size() == 1 and areas[Stations.VENUE][0]["title"] == "TUBULAR BELLS")
 	var none := Venue.make(Venue.ROULETTE_ID)
 	check("and the Rig Roulette room, which has none of its own, has nothing there", (Stations.by_area(none)[Stations.VENUE] as Array).is_empty())
@@ -29991,8 +29983,8 @@ func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
 	var card := WelcomeCard.new()
 	var pages := card.pages()
 	var names := card.page_names()
-	check("the pages: START, PLAY · HELD on two (the drum pads, slice 41, ran it on), PLAY · CONTROL ROOM, PLAY · LIVE ROOM on two, PLAY · THIS VENUE (slice 42's instrument), TOGETHER and ROOM (%s)" % [names],
-			names == PackedStringArray(["START", "PLAY · HELD 1/2", "PLAY · HELD 2/2", "PLAY · CONTROL ROOM", "PLAY · LIVE ROOM 1/2", "PLAY · LIVE ROOM 2/2", "PLAY · THIS VENUE", "TOGETHER", "ROOM"]))
+	check("the pages: START, PLAY · HELD, PLAY · CONTROL ROOM, PLAY · LIVE ROOM on two, PLAY · THIS VENUE (slice 42's instrument), TOGETHER and ROOM (%s)" % [names],
+			names == PackedStringArray(["START", "PLAY · HELD", "PLAY · CONTROL ROOM", "PLAY · LIVE ROOM 1/2", "PLAY · LIVE ROOM 2/2", "PLAY · THIS VENUE", "TOGETHER", "ROOM"]))
 	var said := func(p: Dictionary) -> String:
 		return " ".join(p["lines"].map(func(l: Array) -> String: return "%s %s" % [l[0], l[1]]))
 	var start: String = said.call(pages[0])
@@ -30001,13 +29993,13 @@ func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
 	var named := ["HANDBELLS", "FIFTHS WHEEL", "P steps", "Shift-P", "T, then", "KEYTAR", "SHAKER", "TAMBOURINE"]
 	check("the PLAY pages name the bells, the wheel, P and Shift-P, T, the keytar, the shaker and the tambourine (%s)"
 			% [named.filter(func(n): return not play.contains(n))], named.all(func(n): return play.contains(n)))
-	var held_sub: String = pages[names.find("PLAY · HELD 1/2")]["sub"]
+	var held_sub: String = pages[names.find("PLAY · HELD")]["sub"]
 	check("PLAY · HELD says where each kind is kept: the bells by the bricks table, not all on the shelf (%s)" % held_sub,
 			held_sub.contains("shelf") and held_sub.contains("by the bricks table") and held_sub.contains("always on you"))
 	var live := {"lines": (pages[names.find("PLAY · LIVE ROOM 1/2")]["lines"] as Array)
 			+ (pages[names.find("PLAY · LIVE ROOM 2/2")]["lines"] as Array)}
 	check("each PLAY line of a stood station is its title and its desk line, and goes there, over both pages",
-			live["lines"].map(func(l): return l[2]) == [&"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"modular", &"lyrics"]
+			live["lines"].map(func(l): return l[2]) == [&"bells", &"wheel", &"sections", &"cassette_rack", &"sampler", &"drums", &"looper", &"modular", &"lyrics"]
 			and live["lines"][0][0] == "HANDBELLS" and live["lines"][0][1] == Stations.row(&"bells")["desk"])
 	var sizes: Array = []
 	for i in pages.size():
@@ -30144,8 +30136,7 @@ func _test_the_help_card_holds_the_keys_and_walks_to_a_station() -> void:
 
 
 ## Going to a station frames what is played from where the walker actually stands, in every venue
-## and variant: the top of every station's controls is in the view from there, and both ends of the chord ledge (CLEAR
-## and its BIN), below the HUD's line and the toast that says how to play it (the top 110 px). In a
+## and variant: the top of every station's controls is in the view from there, below the HUD's line and the toast that says how to play it (the top 110 px). In a
 ## 1600x900 window at the room's lens.
 func _test_going_to_a_station_holds_its_controls_in_view() -> void:
 	DAW.use(OfflineBackend.new())
@@ -30200,14 +30191,10 @@ func _test_going_to_a_station_holds_its_controls_in_view() -> void:
 						var key := wall.find_child(key_name, true, false) as Node3D
 						if key != null:
 							points.append(key.global_transform * Vector3(0, -Stations.PLAQUE_KEY * 0.5, 0))
-				if station == ChordLedge.STATION and studio.ledge != null:
-					# Both ends of the ledge, which its help line names: CLEAR's outer edge and the BIN's.
-					points.append(studio.ledge.to_global(ChordLedge.CLEAR_AT - Vector3(ChordLedge.CLEAR_SIZE.x * 0.5, 0, 0)))
-					points.append(studio.ledge.to_global(Vector3(float(ChordLedge.BIN[1]), float(ChordLedge.BIN[4]), float(ChordLedge.BIN[3]))))
 				for p in points:
 					if not _in_view(cam, studio.camera.fov, 1600.0 / 900.0, p, 110.0 / 900.0):
 						out.append("%s:%d %s %s" % [id, v, station, p])
-	check("from every station's seat its controls' top is in view, under the toast: both ends of the ledge, the venue's set's plaque keys and jack, the looper's every ring, its pad and plaque keys (%s)" % [out.slice(0, 4)],
+	check("from every station's seat its controls' top is in view, under the toast: the venue's set's plaque keys and jack, the looper's every ring, its pad and plaque keys (%s)" % [out.slice(0, 4)],
 			out.is_empty())
 	studio.ergonomics.motion_scale = saved_motion
 	studio.queue_free()
@@ -30287,7 +30274,7 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 	var arrived := true
 	var facing := true
 	var toasts := true
-	for n in 17:
+	for n in 16:
 		said.clear()
 		studio._unhandled_input(key)
 		visits.append(studio.station)
@@ -30301,8 +30288,8 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 		var r := Stations.row(studio.station)
 		toasts = toasts and said.size() == 1 and said[0].begins_with("%s, %s: " % [r["title"], Stations.where(r)]) \
 				and said[0].contains(r["desk"]) and not said[0].contains("in the this")
-	check("I sixteen times walks to the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the TV, the hand drums, the looper, the modular wall, the lyric board and the studio's tubular bells, and a seventeenth comes back round (%s)" % [visits],
-			visits == [&"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"modular", &"lyrics", &"venue", &"bells"])
+	check("I fifteen times walks to the bells, the wheel, the section blocks, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the TV, the hand drums, the looper, the modular wall, the lyric board and the studio's tubular bells, and a sixteenth comes back round (%s)" % [visits],
+			visits == [&"bells", &"wheel", &"sections", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"modular", &"lyrics", &"venue", &"bells"])
 	check("each time the walker ends at the seat, on walkable floor, facing the station", arrived and facing)
 	check("and a toast says its title, where it is (in the control room, in the live room, in this venue) and its desk line", toasts)
 	key.shift_pressed = true
@@ -30363,7 +30350,7 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	studio.ergonomics.motion_scale = 0.0
 	var board := studio.station_board
 	check("a headset has the station board, by the desk (%s)" % [board.rows() if board != null else null],
-			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"modular", &"lyrics", &"venue"])
+			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv", &"bells", &"wheel", &"sections", &"cassette_rack", &"sampler", &"drums", &"looper", &"modular", &"lyrics", &"venue"])
 	# Home is the mix position, in front of the desk, not the room's origin inside the console;
 	# and from there the board is out of the way ahead (the desk is what is in view) and a few
 	# steps behind.
@@ -38457,11 +38444,11 @@ func _test_the_section_mark_follows_the_playhead() -> void:
 	_offline()
 
 
-## Every venue's bricks table holds the wheel, the section blocks and the ledge (slice 31) in three
-## bands, each on the table top, clear of the others by BAND_GAP: the wheel's board, strut and
+## Every venue's bricks table holds the wheel and the section blocks in two bands, each on the
+## table top, clear of the other by BAND_GAP: the wheel's board, strut and
 ## ledge inside its band, the blocks' tray, plaque and rods inside theirs, the plaque's foot above
 ## the table opened, and the blocks facing the near long edge.
-func _test_the_bricks_table_holds_its_three_bands_clear() -> void:
+func _test_the_bricks_table_holds_its_two_bands_clear() -> void:
 	var ids := Venue.TABLE_BANDS.keys()
 	var clear := true
 	for a in ids.size():
@@ -38471,9 +38458,9 @@ func _test_the_bricks_table_holds_its_three_bands_clear() -> void:
 			if ra.grow(Venue.BAND_GAP * 0.5 - 0.001).intersects(rb.grow(Venue.BAND_GAP * 0.5 - 0.001)):
 				clear = false
 	var top := Rect2(-ZoneKit.TABLE_TOP.x * 0.5, -ZoneKit.TABLE_TOP.z * 0.5, ZoneKit.TABLE_TOP.x, ZoneKit.TABLE_TOP.z)
-	check("the wheel's, the blocks' and the ledge's bands are on the table top, clear of each other", clear
+	check("the wheel's and the blocks' bands are on the table top, clear of each other", clear
 			and Venue.TABLE_BANDS.values().all(func(r: Rect2) -> bool: return top.encloses(r))
-			and Venue.TABLE_BANDS.size() == 3)
+			and Venue.TABLE_BANDS.size() == 2)
 	DAW.use(OfflineBackend.new())
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
@@ -38511,547 +38498,9 @@ func _test_the_bricks_table_holds_its_three_bands_clear() -> void:
 			var spot: Transform3D = venue.sections_spot()
 			if spot.basis.z.x > -0.99 or not is_equal_approx(spot.origin.y, ZoneKit.TABLE_HEIGHT):
 				out.append("%s:%d facing" % [id, v])
-			# The ledge (slice 31): its rail, tray and bin, and CLEAR, inside its band; its plaque
-			# hung on the table's near edge, under the top even opened; facing the near edge.
-			var ledge := studio.ledge
-			if ledge == null or ledge.find_children("ChordLedge", "MeshInstance3D", true, false).is_empty() \
-					or not inside.call(ledge, ["ChordLedge", "ClearCap"], &"ledge"):
-				out.append("%s:%d ledge" % [id, v])
-				continue
-			var hung := ledge.get_node("Plaque") as Node3D
-			Stations.fold_plaque(hung, true)
-			var hung_plate := hung.get_node("Plate") as MeshInstance3D
-			var hung_box := ledge.global_transform.affine_inverse() * hung_plate.global_transform * hung_plate.get_aabb()
-			Stations.fold_plaque(hung, false)
-			if hung_box.end.y > -0.005 or hung_box.position.z < 0.17:
-				out.append("%s:%d ledge plaque %s" % [id, v, hung_box])
-			var ledge_at: Transform3D = venue.ledge_spot()
-			if ledge_at.basis.z.x > -0.99 or not is_equal_approx(ledge_at.origin.y, ZoneKit.TABLE_HEIGHT):
-				out.append("%s:%d ledge facing" % [id, v])
-	check("in every venue the wheel, the blocks and the ledge are each inside their band, the blocks and the ledge facing the near edge, the ledge's plaque hung under its edge %s" % [out], out.is_empty())
+	check("in every venue the wheel and the blocks are each inside their band, the blocks facing the near edge %s" % [out], out.is_empty())
 	studio.queue_free()
 	await get_tree().process_frame
-
-
-# --- chord bricks, fed by the wheel (docs/spatial_loop.md part two, slice 31) -------------------
-
-## A studio alone with the demo song (its Intro's [A minor: Am F C G]), the wheel's strip `chords`
-## and MAKE BRICKS pressed: the bricks on the ledge, in order.
-func _bricks_on_the_ledge(studio: Studio, chords: Array) -> Array[ChordBrick]:
-	var wheel := studio.wheel
-	wheel.clear_strip()
-	for c in chords:
-		wheel.strip.append(c)
-	wheel._show()
-	_press(wheel.find_child("MakeBricks", true, false) as ControlAffordance)
-	wheel.silence()
-	return ChordBrick.ledge_row(studio.items)
-
-
-## How many of a brick's studs show: one a bar.
-static func _studs_shown(brick: ChordBrick) -> int:
-	return brick._studs.filter(func(s: MeshInstance3D) -> bool: return s.visible).size()
-
-
-## The wheel's strip to bricks in the ledge: MAKE BRICKS stands a brick a chord in order from the
-## ledge's first slot, each a made item (`brickN`, kind `brick`) carrying its chord and key and no
-## length, lettered with its chord and numeral and a stud a bar. A nudge makes it 2 and 4 bars and
-## back, which is the room's `bricks` row, its made row the same bytes. A strip tile clicked plays its
-## chord; dragged off the board with the mouse, or pulled toward you by a hand, it is a brick of its
-## chord in that hand. Let go near the ledge a brick goes into the first free slot after the row,
-## and let go on a free slot into that one. CLEAR bins the row. The shelf keeps its 22.
-func _test_the_wheels_strip_is_bricks_on_the_ledge() -> void:
-	var saved_layout := Session.layout
-	_as_session(Session.Role.SOLO, 1)
-	var studio := _cassette_studio()
-	await get_tree().physics_frame
-	var wheel := studio.wheel
-	var ledge := studio.ledge
-	var room := studio.items
-	check("the studio stands the chord ledge on the bricks table, its sixteen slots and its bin the room's holders",
-			ledge != null and ledge.get_parent() == studio.venue and room.holders.has(ChordBrick.LEDGE)
-			and (room.holders[ChordBrick.LEDGE] as Array).size() == ChordLedge.SLOTS and room.holders.has(ChordBrick.BIN))
-	check("the wheel is in the song's A minor", wheel.key_text() == "A minor")
-	wheel.clear_strip()
-	var make := wheel.find_child("MakeBricks", true, false) as ControlAffordance
-	check("MAKE BRICKS with an empty strip says so (%s)" % (make.readout() if make != null else "none"),
-			make != null and make.readout().contains("empty"))
-	var row := _bricks_on_the_ledge(studio, ["Am", "F", "C", "G"])
-	check("MAKE BRICKS stands the strip on the ledge, a brick a chord in order (%s)" % [row.map(func(b): return [b.id, b.chord, b.slot_n])],
-			row.map(func(b): return b.chord) == ["Am", "F", "C", "G"] and row.map(func(b): return b.slot_n) == [0, 1, 2, 3]
-			and row.map(func(b): return b.id) == [&"brick1", &"brick2", &"brick3", &"brick4"])
-	check("and its card said what it would make", make.readout() == "a chord brick of each: Am F C G, onto the ledge")
-	var f := row[1]
-	check("each a made brick: kind_of, look_of, its data its chord and key, and no length",
-			ItemRoom.kind_of(&"brick2") == ChordBrick.KIND and ItemRoom.is_made(&"brick2") and ItemRoom.look_of(&"brick2") != null
-			and f.data == {"chord": "F", "key": "A minor"} and not (ItemRoom.KINDS.has(ChordBrick.KIND)) and _shelf_kinds().size() == 24)
-	check("lettered with its chord and numeral, a bar, one stud (%s / %s)" % [f._letters[0].text, f._letters[1].text],
-			f._letters[0].text == "F" and f._letters[1].text == "VI · 1 BAR" and f.bars == 1 and _studs_shown(f) == 1)
-	check("its card says what it is and where (%s)" % f.readout(), f.readout() == "VI of A minor · 1 bar · on the ledge, 2 of 4: Am F C G")
-	check("the strip keeps its chords: a brick is a copy", wheel.strip == PackedStringArray(["Am", "F", "C", "G"]))
-	check("the rail's card says the row (%s)" % ledge.rail.readout(), ledge.rail.readout() == "Am F C G · 4 bricks, 4 bars")
-
-	# Its length is its nudge, and the room's row.
-	var bytes: PackedByteArray = (Session.made[&"brick2"] as Array)[2]
-	var hand := studio.get_node("MouseHand") as MouseInteractor
-	var resized: Array = []
-	room.resized.connect(func(item: Item, bars: int) -> void: resized.append([item.id, bars]))
-	f.nudge(hand, 1, false)
-	check("a nudge makes it 2 bars, two studs, lettered so", f.bars == 2 and f._letters[1].text == "VI · 2 BARS" and _studs_shown(f) == 2)
-	f.nudge(hand, 1, false)
-	f.nudge(hand, 1, false)
-	check("then 4, four studs, and no further", f.bars == 4 and _studs_shown(f) == 4)
-	f.nudge(hand, -1, false)
-	check("and back to 2, each change said once (%s)" % [resized], f.bars == 2 and resized == [[&"brick2", 2], [&"brick2", 4], [&"brick2", 2]])
-	var rows: Dictionary = studio.room_state()["bricks"]
-	check("the room's bricks row has it, its made row unchanged and with no length in it (%s)" % [rows],
-			rows.get(&"brick2") == 2 and rows.get(&"brick1") == 1 and (Session.made[&"brick2"] as Array)[2] == bytes
-			and not (bytes_to_var(bytes) as Dictionary).has("bars"))
-	check("the row's harmony holds it (%s, %d bars)" % [ChordBrick.inside_of(row), ChordBrick.bars_in(row)],
-			ChordBrick.inside_of(row) == "A minor: Am F - C G" and ChordBrick.bars_in(row) == 5)
-
-	# A strip tile: a click plays it; dragged off the board, a brick of it in the mouse's hand.
-	var tile := wheel.find_child("Tile2", true, false) as ControlAffordance
-	check("a strip tile's card names its chord (%s)" % (tile.readout() if tile != null else "none"),
-			tile != null and tile.readout() == "F · VI of A minor" and tile.hint().contains("drag it off the board"))
-	tile.grab_begin(hand, tile.global_position)
-	tile.grab_end(hand)
-	check("a click on a strip tile plays its chord and makes nothing", wheel.sounding() and room.made_ids().size() == 4)
-	wheel.silence()
-	tile.grab_begin(hand, tile.global_position)
-	tile.grab_move(hand, wheel.to_global(Vector3(0.0, -FifthsWheel.CENTRE_Y - 0.02, 0)))
-	check("dragged to the board's edge, nothing yet", room.made_ids().size() == 4 and hand.carrying == null)
-	tile.grab_move(hand, wheel.to_global(Vector3(0.0, -FifthsWheel.CENTRE_Y - 0.06, 0)))
-	tile.grab_end(hand)
-	wheel.silence()
-	var pulled := hand.carrying as ChordBrick
-	check("dragged off the board, it is a brick of its chord in the mouse's hand (%s)" % [pulled.id if pulled != null else &""],
-			pulled != null and pulled.chord == "F" and pulled.id == &"brick5" and pulled.from_ledge == -1)
-	var reach := Interactor.new()
-	add_child(reach)
-	var first_tile := wheel.find_child("Tile1", true, false) as ControlAffordance
-	var out := first_tile.global_basis.z.normalized()
-	reach.global_transform = Transform3D(first_tile.global_basis, first_tile.global_position + out * 0.02)
-	first_tile.grab_begin(reach, first_tile.global_position)
-	reach.global_position += out * 0.05
-	first_tile.grab_move(reach, first_tile.global_position)
-	check("a hand drawn 5 cm out of the board makes nothing", reach.carrying == null)
-	reach.global_position += out * 0.05
-	first_tile.grab_move(reach, first_tile.global_position)
-	first_tile.grab_end(reach)
-	wheel.silence()
-	var hands := reach.carrying as ChordBrick
-	check("pulled 10 cm up out of the strip toward you by a hand, it is a brick of its chord in that hand",
-			hands != null and hands.chord == "Am" and hands.id == &"brick6")
-	if hands != null:
-		room.unmake(hands.id)
-	reach.queue_free()
-
-	# Let go near the ledge: the first free slot after the row; on a free slot, that one.
-	var into := room.global_transform
-	var slots: Array = room.holders[ChordBrick.LEDGE]
-	pulled.global_transform = into * (slots[10] as Transform3D) * Transform3D(Basis.IDENTITY, Vector3(0, 0.05, 0))
-	hand.put_down()
-	check("let go 5 cm over slot 11, it goes at the end of the row, slot 5 (%d)" % pulled.slot_n,
-			pulled.slot_in == ChordBrick.LEDGE and pulled.slot_n == 4 and hand.carrying == null)
-	hand.pick_up(pulled)
-	check("taken from the ledge it knows the slot it came from", pulled.from_ledge == 4 and ChordBrick.row_of(pulled).size() == 5)
-	pulled.global_transform = into * (slots[9] as Transform3D)
-	hand.put_down()
-	check("let go right on free slot 10, it goes there (%d)" % pulled.slot_n, pulled.slot_in == ChordBrick.LEDGE and pulled.slot_n == 9)
-	check("and the row is the slots' order (%s)" % ChordBrick.chords_text(ChordBrick.ledge_row(room)),
-			ChordBrick.chords_text(ChordBrick.ledge_row(room)) == "Am F C G F")
-	check("the next free slot after the row is 11", room.next_in_order(ChordBrick.LEDGE) == 10)
-	var cassette := room.mint(CassetteItem.KIND, CassetteItem.data_of(DAW.state, 2, 0))
-	check("a cassette does not go on the ledge, nor a brick on the rack (%s; %s)" % [room.slot_refusal(cassette, ChordBrick.LEDGE, 12),
-			room.slot_refusal(pulled, CassetteRack.RACK, 0)], room.slot_refusal(cassette, ChordBrick.LEDGE, 12).contains("chord bricks")
-			and room.slot_refusal(pulled, CassetteRack.RACK, 0).contains("cassettes"))
-	room.unmake(cassette.id)
-	# CLEAR: every brick on the ledge into its bin, gone.
-	_press(ledge.clear_key)
-	check("CLEAR bins the whole row (%s)" % [room.made_ids()], ChordBrick.ledge_row(room).is_empty()
-			and room.made_ids().is_empty() and not Session.made.has(&"brick2"))
-	var again := _bricks_on_the_ledge(studio, ["Dm"])
-	check("and ids are never given twice (%s)" % [again.map(func(b): return b.id)], again.size() == 1 and again[0].id == &"brick7")
-	studio.queue_free()
-	await get_tree().process_frame
-	DirAccess.remove_absolute(Session.layout.made_path())
-	Session.made.clear()
-	Session.layout = saved_layout
-
-
-## A brick pressed into a track writes its row's block chords: taken from the ledge, the whole row,
-## each chord voiced at 60 in four notes for its bars, from the bar under a press on a lane or the
-## playhead's bar on a strip, as one take named `chords`, one undo step. A brick from anywhere else
-## writes itself alone. A frozen track and a microphone's refuse it and say why. Pressed into a
-## section block, the row's harmony is written into that section's marker, one undo step, and the
-## harmony follows it there and nowhere before; undo puts it back.
-func _test_a_pressed_brick_writes_its_rows_chords() -> void:
-	var saved_layout := Session.layout
-	_as_session(Session.Role.SOLO, 1)
-	var studio := _cassette_studio()
-	await get_tree().physics_frame
-	var s := DAW.state
-	var room := studio.items
-	var row := _bricks_on_the_ledge(studio, ["Am", "F", "C", "G"])
-	row[1].bars = 2
-	var hand := studio.get_node("MouseHand") as MouseInteractor
-	var first := row[0]
-	hand.pick_up(first)
-	check("taken from the ledge, its row is the ledge's with it in its place (%s)" % ChordBrick.chords_text(ChordBrick.row_of(first)),
-			first.from_ledge == 0 and ChordBrick.row_of(first) == row)
-	var undo := (DAW.backend as OfflineBackend)._undo
-	var depth := undo.size()
-	var took := func(track: int) -> MixState.ItemState:
-		for it: MixState.ItemState in s.track(track).items:
-			if it.name == ChordBrick.TAKE_NAME:
-				return it
-		return null
-	# A press on a lane: the bar under it.
-	room.paste(first, 4, s.bar_to_seconds(12.6))
-	var take: MixState.ItemState = took.call(4)
-	check("a press on a lane writes one take named chords from the bar under it, the row's five bars long",
-			take != null and absf(take.start - s.bar_to_seconds(12.0)) < 0.001
-			and absf(take.length - (s.bar_to_seconds(17.0) - s.bar_to_seconds(12.0))) < 0.001)
-	var pitches: Array = []
-	var starts: Array = []
-	if take != null:
-		for n in take.notes.size() / 5:
-			pitches.append(int(take.notes[n * 5 + 2]))
-			starts.append(snappedf((take.notes[n * 5] + take.start - s.bar_to_seconds(12.0)) / s.bar_to_seconds(2.0), 0.001))
-	check("block chords voiced at 60, four notes each: Am, F, C, G (%s)" % [pitches],
-			pitches == [57, 60, 64, 69, 65, 69, 72, 77, 60, 64, 67, 72, 55, 59, 62, 67])
-	check("one a brick for its bars: F two of them (%s)" % [starts], starts == [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
-			3.0, 3.0, 3.0, 3.0, 4.0, 4.0, 4.0, 4.0])
-	check("as one undo step, and the brick still in the hand", undo.size() == depth + 1 and hand.carrying == first)
-	DAW.undo()
-	check("undo takes the take away", took.call(4) == null)
-	# On a strip: the playhead's bar, through the hand's own press, the card saying so.
-	var strip := ControlAffordance.new()
-	strip.pastes_onto = func() -> int: return 5
-	add_child(strip)
-	s.position_seconds = s.bar_to_seconds(20.3)
-	hand.hovered = strip
-	hand.hover_point = strip.global_position
-	strip.hover_enter(hand)
-	var said := strip.card_hint()
-	check("the strip's card says what a click writes and where (%s)" % said,
-			said == "click writes the ledge's Am F C G (5 bars) onto %s from bar 20; Q puts it down" % s.track(5).display_name())
-	check("the hand's press on it writes", hand._paste_press(strip.global_position))
-	var on_strip: MixState.ItemState = took.call(5)
-	check("on a strip, from the playhead's bar", on_strip != null and absf(on_strip.start - s.bar_to_seconds(20.0)) < 0.001)
-	DAW.undo()
-	strip.hover_exit(hand)
-	hand.hovered = null
-	strip.queue_free()
-	# A brick from anywhere else writes itself alone.
-	var alone := room.mint(ChordBrick.KIND, ChordBrick.data_from("chord:A minor:Dm")) as ChordBrick
-	hand.pick_up(alone)
-	room.paste(alone, 4, s.bar_to_seconds(30.0))
-	var one: MixState.ItemState = took.call(4)
-	check("a brick not from the ledge writes itself alone: one bar of Dm (%s)" % [one.notes if one != null else null],
-			one != null and one.notes.size() == 20 and int(one.notes[2]) == 62 and ChordBrick.row_of(alone) == [alone])
-	DAW.undo()
-	# Refused where no MIDI goes.
-	var notices: Array[String] = []
-	var listen := func(t: String) -> void: notices.append(t)
-	Session.notice.connect(listen)
-	s.track(6).frozen = {"items": []}
-	room.paste(alone, 6, s.bar_to_seconds(30.0))
-	check("a frozen track refuses it and says so (%s)" % [notices], took.call(6) == null and notices.size() == 1 and notices[0].contains("frozen"))
-	s.track(6).frozen = {}
-	Session.notice.disconnect(listen)
-
-	# Into a section block: the row's harmony at that section's marker.
-	hand.pick_up(first)
-	studio.sections.make_sections()
-	studio.sections._process(1.0 / 60.0)
-	var verse := -1
-	for i in s.regions.size():
-		if s.regions[i][2] == "Verse 2":
-			verse = i
-	var block: SectionBlocks.Block = studio.sections.blocks()[verse]
-	var start := float(s.regions[verse][0])
-	check("a section block takes a brick at its start, and nothing else (%s)" % [block.paste_spot_for(first, block.global_position, false)],
-			block.paste_spot_for(first, block.global_position, false) == [ChordBrick.SECTION, start]
-			and block.paste_spot_for(CassetteItem.new(), block.global_position, false).is_empty())
-	hand.hovered = block
-	hand.hover_point = block.global_position
-	block.hover_enter(hand)
-	said = block.card_hint()
-	check("its card says what a click sets (%s)" % said, said == "click sets Verse 2's harmony to [A minor: Am F - C G]; Q puts it down")
-	var third := s.bar_to_seconds(43.0) + 0.05
-	var before := Harmony.at(s, third).chord_name
-	var ahead := Harmony.at(s, start - 0.05).chord_name
-	depth = undo.size()
-	check("the hand's press on it writes", hand._paste_press(block.global_position))
-	block.hover_exit(hand)
-	hand.hovered = null
-	check("the section's marker has the row's brackets (%s)" % s.markers.get(start, ""), s.markers.get(start, "") == "Verse 2 [A minor: Am F - C G]")
-	check("as one undo step", undo.size() == depth + 1)
-	check("its third bar holds F now, where the Intro's bracket had C (%s, %s)" % [Harmony.at(s, third).chord_name, before],
-			Harmony.at(s, third).chord_name == "F" and before == "C")
-	check("and the harmony follows it there, and not before it (%s)" % [Harmony.at(s, third).chord_name],
-			Harmony.at(s, third).chord_name == "F" and Harmony.at(s, start - 0.05).chord_name == ahead)
-	DAW.undo()
-	check("undo gives the section its name back (%s)" % s.markers.get(start, ""), s.markers.get(start, "") == "Verse 2"
-			and Harmony.at(s, third).chord_name == before)
-	studio.queue_free()
-	await get_tree().process_frame
-	_as_session(Session.Role.SOLO, 1)
-	DirAccess.remove_absolute(Session.layout.made_path())
-	Session.made.clear()
-	Session.layout = saved_layout
-
-
-## A bare hand's way to a brick's length, and the desk's clicks on the ledge: a bare hand has no
-## stick, so a brick taken into it and turned a sixth of a turn clockwise is a bar step longer, and
-## back the other way shorter, the room's `bricks` row as the wheel's nudge is, its made bytes
-## unchanged; a mouse cannot turn one. Aimed back at the free slot it was taken from, it goes back
-## in its place, and aimed at another, to the row's end. A cassette aimed along the ledge is not
-## taken by it, and goes down. At a desk a click on the rail with a brick in the hand stands it on
-## the free slot under the click, or at the row's end over a taken one, and a click on the BIN
-## with one bins it.
-func _test_a_bare_hand_turns_a_brick_and_the_desk_clicks_the_ledge() -> void:
-	var saved_layout := Session.layout
-	_as_session(Session.Role.SOLO, 1)
-	var studio := _cassette_studio()
-	await get_tree().physics_frame
-	var room := studio.items
-	var ledge := studio.ledge
-	var row := _bricks_on_the_ledge(studio, ["Am", "F", "C", "G"])
-	var f := row[1]
-	var bytes: PackedByteArray = (Session.made[f.id] as Array)[2]
-	var resized: Array = []
-	room.resized.connect(func(item: Item, bars: int) -> void: resized.append([item.id, bars]))
-	var told: Array = []
-	room.told.connect(func(text: String) -> void: told.append(text))
-	check("the ledge's hands line names turning a brick in the hand (%s)" % Stations.row(&"ledge")["hands"],
-			(Stations.row(&"ledge")["hands"] as String).contains("turn it in your hand")
-			and (Stations.row(&"chord_brick")["hands"] as String).contains("turn it in your hand"))
-
-	# A bare hand: no stick. Taken into it and turned, the brick's length steps.
-	var bare := XRInteractor.new()
-	studio.add_child(bare)
-	check("a bare hand has no stick", bare.stick() == Vector2.ZERO)
-	bare.pick_up(f)
-	check("taken from the ledge's slot 2 into a bare hand (%s)" % [bare.carrying], bare.carrying == f and f.from_ledge == 1)
-	check("its card says to turn it (%s)" % f.hint(), f.hint().begins_with("turn it in your hand"))
-	var clockwise := Vector3.FORWARD
-	var roll := func(degrees: float) -> void:
-		bare.transform = Transform3D(Basis(clockwise, deg_to_rad(degrees)), Vector3.ZERO)
-		bare._count_roll()
-		f.follow_turn()
-	roll.call(0.0)
-	roll.call(-40.0)
-	roll.call(-80.0)
-	check("turned the short way at a bar, still a bar, and nothing said", f.bars == 1 and resized.is_empty())
-	roll.call(-55.0)
-	roll.call(-30.0)
-	check("turned back 50 degrees, still a bar: the turn past its stop was not counted", f.bars == 1 and resized.is_empty())
-	roll.call(-5.0)
-	check("75 degrees back, more than a sixth of a turn: 2 bars, two studs, said (%s)" % [resized],
-			f.bars == 2 and _studs_shown(f) == 2 and resized == [[f.id, 2]])
-	for d in [20.0, 40.0, 80.0, 120.0, 160.0]:
-		roll.call(d)
-	check("on round, 4 bars and no further (%s)" % [resized], f.bars == 4 and _studs_shown(f) == 4
-			and resized == [[f.id, 2], [f.id, 4]])
-	roll.call(130.0)
-	roll.call(110.0)
-	check("turned back 50 degrees from where it stopped, still 4", f.bars == 4 and resized.size() == 2)
-	roll.call(95.0)
-	check("and a sixth back, 2 again (%s)" % [resized], f.bars == 2 and resized == [[f.id, 2], [f.id, 4], [f.id, 2]])
-	var rows: Dictionary = studio.room_state()["bricks"]
-	check("the room's bricks row has it and its made bytes are unchanged (%s)" % [rows],
-			rows.get(f.id) == 2 and (Session.made[f.id] as Array)[2] == bytes)
-	var mouse := studio.get_node("MouseHand") as MouseInteractor
-	check("a mouse cannot turn one: its twist is nothing", is_nan(mouse.twist()))
-
-	# Aimed back at the slot it was taken from: back in its place, not at the row's end.
-	var into := room.global_transform
-	var slots: Array = room.holders[ChordBrick.LEDGE]
-	var aim_at := func(n: int) -> void:
-		var target: Vector3 = into * (slots[n] as Transform3D) * Vector3(0, ChordBrick.SIZE.y * 0.5, 0)
-		var from := target + ledge.global_basis.z * 0.35 + Vector3.UP * 0.25
-		bare.global_transform = Transform3D(Basis.looking_at(target - from, Vector3.UP), from)
-		f.global_position = from
-	aim_at.call(1)
-	bare.put_down()
-	check("aimed back at its own free slot it goes back in its place (%s)" % ChordBrick.chords_text(ChordBrick.ledge_row(room)),
-			f.slot_in == ChordBrick.LEDGE and f.slot_n == 1 and bare.carrying == null
-			and ChordBrick.chords_text(ChordBrick.ledge_row(room)) == "Am F C G")
-	bare.pick_up(f)
-	aim_at.call(2)
-	bare.put_down()
-	check("aimed at another, it goes at the row's end (%d)" % f.slot_n, f.slot_in == ChordBrick.LEDGE and f.slot_n == 4)
-
-	# A cassette aimed along the ledge: not the ledge's, so it goes down, not refused in the hand.
-	var cassette := room.mint(CassetteItem.KIND, CassetteItem.data_of(DAW.state, 2, 0))
-	bare.pick_up(cassette)
-	var target: Vector3 = into * (slots[8] as Transform3D) * Vector3(0, ChordBrick.SIZE.y * 0.5, 0)
-	var from := target + ledge.global_basis.z * 0.35 + Vector3.UP * 0.25
-	bare.global_transform = Transform3D(Basis.looking_at(target - from, Vector3.UP), from)
-	cassette.global_position = from
-	var along := room.free_slot_along(cassette, bare.aim())
-	check("aimed along the ledge, a cassette is not offered the ledge (%s)" % [along],
-			along.is_empty() or along[0] != ChordBrick.LEDGE)
-	told.clear()
-	bare.put_down()
-	check("and put down it goes, out of the hand, not on the ledge, nothing refused (%s)" % [told],
-			bare.carrying == null and cassette.slot_in != ChordBrick.LEDGE and told.is_empty())
-	room.unmake(cassette.id)
-	bare.queue_free()
-
-	# At a desk: a click on the rail with a brick in the hand.
-	var g := row[3]
-	mouse.pick_up(g)
-	check("taken by the mouse's hand from slot 4", mouse.carrying == g and g.from_ledge == 3)
-	var on_rail := func(n: int) -> Vector3:
-		return ledge.to_global(Vector3(ChordLedge.slot_x(n) + 0.01, ChordLedge.RAIL_TOP, ChordLedge.SLOT_Z))
-	ledge.rail.grab_begin(mouse, on_rail.call(9))
-	check("a click on the rail over free slot 10 stands it there (%d)" % g.slot_n,
-			g.slot_in == ChordBrick.LEDGE and g.slot_n == 9 and mouse.carrying == null and ledge.rail.held_by == null)
-	mouse.pick_up(g)
-	ledge.rail.grab_begin(mouse, on_rail.call(0))
-	check("over a taken slot, at the row's end (%d), the rail's card the row (%s)" % [g.slot_n, ledge.rail.readout()],
-			g.slot_in == ChordBrick.LEDGE and g.slot_n == 5 and ledge.rail.readout() == "Am C F G · 4 bricks, 5 bars")
-	var made := room.made_ids().size()
-	ledge.rail.grab_begin(mouse, on_rail.call(12))
-	check("with nothing in the hand a click on the rail stands nothing", room.made_ids().size() == made
-			and ChordBrick.ledge_row(room).size() == 4)
-	# The BIN: a click with a brick in the hand bins it, for good.
-	mouse.pick_up(g)
-	var gone := g.id
-	ledge.bin.grab_begin(mouse, ledge.bin.global_position)
-	await get_tree().process_frame
-	check("a click on the BIN with a brick in the hand bins it (%s)" % [room.made_ids()],
-			mouse.carrying == null and not room.items.has(gone) and not Session.made.has(gone)
-			and ChordBrick.chords_text(ChordBrick.ledge_row(room)) == "Am C F")
-	studio.queue_free()
-	await get_tree().process_frame
-	DirAccess.remove_absolute(Session.layout.made_path())
-	Session.made.clear()
-	Session.layout = saved_layout
-
-
-## A guest's bricks are minted on the host: its MAKE BRICKS asks `make` for each, onto the ledge;
-## its pulled tile asks for one in its glove and holds a blank meanwhile; the host mints them from
-## the words alone (a chord that does not read makes nothing), into the ledge's next slot or the
-## guest's glove by the holds. A guest's nudge is the room's `bricks` ask, shown at once and kept
-## until answered, which the host does only for whoever may hold it. A guest's press on a section
-## block is the wheel's `harmony` ask; on a lane, the take's intent with its notes; neither is
-## written by the guest itself.
-func _test_a_guests_bricks_are_minted_on_the_host() -> void:
-	var saved_layout := Session.layout
-	_as_session(Session.Role.SOLO, 1)
-	var studio := _cassette_studio()
-	await get_tree().physics_frame
-	var s := DAW.state
-	var room := studio.items
-	studio.sections.make_sections()
-	var hand := studio.get_node("MouseHand") as MouseInteractor
-	_as_session(Session.Role.HOST, 1)
-	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-	Session._register(1, "Ada", 0)
-	Session._register(5, "Grace", 1)
-	# The host: a guest's MAKE BRICKS, onto the ledge, made by them.
-	for c in ["Am", "F", "C"]:
-		studio._on_room_asked(&"make", [ChordBrick.KIND, ChordBrick.from_text(true, "A minor", c)], 5)
-	var row := ChordBrick.ledge_row(room)
-	check("the host mints a guest's MAKE BRICKS onto its ledge, in order, made by them (%s)" % ChordBrick.chords_text(row),
-			ChordBrick.chords_text(row) == "Am F C" and (Session.made[&"brick1"] as Array)[1] == 5
-			and Session.holder_of(row[0].network_key()) == 0)
-	room.slot(row[1], ChordBrick.BIN, 0)
-	studio._on_room_asked(&"make", [ChordBrick.KIND, ChordBrick.from_text(true, "A minor", "G")], 5)
-	check("the next goes after the row, not into the gap (%s)" % [ChordBrick.ledge_row(room).map(func(b): return b.slot_n)],
-			ChordBrick.ledge_row(room).map(func(b): return b.slot_n) == [0, 2, 3])
-	studio._on_room_asked(&"make", [ChordBrick.KIND, ChordBrick.from_text(false, "A minor", "Dm")], 5)
-	var pulled := room.items.get(&"brick5") as ChordBrick
-	check("a guest's pulled tile is a brick in its glove by the holds (%s)" % [Session.holds],
-			pulled != null and pulled.chord == "Dm" and Session.holder_of(pulled.network_key()) == 5 and hand.carrying == null)
-	var count := room.made_ids().size()
-	for bad in ["chord:Q major:Am", "chord:A minor:Zz", "chord:A minor:-", "chord:A minor", "clip:2:0"]:
-		studio._on_room_asked(&"make", [ChordBrick.KIND, bad], 5)
-	check("a brick of words that do not read is never made", room.made_ids().size() == count)
-	studio._on_room_asked(&"bricks", [&"brick1", 4], 5)
-	studio._on_room_asked(&"bricks", [&"brick5", 2], 7)
-	studio._on_room_asked(&"bricks", [&"brick3", 3], 5)
-	check("a guest's nudge is the room's row; another's of a brick in the guest's glove, or a length that is not one, is not (%s)" % [studio.room_state()["bricks"]],
-			studio.room_state()["bricks"] == {&"brick1": 4, &"brick3": 1, &"brick4": 1, &"brick5": 1})
-	check("the room names the bricks, never what they are made of", studio.room_state()["made"] == [&"brick1", &"brick3", &"brick4", &"brick5"]
-			and not var_to_str(studio.room_state()).contains("A minor"))
-	# A guest's press on a section block arrives as the wheel's ask: written at the bar it names.
-	var verse := float(s.regions[3][0])
-	studio._on_room_asked(FifthsWheel.VERB, [ChordBrick.bar_of(s, verse), "A minor: Am - - - F"], 5)
-	check("the host writes a guest's section press at that section (%s)" % s.markers.get(verse, ""),
-			s.markers.get(verse, "") == "Verse 2 [A minor: Am - - - F]")
-	DAW.undo()
-	Session.start_solo()
-
-	# The guest's half.
-	for id in room.made_ids():
-		room.unmake(id)
-	Session.made.clear()
-	_as_session(Session.Role.GUEST, 5)
-	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-	Session._register(1, "Ada", 0)
-	Session._register(5, "Grace", 1)
-	Session.room_seq = 0
-	studio._predictions.clear()
-	var here := {"venue": studio.venue.venue_id(), "variant": studio.venue.variant}
-	studio.make_bricks(PackedStringArray(["Am", "F"]), "A minor")
-	check("a guest's MAKE BRICKS asks the host for each, onto the ledge, by its words (%s)" % [studio._predictions.map(func(p): return p["args"])],
-			studio._predictions.map(func(p): return p["args"]) == [[&"brick", "ledge:A minor:Am"], [&"brick", "ledge:A minor:F"]]
-			and room.made_ids().is_empty())
-	studio._on_brick_pulled("G", "A minor", hand)
-	check("its pulled tile asks for one in its glove, a blank one held meanwhile",
-			studio._predictions[-1]["args"] == [&"brick", "chord:A minor:G"] and studio._making.size() == 1
-			and studio._making[0]["look"].name == "MakingBrick")
-	Session._made(&"brick1", &"brick", 5, var_to_bytes({"chord": "Am", "key": "A minor"}))
-	Session._made(&"brick2", &"brick", 5, var_to_bytes({"chord": "F", "key": "A minor"}))
-	var answered := here.duplicate()
-	answered["made"] = [&"brick1", &"brick2"]
-	answered["items"] = {&"brick1": ["slot", "ledge", 0], &"brick2": ["slot", "ledge", 1]}
-	answered["bricks"] = {&"brick1": 1, &"brick2": 1}
-	answered["acks"] = {5: Session.room_seq}
-	studio.apply_room(answered)
-	await get_tree().process_frame
-	var mine := ChordBrick.ledge_row(room)
-	check("the host's answer stands them on the ledge here, the blank one gone (%s)" % ChordBrick.chords_text(mine),
-			ChordBrick.chords_text(mine) == "Am F" and studio._making.is_empty())
-	mine[1].nudge(hand, 1, false)
-	var asked_seq := Session.room_seq
-	check("a guest's nudge is asked of the host as the room's bricks row, shown at once",
-			studio._predictions[-1]["verb"] == &"bricks" and studio._predictions[-1]["args"] == [&"brick2", 2] and mine[1].bars == 2)
-	answered["acks"] = {5: asked_seq - 1}
-	studio.apply_room(answered)
-	check("a room from before the ask leaves it as nudged", mine[1].bars == 2)
-	answered["acks"] = {5: asked_seq}
-	answered["bricks"] = {&"brick1": 1, &"brick2": 2}
-	studio.apply_room(answered)
-	check("and the answer keeps it", mine[1].bars == 2 and studio._predictions.is_empty())
-	hand.pick_up(mine[0])
-	var markers := s.markers.duplicate()
-	var verse_at := float(s.regions[3][0])
-	studio.press_brick(mine[0], ChordBrick.SECTION, verse_at)
-	check("a guest's press on a section block is the wheel's harmony ask, with that section's bar (%s)" % [studio.brick_asked],
-			studio.brick_asked == [FifthsWheel.VERB, [40, "A minor: Am F -"]] and s.markers == markers)
-	Session.keep_intents = true
-	Session.kept_intents.clear()
-	studio.press_brick(mine[0], 4, s.bar_to_seconds(12.5))
-	var sent: Array = Session.kept_intents[0] if not Session.kept_intents.is_empty() else []
-	check("on a lane, the take's intent with its notes, the guest writing nothing itself (%s)" % [sent],
-			sent.size() == 2 and sent[0] == &"insert_midi_take" and int(sent[1][0]) == 4 and (sent[1][3] as Array).size() == 8
-			and sent[1][4] == ChordBrick.TAKE_NAME and s.track(4).items.all(func(it): return it.name != ChordBrick.TAKE_NAME))
-	Session.keep_intents = false
-	Session.kept_intents.clear()
-	Session.start_solo()
-	studio.queue_free()
-	await get_tree().process_frame
-	_as_session(Session.Role.SOLO, 1)
-	DirAccess.remove_absolute(Session.layout.made_path())
-	Session.made.clear()
-	Session.layout = saved_layout
 
 
 ## docs/spatial_loop.md part two, slice 32: a left hand held up, palm toward the room and the

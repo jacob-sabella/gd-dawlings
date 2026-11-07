@@ -186,7 +186,7 @@ func paste_spot_for(_item: Item, at: Vector3, fine: bool) -> Array:
 ## What a press here would paste, for a hand over this control carrying something that pastes:
 ## "click pastes the Kick Verse 1 cassette onto Bass at 12.1.00"; "" for none. What the hover card
 ## says instead of the control's own hint, since the press is the paste's. What the carried thing
-## says it does there (Item.paste_text: a chord brick's chords) where it says.
+## says it does there (Item.paste_text) where it says.
 func paste_words() -> String:
 	for by in _hovered_by:
 		var hand := by as Interactor

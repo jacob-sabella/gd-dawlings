@@ -762,13 +762,10 @@ func wheel_spot() -> Variant:
 ## x across it, + toward the long edge far from the middle of the room, and z along it, + away
 ## from the control room. The fifths wheel's board and its strut at the end nearest the control
 ## room (where `wheel_spot` stands it, WHEEL_IN in from that end); the section blocks along the
-## far long edge, past the wheel; and the ledge for chord bricks (slice 31) along the near long
-## edge, beside them, where a player at the blocks has it under their hands. Seen from there, the
-## wheel is at the near left end. Clear of each other by BAND_GAP or more.
+## far long edge, past the wheel. Clear of each other by BAND_GAP or more.
 const TABLE_BANDS := {
 	&"wheel": Rect2(-0.47, -1.0, 0.94, 0.56),
 	&"sections": Rect2(0.12, -0.4, 0.36, 1.38),
-	&"ledge": Rect2(-0.48, -0.4, 0.3, 1.38),
 }
 const BAND_GAP := 0.04
 
@@ -799,12 +796,6 @@ func band_spot(id: StringName) -> Variant:
 ## table, along its far long edge. Null where there is no bricks table.
 func sections_spot() -> Variant:
 	return band_spot(&"sections")
-
-
-## Where the ledge for chord bricks stands (ChordLedge, slice 31): its band's middle on the bricks
-## table, along its near long edge. Null where there is no bricks table.
-func ledge_spot() -> Variant:
-	return band_spot(&"ledge")
 
 
 ## The circle of hand drums on the drum riser (HandDrum, docs/spatial_loop.md part two, slice 40):

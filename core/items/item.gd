@@ -209,8 +209,7 @@ func _next_take() -> int:
 
 ## Override: whether a press with this in the hand on a control that takes a paste
 ## (ControlAffordance.paste_spot) pastes it there rather than working the control: a cassette with
-## a clip on it (docs/spatial_loop.md part two, slice 24), and a chord brick, which writes its
-## chords (slice 31). Nothing else does.
+## a clip on it (docs/spatial_loop.md part two, slice 24). Nothing else does.
 func pastes() -> bool:
 	return false
 

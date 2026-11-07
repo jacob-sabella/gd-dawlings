@@ -131,20 +131,6 @@ const CRANK_NOTCHES := 2
 ## guest's copy and the room's notice say so. The host takes all of it back at 60.36.
 const ARRANGE_BAR := 460.0
 const ARRANGE_NAMES := ["Probe A", "Probe B", "Probe C"]
-## Chord bricks (slice 31): at 60.38 the host lays out a section of four bars from BRICK_BAR, past
-## the arrangement's ("Probe D", its marker at its start). At 60.42 the guest's MAKE BRICKS asks
-## for BRICK_CHORDS in BRICK_KEY onto the ledge (`make`, "ledge:<key>:<chord>"); the host mints them
-## from the words alone into its ledge's next slots, and by 60.46 the guest's copy of the room has
-## them in a row there. The guest nudges the second to 2 bars (the room's `bricks` ask), and at 60.5,
-## the host's row saying so, presses its ledge's row onto the host's section block: the wheel's
-## `harmony` ask with that section's bar, ChordBrick.section_ask's. By 60.56 both halves have the
-## section's marker bracketed with the row (BRICK_MARKER) and its third bar in F; the host takes all
-## of it back at 60.58.
-const BRICK_BAR := 480.0
-const BRICK_SECTION := "Probe D"
-const BRICK_KEY := "A minor"
-const BRICK_CHORDS := ["Am", "F", "C"]
-const BRICK_MARKER := "Probe D [A minor: Am F - C]"
 ## Point, mark and listen together (slice 35): from 60.82 the guest points at the song time POINT_AT
 ## on its ruler (Presence's `ruler:<seconds>`, on the presence stream) and drops a sticky note at
 ## NOTE_AT (an add_marker intent of NOTE_WORDS, Harmony.note_named). By 60.9 the host has heard the
@@ -528,8 +514,6 @@ func _host(port: int) -> void:
 			_answer_make(args, from)
 		if verb == &"paste":
 			_answer_paste(args, from)
-		if verb == &"bricks":
-			_answer_bricks(args, from)
 		if verb == Sampler.VERB:
 			_answer_sampler(args, from)
 		if verb == Weather.VERB:
@@ -925,16 +909,6 @@ func _host(port: int) -> void:
 	_check_rearranged()
 	await _until(60.36)
 	_take_back_the_sections()
-
-	# Chord bricks (slice 31): a section of mine at 60.38; the guest's ledge bricks (60.42) minted
-	# onto my ledge, its nudge my room's row, its press of the row onto my section block (60.5) the
-	# wheel's ask, written by 60.56; all of it taken back at 60.58.
-	await _until(60.38)
-	_lay_out_a_brick_section()
-	await _until(60.56)
-	_check_bricks_pressed()
-	await _until(60.58)
-	_take_back_the_bricks()
 
 	# A chord hand down a jack (part two, slice 33): a chord hand of mine to take the guest's chord,
 	# its chord:G plugged into me at 60.62, IV held at 60.66; taken by 60.7, and
@@ -2689,7 +2663,6 @@ func _guest(port: int) -> void:
 	await _spin_the_platter()
 	await _crank_the_history()
 	await _rearrange_the_sections()
-	await _press_the_bricks()
 	await _drive_their_chord_hand()
 	await _point_and_note()
 	await _hear_the_spectra()
@@ -3184,8 +3157,6 @@ func _check_bells() -> void:
 	add_child(_room)
 	# Made items' rows are the session's, as the studio shares them (slice 23).
 	_room.made = Session.made
-	# The chord ledge's sixteen slots (slice 31), as the studio holds them, here in front of the room.
-	_room.set_holder(ChordBrick.LEDGE, ChordLedge.slots_in(Transform3D(Basis.IDENTITY, Vector3(0, 0.76, 1.0))))
 	# The sampler (slice 26), as the studio stands one: its cassettes into this room.
 	if Session.role == Session.Role.HOST:
 		_sampler = Sampler.new()
@@ -3228,15 +3199,6 @@ func _answer_make(args: Array, from: int) -> void:
 	if made == null:
 		return
 	Session.publish_made(made.id)
-	# A guest's MAKE BRICKS (slice 31): onto my ledge, at the end of its row, as the studio's.
-	if made is ChordBrick and ChordBrick.into_ledge(str(args[1])):
-		var n := _room.next_in_order(ChordBrick.LEDGE)
-		check("there is a free slot on my ledge for the guest's %s brick (%d)" % [(made as ChordBrick).chord, n], n >= 0)
-		if n >= 0:
-			_room.slot(made, ChordBrick.LEDGE, n)
-		_bricks_for_guest.append(made.id)
-		_publish_brick_room()
-		return
 	Session.hand_to(from, made.network_key())
 	_made_for_guest.append(made.id)
 	var room: Dictionary = Session.room.duplicate(true)
@@ -3312,95 +3274,6 @@ func _check_pasted() -> void:
 	theirs.erase("start")
 	check("on track %d at bar %d is the cassette's clip but for its start and track (%s)" % [PASTE_TRACK, int(PASTE_BAR), it.name if it != null else "none"],
 			it != null and not theirs.is_empty() and mine == theirs)
-
-
-## Host: the bricks minted for the guest's MAKE BRICKS (slice 31), and the history's depth before
-## the section they are pressed onto.
-var _bricks_for_guest: Array[StringName] = []
-var _brick_depth := -1
-
-
-## The song's seconds at a bar of the bricks' section, BRICK_BAR from 0.
-func _brick_at(bars: float) -> float:
-	return DAW.state.bar_to_seconds(BRICK_BAR + 1.0 + bars)
-
-
-## The room with my bricks in it, as the studio publishes it: their ids, where they are (the room's
-## `items`, only theirs here) and their lengths (`bricks`).
-func _publish_brick_room() -> void:
-	var room: Dictionary = Session.room.duplicate(true)
-	room["made"] = _room.made_ids()
-	var where := _room.state()
-	var items := {}
-	var bricks := {}
-	for id in _room.items:
-		var brick := _room.items[id] as ChordBrick
-		if brick != null:
-			bricks[id] = brick.bars
-			if where.has(id):
-				items[id] = where[id]
-	room["items"] = items
-	room["bricks"] = bricks
-	Session.publish_room(room)
-
-
-## The guest's nudge of a brick (slice 31), as the studio answers it: a length that is one, of a
-## brick nobody else holds.
-func _answer_bricks(args: Array, from: int) -> void:
-	var brick := _room.items.get(args[0]) as ChordBrick if _room != null else null
-	var holder := Session.holder_of(brick.network_key()) if brick != null else 0
-	if brick == null or not int(args[1]) in ChordBrick.LENGTHS or (holder != 0 and holder != from):
-		return
-	brick.bars = int(args[1])
-	_publish_brick_room()
-
-
-## A section of mine past the arrangement's, four bars, its marker at its start (slice 31).
-func _lay_out_a_brick_section() -> void:
-	_brick_depth = DAW.state.undo_depth
-	DAW.add_region(_brick_at(0.0), _brick_at(4.0), BRICK_SECTION)
-	DAW.add_marker(_brick_at(0.0), BRICK_SECTION)
-
-
-## The guest's bricks and its press of their row (slice 31), as my room and my DAW have them: three
-## on my ledge in its order, made by the guest, the second 2 bars; and the section's marker
-## bracketed with the row, as one step, so the third bar of it is in F and its first in A minor.
-func _check_bricks_pressed() -> void:
-	var guest := _other_id()
-	var row := ChordBrick.ledge_row(_room)
-	check("the guest's MAKE BRICKS is %d bricks on my ledge, in order (%s)" % [BRICK_CHORDS.size(), ChordBrick.chords_text(row)],
-			row.map(func(b: ChordBrick) -> String: return b.chord) == BRICK_CHORDS
-			and row.map(func(b: ChordBrick) -> int: return b.slot_n) == range(BRICK_CHORDS.size()))
-	var theirs := func(b: ChordBrick) -> bool:
-		return Session.made.has(b.id) and int(Session.made[b.id][1]) == guest and b.key == BRICK_KEY
-	check("each made by the guest, minted from its words, a chord and its key (%s)" % [row.map(func(b): return b.data)],
-			row.all(theirs))
-	check("its nudge made the second 2 bars, my room's row (%s)" % [Session.room.get("bricks", {})],
-			row.size() == 3 and row[1].bars == 2 and int(Session.room.get("bricks", {}).get(row[1].id, 0)) == 2)
-	var at := DAWBackend.marker_key(DAW.state.markers, _brick_at(0.0))
-	var named := str(DAW.state.markers[at]) if not is_nan(at) else ""
-	check("its press of the row onto my section block bracketed the section's marker (%s)" % named, named == BRICK_MARKER)
-	var third := Harmony.at(DAW.state, _brick_at(2.0) + 0.05)
-	var first := Harmony.at(DAW.state, _brick_at(0.0) + 0.05)
-	check("so the section's third bar is in F and its first in A minor (%s, %s)" % [third.chord_name if third != null else "none",
-			first.chord_name if first != null else "none"], third != null and third.chord_name == "F" and first != null
-			and first.chord_name == "Am")
-	var sets := _room_asks.filter(func(a: Array) -> bool: return a[0] == FifthsWheel.VERB)
-	check("as the wheel's ask with the section's bar (%s)" % [sets.slice(-1)], sets.size() == 2
-			and sets[-1][1] == [int(BRICK_BAR), "A minor: Am F - C"] and sets[-1][2] == guest)
-
-
-## The section and its harmony taken back, and the bricks gone.
-func _take_back_the_bricks() -> void:
-	if _brick_depth >= 0 and DAW.state.undo_depth >= 0:
-		DAW.undo_to(_brick_depth)
-	else:
-		for _i in 3:
-			DAW.undo()
-	for id in _bricks_for_guest:
-		_room.unmake(id)
-		Session.drop_made(id)
-	_publish_brick_room()
 
 
 ## Host: how many steps the sections' layout made (slice 29), the rearrangement among them, so all
@@ -3590,70 +3463,6 @@ func _check_cranked(from: int) -> void:
 		return
 	check("the guest's history crank took my history %d back, from %d to %d" % [CRANK_NOTCHES, from,
 			DAW.state.undo_depth], from >= CRANK_NOTCHES and DAW.state.undo_depth == from - CRANK_NOTCHES)
-
-
-## Chord bricks (slice 31): at 60.42 my MAKE BRICKS asks the host for BRICK_CHORDS onto the ledge, as
-## the studio's wheel does, by their words; by 60.46 the host's room has them in a row on my copy of
-## its ledge. I nudge the second to 2 bars (the room's `bricks`), and at 60.5, the host's row saying
-## so, press my ledge's row onto the host's section block: the wheel's `harmony` ask with that
-## section's bar. By 60.56 my copy of the host's markers has the section bracketed with the row.
-func _press_the_bricks() -> void:
-	await _until(60.42)
-	for c in BRICK_CHORDS:
-		Session.ask_room(&"make", [ChordBrick.KIND, ChordBrick.from_text(true, BRICK_KEY, c)])
-	await _until(60.46)
-	_apply_brick_room()
-	var row := ChordBrick.ledge_row(_room)
-	check("the host's room has my bricks on its ledge, in order, here too (%s)" % ChordBrick.chords_text(row),
-			row.map(func(b: ChordBrick) -> String: return b.chord) == BRICK_CHORDS
-			and row.all(func(b: ChordBrick) -> bool: return Session.made.has(b.id)))
-	if row.size() != BRICK_CHORDS.size():
-		return
-	var seq := Session.ask_room(&"bricks", [row[1].id, 2])
-	check("my nudge of the second is asked of the host as the room's bricks row (seq %d)" % seq, seq > 0)
-	await _until(60.5)
-	_apply_brick_room()
-	check("and the host's row has it 2 bars (%s)" % [Session.room.get("bricks", {})], row[1].bars == 2)
-	var start := NAN
-	for r in DAW.state.regions:
-		if r[2] == BRICK_SECTION:
-			start = float(r[0])
-	check("I have the host's section %s (%s)" % [BRICK_SECTION, start], not is_nan(start))
-	if is_nan(start):
-		return
-	var asked := ChordBrick.section_ask(row, DAW.state, start)
-	check("my ledge's row pressed onto its block asks [%s] at its bar (%s)" % [asked[1], asked],
-			asked == [int(BRICK_BAR), "A minor: Am F - C"])
-	Session.ask_room(FifthsWheel.VERB, asked)
-	await _until(60.56)
-	var at := DAWBackend.marker_key(DAW.state.markers, start)
-	var named := str(DAW.state.markers[at]) if not is_nan(at) else ""
-	check("and my copy of the host's markers has the section bracketed with the row (%s)" % named, named == BRICK_MARKER)
-	var third := Harmony.at(DAW.state, DAW.state.bar_to_seconds(BRICK_BAR + 3.0) + 0.05)
-	check("its third bar in F here too (%s)" % (third.chord_name if third != null else "none"), third != null and third.chord_name == "F")
-
-
-## The host's bricks, as its room has them (slice 31): made real here, laid in my copy of its ledge
-## where it says, each its length. Only the bricks: everything else in the room stays as it is.
-func _apply_brick_room() -> void:
-	_room.apply_made(Session.room.get("made", []))
-	var where: Dictionary = Session.room.get("items", {})
-	var entries := {}
-	var others := {}
-	for id in _room.items:
-		if _room.items[id] is ChordBrick:
-			if where.has(id):
-				entries[id] = where[id]
-			elif where.has(String(id)):
-				entries[id] = where[String(id)]
-		else:
-			others[id] = true
-	_room.apply(entries, others)
-	var lengths: Dictionary = Session.room.get("bricks", {})
-	for id in lengths:
-		var brick := _room.items.get(StringName(id)) as ChordBrick
-		if brick != null and int(lengths[id]) in ChordBrick.LENGTHS:
-			brick.bars = int(lengths[id])
 
 
 ## Sections rearranged (slice 29): at 60.24 I ask the order C A B of the host's three probe regions,

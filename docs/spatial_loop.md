@@ -793,7 +793,7 @@ What is built is the NOTE path a chord hand would use.
 
 Goal: every kept idea that slices 1 to 9 did not build, built whole, on a desktop and in a headset:
 #1 to #21, #23 to #28, #30, #31, #34, #35 and #39, and the rest of four that were started: #29 (the
-wheel feeds the chord bricks), #33 (a chord hand drives a bandmate's harp), #37 (tilt bends and
+wheel feeds the chord bricks, since removed), #33 (a chord hand drives a bandmate's harp), #37 (tilt bends and
 shake wobbles, through the keys) and #38 (hand percussion shaken by a bare hand, snapped gently, and
 found). Also what a desktop player could not find last time: the help card (F1) and the welcome card
 name every instrument and its keys, the HUD fits at 1600x900, and every instrument can be reached
@@ -828,8 +828,8 @@ a real room (60) is last, when every station exists. Every slice leaves the suit
   is `_test_every_venue_stands_the_harp_clear` made general, in two kinds. A free-standing station
   (the harp, the music box) keeps every check the harp's has: on the floor, off the
   footprint, clear of every zone box, every other station's solid and every item spot, with room to
-  stand in front. A zone-mounted station (its `zone` set: the wheel, the section blocks and the
-  ledge on the bricks table, the keyboard stand and the modular wall in the synth zone, the drum
+  stand in front. A zone-mounted station (its `zone` set: the wheel and the section blocks on the
+  bricks table, the keyboard stand and the modular wall in the synth zone, the drum
   circle and the looper on the riser) is checked inside its zone instead, since standing in a zone
   is its point: clear of the zone's own solids (Venue.zone_solids) and of every other station
   mounted there, with its `air` free and a standing place in front on walkable floor. A venue with
@@ -962,7 +962,7 @@ a real room (60) is last, when every station exists. Every slice leaves the suit
   So "tip it from where you started" means the same in either hand, from any start, and with the
   mouse's wiggle.
 - **Things made while playing are spawned items the host makes, and their data travels once.**
-  Cassettes, sample cassettes and chord bricks exist only once somebody makes them. They use the
+  Cassettes and sample cassettes (and, until they were removed, chord bricks) exist only once somebody makes them. They use the
   spawn system ItemRoom already has for Tour's spills and personal copies (`spawn`, `despawn`,
   `spawned_ids`, and `apply` making real on a guest what it has not met), not a second one.
   `ItemRoom.mint(kind, data)` on the host (not `make`, which is the existing factory by kind) picks
@@ -985,7 +985,7 @@ a real room (60) is last, when every station exists. Every slice leaves the suit
   and `ItemRoom.state()` knows floor, hand, head and pocket. A fifth place is added: `{id: ["slot",
   holder, n]}`, asked with the room verb `slot_item` [id, holder, n] and predicted as `put_item` is.
   Holders are `ItemRoom.holders` {holder: [Transform3D per slot]}, filled by whatever builds the
-  furniture: the cassette rack (`rack`, 12), the bricks ledge (`ledge`, 16), the platter (`platter`,
+  furniture: the cassette rack (`rack`, 12), the platter (`platter`,
   1); the grain cloud's bowl (`bowl`) went with it. An item let go within 8 cm of a free slot goes into it,
   a taken slot refuses and says so, and `apply` lays a slotted item there on every machine. Only
   made items take slots. Let-go keeps the meaning it has on XRInteractor's grip (put down, slot or
@@ -3061,7 +3061,7 @@ none.
     the ledge) and shots/spatial30_held.png (Chorus 1 held at the front of the row, the others moved
     along for it).
 
-31. [x] **Chord bricks, fed by the wheel.** The proving ideas, #16 and #29's feeding. `ChordBrick`
+31. [removed 2026-11-06] **Chord bricks, fed by the wheel.** (Removed with the simple toys, the chord ledge and the bricks with it; this is their history.) The proving ideas, #16 and #29's feeding. `ChordBrick`
     (core/items/chord_brick_item.gd) is a made item (`brick3`, data {chord}) lettered with its chord
     and numeral (Harmony.numeral). Its length (1, 2 or 4 bars) is its nudge and a room row (`bricks`
     {id: bars}), so a nudge never resends data. The fifths wheel feeds them. A tile pulled up out of

@@ -1660,9 +1660,8 @@ const ROOM_VERBS := {&"tv": [TYPE_STRING, TYPE_BOOL, TYPE_FLOAT], &"open_tablet"
 		# `ropes` row (StageTable.ropes; docs/spatial_loop.md slice 20).
 		&"rope": [TYPE_STRING, TYPE_BOOL, TYPE_BOOL],
 		# Made while playing (docs/spatial_loop.md part two, slice 23): a made item of a kind, of
-		# something the host has ("clip:<track>:<item>", or a chord brick's "chord:<key>:<chord>"
-		# and "ledge:<key>:<chord>", slice 31), never its data, which the host packs; an item
-		# into a holder's slot (ItemRoom.holders: the cassette rack, its bin, the ledge); and an
+		# something the host has ("clip:<track>:<item>"), never its data, which the host packs; an item
+		# into a holder's slot (ItemRoom.holders: the cassette rack, its bin); and an
 		# item handed to a bandmate, into their hand.
 		&"make": [TYPE_STRING_NAME, TYPE_STRING],
 		&"slot_item": [TYPE_STRING_NAME, TYPE_STRING_NAME, TYPE_INT],
@@ -1678,9 +1677,6 @@ const ROOM_VERBS := {&"tv": [TYPE_STRING, TYPE_BOOL, TYPE_FLOAT], &"open_tablet"
 		# A scratch on the DJ platter, for the sampler (slice 27): the cassette in its slot by id,
 		# and the scratch's path (Varispeed.path), which the host renders from its own render.
 		&"scratch": [TYPE_STRING_NAME, TYPE_PACKED_FLOAT32_ARRAY],
-		# A chord brick's length nudged (slice 31): the room's `bricks` row {id: bars}, which a
-		# brick's length is, so a nudge never resends what it was made of (ChordBrick.LENGTHS).
-		&"bricks": [TYPE_STRING_NAME, TYPE_INT],
 		# The looper's pad slapped (slice 45): armed for the asker from a bar (-1 to start the
 		# transport) for so many bars, or 0 bars to clear their own row; the room's `looper` row
 		# [peer, from_bar, bars] (Looper.answer). And a guest's finished layer, its notes [on, off,

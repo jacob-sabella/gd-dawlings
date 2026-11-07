@@ -31,9 +31,8 @@ extends RefCounted
 ## `foot`), and may say its own `seat`, how far in front of it a player stands (m), where SEAT
 ## would leave its back edge out of reach, or the whole of a tall one out of view.
 ##
-## A zone-mounted row on the bricks table (the wheel, the section blocks, slice 30, and the chord
-## ledge, slice 31) has a band of the table to itself (Venue.TABLE_BANDS, by its id): the clearance loop
-## holds those bands clear of each other rather than their `air`, which is for the floor round it.
+## A zone-mounted row on the bricks table (the wheel and the section blocks, slice 30) has a band of the
+## table to itself (Venue.TABLE_BANDS, by its id): the clearance loop holds those bands clear of each other rather than their `air`, which is for the floor round it.
 ##
 ## A row mounted on the venue itself (`mounted`: the venue's own instrument, slice 42, hung from its
 ## beam, its eave or its back wall, or set into its railing) is neither: it has no trolley and no
@@ -88,8 +87,8 @@ const ALL := [
 		"id": &"wheel", "title": "FIFTHS WHEEL", "area": LIVE, "zone": &"bricks", "air": 0.5,
 		"spot": &"wheel_spot", "at": Vector3(0, 0.45, -0.2),
 		"frame": [Vector3(0, 0.77, -0.35), Vector3(0, -0.29, 0.06)],
-		"desk": "click a chord to hear it · drag round the hub or wheel for the key · SET writes it · drag a strip tile off the board for a chord brick, MAKE BRICKS for the strip",
-		"hands": "press a chord · twist the hub for the key · SET writes them into the song · pull a strip tile out toward you for a chord brick",
+		"desk": "click a chord to hear it · drag round the hub or wheel for the key · SET writes it",
+		"hands": "press a chord · twist the hub for the key · SET writes them into the song",
 	},
 	{
 		"id": &"sections", "title": "SECTION BLOCKS", "area": LIVE, "zone": &"bricks", "air": 0.3,
@@ -98,16 +97,6 @@ const ALL := [
 				Vector3(0, 0, SectionBlocks.ROW_Z + SectionBlocks.DEPTH * 0.5)],
 		"desk": "drag a section along the row to move it, the others make room · [ and ] move the one under the cursor a place · let go and the song is rearranged, one undo step · no sections yet: MAKE SECTIONS FROM MARKERS",
 		"hands": "lift a section and set it down elsewhere in the row · the others make room · let go to rearrange the song · the stick moves it a place",
-	},
-	{
-		"id": &"ledge", "title": "CHORD LEDGE", "area": LIVE, "zone": &"bricks", "air": 0.3,
-		# Close up to the near edge it runs along, its letters a brick's face, and back just far
-		# enough that CLEAR at its left end and the BIN at its right are both in a desk's view.
-		"seat": 0.85, "spot": &"ledge_spot", "at": Vector3(0, 0.04, ChordLedge.SLOT_Z),
-		"frame": [Vector3(0, 0.08, ChordLedge.SLOT_Z),
-				Vector3(0, -0.32, ChordLedge.PLAQUE_Z)],
-		"desk": "MAKE BRICKS on the wheel stands the strip here as chord bricks · wheel over one for 1, 2 or 4 bars · take one and click a lane, a strip or a section block: the whole row is written · click the rail to stand a brick, BIN or CLEAR to bin",
-		"hands": "stand chord bricks in a row: it is the progression · take one and turn it in your hand, or the stick over one, for 1, 2 or 4 bars · aimed back at its slot it goes back in its place · press one into a lane, a strip or a section block to write the row",
 	},
 	{
 		"id": &"stage_table", "title": "STAGE TABLE", "area": CONTROL, "zone": &"", "air": 0.5,
@@ -300,11 +289,6 @@ const HELD := [
 		"id": &"cassette", "title": "A CASSETTE", "area": HELD_AREA,
 		"desk": "drag a clip off the timeline's edge for one · hold L to hear it · click a timeline lane, a strip or a stage voice to paste it · click a bandmate to hand it over · click a rack slot to shelve it · Q puts it down · 1 to 3 pocket it",
 		"hands": "pull a clip out of the timeline toward you · hold it to your ear to hear it · push it into a timeline lane, a strip or a stage voice to paste it · hold it by a bandmate's glove for half a second to hand it over · throw it to them · let it go by a rack slot to shelve it",
-	},
-	{
-		"id": &"chord_brick", "title": "A CHORD BRICK", "area": HELD_AREA,
-		"desk": "drag a strip tile off the fifths wheel for one · click a timeline lane, a strip or a stage voice to write its chords there · click a section block for its harmony · from the ledge, its whole row · Q puts it down",
-		"hands": "pull a tile out of the wheel's strip toward you · turn it in your hand for 1, 2 or 4 bars · push it into a lane, a strip or a stage voice to write its chords · into a section block for that section's harmony · taken from the ledge, the whole row",
 	},
 	{
 		"id": &"miniature", "title": "MINIATURE", "area": HELD_AREA,

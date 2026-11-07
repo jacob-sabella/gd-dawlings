@@ -18,9 +18,6 @@ extends Node3D
 ## said, and the block goes back. Should the sections change under a held block (the host, an
 ## undo), the hold ends and it goes back.
 ##
-## A chord brick pressed into a block (slice 31, Block.paste_spot_for) writes its row's harmony into
-## that section's marker, as the fifths wheel's SET does (Studio.press_brick).
-##
 ## A song with no regions shows MAKE SECTIONS FROM MARKERS: a region for each marker's span that
 ## names a section (`spans`: brackets alone and sticky notes are not sections), added inside one
 ## edit, so one undo step.
@@ -649,13 +646,6 @@ class Block extends ControlAffordance:
 
 	func hint() -> String:
 		return "drag along the row to move it, the others make room  ·  [ or ] or the wheel moves it a place  ·  let go to rearrange the song, one undo step"
-
-	## A chord brick pressed into it (docs/spatial_loop.md part two, slice 31) writes the harmony of
-	## its row into this section: [ChordBrick.SECTION, the section's start]. Nothing else pastes here.
-	func paste_spot_for(item: Item, _at: Vector3, _fine: bool) -> Array:
-		if not (item is ChordBrick) or index >= SectionBlocks.regions().size():
-			return []
-		return [ChordBrick.SECTION, float(SectionBlocks.regions()[index][0])]
 
 	func _on_grab_begin(at: Vector3) -> void:
 		var p := blocks.to_local(at)
