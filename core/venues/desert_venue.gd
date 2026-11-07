@@ -10,7 +10,7 @@ extends Venue
 ## tea things on it. No walls: the desk stands in the tent and the floor beside it is walkable to
 ## the poles, the zones under the back of the canopy.
 ##
-## Three arrangements (Venue.VARIANTS), three deserts round the same camp:
+## Three arrangements (Venue.variant_titles), three deserts round the same camp:
 ##   Starlit canyon  night in a red-rock canyon: sandstone walls in beds of colour towering either
 ##                   side, the canyon opening ahead onto mesa country, the Milky Way overhead, the
 ##                   moon, and a campfire in front of the tent, flickering, throwing embers.

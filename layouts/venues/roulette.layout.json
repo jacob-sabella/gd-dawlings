@@ -1,0 +1,8 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "roulette",
+  "title": "Rig Roulette room",
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "RouletteRoom"}
+}

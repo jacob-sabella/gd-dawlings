@@ -10,7 +10,7 @@ extends Venue
 ## Lit by fire and lanterns: the stove's glow on the floor, lanterns hung from the rafters and
 ## one on the table, the zones' own fittings, and the moon off the snow through the glass.
 ##
-## Three arrangements (Venue.VARIANTS): Snowy night, as above; Summer dusk, the snow gone, the
+## Three arrangements (Venue.variant_titles): Snowy night, as above; Summer dusk, the snow gone, the
 ## clearing green and long in the grass, birches among the firs, a lake glimpsed through a gap in
 ## the trees in front, the windows thrown open on a warm sky and fireflies, and the stove cold
 ## with a jug of wildflowers on it; and Northern lights, a clear, bitter night, the snow deep and
@@ -55,7 +55,7 @@ const GROUND := -0.55
 
 const MODELS := "res://assets/models/"
 
-## The arrangements (Venue.VARIANTS).
+## The arrangements (Venue.variant_titles).
 const SNOWY := 0
 const SUMMER := 1
 const AURORA := 2

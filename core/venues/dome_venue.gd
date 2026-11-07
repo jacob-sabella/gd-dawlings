@@ -44,7 +44,7 @@ const SUB_FLANGE := 1.09
 const HATCH := Vector2(2.0, 2.7)
 const MODELS := "res://assets/models/"
 
-## The arrangements (Venue.VARIANTS).
+## The arrangements (Venue.variant_titles).
 const TWENTY_METRES := 0
 const DEEP := 1
 const WRECK := 2

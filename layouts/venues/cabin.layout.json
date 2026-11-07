@@ -1,0 +1,15 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "cabin",
+  "title": "Cabin",
+  "order": 4,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "CabinVenue"},
+  "mood": {"base": "#FF8033", "hit": "#FFCC66", "glow": 0.65},
+  "variants": [
+    {"title": "Snowy night"},
+    {"title": "Summer dusk"},
+    {"title": "Northern lights"}
+  ]
+}

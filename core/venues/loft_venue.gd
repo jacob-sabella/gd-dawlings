@@ -11,7 +11,7 @@ extends Venue
 ## fitting, and the moon and the city coming in through the glass. Nothing from the ceiling but
 ## what hangs from it.
 ##
-## Three arrangements (Venue.VARIANTS), the same room at three times: City night, as above; Sunday
+## Three arrangements (Venue.variant_titles), the same room at three times: City night, as above; Sunday
 ## morning, the pendants off and a low sun streaming in at the left-hand windows, laying their
 ## glazing bars across the concrete in shafts of dusty air, plants on the sills, a sofa and the
 ## coffee by the glass, the city out there in daylight; and Thunderstorm, rain streaming down the
@@ -71,7 +71,7 @@ const LANDING := 1.0
 ## Steel beams across the room under the roof deck, this far apart.
 const BEAM_SPACING := 2.4
 
-## The arrangements (Venue.VARIANTS).
+## The arrangements (Venue.variant_titles).
 const NIGHT := 0
 const SUNDAY := 1
 const STORM := 2

@@ -56,7 +56,7 @@ const TANKS := [Vector3(-4.6, 4.3, 0.6), Vector3(5.2, 1.4, -0.4)]
 
 const MODELS := "res://assets/models/"
 
-## The arrangements (Venue.VARIANTS): the same roof at three times of the evening. The terrace
+## The arrangements (Venue.variant_titles): the same roof at three times of the evening. The terrace
 ## is the same; the sky, the light off it and how many of the city's windows are lit are not.
 const DUSK := 0
 const GOLDEN := 1

@@ -1,0 +1,15 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "loft",
+  "title": "Loft",
+  "order": 3,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "LoftVenue"},
+  "mood": {"base": "#FF8C59", "hit": "#FFD980", "glow": 0.7},
+  "variants": [
+    {"title": "City night"},
+    {"title": "Sunday morning"},
+    {"title": "Thunderstorm"}
+  ]
+}

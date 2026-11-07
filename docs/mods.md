@@ -436,7 +436,7 @@ class_name RackPresetDef  /  PluginDisplayDef  /  SkinDef
 What it replaces: `RackCatalogue.types()/spec()/in_group()/knob()` become one-line forwards to
 `ModRegistry.current` (so the ~40 call sites do not move in one slice) and are deleted in migration
 step 11; `RackSkin.SKINS`/`of()` and `RackWall.PAD_KNOBS` are read from `RackModuleDef`;
-`RackPatch.preset()` reads `RackPresetDef`; `RackMood.MOODS` (per venue) moves with layouts.
+`RackPatch.preset()` reads `RackPresetDef`; `RackMood.MOODS` (per venue) moved to the venue layout files (`mood`, layouts.md 5.3).
 
 **Interface for engine modules.** A `RackModuleDef` for `sound.kind == "engine"` takes
 `ins/outs/knobs` from the engine snapshot (section 8), so the interface exists in

@@ -5,9 +5,9 @@ extends RefCounted
 ## shipped layouts under `res://layouts/`, scanned once and kept, resolved against a venue's
 ## anchors. `Venue.default_spot` and `Venue.WHEELED` read this and nothing else; no venue carries
 ## a position of its own for the cassette rack, the sampler, the Tour case, the prop shelf or the
-## hoop. A venue with a layout file of its own (`res://layouts/venues/<id>.layout.json`, today only
-## the studio, whose second arrangement moves the shelf) uses it; every other stands on the
-## shared `common.live_room` fragment.
+## hoop. Every venue has a layout file of its own (`res://layouts/venues/<id>.layout.json`, which
+## extends the shared `common.control_room` and `common.live_room` fragments; the studio's second
+## arrangement moves the shelf); an id with none stands on the live-room fragment alone.
 
 ## Where the shipped layouts are searched.
 const ROOTS: Array[String] = ["res://layouts"]
@@ -51,6 +51,11 @@ static func wheeled_ids() -> Array[StringName]:
 
 ## Where each placed piece of the live room stands in a room with `facts` (anchors only are read):
 ## id -> Transform3D, in studio space. A piece the shell has no room for (the sampler where there is
-## no synth zone) is absent.
+## no synth zone) is absent. The control room's furniture, which the venue files extend too, is not
+## the venue's to stand (`ControlRoom` does, in the room's width), so it is left out: `Venue.default_spot`
+## answers null for it, as it always did.
 static func spots(facts: ShellFacts) -> Dictionary:
-	return LayoutResolver.all(layout(facts.venue_id, facts.variant), facts)
+	var out := LayoutResolver.all(layout(facts.venue_id, facts.variant), facts)
+	for p: Dictionary in ControlRoom.layout().pieces():
+		out.erase(StringName(p["id"]))
+	return out

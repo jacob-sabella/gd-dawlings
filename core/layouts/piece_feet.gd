@@ -19,9 +19,12 @@ static func known(kind: StringName) -> bool:
 
 
 ## True for a piece with no footprint of its own because it is mounted in a zone or by the shell
-## (`PieceDef.Mount`): nothing is unknown of it, so the validator does not warn.
+## (`PieceDef.Mount`), or is control-room furniture (the venue files extend `common.control_room`; those
+## pieces stand inside the working footprint, which the validator keeps as one solid block): nothing
+## is unknown of it, so the validator does not warn.
 static func mounted(kind: StringName) -> bool:
-	return PieceDef.has(kind) and PieceDef.of(kind).mount != PieceDef.Mount.WHEELED
+	return (PieceDef.has(kind) and PieceDef.of(kind).mount != PieceDef.Mount.WHEELED) \
+			or not ControlRoom.layout().piece(kind).is_empty()
 
 
 ## The footprint of `kind` stood at `spot` (studio space): `{c, h, a, top}`, in the form of the walker.

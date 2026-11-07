@@ -1,0 +1,15 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "station",
+  "title": "Station",
+  "order": 6,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "StationVenue"},
+  "mood": {"base": "#80E599", "hit": "#E5FFB2", "glow": 0.7},
+  "variants": [
+    {"title": "Night side"},
+    {"title": "Day side"},
+    {"title": "Orbital sunrise"}
+  ]
+}

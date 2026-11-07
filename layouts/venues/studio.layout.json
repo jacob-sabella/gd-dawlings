@@ -3,7 +3,10 @@
   "version": 1,
   "id": "studio",
   "title": "Studio",
-  "extends": ["common.live_room"],
+  "order": 0,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "StudioVenue"},
+  "mood": {"base": "#FF9E4D", "hit": "#FFE599", "glow": 0.7},
   "variants": [
     {"title": "Live room behind"},
     {"title": "Live room beside", "pieces": [

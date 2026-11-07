@@ -1,0 +1,15 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "cave",
+  "title": "Crystal cave",
+  "order": 9,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "CaveVenue"},
+  "mood": {"base": "#4DD9BF", "hit": "#CCFF99", "glow": 0.8},
+  "variants": [
+    {"title": "Crystal grotto"},
+    {"title": "Glowworm lake"},
+    {"title": "Lava tube"}
+  ]
+}

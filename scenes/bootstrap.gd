@@ -172,7 +172,7 @@ func _ready() -> void:
 		welcome.open()
 
 	if args["venue"] != "":
-		# `grid:1` is the grid's second arrangement (Venue.VARIANTS).
+		# `grid:1` is the grid's second arrangement (Venue.variant_titles).
 		var asked := (args["venue"] as String).split(":")
 		if Venue.is_known(StringName(asked[0])):
 			studio.set_venue(StringName(asked[0]), false, int(asked[1]) if asked.size() > 1 else 0)

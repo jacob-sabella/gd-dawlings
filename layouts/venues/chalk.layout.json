@@ -1,0 +1,15 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "chalk",
+  "title": "Chalk Zone",
+  "order": 2,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "ChalkVenue"},
+  "mood": {"base": "#F2E5CC", "hit": "#FFFFFF", "glow": 0.7},
+  "variants": [
+    {"title": "Open sky"},
+    {"title": "Sketched room"},
+    {"title": "Classroom"}
+  ]
+}

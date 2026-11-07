@@ -7,12 +7,7 @@ extends RefCounted
 
 const WIDTHS: Array[float] = [Studio.ROOM_WIDTH, Studio.ROOM_WIDTH + 3.2]
 const TOLERANCE := 1e-4
-const FRAGMENTS: Array[String] = ["res://layouts/common"]
-## `studio` arrangement 1 ("Live room beside") moves the shelf: studio_venue.gd default_prop_shelf_spot,
-## written as the variant entry docs/layouts.md 5.2 gives.
-const STUDIO_BESIDE := {"id": "prop_shelf", "at": {"anchor": {"x": "control_wall.left", "z": "control_rear"},
-		"pos": [0.34, 2.4], "yaw": 1.5707963267948966}}
-
+const FRAGMENTS: Array[String] = ["res://layouts"]
 ## The modular room, as the rooftop example of docs/layouts.md 5.2 places it.
 const ANNEX := {"id": "modular_annex", "piece": "modular_annex", "at": {"anchor": {"x": "annex_edge"}, "pos": [0.0, 0.0], "yaw": 0.0}}
 
@@ -27,23 +22,15 @@ func check(label: String, ok: bool) -> void:
 	t.check(label, ok)
 
 
-## The room `id` in arrangement `variant` as a resolved layout: the venue's file as it will be (step 7)
-## for what this step needs, i.e. it extends the shipped live-room fragment, and the studio's second
-## arrangement moves the shelf; `with_annex` adds the modular room. `set` is a LayoutSet that has scanned FRAGMENTS.
+## The room `id` in arrangement `variant` as a resolved layout: the venue's own shipped file
+## (`layouts/venues/<id>.layout.json`, which extends the control-room and live-room fragments and
+## carries the studio's second arrangement); `with_annex` adds the modular room, which no venue file
+## lists yet (it is the studio's for every venue, step 11). `set` is a LayoutSet that has scanned FRAGMENTS.
 static func room(set: LayoutSet, id: StringName, variant: int, with_annex := false) -> LayoutData:
-	var variants: Array = []
-	for i in maxi(1, Venue.variant_titles(id).size()):
-		variants.append({"title": "arrangement %d" % i})
-	if id == &"studio":
-		variants[1]["pieces"] = [STUDIO_BESIDE]
-	var file := "room_%s%s" % [id, "_annex" if with_annex else ""]
-	if not set.layouts.has(file):
-		var data := {"format": "dawlings.layout", "version": 1, "id": file, "title": str(id),
-				"extends": ["common.live_room"], "variants": variants}
-		if with_annex:
-			data["pieces"] = [ANNEX]
-		set.add(LayoutData.parse(data))
-	return set.resolve(file, variant)
+	var out := set.resolve(String(id), variant)
+	if with_annex:
+		out.body["pieces"].append(ANNEX.duplicate(true))
+	return out
 
 
 static func fragments() -> LayoutSet:

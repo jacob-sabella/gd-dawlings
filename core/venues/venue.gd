@@ -17,9 +17,9 @@ extends Node3D
 ## border on the grid, a chalk outline in the chalk zone -- so the edge you will bump a rack
 ## into is never invisible.
 
-## Registry, in cycling order. The first is the default.
-const IDS: Array[StringName] = [&"studio", &"grid", &"chalk", &"loft", &"cabin", &"rooftop", &"station", &"dome",
-		&"club", &"cave", &"greenhouse", &"stage", &"garden", &"desert"]
+## Registry, in cycling order; the first is the default. Read from the venue layout files' `order`
+## (`VenueCatalogue`), so adding a venue is adding a file.
+static var IDS: Array[StringName] = VenueCatalogue.ids()
 
 ## The Rig Roulette room's id. A place the band is taken to, not one of the venues (`IDS`).
 const ROULETTE_ID := &"roulette"
@@ -27,23 +27,8 @@ const ROULETTE_ID := &"roulette"
 ## A venue can come in more than one arrangement -- the same place with its structure moved
 ## about: walls or none, a city close in or far off. A variant keeps the venue's footprint and
 ## its zones' contract; only what stands round them changes. Variant 0 is the venue as first
-## built. Chosen by whoever's room it is, and carried with the venue (see Session.room).
-const VARIANTS := {
-	&"studio": ["Live room behind", "Live room beside", "Through the glass"],
-	&"grid": ["Highway", "Downtown", "Neon sea"],
-	&"chalk": ["Open sky", "Sketched room", "Classroom"],
-	&"loft": ["City night", "Sunday morning", "Thunderstorm"],
-	&"cabin": ["Snowy night", "Summer dusk", "Northern lights"],
-	&"rooftop": ["Dusk", "Golden hour", "Night"],
-	&"station": ["Night side", "Day side", "Orbital sunrise"],
-	&"dome": ["Twenty metres", "The deep", "Shipwreck"],
-	&"club": ["After hours", "Showtime", "Speakeasy"],
-	&"cave": ["Crystal grotto", "Glowworm lake", "Lava tube"],
-	&"greenhouse": ["Morning", "Rain", "Night bloom"],
-	&"stage": ["Headline night", "Soundcheck", "Arena"],
-	&"garden": ["Spring", "Autumn", "Winter"],
-	&"desert": ["Starlit canyon", "Dawn dunes", "Oasis"],
-}
+## built. Chosen by whoever's room it is, and carried with the venue (see Session.room). Their
+## names are the layout file's `variants` (`variant_titles`).
 
 ## What people will do here besides mix, each with room of its own. Built later; every venue
 ## leaves the space for all of them now, so an activity made for one lands in every one.
@@ -93,7 +78,7 @@ const DRAWN_BACK := 7.3
 ## its walls through the rack.
 var room_width := Studio.ROOM_WIDTH
 
-## Which arrangement of this venue to build (VARIANTS). Set by make(), before the venue enters
+## Which arrangement of this venue to build (`variant_titles`). Set by make(), before the venue enters
 ## the tree.
 var variant := 0
 
@@ -102,39 +87,10 @@ var variant := 0
 var rich := false
 
 
+## A new venue of `id` in arrangement `which`: the shell class its layout file names
+## (`ShellBuilders`), the studio's for an id nobody ships.
 static func make(id: StringName, which := 0) -> Venue:
-	var out: Venue
-	match id:
-		&"grid":
-			out = GridVenue.new()
-		&"chalk":
-			out = ChalkVenue.new()
-		&"loft":
-			out = LoftVenue.new()
-		&"cabin":
-			out = CabinVenue.new()
-		&"rooftop":
-			out = RooftopVenue.new()
-		&"station":
-			out = StationVenue.new()
-		&"dome":
-			out = DomeVenue.new()
-		&"club":
-			out = ClubVenue.new()
-		&"cave":
-			out = CaveVenue.new()
-		&"greenhouse":
-			out = GreenhouseVenue.new()
-		&"stage":
-			out = StageVenue.new()
-		&"garden":
-			out = GardenVenue.new()
-		&"desert":
-			out = DesertVenue.new()
-		ROULETTE_ID:
-			out = RouletteRoom.new()
-		_:
-			out = StudioVenue.new()
+	var out := ShellBuilders.make(id)
 	out.variant = known_variant(id, which)
 	return out
 
@@ -142,7 +98,7 @@ static func make(id: StringName, which := 0) -> Venue:
 ## The names of a venue's arrangements, in order, without building it. A venue with one has
 ## nothing to choose between, and the stage manager shows no picker for it.
 static func variant_titles(id: StringName) -> PackedStringArray:
-	return PackedStringArray(VARIANTS.get(id, [make_title(id)]))
+	return VenueCatalogue.variant_titles(id)
 
 
 ## `which` if the venue has that arrangement, else its first.
@@ -153,37 +109,7 @@ static func known_variant(id: StringName, which: int) -> int:
 ## A venue's name without building one: building the chalk zone to read its title would draw
 ## sixty-four doodles for a button caption.
 static func make_title(id: StringName) -> String:
-	match id:
-		&"grid":
-			return "Grid"
-		&"chalk":
-			return "Chalk Zone"
-		&"loft":
-			return "Loft"
-		&"cabin":
-			return "Cabin"
-		&"rooftop":
-			return "Rooftop"
-		&"station":
-			return "Station"
-		&"dome":
-			return "Underwater dome"
-		&"club":
-			return "Jazz club"
-		&"cave":
-			return "Crystal cave"
-		&"greenhouse":
-			return "Glasshouse"
-		&"stage":
-			return "Festival stage"
-		&"garden":
-			return "Temple garden"
-		&"desert":
-			return "Desert"
-		ROULETTE_ID:
-			return "Rig Roulette room"
-		_:
-			return "Studio"
+	return VenueCatalogue.title_of(id)
 
 
 static func next_after(id: StringName) -> StringName:

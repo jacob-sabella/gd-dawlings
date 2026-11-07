@@ -26,16 +26,19 @@ mkdir -p "$OUT"
 if [ $# -gt 0 ]; then
   VENUES=("$@")
 else
-  mapfile -t VENUES < <(grep -oP 'const IDS: Array\[StringName\] = \[\K[^]]*' core/venues/venue.gd \
-    | tr ',' '\n' | sed -E 's/[ &"]//g' | grep -v '^$')
-fi
-# Every arrangement after a venue's first, as `id:n` (Venue.VARIANTS; bootstrap's --venue takes it).
-if [ $# -eq 0 ]; then
-  while IFS= read -r line; do
-    id=$(sed -E 's/^\s*&"([a-z_]+)".*/\1/' <<<"$line")
-    count=$(grep -o '"[^"]*"' <<<"${line#*:}" | wc -l)
-    for ((n = 1; n < count; n++)); do VENUES+=("$id:$n"); done
-  done < <(sed -n '/^const VARIANTS := {/,/^}/p' core/venues/venue.gd | grep -E '^\s*&"')
+  # The cycled venues in order, and every arrangement after a venue's first as `id:n` (Venue.variant_titles;
+  # bootstrap's --venue takes it), read from the venue layout files (`order`, `variants`).
+  mapfile -t VENUES < <(python3 -I - <<'PY'
+import glob, json
+rooms = [json.load(open(f)) for f in glob.glob("layouts/venues/*.layout.json")]
+rooms = sorted((r for r in rooms if r.get("order") is not None), key=lambda r: (r["order"], r["id"]))
+for r in rooms:
+    print(r["id"])
+for r in rooms:
+    for n in range(1, len(r.get("variants", []))):
+        print("%s:%d" % (r["id"], n))
+PY
+  )
 fi
 
 shoot() {

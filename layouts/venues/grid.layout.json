@@ -1,0 +1,15 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "grid",
+  "title": "Grid",
+  "order": 1,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "GridVenue"},
+  "mood": {"base": "#80E5FF", "hit": "#FF8CD9", "glow": 0.8},
+  "variants": [
+    {"title": "Highway"},
+    {"title": "Downtown"},
+    {"title": "Neon sea"}
+  ]
+}

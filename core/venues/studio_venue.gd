@@ -27,7 +27,7 @@ const DOWNLIGHTS: Array = [
 	[Vector3(-4.2, 0, 2.6), 1.8],
 ]
 const SHADOWED_DOWNLIGHTS := 5
-## The second arrangement (Venue.VARIANTS): the kit, the lattice and the booth -- the rhythm and
+## The second arrangement (Venue.variant_titles): the kit, the lattice and the booth -- the rhythm and
 ## vocal neighbourhoods -- in a room of their own off the control room's left side, seen through a
 ## window over the riser, the way a real studio has its live room; the table, the synth and the
 ## toys in the room behind.

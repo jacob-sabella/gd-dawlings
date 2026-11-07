@@ -1,0 +1,15 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "stage",
+  "title": "Festival stage",
+  "order": 11,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "StageVenue"},
+  "mood": {"base": "#FF8C80", "hit": "#FFF2D9", "glow": 0.65},
+  "variants": [
+    {"title": "Headline night"},
+    {"title": "Soundcheck"},
+    {"title": "Arena"}
+  ]
+}

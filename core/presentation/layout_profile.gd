@@ -35,7 +35,7 @@ var local_transforms: Dictionary = {}
 var medium: int = Presentation.Medium.SCREEN
 ## Which venue this participant stands in. Empty means the default. See core/venues/venue.gd.
 var venue: StringName = &""
-## Which arrangement of it (Venue.VARIANTS). 0, the first, unless chosen.
+## Which arrangement of it (Venue.variant_titles). 0, the first, unless chosen.
 var venue_variant := 0
 ## The plugins this participant has torn off the rack onto tablets: {stand id: [track, fx, name]}.
 ## The name is what finds the plugin again: the slot is only where it was when last saved, and

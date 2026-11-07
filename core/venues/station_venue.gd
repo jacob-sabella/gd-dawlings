@@ -57,7 +57,7 @@ const SUN_DIR := Vector3(-0.85, 0.15, -0.5)
 
 const MODELS := "res://assets/models/"
 
-## The arrangements (Venue.VARIANTS).
+## The arrangements (Venue.variant_titles).
 const NIGHT_SIDE := 0
 const DAY_SIDE := 1
 const SUNRISE := 2

@@ -1,0 +1,298 @@
+{
+  "ids": [
+    "studio",
+    "grid",
+    "chalk",
+    "loft",
+    "cabin",
+    "rooftop",
+    "station",
+    "dome",
+    "club",
+    "cave",
+    "greenhouse",
+    "stage",
+    "garden",
+    "desert"
+  ],
+  "moods": {
+    "cabin": {
+      "base": [
+        1.0,
+        0.5,
+        0.200000002980232
+      ],
+      "glow": 0.65,
+      "hit": [
+        1.0,
+        0.800000011920929,
+        0.400000005960464
+      ]
+    },
+    "cave": {
+      "base": [
+        0.300000011920929,
+        0.850000023841858,
+        0.75
+      ],
+      "glow": 0.8,
+      "hit": [
+        0.800000011920929,
+        1.0,
+        0.600000023841858
+      ]
+    },
+    "chalk": {
+      "base": [
+        0.949999988079071,
+        0.899999976158142,
+        0.800000011920929
+      ],
+      "glow": 0.7,
+      "hit": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "club": {
+      "base": [
+        0.860000014305115,
+        0.5,
+        0.860000014305115
+      ],
+      "glow": 0.8,
+      "hit": [
+        0.550000011920929,
+        0.899999976158142,
+        1.0
+      ]
+    },
+    "desert": {
+      "base": [
+        1.0,
+        0.550000011920929,
+        0.25
+      ],
+      "glow": 0.7,
+      "hit": [
+        1.0,
+        0.899999976158142,
+        0.400000005960464
+      ]
+    },
+    "dome": {
+      "base": [
+        0.699999988079071,
+        0.550000011920929,
+        1.0
+      ],
+      "glow": 0.8,
+      "hit": [
+        0.5,
+        1.0,
+        1.0
+      ]
+    },
+    "garden": {
+      "base": [
+        1.0,
+        0.800000011920929,
+        0.5
+      ],
+      "glow": 0.8,
+      "hit": [
+        1.0,
+        0.600000023841858,
+        0.800000011920929
+      ]
+    },
+    "greenhouse": {
+      "base": [
+        0.550000011920929,
+        1.0,
+        0.449999988079071
+      ],
+      "glow": 0.65,
+      "hit": [
+        1.0,
+        1.0,
+        0.600000023841858
+      ]
+    },
+    "grid": {
+      "base": [
+        0.5,
+        0.899999976158142,
+        1.0
+      ],
+      "glow": 0.8,
+      "hit": [
+        1.0,
+        0.550000011920929,
+        0.850000023841858
+      ]
+    },
+    "loft": {
+      "base": [
+        1.0,
+        0.550000011920929,
+        0.349999994039536
+      ],
+      "glow": 0.7,
+      "hit": [
+        1.0,
+        0.850000023841858,
+        0.5
+      ]
+    },
+    "rooftop": {
+      "base": [
+        0.449999988079071,
+        0.600000023841858,
+        1.0
+      ],
+      "glow": 0.75,
+      "hit": [
+        1.0,
+        0.699999988079071,
+        0.899999976158142
+      ]
+    },
+    "stage": {
+      "base": [
+        1.0,
+        0.550000011920929,
+        0.5
+      ],
+      "glow": 0.65,
+      "hit": [
+        1.0,
+        0.949999988079071,
+        0.850000023841858
+      ]
+    },
+    "station": {
+      "base": [
+        0.5,
+        0.899999976158142,
+        0.600000023841858
+      ],
+      "glow": 0.7,
+      "hit": [
+        0.899999976158142,
+        1.0,
+        0.699999988079071
+      ]
+    },
+    "studio": {
+      "base": [
+        1.0,
+        0.620000004768372,
+        0.300000011920929
+      ],
+      "glow": 0.7,
+      "hit": [
+        1.0,
+        0.899999976158142,
+        0.600000023841858
+      ]
+    }
+  },
+  "roulette_title": "Rig Roulette room",
+  "titles": {
+    "cabin": "Cabin",
+    "cave": "Crystal cave",
+    "chalk": "Chalk Zone",
+    "club": "Jazz club",
+    "desert": "Desert",
+    "dome": "Underwater dome",
+    "garden": "Temple garden",
+    "greenhouse": "Glasshouse",
+    "grid": "Grid",
+    "loft": "Loft",
+    "rooftop": "Rooftop",
+    "stage": "Festival stage",
+    "station": "Station",
+    "studio": "Studio"
+  },
+  "unknown_title": "Studio",
+  "variants": {
+    "cabin": [
+      "Snowy night",
+      "Summer dusk",
+      "Northern lights"
+    ],
+    "cave": [
+      "Crystal grotto",
+      "Glowworm lake",
+      "Lava tube"
+    ],
+    "chalk": [
+      "Open sky",
+      "Sketched room",
+      "Classroom"
+    ],
+    "club": [
+      "After hours",
+      "Showtime",
+      "Speakeasy"
+    ],
+    "desert": [
+      "Starlit canyon",
+      "Dawn dunes",
+      "Oasis"
+    ],
+    "dome": [
+      "Twenty metres",
+      "The deep",
+      "Shipwreck"
+    ],
+    "garden": [
+      "Spring",
+      "Autumn",
+      "Winter"
+    ],
+    "greenhouse": [
+      "Morning",
+      "Rain",
+      "Night bloom"
+    ],
+    "grid": [
+      "Highway",
+      "Downtown",
+      "Neon sea"
+    ],
+    "loft": [
+      "City night",
+      "Sunday morning",
+      "Thunderstorm"
+    ],
+    "nowhere": [
+      "Studio"
+    ],
+    "rooftop": [
+      "Dusk",
+      "Golden hour",
+      "Night"
+    ],
+    "roulette": [
+      "Rig Roulette room"
+    ],
+    "stage": [
+      "Headline night",
+      "Soundcheck",
+      "Arena"
+    ],
+    "station": [
+      "Night side",
+      "Day side",
+      "Orbital sunrise"
+    ],
+    "studio": [
+      "Live room behind",
+      "Live room beside",
+      "Through the glass"
+    ]
+  }
+}

@@ -15,7 +15,7 @@ extends Venue
 ## garden: a gravel walk running away from the front between box hedges and clipped yews, lamp
 ## posts along it, lawns mown in stripes, and trees.
 ##
-## Three arrangements, three weathers (Venue.VARIANTS): Morning (a low sun through the glass
+## Three arrangements, three weathers (Venue.variant_titles): Morning (a low sun through the glass
 ## laying the bars' shadows over the tiles, haze, dew), Rain (an overcast afternoon, rain falling
 ## outside and running down the glass, drips, wet tiles, the house's lanterns lit), and Night
 ## bloom (the moon through the roof, strings of warm lights wound round the columns and through

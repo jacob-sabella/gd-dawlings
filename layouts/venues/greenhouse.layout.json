@@ -1,0 +1,15 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "greenhouse",
+  "title": "Glasshouse",
+  "order": 10,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "GreenhouseVenue"},
+  "mood": {"base": "#8CFF73", "hit": "#FFFF99", "glow": 0.65},
+  "variants": [
+    {"title": "Morning"},
+    {"title": "Rain"},
+    {"title": "Night bloom"}
+  ]
+}

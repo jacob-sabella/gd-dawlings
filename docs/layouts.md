@@ -1,8 +1,8 @@
 # Layouts: rooms as data
 
-Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 to 5 (11) and parts 1 to 3 of step 6 are built; the game reads them for the five wheeled pieces, the four zone-mounted ones (`LiveRoom`, `PieceHost`) and the control room's eight trolleys (`ControlRoom`), and `Neighbourhoods` is the layouts' `groups`:
+Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 to 5 (11), parts 1 to 3 of step 6 and step 7 (the 14 venue files and the roulette room) are built; the game reads them for the five wheeled pieces, the four zone-mounted ones (`LiveRoom`, `PieceHost`) and the control room's eight trolleys (`ControlRoom`), and `Neighbourhoods` is the layouts' `groups`:
 `core/layouts/` (`LayoutData`, `LayoutCheck`, `LayoutMerge`, `LayoutSet`, `LayoutProblem`, `ShellFacts`, `LayoutResolver`,
-`LayoutValidator` with `LayoutChecks`, `LayoutIssue`, `LayoutReach`, `LayoutGeometry`, `PieceFeet`, `LiveRoom`, `ControlRoom`, `FloorImport`), `layouts/common/live_room.layout.json`, `layouts/common/control_room.layout.json`, `layouts/import/floor_v1.json`, `layouts/venues/studio.layout.json`,
+`LayoutValidator` with `LayoutChecks`, `LayoutIssue`, `LayoutReach`, `LayoutGeometry`, `PieceFeet`, `LiveRoom`, `ControlRoom`, `FloorImport`, `VenueCatalogue`, `ShellBuilders`), `layouts/common/live_room.layout.json`, `layouts/common/control_room.layout.json`, `layouts/import/floor_v1.json`, `layouts/venues/<id>.layout.json` (15 files),
 `layouts/layout.schema.json`, fixtures in `tests/fixtures/layouts/`. Where they differ from the text below, the
 text says so ("Built:"). It is queue item 2 of `docs/refactor_loop.md` and feeds items 6-8. "Today" claims cite `docs/refactor_state_map.md` (SM) or
 a file:line. Companion: `docs/mods.md` (manifests, registry; a piece is delivered as a mod entry).
@@ -456,9 +456,19 @@ added for it.) Studio's `rooms()` for this arrangement (`:171`) is shell facts a
   class, inside the room's own half-width (`:39`); `sampler` has `needs: ["synth"]` and is skipped by the
   rule "a piece whose `needs` zone is missing is skipped, not an error".
 * 42 combinations remain 14 x 3; the validator test (8) loops the files, not the classes.
-* `Venue.IDS`, `Venue.make_title`, `Venue.variant_titles`, `RackMood.MOODS`, `VENUE_SETS` (tests) are
+* `Venue.IDS`, `Venue.make_title`, `Venue.variant_titles`, `RackMood.MOODS`, `VENUE_SETS` (tests) are (**built**, step 7)
   derived by scanning the layout directory, ordered by `order`. `Venue.make` becomes a lookup of
   `shell.builder` in one `ShellBuilders` table (the one list that must stay while shells are code).
+
+**Built (step 7)**: the 14 files and `roulette.layout.json` exist under `layouts/venues/`. Each venue file has `id`, `title` (what `make_title` returned), `order` (0 to 13, the old `Venue.IDS` order), `extends: ["common.control_room", "common.live_room"]`, `shell: {"builder": "<Class>"}`, `mood` (the old `RackMood.MOODS` entry as hex colours and a glow) and `variants` (the old `Venue.VARIANTS` titles). The studio's file keeps its one placement variant (the shelf in "Live room beside"); no other venue overrides a placement, so the other thirteen have titles only. The roulette room's file has no `order` (never cycled), no `mood` and no `variants` (its one arrangement is its title), and the same two fragments: it has no zones, so the sampler and the four zone-mounted pieces are skipped with warnings as before.
+
+* `VenueCatalogue` (`core/layouts/venue_catalogue.gd`) answers from the scanned set (`LiveRoom.layouts()`): `ids()`, `title_of`, `variant_titles`, `builder_of`, `mood_of`. `Venue.IDS` is now a `static var` set from it (`order`), `Venue.variant_titles`/`make_title` call it, and `Venue.VARIANTS`, the 14-arm `match` of `make_title` and `RackMood.MOODS` are deleted. A name nobody ships is the studio's title with one arrangement and `RackMood.FALLBACK`, as before.
+* `ShellBuilders` (`core/layouts/shell_builders.gd`) is the one list that must stay while shells are code: `BY_NAME` maps the layout's `shell.builder` to the class, and `Venue.make` is `ShellBuilders.make(id)` (the 14-arm `match` is gone). A static var, not a const: class names are not constant expressions. A new venue is its layout file, its shell class and a line here.
+* Mood colours are bytes (`#RRGGBB`), as groups' colours are: up to 1/510 off the hand-typed floats of the old table. The test holds them to a byte.
+* Fixture `tests/fixtures/layouts/venue_tables_legacy.json` (dumped from the tables before they were deleted): ids and order, names, arrangements, moods, the roulette and unknown cases. Tests: `_test_the_venue_tables_are_the_layout_files`, `_test_fifteen_venue_files_are_shipped_and_valid` (`tests/venue_files_tests.gd`); `_test_every_layout_is_valid` now resolves the shipped file of each of the 43 rooms (path checked) instead of an in-memory stand-in, and `LayoutResolverTests.room` does too. 0 errors, the same 10 warnings.
+* The validator treats the control room's furniture kinds as `PieceFeet.mounted` (they stand inside the working footprint, which it keeps as one block), so extending the fragment adds no warnings.
+* Zones are **not** repeated in the venue files: the shells report them (`Venue.ZONES`, the studio's `SIDE_ZONES`) and a file that restated them would be a second copy to keep equal. The `zones` key stays for made rooms, which have no shell class to ask. For the same reason the files do not list `modular_annex` (the studio stands it on every venue until step 11).
+* **Not moved, and why.** The venue's `instrument()` and `weather()` specs (spot, kind, and per-kind extras such as `hang_to`, `sill`, `glass`) are built from each shell's own constants (`LEFT_BAYS`, `SILL`, `WALL`, `CHIMES_ALONG`, `piano_case()`) and, for weather, from the arrangement; a layout entry would restate those numbers beside the shell that already has them, so they stay in the 14 classes until a shell form exposes its bays as anchors (step 11/12). `lyrics` still reads the booth's mic stand. The `Stations` text rows (title, help, look point, frame) are written against class constants (`RackWall.FRAME_TOP`, `Looper.PLAQUE_FOOT`) and wait for `PieceBuilders`. The roulette room's `rig_roulette_spot` stays: it is one line in the class and the anchors have no front-wall line to write it against.
 
 ## 6. Validators
 
@@ -640,7 +650,7 @@ item 7, 11-12 item 8.
    noted in the commit). **Part 1 done** (piece definitions, 4.1); **part 2 done for** the four zone-mounted pieces
    placed from the layout and nine `_stand_the_*` replaced by `PieceHost.stand` (4.1 "Built (part 2)"); **part 3 done**: the control-room fragment
    (eight trolleys, the MIXING banner, `fit`), `Neighbourhoods` as `groups` and the one `FloorImport` step (4.1 "Built (part 3)"); still to do: the `Stations` text rows, and the pieces listed there as not moved (`lyrics`, `venue`, `weather`, `modular`, `levels`, `tv`, the timeline stand, the lamps).
-7. **14 venue files and the roulette room**; `IDS`, `VARIANTS`, `make_title`, `RackMood.MOODS` derived.
+7. **14 venue files and the roulette room**; `IDS`, `VARIANTS`, `make_title`, `RackMood.MOODS` derived. **Done** (see 5.3 "Built (step 7)"; the instrument and weather mounts and the `Stations` text rows stay in code).
 8. **Room delta and the `layout` row**, import of `floor/*`, persistence in `user://layouts/rooms/`.
 9. **Edit ops** (`ask_layout`), edit mode, reset; validators in the loop.
 10. **Sharing**: guest apply, unavailable pieces, host-only rules; two-instance test.

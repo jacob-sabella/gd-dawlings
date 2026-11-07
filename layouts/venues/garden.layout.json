@@ -1,0 +1,15 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "garden",
+  "title": "Temple garden",
+  "order": 12,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "GardenVenue"},
+  "mood": {"base": "#FFCC80", "hit": "#FF99CC", "glow": 0.8},
+  "variants": [
+    {"title": "Spring"},
+    {"title": "Autumn"},
+    {"title": "Winter"}
+  ]
+}

@@ -9,7 +9,7 @@ extends Venue
 ## Behind the zones -- the band's own back of house -- the backline, and behind that an LED wall
 ## the width of the stage; past it, backstage, more cases, black drapes and the stairs down.
 ##
-## Three arrangements (Venue.VARIANTS):
+## Three arrangements (Venue.variant_titles):
 ##  - Headline night: a sea of people out to the trees, phones up, moving heads sweeping through
 ##    the haze, lasers fanning over the crowd, the LED wall going, everything on the beat.
 ##  - Soundcheck: late afternoon, an empty field, the front-of-house tent out in it, flags,

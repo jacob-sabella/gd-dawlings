@@ -1,0 +1,15 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "club",
+  "title": "Jazz club",
+  "order": 8,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "ClubVenue"},
+  "mood": {"base": "#DB80DB", "hit": "#8CE5FF", "glow": 0.8},
+  "variants": [
+    {"title": "After hours"},
+    {"title": "Showtime"},
+    {"title": "Speakeasy"}
+  ]
+}

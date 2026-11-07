@@ -1,0 +1,15 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "desert",
+  "title": "Desert",
+  "order": 13,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "DesertVenue"},
+  "mood": {"base": "#FF8C40", "hit": "#FFE566", "glow": 0.7},
+  "variants": [
+    {"title": "Starlit canyon"},
+    {"title": "Dawn dunes"},
+    {"title": "Oasis"}
+  ]
+}

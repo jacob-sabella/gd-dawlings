@@ -48,8 +48,9 @@ func every_layout_is_valid() -> void:
 			var errors := issues.filter(func(i: LayoutIssue) -> bool: return i.is_error())
 			runs += 1
 			warnings += issues.size() - errors.size()
-			check("%s: the layout is valid (%s)" % [tag, errors], errors.is_empty())
-	check("43 rooms at two widths were checked, in %d ms" % (Time.get_ticks_msec() - started), runs == 86)
+			check("%s: the layout is valid, and is the venue's own shipped file (%s)" % [tag, errors],
+					errors.is_empty() and layout.path.ends_with("/venues/%s.layout.json" % id))
+	check("43 rooms at two widths were checked, from the 15 shipped venue files, in %d ms" % (Time.get_ticks_msec() - started), runs == 86)
 	# The roulette room has no zones: its sampler (needs a synth zone) and the four pieces mounted in zones
 	# (wheel, sections, drums, looper; step 6 part 2) are left out, at each of the two widths.
 	check("the only things left out are the roulette room's sampler and zone-mounted four (%d warnings)" % warnings, warnings == 2 + 8)

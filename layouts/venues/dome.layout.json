@@ -1,0 +1,15 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "dome",
+  "title": "Underwater dome",
+  "order": 7,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "DomeVenue"},
+  "mood": {"base": "#B28CFF", "hit": "#80FFFF", "glow": 0.8},
+  "variants": [
+    {"title": "Twenty metres"},
+    {"title": "The deep"},
+    {"title": "Shipwreck"}
+  ]
+}

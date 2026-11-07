@@ -768,6 +768,8 @@ func _ready() -> void:
 	_test_the_layout_resolves_to_the_venues_own_defaults()
 	_test_a_placement_is_anchors_plus_an_offset_or_a_frame()
 	_test_every_layout_is_valid()
+	_test_the_venue_tables_are_the_layout_files()
+	_test_fifteen_venue_files_are_shipped_and_valid()
 	_test_the_piece_definitions_are_the_classes_own_numbers()
 	_test_a_defined_piece_carries_its_followers()
 	_test_the_zone_mounted_pieces_stand_where_the_old_code_stood_them()
@@ -45911,6 +45913,20 @@ func _test_a_placement_is_anchors_plus_an_offset_or_a_frame() -> void:
 ## Section 11 step 4: the placement guarantees of the 42 combinations, from facts and no Studio.
 func _test_every_layout_is_valid() -> void:
 	LayoutValidatorTests.new(self).every_layout_is_valid()
+
+
+const VenueFilesTests := preload("res://tests/venue_files_tests.gd")
+
+
+## Section 11 step 7: `Venue.IDS`, `variant_titles`, `make_title`, `make` and `RackMood.palette` are the layout
+## files', equal to the frozen `venue_tables_legacy.json` the deleted tables were dumped to.
+func _test_the_venue_tables_are_the_layout_files() -> void:
+	VenueFilesTests.new(self).tables_are_the_files()
+
+
+## The 14 venue files and the roulette room parse clean, extend the fragments and name a builder the one table has.
+func _test_fifteen_venue_files_are_shipped_and_valid() -> void:
+	VenueFilesTests.new(self).files_are_shipped_and_valid()
 
 
 func _test_the_validator_names_each_seeded_violation() -> void:

@@ -7,7 +7,7 @@ extends Venue
 ## rises to meet them. Nothing comes in from outside; every light is either something the crew
 ## carried in (floods, lanterns, work lamps) or the cave's own -- crystals, glowworms, lava.
 ##
-## Three arrangements, three caves (Venue.VARIANTS):
+## Three arrangements, three caves (Venue.variant_titles):
 ##   Crystal grotto -- a high vault of dark rock, stalactites over it and stalagmites round it,
 ##     amethyst and ice-blue quartz growing out of the walls and the floor and glowing from
 ##     within; ahead of the desk, past a lip of rock, the floor falls away into a pit of giant

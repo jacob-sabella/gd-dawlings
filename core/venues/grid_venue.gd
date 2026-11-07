@@ -33,7 +33,7 @@ var _cars: Array = []  # [x, z, speed, colour]
 var _pyramids: Array[Node3D] = []
 var _smoothed := 0.0
 
-## The second arrangement (Venue.VARIANTS): the same road, but down an avenue between towers
+## The second arrangement (Venue.variant_titles): the same road, but down an avenue between towers
 ## instead of out across a desert to the mountains.
 const DOWNTOWN := 1
 ## A downtown block: one tower to a cell this size, jittered inside it and never wider than

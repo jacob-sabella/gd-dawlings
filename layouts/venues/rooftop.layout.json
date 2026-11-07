@@ -1,0 +1,15 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "rooftop",
+  "title": "Rooftop",
+  "order": 5,
+  "extends": ["common.control_room", "common.live_room"],
+  "shell": {"builder": "RooftopVenue"},
+  "mood": {"base": "#7399FF", "hit": "#FFB2E5", "glow": 0.75},
+  "variants": [
+    {"title": "Dusk"},
+    {"title": "Golden hour"},
+    {"title": "Night"}
+  ]
+}

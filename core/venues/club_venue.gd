@@ -10,7 +10,7 @@ extends Venue
 ## from under their shelves against a mirror. "after hours" in pink neon over the door you came
 ## in by. No windows: the street is upstairs.
 ##
-## Three arrangements (Venue.VARIANTS): AFTER_HOURS, as above; SHOWTIME, the same room open
+## Three arrangements (Venue.variant_titles): AFTER_HOURS, as above; SHOWTIME, the same room open
 ## and set for the show (the stools down, bistro tables and bentwood chairs set out in the
 ## corners with a candle lit on every table, the piano's lid up with a score on its desk and the
 ## bass stood ready beside it, the curtain washed in colour from a rig of cans, footlights along
