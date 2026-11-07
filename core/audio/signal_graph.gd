@@ -58,7 +58,7 @@ const HEADINGS := {
 }
 
 ## What a room source is (`build`'s `sources`): an instrument (heard live on MONITOR, onto a track
-## when recorded), the mic (a track's live input), notes on a track (the music box), or a sound
+## when recorded), the mic (a track's live input), notes on a track, or a sound
 ## heard in one player's ears only.
 const NOTES := &"notes"
 const VOICE := &"voice"

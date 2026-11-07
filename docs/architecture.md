@@ -474,7 +474,7 @@ The room grew one station at a time, each put in whatever gap was left, until tw
 thirty-six items and forty footprints stood in one 8 x 6 m control room and a 14 x 4.5 m strip of
 live room behind it: thirteen pairs of pieces closer than 0.6 m, the harp (since removed), the bells and the music
 box 12 cm apart, the sampler 3 cm off the booth's wall, and with a 0.9 m walkway the harp, the
-music box, the modular and the lyric board could not be reached at all (2026-10-28: "EVERYTHING is
+modular and the lyric board could not be reached at all (2026-10-28: "EVERYTHING is
 way too cramped"). The layout is now a rule rather than a residue, in three parts.
 
 **Bigger, through the shared constants.** The control room is `Studio.ROOM_WIDTH` 11.2 x
@@ -495,7 +495,7 @@ not colour, says which is which). Where each station stands is still the venue's
 | --- | --- | --- |
 | MIXING | the control room, a ring round the seat | desk, timeline, rack, deck and platter, patch stand, patch wall, EQ wall, stage table, station board |
 | RHYTHM | straight ahead turned round from the desk | drum riser with the hand drums and the looper; the open lattice floor; the venue's instrument on the back wall behind the riser |
-| HARMONY | front right | the bricks table (fifths wheel, chord ledge, section blocks); music box in a row facing it; handbells across its far end |
+| HARMONY | front right | the bricks table (fifths wheel, chord ledge, section blocks); handbells across its far end |
 | SYNTH & SOUND DESIGN | back right | the keyboard stand and modular rack; the sampler round a middle in front of it |
 | VOCALS | back left | the booth (3.4 x 3.1 m, a 1.2 m door), the lyric board, room for a talk box |
 | TAPE & TOYS | front left | prop shelf and cassette rack on the wall, hoop and Tour case across the middle from them; the items' homes |
@@ -2212,34 +2212,8 @@ marked with its station), station `looper` (LIVE, mounted on the `drums` zone).
   mute or its going at once (PREDICT_MS) until the host's mix says so. The ring's toasts go out
   through the studio (`told`).
 
-A music-box sequencer (slice 47). `MusicBox` (`core/music/music_box.gd`) is a brass cylinder of 16
-steps by 8 rows on a case on a plinth of its own (tools/blender/music_box.py), station `music_box`
-(LIVE, free-standing, a `Venue.WHEELED` trolley at `Venue.music_box_spot`: in the harmony row away
-from the bells, or up the loft's aisle).
-
-- **The pattern is one MIDI item, read back, never kept.** Its pegs are the notes of the first MIDI
-  item on its track under its bars (`item_of`, `pegs_of`), each frame: a note moved in the roll
-  moves its peg, an undo takes it back, and every machine's mirror shows the host's pegs. Its bars
-  are the loop's, a LENGTH a page, else the playhead's page (`span_of`); its rows the scale of the
-  song's key at its first bar (`Harmony.at`) from a root, or semitones (`rows_of`). A note on no
-  row is drawn at the nearest one, leaning and collared (by shape).
-- **A peg is an ordinary edit.** A press is `DAW.insert_note` or `delete_note` inside
-  `open_edit`/`close_edit`, and a drag along a row is every cell it passes in the same edit, so one
-  undo step either way. Where there is no MUSIC BOX track or no item, the first peg asks for them
-  (`add_track`, then `insert_midi_take` with the pegs so far as notes) and the rest wait in a queue
-  (`flush`). On a guest these are DAW intents like any edit, its pegs shown at once (`_predicted`)
-  until the host's mix says so, and it waits for its mirror to show what it sent before naming a
-  note index again.
-- **Its settings are a room row.** `music_box` [track, length, root, chromatic]
-  (`Session.ROOM_VERBS`), cleaned on the host (`MusicBox.clean`) and predicted on a guest
-  (`Studio._on_music_box_asked`, `_set_music_box`, `apply_room`); the four keys on its front step it.
-  The view's own turn (`view_steps`) is this player's alone: by the wheel or a stick over the
-  cylinder, or by a hand on the knurled `Thumbwheel` past its right cheek (pushed up or down, or
-  pressed for a step), which is how a tracked hand, with no wheel or stick, reaches the steps
-  round the back.
-- **It turns with the song.** `turn_of` puts the sounding step under the comb at the top; a peg
-  reaching it flicks its row's tooth. At `Ergonomics` motion 0 it steps a step at a time and the
-  teeth stand. It sounds only as the track plays.
+The music box (slice 47) was removed on 2026-11-06, with the other simple toys: only expressive
+instruments stay. Its history is in docs/spatial_loop.md.
 
 The string spool (slice 48) was removed on 2026-11-06, with the other simple toys: only expressive
 instruments stay. Its history is in docs/spatial_loop.md. `Interactor.tool` (a hand's button taken in

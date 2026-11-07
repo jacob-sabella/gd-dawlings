@@ -264,12 +264,6 @@ var looper_row: Array = []
 ## How many bars this player's next layer is where no loop range is set (the looper's LENGTH): their
 ## own, kept across a change of venue.
 var looper_length := Looper.LENGTH_DEFAULT
-## The music box in the harmony row (MusicBox, docs/spatial_loop.md part two, slice 47), stood again with
-## each venue at its `music_box_spot`, on its trolley. Null where there are no zones and in AR.
-var music_box: MusicBox
-## The room's row `music_box`: [track, length, root, chromatic] (MusicBox.row). The room's, not the
-## venue's, so it is kept across a change of venue.
-var music_box_row: Array = MusicBox.DEFAULT_ROW.duplicate()
 ## The modular room's rack over the synth zone's keyboard stand (RackWall, docs/architecture.md), a
 ## surface hung again with each venue at its `modular_spot`; null in AR. Its voice (RackVoice, the
 ## engine), the room's row `rack` {patch, track} (RackPatch), and the computer keys as its keys.
@@ -676,7 +670,6 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_stand_the_sampler()
 	_stand_the_drum_circle()
 	_stand_the_looper()
-	_stand_the_music_box()
 	_stand_the_lyrics()
 	_stand_the_venue_instrument()
 	_stand_the_modular()
@@ -863,22 +856,6 @@ func _stand_the_looper() -> void:
 	venue.add_child(looper)
 	# Its layers' rings (slice 46) say what a grab, a click or a pull did, as a toast.
 	looper.rings.told.connect(func(text: String) -> void: Session.notice.emit(text))
-
-
-## The music box (MusicBox), in the venue's own frame at its spot in the harmony row: a child of the venue,
-## so it goes with it, its trolley the studio's. Its row is the room's (`music_box_row`); its pegs are
-## its track's item in the mix, so they stand again with it. None where there are no zones.
-func _stand_the_music_box() -> void:
-	music_box = null
-	var spot: Variant = Stations.spot(venue, MusicBox.STATION)
-	if spot == null:
-		return
-	music_box = MusicBox.new()
-	music_box.transform = spot
-	music_box.row = music_box_row
-	music_box.row_asked.connect(_on_music_box_asked)
-	music_box.told.connect(func(text: String) -> void: Session.notice.emit(text))
-	venue.add_child(music_box)
 
 
 ## The venue's own instrument's mount (VenueInstrument), in the venue's own frame at its spot: a child
@@ -1888,9 +1865,6 @@ const LIVE_TROLLEYS := {
 			[[Vector3(CassetteRack.FOOT.x * 2.0, 0.15, CassetteRack.FOOT.y * 2.0), Vector3(0, 0.075, 0)]]],
 	&"sampler": ["SamplerTrolley", Vector2.ZERO, Sampler.FOOT, 9.0,
 			[[Vector3(Sampler.FOOT.x * 2.0, 0.15, Sampler.FOOT.y * 2.0), Vector3(0, 0.075, 0)]]],
-	# The plinth under the case: above it a click is a cell, a key or the plaque.
-	&"music_box": ["MusicBoxTrolley", Vector2(0, MusicBox.FOOT_Z), MusicBox.FOOT, 9.0,
-			[[Vector3(MusicBox.FOOT.x * 2.0, 0.3, MusicBox.FOOT.y * 2.0), Vector3(0, 0.15, MusicBox.FOOT_Z)]]],
 	# The case's bottom edge, a little proud of it: above that a click on the case knocks on it.
 	&"tour_case": ["TourCaseTrolley", Vector2.ZERO, Vector2(TourCase.CASE_WIDTH, TourCase.CASE_DEPTH) * 0.5, 7.5,
 			[[Vector3(TourCase.CASE_WIDTH + 0.08, 0.1, TourCase.CASE_DEPTH + 0.08), Vector3(0, 0.05, 0)]]],
@@ -2054,10 +2028,6 @@ func _carry_live(id: StringName) -> void:
 			var at: Variant = venue.sampler_spot()
 			if sampler != null and is_instance_valid(sampler) and at != null:
 				sampler.transform = at
-		&"music_box":
-			var at: Variant = venue.music_box_spot()
-			if music_box != null and is_instance_valid(music_box) and at != null:
-				music_box.transform = at
 		&"tour_case":
 			if tour_case != null:
 				tour_case.transform = _venue_to_set(venue.tour_case_spot())
@@ -2583,7 +2553,6 @@ func room_state() -> Dictionary:
 			"ropes": stage.ropes.duplicate() if stage != null else {},
 			"sampler": sampler.armed_by if sampler != null and is_instance_valid(sampler) else 0,
 			"weather": weather_listening, "bricks": _bricks_row(), "looper": looper_row.duplicate(),
-			"music_box": music_box_row.duplicate(),
 			RackPatch.ROW: rack_row.duplicate(true),
 			"tv": tv.row() if tv != null and is_instance_valid(tv) else {}, "pads": pads_row.duplicate(true)}
 
@@ -2705,7 +2674,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			&"put_item", &"home_item", &"throw_item", &"wear_item", &"pocket_item", &"slot_item", &"give":
 				pending_items[p["args"][0]] = true
 			&"patch", &"on_air", &"plug", &"rope", &"make", &"paste", &"sampler", &"weather", &"bricks", \
-					&"looper", &"looper_layer", &"music_box", \
+					&"looper", &"looper_layer", \
 					&"rack", &"tv": pass
 			&"open_tablet", &"open_track_rack": pending_open[p["id"]] = true
 			&"close_tablet", &"close_track_rack": pending_close[p["args"][0]] = true
@@ -2823,9 +2792,6 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	if state.has("looper") and not _predictions.any(func(p): return p["verb"] == Looper.VERB or p["verb"] == Looper.LAYER_VERB):
 		# Once its slaps and layers are answered, the host's word: who is looping, from which bar.
 		_show_looper(state["looper"])
-	if state.has("music_box") and not _predictions.any(func(p): return p["verb"] == MusicBox.VERB):
-		# Once its keys are answered, the host's word: TRACK, LENGTH, ROOT and SCALE.
-		_show_music_box(state["music_box"])
 	if state.has(RackPatch.ROW):
 		# The host's rack, with this guest's own edits it has not heard back about on top.
 		var row: Dictionary = (state[RackPatch.ROW] as Dictionary).duplicate(true)
@@ -3058,9 +3024,6 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"looper_layer":
 			# A guest's finished layer: onto a track of theirs in the LOOPER folder.
 			_write_looper_layer(args[0], args[1], args[2], from)
-		&"music_box":
-			# A guest's key on the music box: the room's row, if it is one.
-			_set_music_box(args)
 		&"rack":
 			# A guest's edit of the rack, or its track: the room's row, or told why not.
 			_answer_rack(String(args[0]), args[1], from)
@@ -4904,40 +4867,6 @@ func _on_looper_player_left(peer: int) -> void:
 		_publish_room_soon()
 
 
-# --- the music box (docs/spatial_loop.md part two, slice 47) --------------------------------
-#
-# TRACK, LENGTH, ROOT and SCALE are the room's row `music_box`: a guest's key is the room's ask
-# `music_box` [track, length, root, chromatic], shown at once here; the host's is done. The pegs are
-# its track's item in the mix, written by DAW.insert_note and delete_note like any edit, so nothing
-# else of it crosses the wire.
-
-## A key here asked for the row to be `wanted`.
-func _on_music_box_asked(wanted: Array) -> void:
-	if Session.is_authority():
-		_set_music_box(wanted)
-	elif _predict(MusicBox.VERB, wanted) > 0:
-		_show_music_box(wanted)
-
-
-## The room's word on the music box's row: `wanted`, if it is one the host keeps (MusicBox.clean),
-## shown here and told to the room.
-func _set_music_box(wanted: Array) -> void:
-	var row := MusicBox.clean(wanted, DAW.state)
-	if row.is_empty():
-		return
-	_show_music_box(row)
-	_publish_room_soon()
-
-
-## The row shown as the room has it, on this box and any stood later.
-func _show_music_box(row: Array) -> void:
-	if row.size() != 4:
-		return
-	music_box_row = row.duplicate()
-	if music_box != null and is_instance_valid(music_box):
-		music_box.row = music_box_row
-
-
 ## The lyric board (LyricBoard), in the venue's own frame at its spot in the booth: a child of the venue,
 ## so it goes with it. Its notices are toasts, and its EDIT is `edit_lyrics`.
 func _stand_the_lyrics() -> void:
@@ -5317,7 +5246,7 @@ func _modular_play(on: bool) -> void:
 
 ## Whether this player is at the rack: with it visited or brought, or standing in front of the
 ## stand (MODULAR_NEAR to MODULAR_FAR out, MODULAR_SIDE either side) where the rack's own seat is
-## the nearest station's, so standing at the music box or the bells beside it plays them
+## the nearest station's, so standing at the bells beside it plays them
 ## and not the patch.
 func at_modular() -> bool:
 	if rack_wall == null or not is_instance_valid(rack_wall) or not rack_wall.visible \

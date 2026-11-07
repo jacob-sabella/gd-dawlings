@@ -226,16 +226,6 @@ const LOOPER_ASKED_BAR := 900
 const LOOPER_BARS := 2
 ## [on, off, pitch, velocity, channel] in seconds after the span's start: a key, and a hand drum's hit.
 const LOOPER_NOTES := [[0.1, 0.35, 60, 100, 0], [0.5, 0.6, 38, 90, 9]]
-## A music-box sequencer (slice 47): at 62.02 the guest stands a music box of its own, hearing the song
-## at MUSIC_BOX_SONG (past everything else the probe writes), and presses MUSIC_BOX_CELL (row, step)
-## on it. Its peg shows at once; the box asks the host for the MUSIC BOX track (add_track), and once
-## its mirror has it, the item over the box's bar with the peg as its note (insert_midi_take), in one
-## edit. By 62.14 the host's MUSIC BOX track has one item with that note: the row's pitch in the song's
-## key there, at the step's time (on the built-in engine one step, "MUSIC BOX: pegs"), and a box of
-## the host's own reads it back as that peg; so does the guest's mirror. The host takes the track out
-## again at 62.26.
-const MUSIC_BOX_SONG := 760.0
-const MUSIC_BOX_CELL := Vector2i(3, 5)
 ## How far a placed note may be from the moment the guest heard it, in seconds.
 const TAKE_TOLERANCE := 0.005
 ## The lyrics in the booth (slice 56): at 64.52 the guest's own board (a LyricBoard of its own, not in
@@ -1002,11 +992,6 @@ func _host(port: int) -> void:
 	_check_ring_pulled()
 	await _until(61.98)
 	_take_back_the_looper()
-	# A music box (slice 47): the guest's peg, pressed at 62.02, is a note in my MUSIC BOX item by 62.14.
-	await _until(62.14)
-	_check_music_box_peg()
-	await _until(62.26)
-	_take_back_the_music_box()
 	# How much of the time before the end the work took: the end has moved twelve times as it grew.
 	if DAW.backend is GodotBackend:
 		print("engine: %s" % ("native lanes" if (DAW.backend as GodotBackend).lanes != null else "players"))
@@ -2712,7 +2697,6 @@ func _guest(port: int) -> void:
 	await _strike_the_drum()
 	await _press_the_weather()
 	await _loop_a_layer()
-	await _press_the_music_box()
 	await _tap_the_lyrics()
 	await _until(64.88)
 	print("notices: ", _notices)
@@ -4377,80 +4361,6 @@ func _loop_a_layer() -> void:
 	await _until(61.98)
 	check("by 61.98 my copy of the host's mix no longer has %s" % named, Looper.track_named(DAW.state, named) == 0)
 	rings.queue_free()
-
-
-## A music box hearing the song at MUSIC_BOX_SONG, stood still: what either half's reads its pegs by.
-func _probe_music_box() -> MusicBox:
-	var box := MusicBox.new()
-	box.heard_source = func() -> Dictionary: return {"seconds": MUSIC_BOX_SONG, "playing": false, "valid": true}
-	add_child(box)
-	return box
-
-
-## Where MUSIC_BOX_CELL's note is in `state`: the MUSIC BOX track, the bar's span, the row's pitch in
-## the song's key there, and the step's time.
-func _music_box_note(state: MixState) -> Dictionary:
-	var span := MusicBox.span_of(state, 1, MUSIC_BOX_SONG)
-	var rows := MusicBox.rows_of(MusicBox.key_of(state, span), MusicBox.DEFAULT_ROW)
-	return {"track": MusicBox.named_track(state), "span": span, "pitch": rows[MUSIC_BOX_CELL.x],
-			"on": MusicBox.step_time(state, span, MUSIC_BOX_CELL.y)}
-
-
-## Whether `state`'s MUSIC BOX track has one item over the box's bar, its one note MUSIC_BOX_CELL's.
-func _has_music_box_peg(state: MixState) -> bool:
-	var want := _music_box_note(state)
-	var t := state.tracks.get(int(want["track"])) as MixState.TrackState
-	if t == null or t.items.size() != 1:
-		return false
-	var it := t.items[0] as MixState.ItemState
-	var notes := MidiTake.unpack_relative(it.notes, it.start)
-	return notes.size() == 1 and int(notes[0][2]) == int(want["pitch"]) \
-			and absf(float(notes[0][0]) - float(want["on"])) < TAKE_TOLERANCE \
-			and absf(it.start - (want["span"] as Vector2).x) < TAKE_TOLERANCE
-
-
-## Host: the guest's peg on its music box (slice 47) is a note in my MUSIC BOX track's item, at its
-## row's pitch and its step's time; on the built-in engine one step named for the pegs; and a box of
-## my own reads it back as that peg.
-func _check_music_box_peg() -> void:
-	var want := _music_box_note(DAW.state)
-	var t := DAW.state.tracks.get(int(want["track"])) as MixState.TrackState
-	check("the guest's peg on its music box is a note in my MUSIC BOX track's item (track %d, pitch %d at %.3fs: %s)" % [
-			want["track"], want["pitch"], want["on"], str(t.items[0].notes) if t != null and t.items.size() > 0 else "none"],
-			int(want["track"]) > 0 and _has_music_box_peg(DAW.state))
-	if _reaper_resource == "":
-		var last: String = str(DAW.state.undo_names[DAW.state.undo_depth - 1]) if DAW.state.undo_depth > 0 else ""
-		check("the track and its item, one step named for the pegs (%s)" % last, last == "%s: pegs" % MusicBox.TRACK_NAME)
-	# Stood still at the song's place, as its first frame would show it: the bar it reads is the one
-	# the guest's box was showing.
-	var box := _probe_music_box()
-	box.set_process(false)
-	box.show_at(MUSIC_BOX_SONG, 0.0)
-	check("and a music box of my own reads it back as the guest's peg (%s)" % [box.pegs().keys()],
-			box.pegs().keys() == [MUSIC_BOX_CELL])
-	box.queue_free()
-
-
-## Host: the MUSIC BOX track taken out again.
-func _take_back_the_music_box() -> void:
-	var track := MusicBox.named_track(DAW.state)
-	if track > 0:
-		DAW.remove_track(track)
-
-
-## Guest: a peg pressed on a music box of my own (slice 47) at 62.02, shown at once and asked of the
-## host as the MUSIC BOX track and its item; by 62.18 my mirror of the host's mix has it as the note.
-func _press_the_music_box() -> void:
-	await _until(62.02)
-	var box := _probe_music_box()
-	var had := MusicBox.named_track(DAW.state)
-	box.press(MUSIC_BOX_CELL)
-	check("my press on my music box shows its peg at once, the MUSIC BOX track asked of the host (had %d)" % had,
-			box.has_peg(MUSIC_BOX_CELL) and had == 0)
-	await _until(62.18)
-	check("by 62.18 my copy of the host's mix has my peg as the note in its MUSIC BOX item, and my box still shows it",
-			_has_music_box_peg(DAW.state) and box.has_peg(MUSIC_BOX_CELL) and box.peg_count() == 1)
-	box.queue_free()
 
 
 ## Host: the guest's lyrics (slice 56), as my song has them: its two lines, the first stamped by its

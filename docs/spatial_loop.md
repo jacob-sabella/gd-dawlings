@@ -4692,7 +4692,7 @@ none.
     LAYERS list over the screen with MUTE, MUTED and X (`SHOT_CAM "3.1416,-0.32,1.05,-1.6,1.22,4.8"`,
     `SHOT_ARGS "--no-hud --rings 3 --at 3 --play"`, frames 90/96).
 
-47. [x] **A music-box sequencer.** The proving idea, #15. `MusicBox` (core/music/music_box.gd,
+47. [removed 2026-11-06] **A music-box sequencer.** (Removed with the simple toys; this is its history.) The proving idea, #15. `MusicBox` (core/music/music_box.gd,
     station `music_box`, free-standing on a plinth of its own beside the bell stand at
     `Venue.music_box_spot`, since the synth zone has no room left) is a brass cylinder of 16 steps
     by 8 rows turning past a comb. The rows are the key's scale up from the box's root (or

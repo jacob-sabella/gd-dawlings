@@ -1866,7 +1866,7 @@ func _build_song_key(column: VBoxContainer) -> void:
 	column.add_child(row)
 	var said := _label("Song key", 14, INK)
 	said.mouse_filter = Control.MOUSE_FILTER_PASS
-	said.tooltip_text = ("The key the room plays in: the bells, the music box, the strings, "
+	said.tooltip_text = ("The key the room plays in: the bells, the strings, "
 			+ "the pads in scale mode, and your keys when they are locked. From bar 1; a key change on the timeline changes it from there.")
 	row.add_child(said)
 	_key_root = _choice()

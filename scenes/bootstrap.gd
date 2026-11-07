@@ -248,23 +248,6 @@ func _ready() -> void:
 				DAW.set_track_mute(int(made["track"]), true)
 		DAW.set_loop_range(span[0], span[1])
 		DAW.set_looping(true)
-	# `--pegs`: a pattern on the music box (docs/spatial_loop.md part two, slice 47), for a shot of it:
-	# a run up the rows and back, pressed as a hand presses them, and one note off its rows, a
-	# semitone above the third row's, for its mark.
-	if args["pegs"] and studio.music_box != null:
-		var box := studio.music_box
-		box.show_at(DAW.state.position_seconds, 1.0)
-		for cell in [Vector2i(0, 0), Vector2i(2, 1), Vector2i(4, 2), Vector2i(7, 3), Vector2i(4, 4),
-				Vector2i(0, 4), Vector2i(5, 6), Vector2i(3, 7), Vector2i(1, 8), Vector2i(4, 10),
-				Vector2i(2, 12), Vector2i(0, 14)]:
-			box.press(cell)
-		var track := MusicBox.track_of(DAW.state, box.row)
-		var item := MusicBox.item_of(DAW.state, track, box.span)
-		var it := DAW.state.item(track, item)
-		if it != null:
-			var rows := MusicBox.rows_of(MusicBox.key_of(DAW.state, box.span), box.row)
-			var on := MusicBox.step_time(DAW.state, box.span, 5) - it.start
-			DAW.insert_note(track, item, on, on + 0.1, rows[2] + 1 if not rows.has(rows[2] + 1) else rows[2] - 1)
 	# `--lyrics`: the song's lyrics on the vocal booth's lyric board (docs/spatial_loop.md part two, slice
 	# 56), for a shot of it: four lines timed and two left to TAP, the board held at 7 s, half way
 	# through the second line, as the song would put it there.
@@ -355,7 +338,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "public": false, "join": "", "online": false, "join_code": "", "noray_server": "", "relay": false, "xr": OS.has_feature("android"), "xr_sim": false, "ar": OS.has_feature("android"),
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
-		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "perf": false, "play": false, "slap": false, "rings": 0, "pegs": false, "lyrics": false, "modular": false, "rack_preset": "acid_line", "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
+		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "perf": false, "play": false, "slap": false, "rings": 0, "lyrics": false, "modular": false, "rack_preset": "acid_line", "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 		"ghost": {}, "tablets": [], "plugins": [], "welcome": false,
@@ -506,8 +489,6 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 			# `--slap`: the looper's pad slapped once everything is up (docs/spatial_loop.md part two,
 			# slice 45), for a shot of its count or its recording.
 			"--slap": out["slap"] = true
-			# `--pegs`: a pattern on the music box, for a shot of it (slice 47).
-			"--pegs": out["pegs"] = true
 			# `--lyrics`: lyrics on the booth's lyric board, held mid-song, for a shot of it (slice 56).
 			"--lyrics": out["lyrics"] = true
 			# `--modular`: the modular wall re-patched, an A held on its keys, for a shot of it (slice 51).

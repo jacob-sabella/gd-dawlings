@@ -72,7 +72,7 @@ const THROUGH_GLASS := 2
 const GLASS_WALL_FRONT := Studio.ROOM_BACK - 0.02
 const GLASS_WALL_BACK := Studio.ROOM_BACK + 0.34
 ## Through the glass, how much further back again than the wall's depth the riser and the table
-## stand, so the music box at the front of the harmony row has its walk between it and the wall.
+## stand, so the harmony row has its walk between it and the wall.
 const GLASS_ZONES_BACK := 0.2
 ## And the riser that much further back again, so the looper on its front corner has its seat a full
 ## step in front of it (Stations.SEAT) on this side of the glass, not cut in against the wall.

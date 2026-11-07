@@ -691,11 +691,6 @@ func _ready() -> void:
 	await _test_a_looper_ring_turns_with_its_layer_and_shines_with_its_level()
 	await _test_the_looper_layers_list_mutes_and_deletes_at_a_desk()
 	await _test_a_guests_ring_pull_asks_the_host()
-	await _test_a_peg_on_the_music_box_is_a_note_of_its_track()
-	await _test_a_drag_along_a_music_box_row_is_one_undo_step()
-	await _test_the_music_box_reads_its_pegs_back_from_the_item()
-	await _test_the_music_box_turns_with_the_song()
-	await _test_a_guests_music_box_keys_and_pegs_ask_the_host()
 	_test_the_storms_density_and_drops_are_the_weather_sockets_events()
 	_test_a_drip_gates_an_env_in_the_cave()
 	_test_a_rings_level_follows_its_layers_notes_the_same_on_two_machines()
@@ -8647,19 +8642,6 @@ func _test_floor_past_the_control_room_holds_a_piece_at_its_walls() -> void:
 			middle.x - reach.x, live.position.x], middle.x - reach.x >= live.position.x - 0.001
 			and middle.y - reach.y >= live.position.y - 0.001
 			and FloorPlan.on_floor(floor, middle - reach, middle + reach))
-	# The music box, pushed across the aisle at the bricks table it faces: it stops at the table.
-	var box_t: Trolley = studio.live_pieces[&"music_box"]
-	var from := Vector2(box_t.position.x, box_t.position.z)
-	var bricks: AABB = venue.zones()[&"bricks"]
-	_push(box_t, hand, Vector2(3.0, bricks.get_center().z - from.y))
-	_roll_until_still(box_t)
-	var table := FloorPlan.footprint(Vector2(bricks.get_center().x, bricks.get_center().z),
-			Vector2(ZoneKit.TABLE_TOP.x, ZoneKit.TABLE_TOP.z) * 0.5, 0.0)
-	var at := Vector2(box_t.position.x, box_t.position.z)
-	var gap := FloorPlan.separation(print_of.call(box_t), table)
-	check("a piece pushed at the bricks table stops at it (%.3f m on, table at z %.2f)" % [from.distance_to(at),
-			bricks.end.z], gap.length() < 0.002 and from.distance_to(at) > 0.2 and from.distance_to(at) < 2.0
-			and (print_of.call(box_t)["c"] as Vector2).x < bricks.get_center().x)
 	# And one wheeled out of the control room goes into the live room, through the way between.
 	var board_t: Trolley = studio.live_pieces[&"station_board"]
 	_push(board_t, hand, Vector2(0, 2.4), 80)
@@ -26841,13 +26823,13 @@ func _test_every_venue_stands_every_station_clear() -> void:
 			var tag := "%s:%d" % [id, v]
 			var here := Stations.ids(venue)
 			# And the venue's own instrument where it has one (slice 42).
-			var stood: Array[StringName] = [&"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"modular", &"lyrics"]
+			var stood: Array[StringName] = [&"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"modular", &"lyrics"]
 			if VENUE_SETS.has(id):
 				stood.append(VenueInstrument.STATION)
 			# And its weather's switch where this arrangement has weather (slice 44).
 			if WEATHERS.any(func(w: Array) -> bool: return w[0] == id and w[1] == v):
 				stood.append(Weather.STATION)
-			check("%s: the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, the hand drums, the looper, the music box, the modular wall, the lyric board and any instrument and weather of its own stand here (%s)" % [tag, here],
+			check("%s: the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, the hand drums, the looper, the modular wall, the lyric board and any instrument and weather of its own stand here (%s)" % [tag, here],
 					here == stood)
 			for station: StringName in here:
 				var r := Stations.row(station)
@@ -26883,9 +26865,9 @@ func _test_every_venue_stands_every_station_clear() -> void:
 	check("in the chalk zone they are only drawn, like everything else there",
 			ChalkVenue.new().solids().size() == ChalkVenue.new().zone_solids().size())
 	var roulette := Venue.make(Venue.ROULETTE_ID)
-	check("and there is no bricks table, so no wheel, no booth, so no sampler and no lyric board, and no zones, so no music box: it stands only the bells and the cassette rack (%s)" % [Stations.ids(roulette)],
+	check("and there is no bricks table, so no wheel, no booth, so no sampler and no lyric board, and no zones: it stands only the bells and the cassette rack (%s)" % [Stations.ids(roulette)],
 			Stations.ids(roulette) == [&"bells", &"cassette_rack"] and Stations.spot(roulette, &"wheel") == null
-			and Stations.spot(roulette, &"sampler") == null and Stations.spot(roulette, MusicBox.STATION) == null
+			and Stations.spot(roulette, &"sampler") == null
 			and Stations.spot(roulette, LyricBoard.STATION) == null and Stations.seat(roulette, &"wheel") == null)
 	roulette.free()
 
@@ -27362,12 +27344,6 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 		&"sampler":
 			node = studio.sampler
 			if node == null or not node.transform.is_equal_approx(spot):
-				return false
-		&"music_box":
-			# The music box (slice 47), its cylinder and its four keys on it.
-			node = studio.music_box
-			if node == null or not node.transform.is_equal_approx(spot) or studio.music_box.drum == null \
-					or studio.music_box.keys.size() != 4:
 				return false
 		&"modular":
 			# The modular wall over the synth zone's stand (slice 51), a surface in the set at the venue's
@@ -30031,7 +30007,7 @@ func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
 	var live := {"lines": (pages[names.find("PLAY · LIVE ROOM 1/2")]["lines"] as Array)
 			+ (pages[names.find("PLAY · LIVE ROOM 2/2")]["lines"] as Array)}
 	check("each PLAY line of a stood station is its title and its desk line, and goes there, over both pages",
-			live["lines"].map(func(l): return l[2]) == [&"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"modular", &"lyrics"]
+			live["lines"].map(func(l): return l[2]) == [&"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"modular", &"lyrics"]
 			and live["lines"][0][0] == "HANDBELLS" and live["lines"][0][1] == Stations.row(&"bells")["desk"])
 	var sizes: Array = []
 	for i in pages.size():
@@ -30212,10 +30188,6 @@ func _test_going_to_a_station_holds_its_controls_in_view() -> void:
 					# The looper's whole stack of rings, as many as the post could stand, the pad and
 					# its plaque's keys (slice 46): the desk sees the layers turn, shine and go dashed.
 					points.append_array(_looper_looks(studio.looper))
-				if station == MusicBox.STATION and studio.music_box != null:
-					# The music box's cylinder, its top under the comb and its front's lowest cell, and its
-					# four keys' outer corners (slice 47): what a desk clicks there.
-					points.append_array(_music_box_looks(studio.music_box))
 				if station == Modular.STATION and studio.rack_wall != null:
 					# The modular wall (slice 51): its top corners, its touch keys' ends on the deck, and its
 					# plaque's keys' feet under the deck: what a desk clicks there.
@@ -30315,7 +30287,7 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 	var arrived := true
 	var facing := true
 	var toasts := true
-	for n in 18:
+	for n in 17:
 		said.clear()
 		studio._unhandled_input(key)
 		visits.append(studio.station)
@@ -30329,8 +30301,8 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 		var r := Stations.row(studio.station)
 		toasts = toasts and said.size() == 1 and said[0].begins_with("%s, %s: " % [r["title"], Stations.where(r)]) \
 				and said[0].contains(r["desk"]) and not said[0].contains("in the this")
-	check("I seventeen times walks to the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the TV, the hand drums, the looper, the music box, the modular wall, the lyric board and the studio's tubular bells, and a nineteenth comes back round (%s)" % [visits],
-			visits == [&"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"modular", &"lyrics", &"venue", &"bells"])
+	check("I sixteen times walks to the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the TV, the hand drums, the looper, the modular wall, the lyric board and the studio's tubular bells, and a seventeenth comes back round (%s)" % [visits],
+			visits == [&"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"modular", &"lyrics", &"venue", &"bells"])
 	check("each time the walker ends at the seat, on walkable floor, facing the station", arrived and facing)
 	check("and a toast says its title, where it is (in the control room, in the live room, in this venue) and its desk line", toasts)
 	key.shift_pressed = true
@@ -30391,7 +30363,7 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	studio.ergonomics.motion_scale = 0.0
 	var board := studio.station_board
 	check("a headset has the station board, by the desk (%s)" % [board.rows() if board != null else null],
-			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"modular", &"lyrics", &"venue"])
+			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"modular", &"lyrics", &"venue"])
 	# Home is the mix position, in front of the desk, not the room's origin inside the console;
 	# and from there the board is out of the way ahead (the desk is what is in view) and a few
 	# steps behind.
@@ -44985,25 +44957,6 @@ func _test_the_looper_layers_list_mutes_and_deletes_at_a_desk() -> void:
 ## What a desk at the looper's seat has to see of `looper`, in global space: the pad, the feet of its
 ## plaque's keys (INSTRUMENTS and BACK, folded, as it stands), and each of the MOST rings the post
 ## could stand, its tube's top and front and its lettering.
-## What a desk has to see of the music box to play it, in global space: the cylinder's top and the
-## lowest cell on its front, at both ends of its rows; each key's four corners; and its plaque's keys.
-func _music_box_looks(box: MusicBox) -> Array[Vector3]:
-	var out: Array[Vector3] = []
-	var g := box.global_transform
-	for x in [MusicBox.ROW_LEFT + 0.005, MusicBox.ROW_LEFT + MusicBox.ROW_PITCH * MusicBox.ROWS - 0.005]:
-		out.append(g * (MusicBox.AXIS + Vector3(x, MusicBox.RADIUS, 0)))
-		out.append(g * (MusicBox.AXIS + Vector3(x, -MusicBox.RADIUS * 0.7, MusicBox.RADIUS * 0.7)))
-	for kind: int in box.keys:
-		var key := box.keys[kind] as Node3D
-		for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
-			out.append(key.global_transform * Vector3(c.x * MusicBox.KEY.x * 0.5, c.y * MusicBox.KEY.y * 0.5, 0))
-	for key_name in ["Instruments", "Back"]:
-		var key := box.find_child(key_name, true, false) as Node3D
-		if key != null:
-			out.append(key.global_transform * Vector3(0, -Stations.PLAQUE_KEY * 0.5, 0))
-	return out
-
-
 func _looper_looks(looper: Looper) -> Array[Vector3]:
 	var out: Array[Vector3] = [looper.pad.global_position]
 	for key_name in ["Instruments", "Back"]:
@@ -45045,451 +44998,6 @@ func _test_a_guests_ring_pull_asks_the_host() -> void:
 			and rings.shown_layers().is_empty() and Looper.track_named(s, "GRACE LOOP 1") == index)
 	Session.keep_intents = false
 	Session.kept_intents.clear()
-	studio.queue_free()
-	await get_tree().process_frame
-	Session.start_solo()
-	_offline()
-
-
-# --- the music box (docs/spatial_loop.md part two, slice 47) --------------------------------
-
-## A music box of its own, in A minor at 120 bpm (a bar is 2 s, a step of a one-bar turn 0.125 s),
-## the playhead at the song's start, its song the given `heard`: not turning by itself, so the suite
-## draws it (`show_at`).
-func _music_box(heard := {"seconds": 0.0, "playing": false, "valid": true}) -> MusicBox:
-	_offline()
-	var s := DAW.state
-	s.tempo = 120.0
-	s.looping = false
-	s.loop_start = 0.0
-	s.loop_end = 0.0
-	s.playing = false
-	s.position_seconds = 0.0
-	s.markers.clear()
-	s.markers[0.0] = "Intro [A minor]"
-	var box := MusicBox.new()
-	box.heard_source = func() -> Dictionary: return heard
-	add_child(box)
-	await get_tree().process_frame
-	box.set_process(false)
-	box.show_at(0.0, 1.0)
-	return box
-
-
-## The music box's notes, [on, off, pitch, velocity] each, in song seconds, on its MUSIC BOX track.
-func _box_notes(box: MusicBox) -> Array:
-	var s := DAW.state
-	var track := MusicBox.track_of(s, box.row)
-	var item := MusicBox.item_of(s, track, box.span)
-	var it := s.item(track, item)
-	var out: Array = []
-	if it == null:
-		return out
-	for n in range(0, it.notes.size(), MidiTake.NOTE_WIDTH):
-		out.append([snappedf(it.start + it.notes[n], 0.0001), snappedf(it.start + it.notes[n + 1], 0.0001),
-				int(it.notes[n + 2]), int(it.notes[n + 3])])
-	return out
-
-
-## A cell's middle on the brass, in global space: where a click on it lands.
-func _cell_global(box: MusicBox, cell: Vector2i) -> Vector3:
-	return box.global_transform * box.cell_point(cell)
-
-
-## A peg at row 3, step 5 is the box's fourth row's pitch (D4 in A minor) at the sixth step's time,
-## on a MUSIC BOX track made for it with one item over the box's bar, in one undo step; a click on
-## the cylinder (the drum's grab, as a desk's mouse or a pinch's ray gives it) is that press; a second
-## peg is another note; pressing a peg takes its note out; Ctrl-Z puts it back. The rows, the keys,
-## the plaque and the cards say what it is.
-func _test_a_peg_on_the_music_box_is_a_note_of_its_track() -> void:
-	var box: MusicBox = await _music_box()
-	var s := DAW.state
-	var rows := MusicBox.rows_of(MusicBox.key_of(s, box.span), box.row)
-	check("in A minor its rows are A3 up the scale to A4 (%s)" % [rows],
-			rows == PackedInt32Array([57, 59, 60, 62, 64, 65, 67, 69])
-			and (box.get_node("Row3") as Label3D).text == "D4" and (box.get_node("Row0") as Label3D).text == "A3")
-	check("its bar is the first, a bar a turn (%s)" % box.span, box.span.is_equal_approx(Vector2(0.0, 2.0)))
-	check("its keys say TRACK MUSIC BOX, LENGTH 1 BAR, ROOT A3 and SCALE A MINOR",
-			box.legend(MusicBox.Kind.TRACK) == "TRACK\nMUSIC BOX" and box.legend(MusicBox.Kind.LENGTH) == "LENGTH\n1 BAR"
-			and box.legend(MusicBox.Kind.ROOT) == "ROOT\nA3" and box.legend(MusicBox.Kind.SCALE) == "SCALE\nA MINOR")
-	var missed: Array = []
-	for angle in [0.0, 0.7, 2.0, 4.1]:
-		box.shown_angle = angle
-		for cell in [Vector2i(0, 0), Vector2i(3, 5), Vector2i(7, 11), Vector2i(5, 15)]:
-			var p := box.cell_point(cell)
-			var q := p - MusicBox.AXIS
-			# Only the front half is in reach of a click; a drag's point is on the upright plane.
-			if q.z > 0.0 and (box.cell_at(p) != cell or box.cell_at(Vector3(p.x, p.y, MusicBox.AXIS.z)) != cell):
-				missed.append([angle, cell, box.cell_at(p), box.cell_at(Vector3(p.x, p.y, MusicBox.AXIS.z))])
-	check("a cell's point on the brass, and its point on the drag's plane, are that cell, however it is turned (%s)" % [missed], missed.is_empty())
-	box.shown_angle = 0.0
-	check("and a point off the rows is no cell", box.cell_at(MusicBox.AXIS + Vector3(MusicBox.ROW_LEFT - 0.01, 0, MusicBox.RADIUS)) == Vector2i(-1, -1))
-	var tracks := Looper.track_count(s)
-	var depth := maxi(s.undo_depth, 0)
-	var hand := Node.new()
-	add_child(hand)
-	box.drum.grab_begin(hand, _cell_global(box, Vector2i(3, 5)))
-	box.drum.grab_end(hand)
-	var track := MusicBox.named_track(s)
-	var item := MusicBox.item_of(s, track, box.span)
-	var notes := _box_notes(box)
-	check("a click on row 3, step 5 makes a MUSIC BOX track at the end of the project (%d of %d)" % [track, tracks + 1],
-			track == tracks + 1 and MusicBox.track_of(s, box.row) == track)
-	check("with one MIDI item over the box's bar (%s)" % [[s.item(track, item).start, s.item(track, item).length] if item >= 0 else null],
-			item == 0 and s.track(track).items.size() == 1 and is_equal_approx(s.item(track, 0).start, 0.0)
-			and is_equal_approx(s.item(track, 0).length, 2.0) and s.item(track, 0).source == "")
-	check("and in it D4 at step 5's time, a step long, at the inserted velocity (%s)" % [notes],
-			notes == [[0.625, 0.75, 62, DAWBackend.INSERT_VELOCITY]])
-	check("all of it one undo step (%d to %d)" % [depth, s.undo_depth], s.undo_depth == depth + 1)
-	box.refresh()
-	check("and its peg stands at the cell", box.has_peg(Vector2i(3, 5)) and box.find_child("Peg3_5", true, false) != null
-			and box.peg_count() == 1)
-	box.press(Vector2i(6, 9))
-	notes = _box_notes(box)
-	check("a second peg, row 6 step 9, is G4 at 1.125 s, one more undo step (%s)" % [notes],
-			notes == [[0.625, 0.75, 62, 100], [1.125, 1.25, 67, 100]] and s.undo_depth == depth + 2)
-	box.refresh()
-	box.press(Vector2i(3, 5))
-	notes = _box_notes(box)
-	box.refresh()
-	check("pressing the first peg takes its note out, one undo step (%s)" % [notes],
-			notes == [[1.125, 1.25, 67, 100]] and s.undo_depth == depth + 3 and not box.has_peg(Vector2i(3, 5)))
-	DAW.undo()
-	box.refresh()
-	check("and Ctrl-Z puts it back, peg and all", _box_notes(box).size() == 2 and box.has_peg(Vector2i(3, 5)))
-	check("pressing an empty cell of an existing item adds to that item, not a new one",
-			s.track(track).items.size() == 1 and Looper.track_count(s) == tracks + 1)
-	var r := Stations.row(MusicBox.STATION)
-	check("the station is the music box: free-standing in the live room, its desk and hands lines saying how",
-			r["title"] == "MUSIC BOX" and r["area"] == Stations.LIVE and not Stations.zoned(MusicBox.STATION)
-			and String(r["desk"]).contains("click a cell") and String(r["desk"]).contains("wheel")
-			and String(r["hands"]).contains("fingertip"))
-	# Up the lid from the hinge, in the lid's frame: folded at the top, and opened still on the lid.
-	var plaque := box.get_node("Plaque") as Node3D
-	var up := (MusicBox.lid_frame().affine_inverse() * plaque.transform).origin.y
-	var top := up + float(plaque.get_meta(&"plaque_tall")) * 0.5
-	var bottom := up - Stations.plaque_bottom(MusicBox.STATION, MusicBox.PLAQUE_WIDTH)
-	var top_at := MusicBox.lid_frame() * Vector3(0, top, 0)
-	check("its plaque, folded, hangs on the open lid over the comb, its top the station's frame's, and opened it is still on the lid (%.3f to %.3f up it)" % [top, bottom],
-			not Stations.plaque_open(plaque) and absf(top - MusicBox.PLAQUE_UP) < 0.002 and bottom >= 0.0
-			and top_at.distance_to(MusicBox.FRAME_TOP) < 0.005 and top_at.y > MusicBox.TOOTH_Y + 0.03)
-	check("the cylinder's card says what it is and how a desk plays it (%s)" % box.drum.readout(),
-			box.drum.title() == "MUSIC BOX" and box.drum.readout().contains("2 pegs")
-			and box.drum.readout().contains("MUSIC BOX") and box.drum.hint().contains("click a cell")
-			and box.drum.hint().contains("wheel"))
-	hand.queue_free()
-	box.queue_free()
-	await get_tree().process_frame
-
-
-## A drag along a row is a run of pegs, all one undo step, and one undo takes the run away; a pointer
-## held still while the cylinder turns under it adds nothing; a drag that leaves the row adds nothing
-## off it; a drag begun on a peg takes a run out instead, one step too.
-func _test_a_drag_along_a_music_box_row_is_one_undo_step() -> void:
-	var box: MusicBox = await _music_box()
-	var s := DAW.state
-	box.press(Vector2i(0, 0))
-	box.refresh()
-	var depth := s.undo_depth
-	var hand := Node.new()
-	add_child(hand)
-	box.drum.grab_begin(hand, _cell_global(box, Vector2i(2, 2)))
-	for st in [3, 4, 5]:
-		var at := _cell_global(box, Vector2i(2, st))
-		# The drag's point is on the upright plane through the axle, as Interactor gives it.
-		box.drum.grab_move(hand, box.global_transform * Vector3((box.global_transform.affine_inverse() * at).x,
-				(box.global_transform.affine_inverse() * at).y, MusicBox.AXIS.z))
-	var still := box.global_transform * Vector3(box.cell_point(Vector2i(2, 5)).x, box.cell_point(Vector2i(2, 5)).y, MusicBox.AXIS.z)
-	box.show_at(0.25, 1.0)
-	box.drum.grab_move(hand, still)
-	box.drum.grab_move(hand, _cell_global(box, Vector2i(5, 1)))
-	box.drum.grab_end(hand)
-	box.show_at(0.0, 1.0)
-	var pitches := _box_notes(box).map(func(n: Array) -> int: return n[2])
-	var times := _box_notes(box).map(func(n: Array) -> float: return n[0])
-	check("a drag from step 2 to 5 along row 2 is C4 at each of the four steps, nothing more (%s %s)" % [pitches, times],
-			pitches == [57, 60, 60, 60, 60] and times == [0.0, 0.25, 0.375, 0.5, 0.625])
-	check("and all of it one undo step (%d to %d)" % [depth, s.undo_depth], s.undo_depth == depth + 1)
-	DAW.undo()
-	box.refresh()
-	check("one undo takes the whole run away", _box_notes(box).size() == 1 and not box.has_peg(Vector2i(2, 3)))
-	DAW.redo()
-	box.refresh()
-	depth = s.undo_depth
-	box.drum.grab_begin(hand, _cell_global(box, Vector2i(2, 5)))
-	box.drum.grab_move(hand, _cell_global(box, Vector2i(2, 3)))
-	box.drum.grab_end(hand)
-	box.refresh()
-	check("a drag begun on a peg takes the run out, steps 5 back to 3, one step (%s)" % [_box_notes(box)],
-			_box_notes(box).map(func(n: Array) -> float: return n[0]) == [0.0, 0.25] and s.undo_depth == depth + 1
-			and box.has_peg(Vector2i(2, 2)) and not box.has_peg(Vector2i(2, 4)))
-	hand.queue_free()
-	box.queue_free()
-	await get_tree().process_frame
-
-
-## The pegs are the item's notes, read back: a note moved or transposed in the 2D roll moves its peg; a
-## key change leaves a note off the rows, drawn at its nearest row with a mark (a collar, leaning toward
-## its pitch), and pressing it takes it out; the chromatic switch and the root move the rows; a note on
-## another track is not a peg until TRACK is that track; a cell past a short item's end is refused in
-## words.
-func _test_the_music_box_reads_its_pegs_back_from_the_item() -> void:
-	var box: MusicBox = await _music_box()
-	var s := DAW.state
-	box.press(Vector2i(6, 9))
-	var track := MusicBox.named_track(s)
-	DAW.move_note(track, 0, 0, 0.25)
-	box.refresh()
-	check("a note moved two steps later in the roll moves its peg from step 9 to 11",
-			box.has_peg(Vector2i(6, 11)) and not box.has_peg(Vector2i(6, 9)))
-	DAW.transpose_note(track, 0, 0, 2)
-	box.refresh()
-	check("transposed up to A4 it is on the top row", box.has_peg(Vector2i(7, 11)) and not box.has_peg(Vector2i(6, 11)))
-	box.press(Vector2i(2, 4))
-	s.markers[0.0] = "Intro [A major]"
-	box.refresh()
-	var rows := MusicBox.rows_of(MusicBox.key_of(s, box.span), box.row)
-	var shown := box.pegs()
-	check("in A major the rows are A B C# D E F# G# A, and C4 is on none of them: drawn at B3, the nearer of two as near, marked toward its pitch (%s %s)" % [rows, shown],
-			rows == PackedInt32Array([57, 59, 61, 62, 64, 66, 68, 69]) and shown.get(Vector2i(1, 4), 0) == 1
-			and shown.get(Vector2i(7, 11), 1) == 0)
-	var peg := box.find_child("Peg1_4", true, false) as Node3D
-	check("by its shape: its peg leans and has a collar", peg != null and int(peg.get_meta(&"mark", 0)) == 1
-			and box.find_child("Mark", true, false) != null
-			and not (peg.transform.basis.y as Vector3).is_equal_approx(MusicBox._radial(Vector2i(1, 4), 0.0).basis.y))
-	box.press(Vector2i(1, 4))
-	check("and pressing the marked peg takes its note out (%s)" % [_box_notes(box)],
-			_box_notes(box).map(func(n: Array) -> int: return n[2]) == [69])
-	box.row = [0, 1, 0, true]
-	box.refresh()
-	check("chromatic, the rows are A3 to E4 a semitone apart", MusicBox.rows_of(MusicBox.key_of(s, box.span), box.row)
-			== PackedInt32Array([57, 58, 59, 60, 61, 62, 63, 64]) and box.legend(MusicBox.Kind.SCALE) == "SCALE\nCHROMATIC")
-	box.row = [0, 1, 3, false]
-	check("the root 3 up is C4, and the rows are A major's from there (%s)" % [MusicBox.rows_of(MusicBox.key_of(s, box.span), box.row)],
-			MusicBox.rows_of(MusicBox.key_of(s, box.span), box.row)[0] == 61 and box.legend(MusicBox.Kind.ROOT) == "ROOT\nC4")
-	box.row = MusicBox.DEFAULT_ROW.duplicate()
-	s.markers[0.0] = "Intro [A minor]"
-	# Another track's item, half a bar long.
-	DAW.insert_midi_take(2, 0.0, 1.0, [[0.25, 0.375, 64, 90, 0]], "SHORT")
-	var other := s.track(2).items.find_custom(func(i: MixState.ItemState) -> bool: return i.name == "SHORT")
-	box.refresh()
-	check("a note on another track is not a peg", not box.has_peg(Vector2i(4, 2)))
-	box.row = MusicBox.stepped(MusicBox.stepped(box.row, MusicBox.Kind.TRACK, 1, s), MusicBox.Kind.TRACK, 1, s)
-	box.refresh()
-	check("until TRACK steps to it, its second step (%s): then it is (%s)" % [box.legend(MusicBox.Kind.TRACK), box.pegs()],
-			int(box.row[0]) == 2 and MusicBox.item_of(s, 2, box.span) == other and box.has_peg(Vector2i(4, 2)))
-	var said: Array = []
-	var listen := func(t: String) -> void: said.append(t)
-	box.told.connect(listen)
-	box.press(Vector2i(0, 12))
-	box.refresh()
-	check("a cell past the end of a short item is refused in words, and shows nothing (%s)" % [said],
-			said.size() == 1 and said[0].contains("past the end") and not box.has_peg(Vector2i(0, 12)))
-	box.told.disconnect(listen)
-	check("TRACK goes round: the MUSIC BOX track first, then the others (%s)" % [MusicBox.track_choices(s).slice(0, 3)],
-			MusicBox.track_choices(s)[0] == 0 and not MusicBox.track_choices(s).has(track)
-			and MusicBox.stepped([MusicBox.track_choices(s)[-1], 1, 0, false], MusicBox.Kind.TRACK, 1, s)[0] == 0)
-	check("LENGTH presses go 1, 2, 4 and round; the wheel stops at the ends",
-			MusicBox.stepped([0, 4, 0, false], MusicBox.Kind.LENGTH, 1, s, true)[1] == 1
-			and MusicBox.stepped([0, 4, 0, false], MusicBox.Kind.LENGTH, 1, s)[1] == 4
-			and MusicBox.stepped([0, 1, 0, false], MusicBox.Kind.LENGTH, 1, s, true)[1] == 2)
-	check("ROOT presses go round an octave up from the tonic; SCALE switches",
-			MusicBox.stepped([0, 1, 11, false], MusicBox.Kind.ROOT, 1, s, true)[2] == 0
-			and MusicBox.stepped([0, 1, 0, false], MusicBox.Kind.ROOT, -1, s)[2] == -1
-			and MusicBox.stepped([0, 1, 0, false], MusicBox.Kind.SCALE, 1, s, true)[3] == true)
-	box.queue_free()
-	await get_tree().process_frame
-
-
-## The cylinder turns with the song, a turn a LENGTH: the step sounding under the comb at the top, a
-## quarter round a quarter of the way through its bar, and at Ergonomics motion 0 a step at a time.
-## Its bars are the playhead's page, or the loop's. The wheel turns this player's view round a step,
-## and so does a hand on the thumbwheel: pushed up or down, or pressed, it brings the back steps round
-## to the front, and the headset's cards and the hands line say so.
-## A peg reaching the comb flicks its row's tooth, which stands still at motion 0.
-func _test_the_music_box_turns_with_the_song() -> void:
-	var heard := {"seconds": 0.0, "playing": true, "valid": true}
-	var box: MusicBox = await _music_box(heard)
-	var s := DAW.state
-	var span := Vector2(0.0, 2.0)
-	close_to("at the bar's start it is not turned", MusicBox.turn_of(s, span, 0.0, 1.0), 0.0)
-	close_to("a quarter through the bar, a quarter round", MusicBox.turn_of(s, span, 0.5, 1.0), PI * 0.5)
-	close_to("half through, half round", MusicBox.turn_of(s, span, 1.0, 1.0), PI)
-	close_to("and round again at the next bar", MusicBox.turn_of(s, span, 2.0, 1.0), 0.0)
-	close_to("at motion 0 a step at a time: 0.6 s is step 4's turn", MusicBox.turn_of(s, span, 0.6, 0.0), 4 * MusicBox.STEP_ANGLE)
-	close_to("and 0.55 s too", MusicBox.turn_of(s, span, 0.55, 0.0), 4 * MusicBox.STEP_ANGLE)
-	box.show_at(0.625, 1.0)
-	var under := MusicBox.AXIS + Vector3(MusicBox.ROW_LEFT + MusicBox.ROW_PITCH * 3.5, MusicBox.RADIUS, 0)
-	check("at step 5's time, step 5's cell is under the comb, at the top (%s)" % box.cell_point(Vector2i(3, 5)),
-			box.cell_point(Vector2i(3, 5)).is_equal_approx(under) and is_equal_approx(box.turn.rotation.x, -5 * MusicBox.STEP_ANGLE))
-	check("its bars are the playhead's: a bar a turn from bar 2 at 2.5 s, two bars from bar 1",
-			MusicBox.span_of(s, 1, 2.5).is_equal_approx(Vector2(2.0, 4.0)) and MusicBox.span_of(s, 2, 2.5).is_equal_approx(Vector2(0.0, 4.0))
-			and MusicBox.span_of(s, 4, 9.0).is_equal_approx(Vector2(8.0, 16.0)))
-	s.loop_start = 6.0
-	s.loop_end = 14.0
-	check("or the loop's: from its first bar, a LENGTH a page, its first page outside it",
-			MusicBox.span_of(s, 2, 11.0).is_equal_approx(Vector2(10.0, 14.0)) and MusicBox.span_of(s, 2, 7.0).is_equal_approx(Vector2(6.0, 10.0))
-			and MusicBox.span_of(s, 1, 1.0).is_equal_approx(Vector2(6.0, 8.0)))
-	s.loop_start = 0.0
-	s.loop_end = 0.0
-	box.show_at(0.0, 1.0)
-	box.drum.nudge(box.drum, 1, false)
-	box.show_at(0.0, 1.0)
-	check("the wheel over the cylinder turns the view round a step, this player's own", box.view_steps == 1
-			and is_equal_approx(box.shown_angle, MusicBox.STEP_ANGLE) and box.cell_at(box.cell_point(Vector2i(0, 3))) == Vector2i(0, 3))
-	box.view_steps = 0
-	box.show_at(0.0, 1.0)
-	# A tracked hand has no wheel and no stick: the thumbwheel on the axle is how it turns the brass.
-	var back := Vector2i(2, 12)
-	var reach_back := func() -> bool:
-		var q := box.cell_point(back) - MusicBox.AXIS
-		return q.z > MusicBox.RADIUS * 0.5 and box.cell_at(box.cell_point(back)) == back
-	check("stopped, step 12 is round the back, out of a fingertip's reach", not reach_back.call())
-	var hand := Node.new()
-	add_child(hand)
-	var rim := box.thumbwheel.global_position + box.global_transform.basis * Vector3(0, 0, MusicBox.WHEEL_RADIUS)
-	var a_step := MusicBox.WHEEL_RADIUS * MusicBox.STEP_ANGLE
-	box.thumbwheel.grab_begin(hand, rim)
-	for k in range(0, 9):
-		box.thumbwheel.grab_move(hand, rim + box.global_transform.basis * Vector3(0, a_step * k, 0))
-	box.thumbwheel.grab_end(hand)
-	box.show_at(0.0, 1.0)
-	check("a fingertip pushing the thumbwheel's front up eight steps' travel turns the view eight steps (%d), the brass's front going up with it" % box.view_steps,
-			box.view_steps == 8 and is_equal_approx(box.shown_angle, 8 * MusicBox.STEP_ANGLE))
-	check("and step 12 is on the front now, where a fingertip presses it (front step %d)" % (box.front_step() + 1),
-			reach_back.call() and box.front_step() == 12)
-	box.thumbwheel.grab_begin(hand, rim)
-	box.thumbwheel.grab_move(hand, rim)
-	box.thumbwheel.grab_move(hand, rim + box.global_transform.basis * Vector3(0, -a_step * 3, 0))
-	box.thumbwheel.grab_end(hand)
-	check("pushed down three steps' travel it turns back three (%d)" % box.view_steps, box.view_steps == 5)
-	box.thumbwheel.grab_begin(hand, rim)
-	box.thumbwheel.grab_end(hand)
-	check("a press that does not roll it turns it a step on (%d)" % box.view_steps, box.view_steps == 6)
-	# A ray (mouse, controller, pinch) grabs on the front of the fat collision cylinder, and every
-	# move after is its hit on the upright plane through the axle, further back and, for a ray coming
-	# down at the wheel, lower: the hand held still must not turn it on grabbing.
-	var tw_basis := box.thumbwheel.global_transform.basis
-	var slope := deg_to_rad(30.0)
-	var ray_dir := (tw_basis * Vector3(0, -sin(slope), -cos(slope))).normalized()
-	var surface := box.thumbwheel.global_position + tw_basis * Vector3(0, 0, MusicBox.WHEEL_RADIUS + 0.008)
-	var axle_plane := Plane(tw_basis.z.normalized(), box.thumbwheel.global_position)
-	var on_plane = axle_plane.intersects_ray(surface - ray_dir * 0.5, ray_dir)
-	box.thumbwheel.grab_begin(hand, surface)
-	box.thumbwheel.grab_move(hand, on_plane)
-	box.thumbwheel.grab_move(hand, on_plane)
-	var held_still := box.view_steps
-	box.thumbwheel.grab_end(hand)
-	check("a ray sloping 30 degrees down that grabs the wheel and holds still does not turn it (%d)" % held_still,
-			on_plane != null and held_still == 6)
-	check("and its click then turns it exactly a step on (%d)" % box.view_steps, box.view_steps == 7)
-	box.thumbwheel.nudge(box.thumbwheel, -1, false)
-	box.thumbwheel.nudge(box.thumbwheel, -1, false)
-	check("and a stick or the wheel over it a step either way (%d)" % box.view_steps, box.view_steps == 5)
-	InstrumentItem.hands_hint = true
-	var hands_card := [box.thumbwheel.hint(), box.drum.hint()]
-	InstrumentItem.hands_hint = false
-	check("a headset's cards say how: the thumbwheel's, and the cylinder's naming it and the stick (%s)" % [hands_card],
-			String(hands_card[0]).contains("fingertip") and String(hands_card[0]).contains("stick")
-			and String(hands_card[1]).contains("wheel at its right end") and String(hands_card[1]).contains("stick"))
-	check("and so does the station's hands line, and the desk's names the knurled wheel",
-			String(Stations.row(MusicBox.STATION)["hands"]).contains("wheel at its right end")
-			and String(Stations.row(MusicBox.STATION)["desk"]).contains("knurled wheel")
-			and box.thumbwheel.title() == "MUSIC BOX  TURN" and box.thumbwheel.readout().contains("at the front"))
-	hand.queue_free()
-	box.view_steps = 0
-	box.press(Vector2i(6, 9))
-	box.show_at(1.0, 1.0)
-	box._tend_teeth(1.0, true, 1.0, 0.0)
-	box._tend_teeth(1.13, true, 1.0, 0.01)
-	var flicked := box.tooth_lift(6)
-	box._tend_teeth(1.2, true, 1.0, 0.5)
-	check("a peg reaching the comb flicks its row's tooth (%.3f), and the flick dies away (%.3f)" % [flicked, box.tooth_lift(6)],
-			flicked > MusicBox.FLICK * 0.8 and box.tooth_lift(6) < 0.01 and is_zero_approx(box.tooth_lift(5)))
-	box._tend_teeth(1.0, true, 0.0, 0.0)
-	box._tend_teeth(1.13, true, 0.0, 0.01)
-	check("at motion 0 the teeth stand", is_zero_approx(box.tooth_lift(6)))
-	box.queue_free()
-	await get_tree().process_frame
-
-
-## TRACK, LENGTH, ROOT and SCALE are the room's row: a guest's LENGTH press asks the host for the row
-## with two bars, which the host keeps and publishes, and a guest's room shows the host's row. A row
-## the host would not keep (a length of 3, a track not in the project) is refused. A guest's peg on an
-## empty box asks for the MUSIC BOX track inside an edit, then the item with its peg as a note, then
-## its next pegs as notes, and the edit closes when the queue has reached the host; its pegs show at
-## once. And the box stands in a studio on its trolley.
-func _test_a_guests_music_box_keys_and_pegs_ask_the_host() -> void:
-	var rig: Array = await _looper_studio(Session.Role.SOLO, 1)
-	var studio: Studio = rig[0]
-	var box := studio.music_box
-	check("the studio stands the music box in the harmony row, on its trolley", box != null and box.get_parent() == studio.venue
-			and studio.live_pieces.has(MusicBox.STATION) and (studio.live_pieces[MusicBox.STATION] as Trolley).visible)
-	check("its row is a room verb", Session.room_ask_is_valid(MusicBox.VERB, [0, 2, 0, false])
-			and not Session.room_ask_is_valid(MusicBox.VERB, [0, 2.0, 0, false]))
-	var asked: Array = []
-	box.row_asked.connect(func(r: Array) -> void: asked.append(r))
-	Session.role = Session.Role.GUEST
-	Session.local_peer_id = 2
-	(box.keys[MusicBox.Kind.LENGTH] as ControlAffordance).call("_on_grab_begin", Vector3.ZERO)
-	check("on a guest, LENGTH pressed asks for the row with two bars (%s)" % [asked], asked == [[0, 2, 0, false]])
-	Session.role = Session.Role.SOLO
-	Session.local_peer_id = 1
-	studio._on_room_asked(MusicBox.VERB, [0, 2, 0, false], 2)
-	check("the host keeps the guest's row, and its room says so (%s)" % [studio.room_state()["music_box"]],
-			studio.music_box_row == [0, 2, 0, false] and box.row == [0, 2, 0, false]
-			and studio.room_state()["music_box"] == [0, 2, 0, false])
-	studio._on_room_asked(MusicBox.VERB, [0, 3, 0, false], 2)
-	studio._on_room_asked(MusicBox.VERB, [99, 1, 0, false], 2)
-	check("and refuses a length of 3 and a track not in the project", studio.music_box_row == [0, 2, 0, false])
-	studio.apply_room({"music_box": [0, 4, 2, true]})
-	check("a guest's room shows the host's row", box.row == [0, 4, 2, true] and box.legend(MusicBox.Kind.LENGTH) == "LENGTH\n4 BARS")
-	box.row = MusicBox.DEFAULT_ROW.duplicate()
-	box.set_process(false)
-	box.show_at(0.0, 1.0)
-	var s := DAW.state
-	Session.role = Session.Role.GUEST
-	Session.local_peer_id = 2
-	Session.keep_intents = true
-	Session.kept_intents.clear()
-	var verbs := func() -> Array: return Session.kept_intents.map(func(c: Array) -> StringName: return c[0])
-	var count := Looper.track_count(s)
-	var hand := Node.new()
-	add_child(hand)
-	box.drum.grab_begin(hand, _cell_global(box, Vector2i(3, 5)))
-	check("a guest's first peg asks for the MUSIC BOX track inside an edit (%s), and shows at once" % [verbs.call()],
-			verbs.call() == [&"open_edit", &"add_track"] and Session.kept_intents[1][1] == [count + 1, "MUSIC BOX"]
-			and box.has_peg(Vector2i(3, 5)))
-	box.drum.grab_move(hand, _cell_global(box, Vector2i(3, 6)))
-	box.drum.grab_end(hand)
-	box.flush()
-	check("the rest of its drag waits for the track", verbs.call() == [&"open_edit", &"add_track"] and box.has_peg(Vector2i(3, 6)))
-	# The host's mix arrives with the track.
-	var made := s.track(count + 1)
-	made.name = "MUSIC BOX"
-	box.flush()
-	var take: Array = Session.kept_intents[2][1] if verbs.call().size() >= 3 else []
-	check("then the item, its pegs as notes, over the box's bar, and the edit closes: every write of it sent (%s %s)" % [verbs.call(), take],
-			verbs.call() == [&"open_edit", &"add_track", &"insert_midi_take", &"close_edit"] and take.size() >= 4
-			and int(take[0]) == count + 1 and is_equal_approx(float(take[1]), 0.0) and is_equal_approx(float(take[2]), 2.0)
-			and (take[3] as Array).size() == 2 and int(take[3][0][2]) == 62 and is_equal_approx(float(take[3][1][0]), 0.75))
-	var it := MixState.ItemState.new()
-	it.start = 0.0
-	it.length = 2.0
-	it.notes = PackedFloat32Array([0.625, 0.75, 62, 100, 0, 0.75, 0.875, 62, 100, 0])
-	s.set_track_items(count + 1, [it])
-	box.flush()
-	box.refresh()
-	check("and once the item has come, its pegs are the mix's", verbs.call().size() == 4 and box.has_peg(Vector2i(3, 5))
-			and box.has_peg(Vector2i(3, 6)) and box.peg_count() == 2)
-	box.press(Vector2i(0, 0))
-	box.flush()
-	var asks: Array = verbs.call()
-	check("a peg on the item is one note into it, in its own edit (%s)" % [asks.slice(4)],
-			asks.slice(4) == [&"open_edit", &"insert_note", &"close_edit"] and Session.kept_intents[5][1] == [count + 1, 0, 0.0, 0.125, 57])
-	Session.keep_intents = false
-	Session.kept_intents.clear()
-	hand.queue_free()
 	studio.queue_free()
 	await get_tree().process_frame
 	Session.start_solo()

@@ -193,17 +193,6 @@ const ALL := [
 		"hands": "slap the pad: a bar's count, then everything you play for LENGTH bars is a layer · slap again while it loops to stack another · one player at a time · each layer is a ring: grab to mute, again to unmute, pull away to delete",
 	},
 	{
-		# The music box (MusicBox, slice 47): a brass cylinder on a case on a plinth of its own, standing
-		# on the floor by itself, so a trolley in a studio. Its frame's top is the
-		# plaque's top on the open lid, its foot the front edge of its keys on the deck.
-		"id": &"music_box", "title": "MUSIC BOX", "area": LIVE, "zone": &"", "air": 0.5,
-		"spot": &"music_box_spot", "at": MusicBox.AXIS + Vector3(0, -0.05, 0.1),
-		"frame": [MusicBox.FRAME_TOP, MusicBox.FRAME_FOOT],
-		"foot": MusicBox.FOOT, "foot_z": MusicBox.FOOT_Z, "top": MusicBox.TOP,
-		"desk": "click a cell on the cylinder for a peg, a peg to take it out · drag along a row for a run, one undo step · the wheel over it, or dragging the knurled wheel at its right end, turns it round · TRACK, LENGTH, ROOT and SCALE in front: click for the next, the wheel either way · it plays its track's MIDI item as the song plays",
-		"hands": "a fingertip on a cell for a peg, on a peg to take it out · along a row for a run · roll the wheel at its right end, or the stick, to turn it round · a key steps on",
-	},
-	{
 		# The modular room (RackWall, slice 51): its help lines say where the world's sockets are
 		# (WorldSocket, slice 53), since they are out in the room and not on it. A surface hung on the synth zone's module rack over
 		# the keyboard stand, its touch keys on the stand's upper deck under it and its plaque beside

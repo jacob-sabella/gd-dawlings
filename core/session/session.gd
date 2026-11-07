@@ -1687,9 +1687,6 @@ const ROOM_VERBS := {&"tv": [TYPE_STRING, TYPE_BOOL, TYPE_FLOAT], &"open_tablet"
 		# pitch, velocity, channel] in song seconds, for the host to write as their track (Looper.write_layer).
 		&"looper": [TYPE_INT, TYPE_INT],
 		&"looper_layer": [TYPE_FLOAT, TYPE_FLOAT, TYPE_ARRAY],
-		# The music box's keys (slice 47): the room's `music_box` row whole, [track (0 the MUSIC BOX
-		# track), bars a turn, root (semitones from the key's tonic), chromatic] (MusicBox.clean).
-		&"music_box": [TYPE_INT, TYPE_INT, TYPE_INT, TYPE_BOOL],
 		# The modular room's rack (RackPatch.answer): its patch, edited. The room's `rack` row.
 		&"rack": [TYPE_STRING_NAME, TYPE_ARRAY],
 		# Look to solo (LookSolo, docs/spatial_loop.md part three, G): the track looked at, held or

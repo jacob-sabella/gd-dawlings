@@ -1517,7 +1517,7 @@ func add_track(at: int, track_name: String) -> void:
 	at = clampi(at, 1, count + 1)
 	var before := _structure()
 	# Named before the room gets the whole mix (`_structure_changed`): a guest that asked for a track
-	# by name (the music box's) finds it by that name in its mirror.
+	# by name finds it by that name in its mirror.
 	var kinds := _renumber(_order_adding(count, at), false)
 	state.track(at).name = track_name
 	_structure_changed(kinds)
