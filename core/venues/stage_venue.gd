@@ -257,6 +257,7 @@ func zone_solids() -> Array:
 	return out
 
 
+## Floor spots of the two strip cases, one each side of the live room.
 func strip_case_spots() -> Array[Vector3]:
 	var x := live_room_half() - 0.8
 	return [Vector3(-x, 0, Studio.ROOM_FRONT + 0.6), Vector3(x, 0, Studio.ROOM_FRONT + 0.6)]

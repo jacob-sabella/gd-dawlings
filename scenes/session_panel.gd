@@ -212,6 +212,7 @@ func in_room(room: Node3D) -> void:
 	glass.set_shown(_root.visible)
 
 
+## Show the panel, facing the player, and fill in the current name.
 func open() -> void:
 	_root.visible = true
 	if glass != null:
@@ -266,12 +267,14 @@ func set_motion(step: int) -> void:
 	refresh_comfort()
 
 
+## Set and save the comfort setting that the room reacts to the music.
 func set_room_reacts(on: bool) -> void:
 	Ergonomics.current.room_reacts = on
 	Ergonomics.save_comfort(comfort_path, {"room_reacts": on})
 	refresh_comfort()
 
 
+## Set and save the comfort setting that the room lifts on a clip.
 func set_lift_on_clip(on: bool) -> void:
 	Ergonomics.current.lift_on_clip = on
 	Ergonomics.save_comfort(comfort_path, {"lift_on_clip": on})
@@ -290,6 +293,7 @@ func refresh_comfort() -> void:
 	_lift_on_clip.disabled = not e.room_reacts
 
 
+## Hide the panel and let go of keyboard focus it holds.
 func close() -> void:
 	_root.visible = false
 	if glass != null:
@@ -300,6 +304,7 @@ func close() -> void:
 		focused.release_focus()
 
 
+## Open the panel if closed, else close it.
 func toggle() -> void:
 	if is_open():
 		close()
@@ -1546,6 +1551,7 @@ func _build_toasts() -> void:
 	add_child(_toasts)
 
 
+## Show `text` as a short-lived card.
 func toast(text: String) -> void:
 	var card := PanelContainer.new()
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2036,6 +2042,7 @@ func keep_as_template() -> PackedStringArray:
 	return said
 
 
+## Start a project from the template `template_name`; returns what the DAW said.
 func start_from_template(template_name: String) -> PackedStringArray:
 	var said := DAW.new_project_from_template(template_name)
 	_report(said, "started a project from the %s template" % template_name, "could not start from the template",
@@ -2072,12 +2079,14 @@ func save_project_as(path: String) -> PackedStringArray:
 	return said
 
 
+## Open the project at `path`; returns what the DAW said.
 func open_project(path: String) -> PackedStringArray:
 	var said := DAW.open_project(path)
 	_report(said, "opened %s" % path.get_file(), "could not open %s" % path.get_file(), DAW.project_file() == path)
 	return said
 
 
+## Start an empty project; returns what the DAW said.
 func start_new_project() -> PackedStringArray:
 	var said := DAW.new_project()
 	_report(said, "started an empty project", "could not start a project", said.is_empty())

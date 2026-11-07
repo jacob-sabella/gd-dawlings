@@ -13,6 +13,7 @@ extends ControlAffordance
 ## it is "on" -- the token stands forward, its ring full and its mark white-hot -- and for an
 ## action it is "pressing me does something", its mark glowing in its colour; dark when not.
 
+## The key was grabbed while it was available.
 signal pressed()
 
 ## The token, in metres: its diameter, and how far it stands out of the air it hangs in.

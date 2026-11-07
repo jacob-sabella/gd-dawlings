@@ -883,6 +883,7 @@ func _hang_pendants() -> void:
 				parent.add_child(spill)
 
 
+## The dark rough material of the hanging cords.
 func steel_cord() -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = Color(0.02, 0.02, 0.02)

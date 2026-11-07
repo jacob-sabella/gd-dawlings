@@ -23,6 +23,7 @@ func _init(of: Studio) -> void:
 	studio = of
 
 
+## Switch the studio to venue `id` (and `variant`), rebuilding the room round the player; `persist` saves the choice to the profile. Does nothing in AR; an unknown id falls back to the first venue.
 func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	if studio.medium == Presentation.Medium.AR:
 		return
@@ -183,6 +184,7 @@ func _patch_wall_frame() -> Transform3D:
 			Vector3(0, Studio.PATCH_WALL_TOP, 0))
 
 
+## A player's choice of venue: only the authority may change it (anyone else gets a notice and false); otherwise `set_venue` and true.
 func choose_venue(id: StringName, variant := 0) -> bool:
 	if not Session.is_authority():
 		Session.notice.emit("Only %s can change the venue." % Session.name_of(1))

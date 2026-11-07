@@ -46,6 +46,7 @@ const ITEMS := &"items"
 ## hand that threw it, which would otherwise catch it straight back.
 const CATCH_AFTER := 0.35
 
+## The item entered a new `State` (held, thrown, resting, ...), passed as the argument.
 signal state_changed(state: State)
 ## A hand here used it (`work`): for the session to tell everyone else.
 signal used(down: bool)

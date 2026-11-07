@@ -204,6 +204,7 @@ const SHELF_SPOTS := 4
 const SHELF_LOWER_TOP := 0.22 + 0.035 * 0.8 * 0.5
 
 
+## Build the wall shelf for props under `parent`: a top board, a lower tier and a back lip, in `top` and `frame` materials, lit by a lamp of colour `lamp`.
 static func prop_shelf(parent: Node3D, top: Material, frame: Material, lamp: Color) -> void:
 	var board := 0.035
 	block(parent, Vector3(SHELF.x, board, SHELF.z), Vector3(0, SHELF.y - board * 0.5, 0), top, "ShelfTop")
@@ -549,6 +550,7 @@ static func spot_down(parent: Node3D, at: Vector3, colour: Color, energy: float,
 	return spot
 
 
+## An unshaded material of `colour` times `strength`; above 1.0 it blooms.
 static func glow(colour: Color, strength: float) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

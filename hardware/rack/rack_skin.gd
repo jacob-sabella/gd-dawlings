@@ -48,6 +48,7 @@ static func of(type: String) -> Array:
 	return skin
 
 
+## The face colour of module `type`, a shade lighter for the alternate.
 static func face(type: String, alt := false) -> Color:
 	var c: Color = of(type)[0]
 	return c.lightened(0.05) if alt else c
@@ -120,6 +121,7 @@ const _AUDIO := ["out", "sub", "aux", "l", "r", "lp", "bp", "hp", "notch", "odd"
 		"weather", "drips", "venue", "marbles"]
 
 
+## The colour of a signal on `port`: pitch, gate, audio or (by default) CV.
 static func signal_of(port: String) -> Color:
 	if port == "pitch":
 		return SIGNAL_PITCH

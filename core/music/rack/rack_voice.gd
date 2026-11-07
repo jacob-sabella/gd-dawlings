@@ -9,6 +9,7 @@ extends Node
 ##
 ## Its meters, how loud each module is now, are what the room's lights follow (`meters`, `level`).
 
+## The patch or the track it sounds on was replaced.
 signal changed()
 
 const FOLLOW_SECONDS := 0.25
@@ -54,6 +55,7 @@ func _exit_tree() -> void:
 	shutdown()
 
 
+## Start the engine process and send it the current patch; false if the engine will not start.
 func start() -> bool:
 	if source == null:
 		source = RackEngine.Source.new(engine)
@@ -66,6 +68,7 @@ func start() -> bool:
 	return true
 
 
+## Stop the engine and the direct feed to the track.
 func shutdown() -> void:
 	InputMonitor.feeds.erase(track)
 	_stop_direct()
@@ -141,16 +144,19 @@ func knob(id: String, k: String, v01: float) -> void:
 	engine.say(RackPatch.knob_line(id, k, v01))
 
 
+## Sound `pitch` (MIDI) at `velocity` on the engine and remember it as held.
 func note_on(pitch: int, velocity := 100) -> void:
 	_held[pitch] = true
 	engine.say("note_on %d %d" % [pitch, velocity])
 
 
+## Release `pitch` on the engine.
 func note_off(pitch: int) -> void:
 	_held.erase(pitch)
 	engine.say("note_off %d" % pitch)
 
 
+## Release every pitch this voice still holds.
 func all_off() -> void:
 	for pitch in _held.keys():
 		engine.say("note_off %d" % pitch)

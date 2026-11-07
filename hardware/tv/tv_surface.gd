@@ -18,8 +18,11 @@ extends Surface
 signal changed()
 ## The pads' bank or settings changed (the deck's own signal, kept across rebuilds of the wall).
 signal pads_changed()
+## A guest asks the host to play or pause `video`, at `at` seconds.
 signal asked(video: String, playing: bool, at: float)
+## The FIND button was pressed.
 signal find_asked()
+## A video search finished: `query`, its `results`, and an `error` (empty if none).
 signal searched(query: String, results: Array, error: String)
 ## A pad struck (PadDeck): the note it is, for the take.
 signal pad_struck(note: int, velocity: int, seconds: float)
@@ -185,6 +188,7 @@ func _loaded(id: String, stream: AudioStreamWAV) -> void:
 		_sync_to_want()
 
 
+## Play the video; a guest asks the host instead (`asked`).
 func play() -> void:
 	if guest and not _applying:
 		asked.emit(video, true, position())
@@ -203,6 +207,7 @@ func _play() -> void:
 	_say_state()
 
 
+## Pause the video; a guest asks the host instead (`asked`).
 func pause() -> void:
 	if guest and not _applying:
 		asked.emit(video, false, position())
@@ -220,6 +225,7 @@ func _pause() -> void:
 	_say_state()
 
 
+## Pause if playing, else play.
 func toggle() -> void:
 	if playing:
 		pause()

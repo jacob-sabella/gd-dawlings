@@ -118,6 +118,7 @@ var _io_mutex := Mutex.new()
 var _alive := false
 
 
+## Start the engine process in live mode; true if it is running afterwards, false if the binary is missing or will not start.
 func start() -> bool:
 	if running():
 		return true
@@ -166,6 +167,7 @@ func _read_lines(err: FileAccess, pid: int) -> void:
 		_err_mutex.unlock()
 
 
+## Tell the engine to quit, close its pipes and join the drain thread.
 func stop() -> void:
 	_alive = false
 	if _drain_thread != null:
@@ -191,11 +193,13 @@ func running() -> bool:
 	return _pid > 0 and _io != null and OS.is_process_running(_pid)
 
 
+## Send the engine one command line; dropped if it is not running.
 func say(line: String) -> void:
 	if _io != null:
 		_io.store_line(line)
 
 
+## Send the engine each of `lines` in order.
 func say_all(lines: PackedStringArray) -> void:
 	for line in lines:
 		say(line)

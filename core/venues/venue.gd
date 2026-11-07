@@ -119,6 +119,7 @@ static func make_title(id: StringName) -> String:
 	return VenueCatalogue.title_of(id)
 
 
+## The venue id after `id` in `IDS`, wrapping round.
 static func next_after(id: StringName) -> StringName:
 	var at := IDS.find(id)
 	return IDS[(at + 1) % IDS.size()]

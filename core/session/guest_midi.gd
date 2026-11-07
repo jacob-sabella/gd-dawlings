@@ -38,6 +38,7 @@ extends Node
 ## (Presence.modular_heard). Those notes are not in a MIDI take; whatever else the take holds (the
 ## strings before the player walked up to the rack, the keys after they left it while it rolled on) is.
 
+## A setting that decides where the guest's keys go (target track, record with host, tilt bends, ...) changed.
 signal changed()
 ## A key down or up, wherever it was played from: for the modular's keys to show.
 signal key(pitch: int, down: bool)
@@ -489,6 +490,7 @@ func note_off(pitch: int, channel := 0, age := 0.0, sounded := false, source := 
 	changed.emit()
 
 
+## Press or release the sustain pedal: to the track's plugin if it has one, else to the local synth (unless already sounded); also sent to the host as a pedal note.
 func sustain(down: bool, channel := 0, age := 0.0, sounded := false) -> void:
 	var plugin = _track_plugin()
 	if plugin != null:

@@ -57,6 +57,7 @@ func _count_roll() -> void:
 	_roll_from = side
 
 
+## True when this controller is a tracked bare hand (the hand-interaction profile) rather than a held controller.
 func bare_hand() -> bool:
 	if controller == null:
 		return false

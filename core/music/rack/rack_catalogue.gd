@@ -118,6 +118,7 @@ static func in_group(group: String) -> Array[String]:
 	return out
 
 
+## The knob ids of module `type`, in the engine's order.
 static func knob_ids(type: String) -> Array[String]:
 	var out: Array[String] = []
 	for k in spec(type).get("knobs", []):
@@ -125,6 +126,7 @@ static func knob_ids(type: String) -> Array[String]:
 	return out
 
 
+## The description of knob `id` on module `type`; empty if there is none.
 static func knob(type: String, id: String) -> Dictionary:
 	for k in spec(type).get("knobs", []):
 		if k["id"] == id:

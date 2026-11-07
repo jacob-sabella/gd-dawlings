@@ -106,6 +106,7 @@ func _drop_unneeded() -> void:
 		return not MadeRoom.NEEDS.has(StringName(str(p))) or String(MadeRoom.NEEDS[StringName(str(p))]) in spec["zones"])
 
 
+## Throw the form's rows away and build them again from `spec`.
 func rebuild() -> void:
 	for child in _rows.get_children():
 		_rows.remove_child(child)

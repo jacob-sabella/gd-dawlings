@@ -17,14 +17,23 @@ extends Surface
 ##
 ## Hardware: it knows nothing of the session.
 
+## A change to the patch is asked for: `op` and `args` as `RackPatch.answer` takes them.
 signal edit_asked(op: String, args: Array)
+## A knob is being turned: module id, knob and value 0..1, on every change.
 signal knob_turning(id: String, knob: String, v: float)
+## A knob being turned, at a limited rate, to be sent on as a live ask.
 signal knob_streamed(id: String, knob: String, v: float)
+## A knob was let go at its final value.
 signal knob_set(id: String, knob: String, v: float)
+## A touch key was pressed (`down`) or released at MIDI `pitch`.
 signal touched(pitch: int, down: bool)
+## The PLAY key was pressed: play the rack from the computer keys.
 signal keys_asked()
+## The wall has something to say to the player.
 signal told(text: String)
+## The TRACK key was pressed: the player asks to move the rack's sound to a track.
 signal track_asked()
+## The REC key was pressed.
 signal record_asked()
 
 const COLS := RackLayout.COLS
@@ -259,6 +268,7 @@ func glow_with(level: float, hit: float) -> void: dressing.glow_with(level, hit)
 func _shine() -> void: dressing._shine()
 
 
+## Take a new mood palette (`RackMood`) and repaint the glow.
 func set_mood(m: Dictionary) -> void:
 	mood = m
 	_shine()
@@ -333,6 +343,7 @@ func set_track(t: int, track_name := "") -> void: shown.set_track(t, track_name)
 func set_recording(on: bool) -> void: shown.set_recording(on)
 
 
+## True while the rack is being recorded to its track.
 func is_recording() -> bool:
 	return _recording
 
@@ -392,6 +403,7 @@ func _apply_reach() -> void:
 var extra_controls: Array[ControlAffordance] = []
 
 
+## Every control a hand can reach on the wall: extras, jacks, knobs and touch keys.
 func reach_controls() -> Array[ControlAffordance]:
 	var out: Array[ControlAffordance] = []
 	out.append_array(extra_controls)

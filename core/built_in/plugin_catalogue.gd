@@ -9,6 +9,7 @@ extends RefCounted
 ## at again, on a thread of their own. Each plugin is a dictionary as dawkit describes one:
 ## {format, id, name, vendor, version, path, category, instrument, has_editor}.
 
+## A scan finished and the list of plugins was rebuilt and cached.
 signal changed
 
 const CACHE := "user://plugin_scan.json"

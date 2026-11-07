@@ -33,7 +33,9 @@ extends Control
 ## up or down, it bends what the keys play, so a key pressed under Alt plays, and one let go under
 ## any modifier still stops.
 
+## A computer key mapped to `pitch` went down at `velocity`.
 signal note_on(pitch: int, velocity: int)
+## That key came up.
 signal note_off(pitch: int)
 ## Turned on or off, by the panel, by Esc, or by focus going elsewhere.
 signal active_changed(active: bool)
@@ -86,6 +88,7 @@ func is_active() -> bool:
 	return has_focus()
 
 
+## Take or give back keyboard focus, which is what makes the catcher listen.
 func set_active(on: bool) -> void:
 	if on == has_focus():
 		return

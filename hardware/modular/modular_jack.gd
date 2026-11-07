@@ -11,8 +11,11 @@ extends ControlAffordance
 ## another input or off the wall to pull it. The wall does the patching; a jack only says where the
 ## drag went.
 
+## A cable drag started from this jack at world point `at`.
 signal drag_began(from: ModularJack, at: Vector3)
+## The drag moved to `at`, over the control `over` (null over nothing).
 signal drag_moved(from: ModularJack, at: Vector3, over: ControlAffordance)
+## The drag was let go over `over` (null over nothing); the wall decides whether that makes a cable.
 signal drag_finished(from: ModularJack, over: ControlAffordance)
 
 ## Where to aim: the socket and its letters, so a 1 cm hole is not a test of the mouse.
@@ -98,6 +101,7 @@ func plug_transform() -> Transform3D:
 	return global_transform * Transform3D(Basis.IDENTITY, Vector3(0, -0.008, FACE_Z))
 
 
+## Set the jack's lamp state (one of the light constants); nothing if unchanged.
 func set_light(how: int) -> void:
 	if how != _light:
 		_set_light(how)

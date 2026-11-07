@@ -5,8 +5,11 @@ extends ControlAffordance
 ## case and follows you; let go over a free place and it settles there. The wall does the moving; the
 ## handle only says where the drag went.
 
+## A drag started on the handle at world point `at`.
 signal drag_began(from: RackHandle, at: Vector3)
+## The drag moved to `at`.
 signal drag_moved(from: RackHandle, at: Vector3)
+## The drag was let go at `at`.
 signal drag_finished(from: RackHandle, at: Vector3)
 
 var module_id := ""

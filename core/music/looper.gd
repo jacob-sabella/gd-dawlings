@@ -430,6 +430,7 @@ static func write_layer(player: String, start: float, end: float, notes: Array) 
 
 # --- following the song -------------------------------------------------------------------------
 
+## What the song is doing as this player hears it: {seconds, playing, valid}. From `heard_source` if set, else the guest's feed, else a silent default.
 func heard() -> Dictionary:
 	if heard_source.is_valid():
 		return heard_source.call()

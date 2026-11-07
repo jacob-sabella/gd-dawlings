@@ -84,6 +84,7 @@ static func peak(c: PackedFloat32Array) -> float:
 	return best
 
 
+## The index of the largest value in `c`.
 static func peak_at(c: PackedFloat32Array) -> int:
 	var best := 0
 	for i in c.size():

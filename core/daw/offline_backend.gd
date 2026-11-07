@@ -111,6 +111,7 @@ func _age_autosaves() -> void:
 			DirAccess.rename_absolute(from, to)
 
 
+## Write the project to its autosave path now (rotating the older autosaves) and return what the save said.
 func autosave() -> PackedStringArray:
 	_settled_copy = autosave_path()
 	_age_autosaves()
@@ -726,6 +727,7 @@ func fx_choices() -> Array:
 	return STOCK_FX.duplicate(true)
 
 
+## Put the stock effect list into the state and queue it for replication to guests.
 func publish_fx_choices() -> void:
 	state.fx_choices = fx_choices()
 	record_for_replication("/fxchoices", MixWire.pack_inputs(state.fx_choices))

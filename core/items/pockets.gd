@@ -40,6 +40,7 @@ func at(slot: int) -> Item:
 	return item
 
 
+## Put `item` in pocket `slot`; ignored for a slot out of range.
 func put(slot: int, item: Item) -> void:
 	if slot >= 0 and slot < COUNT:
 		_slots[slot] = item

@@ -75,6 +75,7 @@ func _init() -> void:
 		params.append(default_params())
 
 
+## A pad's settings at rest: volume, pan, tune, reverse, mode, choke, start and end, envelope, filter, send, lock and fit.
 static func default_params() -> Dictionary:
 	return {"vol": 1.0, "pan": 0.0, "tune": 0.0, "rev": false, "mode": 0, "choke": 0,
 			"start": 0.0, "end": 1.0, "atk": 0.0, "rel": 0.0, "filt": 0.0, "send": 0.0, "lock": false, "fit": 0.0}
@@ -180,6 +181,7 @@ static func _frame(data: PackedByteArray, i: int, channels: int) -> Vector2:
 	return Vector2(l, r)
 
 
+## Replace the whole sample with `sound` and cut it into equal pad slices.
 func set_sample(sound: PackedVector2Array) -> void:
 	revision += 1
 	_made.clear()
@@ -296,6 +298,7 @@ static func degree_semitones(scale_name: String, degree: int) -> int:
 	return int(steps[posmod(degree, n)]) + 12 * floori(float(degree) / n)
 
 
+## The semitone steps of scale `scale_name` (a mode alias is resolved); major if unknown.
 static func steps_of(scale_name: String) -> Array:
 	if Harmony.SCALES.has(scale_name):
 		return Harmony.SCALES[scale_name]

@@ -47,6 +47,7 @@ var _incoming_paths := {}
 
 ## Guest: a fetch finished, its copy here at `path`; or the host could not send it, and `why`.
 signal fetched(file_name: String, path: String)
+## Guest: the host could not send `file_name`; `why` says why.
 signal fetch_failed(file_name: String, why: String)
 
 ## Guest: each file asked of the host, by name: {state: FETCHING, FETCHED or REFUSED, size, got,

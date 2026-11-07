@@ -21,6 +21,7 @@ func send_audio_begin(take_id: int, track: int, start: float, take_name: String,
 		_take_begin(session.local_peer_id, take_id, track, start, take_name, plan)
 
 
+## Send a chunk of PCM for take `take_id` to the host (or hand it to the take writer when this process is the host).
 func send_audio_chunk(take_id: int, pcm: PackedByteArray) -> void:
 	if session.role == session.Role.GUEST and session._connected():
 		session._audio_chunk.rpc_id(1, take_id, pcm)
@@ -34,6 +35,7 @@ func send_audio_channels(take_id: int, by_channel: Dictionary) -> void:
 		_take_chunk(session.local_peer_id, take_id, by_channel)
 
 
+## Tell the host take `take_id` has ended (or end it here when this process is the host).
 func send_audio_end(take_id: int) -> void:
 	if session.role == session.Role.GUEST and session._connected():
 		session._audio_end.rpc_id(1, take_id)

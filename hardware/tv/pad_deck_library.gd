@@ -23,6 +23,7 @@ func _base_name() -> String:
 	return deck.tv.title if deck.tv != null and deck.tv.title != "" else "sample"
 
 
+## Keep the selected pad's sound in the sample library under a fresh name; says so if the pad is empty.
 func save_to_library() -> void:
 	var sound := deck.bank.slice_frames(deck.selected)
 	if sound.is_empty():
@@ -38,6 +39,7 @@ func save_to_library() -> void:
 	deck.refresh()
 
 
+## Browse to the next saved sample.
 func step_library() -> void:
 	var all := PadLibrary.samples()
 	deck._del_armed = false
@@ -50,6 +52,7 @@ func step_library() -> void:
 	deck.refresh()
 
 
+## Load the browsed sample onto the pads.
 func load_from_library() -> void:
 	var all := PadLibrary.samples()
 	if deck.lib_sample < 0 or deck.lib_sample >= all.size():
@@ -65,6 +68,7 @@ func load_from_library() -> void:
 	deck.refresh()
 
 
+## Keep the pads as a new kit in the library.
 func save_kit() -> void:
 	var name := PadLibrary.save_kit(PadLibrary.fresh("kit", PadLibrary.kits()), deck.bank, _base_name())
 	if name == "":
@@ -76,6 +80,7 @@ func save_kit() -> void:
 	deck.refresh()
 
 
+## Browse to the next saved kit.
 func step_kits() -> void:
 	var all := PadLibrary.kits()
 	deck._del_armed = false
@@ -88,6 +93,7 @@ func step_kits() -> void:
 	deck.refresh()
 
 
+## Load the browsed kit onto the pads (stopping what plays).
 func load_kit() -> void:
 	var all := PadLibrary.kits()
 	if deck.lib_kit < 0 or deck.lib_kit >= all.size():
@@ -103,6 +109,7 @@ func load_kit() -> void:
 	deck.refresh()
 
 
+## Delete the browsed sample or kit; the first press arms it and says so, the second deletes.
 func delete_browsed() -> void:
 	var is_kit := deck._browsed == "kit"
 	var all := PadLibrary.kits() if is_kit else PadLibrary.samples()

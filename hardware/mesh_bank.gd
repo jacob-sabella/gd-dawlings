@@ -54,6 +54,7 @@ var _colours: PackedColorArray = PackedColorArray()
 var _committed := false
 
 
+## A bank of `size` lamps: unshaded, bright enough to bloom, casting no shadow.
 static func lamps(size: Vector3) -> MeshBank:
 	var bank := _make(size)
 	bank.material_override = _lamp_material()
@@ -209,6 +210,7 @@ func commit() -> void:
 		multimesh.set_instance_color(i, _colours[i])
 
 
+## Colour instance `index`; ignored out of range, and applied to the multimesh once the bank is committed.
 func set_colour(index: int, colour: Color) -> void:
 	if index < 0 or index >= _colours.size():
 		return

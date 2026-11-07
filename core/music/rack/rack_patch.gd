@@ -51,6 +51,7 @@ static func _put(p: Dictionary, id: String, type: String, col: int, row: int, kn
 	p["modules"][id] = {"type": type, "at": [col, row], "knobs": k}
 
 
+## The patch's module ids, sorted.
 static func module_ids(p: Dictionary) -> Array:
 	var ids: Array = (p["modules"] as Dictionary).keys()
 	ids.sort()
@@ -166,6 +167,7 @@ static func step_world(p: Dictionary, socket: StringName, way: int) -> String:
 	return ring[posmod(maxi(at, 0) + (1 if way >= 0 else -1), ring.size())]
 
 
+## True if the patch holds a module of `type`.
 static func has_type(p: Dictionary, type: String) -> bool:
 	for id in p["modules"]:
 		if p["modules"][id]["type"] == type:
@@ -173,6 +175,7 @@ static func has_type(p: Dictionary, type: String) -> bool:
 	return false
 
 
+## Take module `id` out with every cable on it; false if there is no such module.
 static func remove(p: Dictionary, id: String) -> bool:
 	if not (p["modules"] as Dictionary).has(id):
 		return false
@@ -185,6 +188,7 @@ static func remove(p: Dictionary, id: String) -> bool:
 	return true
 
 
+## Put module `id` at cell `at` in the case. The caller checks that the cell is free.
 static func move(p: Dictionary, id: String, at: Vector2i) -> void:
 	if (p["modules"] as Dictionary).has(id):
 		p["modules"][id]["at"] = [at.x, at.y]
@@ -233,6 +237,7 @@ static func pull(p: Dictionary, to: String) -> bool:
 	return had
 
 
+## Remove the cable from jack `from` to jack `to`; false if there was none.
 static func pull_one(p: Dictionary, from: String, to: String) -> bool:
 	for i in (p["cables"] as Array).size():
 		if p["cables"][i][0] == from and p["cables"][i][1] == to:
@@ -241,6 +246,7 @@ static func pull_one(p: Dictionary, from: String, to: String) -> bool:
 	return false
 
 
+## Set knob `knob` of module `id` to `v01` (clamped to 0..1); false if the module or knob does not exist.
 static func set_knob(p: Dictionary, id: String, knob: String, v01: float) -> bool:
 	var t := type_of(p, id)
 	if t == "" or RackCatalogue.knob(t, knob).is_empty():
@@ -249,6 +255,7 @@ static func set_knob(p: Dictionary, id: String, knob: String, v01: float) -> boo
 	return true
 
 
+## Knob `knob` of module `id`, 0..1; its default when unset, 0 if the knob does not exist.
 static func knob_of(p: Dictionary, id: String, knob: String) -> float:
 	var t := type_of(p, id)
 	var k := RackCatalogue.knob(t, knob)

@@ -219,6 +219,7 @@ static func _cut(spans: Array, from: float, to: float) -> Array:
 	return out
 
 
+## Build the wall colliders again, if they have been built, after the room's walls changed.
 func rebuild_walls() -> void:
 	if _solid_body != null:
 		_build_walls()

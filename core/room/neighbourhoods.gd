@@ -60,6 +60,7 @@ const RADIUS := 3.4
 const LETTER := 0.3
 
 
+## The neighbourhood row with `id`; empty if there is none.
 static func row(id: StringName) -> Dictionary:
 	for r: Dictionary in all():
 		if r["id"] == id:

@@ -54,6 +54,7 @@ func _ready() -> void:
 	column.add_child(_rows)
 
 
+## Show the stage manager panel and rebuild it.
 func open() -> void:
 	_panel.visible = true
 	rebuild()

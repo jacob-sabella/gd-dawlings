@@ -15,7 +15,9 @@ extends Node3D
 
 ## The bank or a pad's settings changed (the room shares them).
 signal changed()
+## Pad `pad` was hit at `velocity`.
 signal struck(pad: int, velocity: int)
+## The deck has a line to tell the player (what a button just did).
 signal said(words: String)
 
 const PAD := 0.09
@@ -303,6 +305,7 @@ func load_kit() -> void: library.load_kit()
 func delete_browsed() -> void: library.delete_browsed()
 
 
+## Step the selected pad's fit-to-beat length through `FITS` and apply it at the current tempo.
 func step_fit() -> void:
 	var beat := 60.0 / maxf(DAW.state.tempo if DAW.state != null else 120.0, 20.0)
 	var now := float(bank.params[selected]["fit"])
@@ -316,18 +319,21 @@ func step_fit() -> void:
 	refresh()
 
 
+## Step the MIDI channel the pads listen to (0 is every channel, then 1 to 16).
 func step_channel() -> void:
 	channel = (channel + 1) % 17
 	said.emit("The pads listen to %s." % ("every MIDI channel" if channel == 0 else "MIDI channel %d" % channel))
 	refresh()
 
 
+## Toggle PUNCH, which sends every pad to the effect.
 func toggle_punch() -> void:
 	punch = not punch
 	said.emit("PUNCH: every pad goes to the effect." if punch else "PUNCH off.")
 	refresh()
 
 
+## Step the pad effect through `FX_KINDS` and make sure its bus exists.
 func step_fx() -> void:
 	fx_kind = (fx_kind + 1) % FX_KINDS.size()
 	_ensure_fx_bus()
@@ -335,6 +341,7 @@ func step_fx() -> void:
 	refresh()
 
 
+## Toggle learning: the next MIDI note struck becomes the selected pad's note.
 func toggle_learn() -> void:
 	learning = not learning
 	if learning:
@@ -342,6 +349,7 @@ func toggle_learn() -> void:
 	refresh()
 
 
+## Toggle following: the pads play the armed track's notes while the song plays.
 func toggle_follow() -> void:
 	follow_on = not follow_on
 	_last_song = -1.0
@@ -379,6 +387,7 @@ func _ensure_fx_bus() -> void:
 	AudioServer.set_bus_effect_enabled(at, 1, fx_kind != 0)
 
 
+## Toggle playing the pads from the computer keys.
 func toggle_keys() -> void:
 	keys_on = not keys_on
 	refresh()

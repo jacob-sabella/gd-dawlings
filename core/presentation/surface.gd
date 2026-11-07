@@ -135,6 +135,7 @@ func _anything_held() -> bool:
 	return false
 
 
+## Note that the surface's contents changed and need redrawing; remembers since when, for catching up.
 func mark_dirty() -> void:
 	if _dirty_since < 0:
 		_dirty_since = Time.get_ticks_msec()
@@ -234,6 +235,7 @@ func _shown_within(node: Node) -> bool:
 	return true
 
 
+## The box round the surface's visible content, without the chrome (grab handle, frame) that is placed from it.
 func content_aabb() -> AABB:
 	var out := AABB()
 	var first := true

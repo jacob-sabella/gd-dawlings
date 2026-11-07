@@ -107,6 +107,7 @@ static func reel_motor() -> AudioStreamWAV:
 const SPINBACK_SECONDS := 0.7
 
 
+## The sound of a record stopped by hand: a pitch falling to nothing. Cached.
 static func spinback() -> AudioStreamWAV:
 	return _cached("spinback", func() -> AudioStreamWAV:
 		var s := _silence(SPINBACK_SECONDS)
@@ -1016,6 +1017,7 @@ static func _flick(s: PackedFloat32Array, at: float, level: float, rng: RandomNu
 		s[i] += level * env * (0.09 * rng.randf_range(-1.0, 1.0) + 0.05 * sin(tone * float(i - start)))
 
 
+## Play `stream` once from `on` (a one-shot emitter that frees itself); nothing if either is null or `on` is not in the tree.
 static func play(on: Node3D, stream: AudioStream, volume_db := 0.0, pitch := 1.0) -> void:
 	if on == null or stream == null or not on.is_inside_tree():
 		return

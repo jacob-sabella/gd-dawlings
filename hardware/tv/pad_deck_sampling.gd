@@ -56,6 +56,7 @@ func _sample_live() -> void:
 	deck.refresh()
 
 
+## Step the source the pads sample from (stopping a catch under way).
 func step_source() -> void:
 	if deck.capture.recording:
 		deck.capture.stop()
@@ -96,12 +97,14 @@ func step_device() -> void:
 	deck.refresh()
 
 
+## Toggle trimming the quiet off a live catch.
 func toggle_trim() -> void:
 	deck.trim_on = not deck.trim_on
 	deck.said.emit("Trim the quiet off a live catch: " + ("on" if deck.trim_on else "off"))
 	deck.refresh()
 
 
+## Step how the sample is cut over the pads (equal slices, or at the hits; falls back to equal slices if there are no hits).
 func step_chop() -> void:
 	if deck.bank.frames.is_empty():
 		return
@@ -128,11 +131,13 @@ func toggle_scale() -> void:
 	deck.refresh()
 
 
+## Move the sample's root note by `by` semitones, wrapping within the octave.
 func step_root(by: int) -> void:
 	deck.bank.root = posmod(deck.bank.root + by, 12)
 	deck.refresh()
 
 
+## Step the scale the pads play in.
 func step_mode() -> void:
 	var at := PadBank.MODES.find(deck.bank.mode)
 	deck.bank.mode = PadBank.MODES[(at + 1) % PadBank.MODES.size()]

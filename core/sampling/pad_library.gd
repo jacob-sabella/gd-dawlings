@@ -105,11 +105,13 @@ static func load_sample(name: String) -> PackedVector2Array:
 	return PadBank.cut(wav, 0.0, wav.get_length())
 
 
+## Delete the saved sample called `name`; true if the file existed and went.
 static func delete_sample(name: String) -> bool:
 	var path := samples_dir().path_join(clean(name) + ".wav")
 	return FileAccess.file_exists(path) and DirAccess.remove_absolute(path) == OK
 
 
+## Delete the saved kit called `name`; true if the file existed and went.
 static func delete_kit(name: String) -> bool:
 	var path := kits_dir().path_join(clean(name) + ".json")
 	return FileAccess.file_exists(path) and DirAccess.remove_absolute(path) == OK

@@ -611,6 +611,7 @@ static func mountains(seed: int) -> ArrayMesh:
 	return _barycentric(tris)
 
 
+## A copy of `source`'s first surface as triangles with barycentric coordinates, so a shader can draw the edges.
 static func wireframe(source: Mesh) -> ArrayMesh:
 	var tris := PackedVector3Array()
 	var arrays := source.surface_get_arrays(0)

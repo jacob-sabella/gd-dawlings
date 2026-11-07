@@ -50,6 +50,7 @@ func _ready() -> void:
 	visible = false
 
 
+## Draw the rim round `control` (held or only hovered); hide it for null or a control that has left the tree.
 func show_on(control: ControlAffordance, held: bool) -> void:
 	if control != null and (not is_instance_valid(control) or not control.is_inside_tree()):
 		control = null

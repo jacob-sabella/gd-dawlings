@@ -172,6 +172,7 @@ var placing := ItemPlacing.new(self)
 ## The room's items as a row for the session, and back.
 var replica := ItemReplica.new(self)
 
+## A new item of `kind` (a name from `KINDS`), unplaced.
 static func make(kind: StringName) -> Item:
 	match kind:
 		&"duck":

@@ -424,6 +424,7 @@ func card_table_at() -> Vector2:
 	return Vector2(-live_room_half() + BENCH + 0.05 + CARD_TABLE * 0.5 + 0.05, PIANO_Z + 0.1)
 
 
+## Floor spots of the chairs round the card table.
 func card_chair_spots() -> Array[Vector2]:
 	var out: Array[Vector2] = []
 	for a: float in CARD_CHAIRS:

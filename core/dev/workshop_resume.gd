@@ -40,6 +40,7 @@ static func snapshot(studio: Studio, history: Array, reloaded_onto := "") -> Dic
 	return out
 
 
+## Write `data` as JSON to `path`; false if the file cannot be opened.
 static func save(data: Dictionary, path := PATH) -> bool:
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
@@ -48,6 +49,7 @@ static func save(data: Dictionary, path := PATH) -> bool:
 	return true
 
 
+## Read the JSON dictionary at `path`; empty if there is no file or it is not a dictionary.
 static func load_from(path := PATH) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {}

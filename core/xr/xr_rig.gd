@@ -23,6 +23,7 @@ extends XROrigin3D
 ## to do it again, not wanting to find a menu. Not while the left hand's fingers play, when that
 ## button is its little finger (`watch_calibration`).
 
+## A calibration mark was taken: `step` of `total` (two) are done.
 signal calibration_step(step: int, total: int)
 ## The way out of whatever has been put in front of your face: the menu button on a controller,
 ## or both bare hands made into fists and held there for ESCAPE_HOLD. What Escape is on a

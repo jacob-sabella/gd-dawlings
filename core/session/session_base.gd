@@ -43,10 +43,13 @@ const PALETTE: Array[Color] = [
 	Color(0.35, 0.95, 0.88),  # teal
 	Color(1.00, 0.45, 0.42),  # coral
 ]
+## A peer was admitted to the session.
 signal participant_joined(peer_id: int)
 ## Joining by a code, or hosting online, moved on: found, punched, relayed, or failed. See `online`.
 signal link_changed()
+## A peer left or was dropped.
 signal participant_left(peer_id: int)
+## This process became host, guest or solo.
 signal role_changed()
 ## Names, colours or mediums changed. Fires on everyone, from the host's word on the matter.
 signal roster_changed()
@@ -133,6 +136,7 @@ const SHARE_KINDS: Array[StringName] = [&"audio", &"midi"]
 const LIVE_CHANNEL := 10
 ## The most a live packet may carry, bytes: a tenth of a second of mono 16-bit at 48 kHz.
 const LIVE_PACKET_MAX := 9600
+## `peer` now plays into `track` (0 when they join or have none).
 signal play_track_changed(peer: int, track: int)
 ## A guest's device offers, grants or refusals changed (`share_offers`, `shares`, `my_shares`).
 signal shares_changed()

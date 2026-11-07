@@ -411,6 +411,7 @@ static func wall_pool(pool: RollSettings.Pool) -> RigRouletteStation.Pool:
 	return int(pool) as RigRouletteStation.Pool
 
 
+## The roll board's heading for a roll `source`: ROLL for none, FX RACK, TAPE DECK, else the name in capitals.
 static func board_title(source: StringName) -> String:
 	match source:
 		&"": return "ROLL"

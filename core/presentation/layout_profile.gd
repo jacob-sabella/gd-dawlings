@@ -65,6 +65,7 @@ var floor_import := 0
 var floor_moved := 0
 
 
+## How `surface_id` is shown: the saved mode if there is one, else the default for its kind on this medium.
 func mode_for(surface_id: StringName, surface_kind: StringName) -> int:
 	if modes.has(surface_id):
 		return modes[surface_id]
@@ -87,6 +88,7 @@ func set_transform(surface_id: StringName, mode: int, xform: Transform3D) -> voi
 	local_transforms[_key(surface_id, mode)] = xform
 
 
+## Forget the saved placement of `surface_id` in `mode` (under either key spelling).
 func clear_transform(surface_id: StringName, mode: int) -> void:
 	# Either spelling: set here as a String, read back from the file as a StringName.
 	local_transforms.erase(_key(surface_id, mode))
@@ -97,6 +99,7 @@ static func _key(surface_id: StringName, mode: int) -> String:
 	return "%s/%d" % [surface_id, mode]
 
 
+## Write the profile (medium, venue, modes, placements, shelves) to `save_path`.
 func save() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("profile", "medium", medium)
@@ -140,6 +143,7 @@ func set_made(rows: Dictionary) -> void:
 	_made_dirty = true
 
 
+## Read the profile back from `save_path`; the fields keep their values if there is no file.
 func load_saved() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(save_path) != OK:

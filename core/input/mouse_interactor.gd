@@ -38,6 +38,7 @@ func reach() -> float:
 	return 12.0
 
 
+## The pointer in viewport pixels: `pointer_override` when set, else the mouse.
 func pointer() -> Vector2:
 	if pointer_override.x >= 0.0:
 		return pointer_override
@@ -128,6 +129,7 @@ const CHORD_PALM_UP_FINGERS := Vector3(0.85, 0.3, -0.35)
 const CHORD_PALM_UP_FACING := Vector3(0.0, 0.75, 0.65)
 
 
+## Where the chord hand is posed for scale degree `degree`: a spot kept at the same place on screen at any field of view or window shape, with the idle wiggle.
 func chord_pose(degree: int) -> Transform3D:
 	if camera == null:
 		return global_transform

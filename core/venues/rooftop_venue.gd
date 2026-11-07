@@ -237,6 +237,7 @@ func skylight_spot() -> Vector2:
 	return _past_parapet(SKYLIGHT)
 
 
+## Floor spots of the roof vents, moved clear of the parapet.
 func vent_spots() -> Array[Vector2]:
 	var out: Array[Vector2] = []
 	for v: Vector2 in VENTS:
@@ -249,6 +250,7 @@ func _past_parapet(at: Vector2) -> Vector2:
 	return Vector2(signf(at.x) * (terrace_half() + WALL) + at.x, at.y)
 
 
+## Floor spots of the water tanks, outside each side of the terrace.
 func tank_spots() -> Array[Vector2]:
 	var out: Array[Vector2] = []
 	for t: Vector3 in TANKS:

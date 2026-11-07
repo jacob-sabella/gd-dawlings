@@ -461,6 +461,7 @@ static func top_of(set_spec: Dictionary) -> float:
 	return out
 
 
+## The lowest y of any bar of the set described by `set_spec`.
 static func bottom_of(set_spec: Dictionary) -> float:
 	var out := INF
 	for n in int(set_spec.get("count", MOST)):

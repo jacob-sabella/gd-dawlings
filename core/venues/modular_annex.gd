@@ -45,6 +45,7 @@ var tv: ScopeScreen
 ## The CV bench's fifteen controls (two knobs and a slider in each of five boxes), in the order of the
 ## rack's HAND module outputs, and what a hand does to one: (index, 0..1).
 var bench: Array[Knob] = []
+## A knob of the CV bench was turned: index `k` (0 to 14) and value `v` in 0..1.
 signal bench_turned(k: int, v: float)
 var _sign_material := StandardMaterial3D.new()
 var _columns: Array[MeshInstance3D] = []
@@ -281,6 +282,7 @@ func _exit_tree() -> void:
 	_hushed.clear()
 
 
+## Take a new mood (the glow dictionary, see `RackMood`) and repaint the room with it.
 func set_mood(m: Dictionary) -> void:
 	mood = m
 	_apply_mood()

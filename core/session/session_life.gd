@@ -12,6 +12,7 @@ func _init(of: Session) -> void:
 	session = of
 
 
+## Create and add the autoload's child nodes (mix feed, guest MIDI, audio, ...) and wire their signals. Called from `Session._ready`.
 func ready() -> void:
 	session.mix_feed = MixFeed.new()
 	session.mix_feed.name = "MixFeed"
@@ -79,6 +80,7 @@ func exit_tree() -> void:
 	peer.close()
 
 
+## One frame of the session's timers: the LAN beacon, admission, the online links, punches and the mix link.
 func process(delta: float) -> void:
 	_tick_beacon(delta)
 	session.admitting._tick_admission()
@@ -133,6 +135,7 @@ func start_solo() -> void:
 	session.roster_changed.emit()
 
 
+## Open a server on `at_port` and become the host; false, with a notice, if the port cannot be opened.
 func host(at_port: int = session.DEFAULT_PORT) -> bool:
 	session.admitting._close_peer()
 	var peer := ENetMultiplayerPeer.new()
@@ -165,6 +168,7 @@ func host(at_port: int = session.DEFAULT_PORT) -> bool:
 	return true
 
 
+## Connect to a host by `address` (or, with `with_code`, as the dial of a join by code); the result arrives later as the connection signals.
 func join(address: String, at_port: int = session.DEFAULT_PORT, with_code: String = "",
 		local_port: int = 0) -> bool:
 	# By address: whatever way in by a code was under way is over. By code, this is its dial.
@@ -260,6 +264,7 @@ func local_participant() -> Session.Participant:
 	return session.participants.get(session.local_peer_id)
 
 
+## The display name of `peer_id`; "someone" if unknown.
 func name_of(peer_id: int) -> String:
 	var p: Session.Participant = session.participants.get(peer_id)
 	return p.display_name if p != null else "someone"
@@ -320,6 +325,7 @@ func _tick_beacon(delta: float) -> void:
 		session._beacon.put_packet(packet)
 
 
+## What the LAN beacon announces: app, version, host name, port, head count and whether a door code is set.
 func beacon_payload() -> Dictionary:
 	return {
 		"app": "dawlings",

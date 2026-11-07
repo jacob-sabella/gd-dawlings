@@ -1499,6 +1499,7 @@ func _sync_click_window() -> void:
 var _lane_click := {}
 
 
+## The one-bar click for `key` at `rate`; a new tempo or signature (a new key) replaces the cached one.
 func lane_click_bar(key: String, rate: int) -> AudioStreamWAV:
 	if not _lane_click.has(key):
 		_lane_click.clear()

@@ -154,6 +154,7 @@ func shown(key: String) -> Array:
 	return _all[key]["shown"] if _all.has(key) else []
 
 
+## Give every loaded plugin effect the transport it reads the song position from.
 func set_transport(t: Object) -> void:
 	transport = t
 	for key in _all:

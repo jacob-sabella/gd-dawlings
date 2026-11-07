@@ -134,6 +134,7 @@ func note_delay_ms(peer: int) -> float:
 	return mine * 0.5 if peer == 1 else mine
 
 
+## True if `verb` is in `ROOM_VERBS` and `args` have the declared count and types.
 static func room_ask_is_valid(verb: StringName, args: Array) -> bool:
 	if not Session.ROOM_VERBS.has(verb) or args.size() != Session.ROOM_VERBS[verb].size():
 		return false
@@ -187,6 +188,7 @@ func ask_tour(verb: StringName, args: Array) -> void:
 	session._tour_asked.rpc_id(1, verb, args)
 
 
+## True if `verb` is in `TOUR_VERBS` and `args` have the declared count and types.
 static func tour_ask_is_valid(verb: StringName, args: Array) -> bool:
 	if not Session.TOUR_VERBS.has(verb) or args.size() != Session.TOUR_VERBS[verb].size():
 		return false

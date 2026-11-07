@@ -5,7 +5,9 @@ extends ControlAffordance
 ## cool to hot. Press and drag across them to paint a line: the step under the hand follows the hand's
 ## height. A sequencer's sixteen knobs, as a landscape you can sculpt.
 
+## A bar was set: step `step` to value `v` (0..1) while a hand sweeps across.
 signal painted(step: int, v: float)
+## The hand let go; `steps` are the steps it touched.
 signal released(steps: Array)
 
 var count := 16
@@ -63,6 +65,7 @@ func _ready() -> void:
 		_show(i)
 
 
+## Show step `i` at `v` (clamped to 0..1); ignored out of range.
 func set_step(i: int, v: float) -> void:
 	if i < 0 or i >= count:
 		return

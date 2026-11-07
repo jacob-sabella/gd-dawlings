@@ -1331,6 +1331,7 @@ func _wheel(rows: int, cols: int) -> bool:
 
 # --- folding groups -----------------------------------------------------------------------------
 
+## Fold (true) or unfold the group `key` and lay the matrix out again.
 func set_collapsed(key: Variant, folded: bool) -> void:
 	if folded:
 		collapsed[key] = true

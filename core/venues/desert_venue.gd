@@ -276,6 +276,7 @@ func tent_middle() -> Vector2:
 	return Vector2(TENT_MIDDLE.x * tent_scale(), tent_z(TENT_MIDDLE.y))
 
 
+## Where the tent's poles stand (x, height, z), scaled to the tent.
 func pole_spots() -> Array[Vector3]:
 	var out: Array[Vector3] = []
 	for p: Vector3 in TENT_POLES:

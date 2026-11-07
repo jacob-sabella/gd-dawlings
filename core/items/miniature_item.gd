@@ -622,11 +622,13 @@ func span() -> float:
 	return DAW.state.timeline_length()
 
 
+## The x on the strip lanes for `seconds` of the song.
 func x_of(seconds: float) -> float:
 	var lanes := lanes_rect()
 	return lanes.position.x + clampf(seconds / span(), 0.0, 1.0) * lanes.size.x
 
 
+## The song position, in seconds, under strip x `x`; the inverse of `x_of`.
 func seconds_at_x(x: float) -> float:
 	var lanes := lanes_rect()
 	return clampf((x - lanes.position.x) / lanes.size.x, 0.0, 1.0) * span()

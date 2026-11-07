@@ -59,12 +59,14 @@ func _init() -> void:
 	name = "ModularWorld"
 
 
+## The mix state the world reads: `state_source` if set, else the DAW's.
 func state() -> MixState:
 	if state_source.is_valid():
 		return state_source.call()
 	return DAW.state
 
 
+## What the song is doing as this player hears it: {seconds, playing, valid}. From `heard_source` if set, else the guest's feed, else a silent default.
 func heard() -> Dictionary:
 	if heard_source.is_valid():
 		return heard_source.call()
@@ -276,6 +278,7 @@ static func ring_level(s: MixState, track: int, at: float) -> float:
 	return ring_level_of(ring_notes(s, track), at)
 
 
+## The loudest velocity among `notes` ([start, end, level] triples) sounding at time `at`.
 static func ring_level_of(notes: Array, at: float) -> float:
 	var level := 0.0
 	for n: Array in notes:

@@ -21,12 +21,14 @@ func set_track(t: int, track_name := "") -> void:
 	wall.keys._build_palette()
 
 
+## Light the REC state on the wall and rebuild the key palette if it changed.
 func set_recording(on: bool) -> void:
 	if on != wall._recording:
 		wall._recording = on
 		wall.keys._build_palette()
 
 
+## Show the palette group `g` and rebuild the key palette.
 func show_group(g: String) -> void:
 	wall.group = g
 	wall.keys._build_palette()
@@ -73,6 +75,7 @@ func _shape_of(p: Dictionary) -> String:
 	return "|".join(parts)
 
 
+## Set knob `k` of module `id` to `v` in the wall's patch and move the knob node (and a pad's orb) to match.
 func show_knob(id: String, k: String, v: float) -> void:
 	RackPatch.set_knob(wall.patch, id, k, v)
 	var node: Knob = wall.knobs.get("%s.%s" % [id, k])
@@ -100,12 +103,14 @@ func show_steps(on: Dictionary) -> void:
 			(node as RackBars).set_playhead(int(on.get(id, -1)))
 
 
+## Give each SCOPE module its wave from `waves` ({module id: samples}).
 func show_scopes(waves: Dictionary) -> void:
 	for id: String in wall._scopes:
 		if is_instance_valid(wall._scopes[id]):
 			(wall._scopes[id] as ScopeScreen).set_wave(waves.get(id, PackedFloat32Array()))
 
 
+## Move the level pillars and lamps to the engine's `meters` ({module id: 0..1}), rising fast and falling slowly.
 func show_meters(meters: Dictionary) -> void:
 	for n in wall._pillars.size():
 		var id: String = wall._pillar_for[n]
@@ -131,6 +136,7 @@ func show_meters(meters: Dictionary) -> void:
 				cable.set_glow(clampf(float(meters.get(String(ends[0]).get_slice(".", 0), 0.0)) * 1.6, 0.0, 1.0))
 
 
+## The knobs a hand is holding or that are still settling after one: {"id.knob": value}.
 func turning() -> Dictionary:
 	var out := {}
 	for key: String in wall.knobs:
@@ -202,11 +208,13 @@ func _lay_cables(touching := {}) -> void:
 		return k)
 
 
+## Light the play key to the gate of a played note.
 func show_keys(pitch: int, gate: bool) -> void:
 	if wall.play_key != null:
 		wall.play_key.lit = gate
 
 
+## Light the play key while the rack is being played from the computer keys.
 func show_playing(on: bool) -> void:
 	wall._playing = on
 	if wall.play_key != null:

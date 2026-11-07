@@ -85,6 +85,7 @@ static func available() -> bool:
 	return AudioServer.get_driver_name() != "Dummy"
 
 
+## Start the monitor sound: the native keys helper when available, else the mixing thread. Does nothing when already running or unavailable.
 func start() -> void:
 	if _running or not available():
 		return
@@ -130,6 +131,7 @@ func set_bus(to: StringName) -> void:
 		(_player as AudioStreamPlayer).bus = to if to != &"" else AudioPorts.bus(AudioPorts.MONITOR)
 
 
+## Stop the monitor sound and join its thread.
 func stop() -> void:
 	_running = false
 	if native != null:
@@ -163,6 +165,7 @@ func latency_seconds() -> float:
 	return QUEUE_FRAMES / RATE + MIX_STEP / RATE + AudioServer.get_output_latency()
 
 
+## Sound `pitch` at `velocity` locally, through `redirect` when one is set, else the native helper, else the mixing thread. Ignored while disabled.
 func note_on(pitch: int, velocity: int) -> void:
 	if not enabled:
 		return
@@ -175,6 +178,7 @@ func note_on(pitch: int, velocity: int) -> void:
 	_queue([ON, pitch, velocity])
 
 
+## Release `pitch` by the same route as `note_on`.
 func note_off(pitch: int) -> void:
 	if redirect != null:
 		redirect.note_off(pitch)
@@ -218,6 +222,7 @@ func rest_controls() -> void:
 			control(kind, Session.control_rest(kind))
 
 
+## Release every sounding key and the pedal.
 func all_off() -> void:
 	if redirect != null:
 		redirect.all_off()

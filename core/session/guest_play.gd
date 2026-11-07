@@ -113,6 +113,7 @@ func _release(peer: int) -> void:
 	_held.erase(peer)
 
 
+## Release every key held by every peer.
 func release_all() -> void:
 	for peer: int in _held.keys():
 		_release(peer)

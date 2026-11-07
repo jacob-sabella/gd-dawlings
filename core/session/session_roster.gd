@@ -306,6 +306,7 @@ func _receive_roster(rows: Array) -> void:
 	apply_roster(rows)
 
 
+## Adopt the host's roster rows: register each peer, update names, and drop the participants no longer listed.
 func apply_roster(rows: Array) -> void:
 	var seen := {}
 	for row in rows:

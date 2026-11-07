@@ -95,6 +95,7 @@ static func class_of(piece: StringName) -> String:
 	return "room_scale" if room_scale(piece) else "single"
 
 
+## The kinds of every wheeled piece (the ones that can be pushed about the floor).
 static func ids() -> Array[StringName]:
 	var out: Array[StringName] = []
 	for k: StringName in _table():

@@ -458,6 +458,7 @@ func touched() -> bool:
 	return false
 
 
+## Empty the played-notes strip.
 func clear_strip() -> void:
 	strip = PackedStringArray()
 	last = ""

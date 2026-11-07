@@ -96,6 +96,7 @@ const PATCH_BAY_FRONT := 0.03
 var medium: int = Presentation.Medium.SCREEN
 var xr_bootstrap: XRBootstrap = null
 
+## The venue was switched to `id` (after the room was rebuilt).
 signal venue_changed(id: StringName)
 ## EDIT on the lyric board at a desk: the session panel's LYRICS box, which is not the studio's, is
 ## asked to open (LyricBoard, docs/spatial_loop.md part two, slice 56).

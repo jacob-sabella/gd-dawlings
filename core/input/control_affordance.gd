@@ -14,8 +14,11 @@ extends StaticBody3D
 ## or quantise a value, and the fader should end up where the mix really is rather than where the
 ## hand left it.
 
+## A hand took hold of the control (after the control's own grab handler ran).
 signal grab_started(by: Node)
+## The hand that held the control let go.
 signal grab_ended(by: Node)
+## A whole gesture ended with the control at `value` (a release or a nudge): what history listens to, as opposed to the value moving mid-drag.
 signal value_committed(value: float)
 
 ## 0..1 in the control's own terms, whatever it drives.
@@ -267,6 +270,7 @@ func set_dwell_progress(_fraction: float) -> void:
 	pass
 
 
+## `by` takes hold at world point `at`. Ignored while another hand holds it or something else claims it: the first hand wins.
 func grab_begin(by: Node, at: Vector3) -> void:
 	if claimed_by != null or bead != null:
 		return
@@ -289,12 +293,14 @@ func grab_begin(by: Node, at: Vector3) -> void:
 	grab_started.emit(by)
 
 
+## The holding hand moved to `at`; ignored from any other hand.
 func grab_move(by: Node, at: Vector3) -> void:
 	if held_by != by:
 		return
 	_on_grab_move(at)
 
 
+## The holding hand lets go: ends the edit, holds off the host's echoes for a moment, emits `grab_ended`.
 func grab_end(by: Node) -> void:
 	if held_by != by:
 		return
@@ -483,15 +489,18 @@ var describe_value: Callable = Callable()
 
 var _hovered_by: Array[Node] = []
 
+## The control gained its first hovering hand (true) or lost its last (false).
 signal hover_changed(hovered: bool)
 
 
+## What the control is called on the hover card: `describe_title` if set, else the default for its kind.
 func title() -> String:
 	if describe_title.is_valid():
 		return describe_title.call()
 	return _default_title()
 
 
+## What the control is set to, in its own units: `describe_value` if set, else the default for its kind.
 func readout() -> String:
 	if describe_value.is_valid():
 		return describe_value.call(value)
@@ -519,6 +528,7 @@ func hover_enter(by: Node) -> void:
 		hover_changed.emit(true)
 
 
+## `by` stopped hovering; emits `hover_changed(false)` when the last hand leaves.
 func hover_exit(by: Node) -> void:
 	if not by in _hovered_by:
 		return

@@ -132,6 +132,7 @@ func open() -> void:
 		_keys.grab_focus()
 
 
+## Hide the card and, the first time, write the file that records it has been seen.
 func close() -> void:
 	visible = false
 	_set_hovered(-1)
@@ -189,6 +190,7 @@ func page_size(index: int) -> Vector2:
 	return size
 
 
+## Show page `index` (wrapping round).
 func show_page(index: int) -> void:
 	if _pages.is_empty():
 		_pages = pages()

@@ -42,6 +42,7 @@ func seconds() -> float:
 var why := ""
 
 
+## Begin catching `from` (a bus name or "IN" for the input device), stopping any catch under way; false, with `why` set, if there is nothing to catch.
 func start(from: String) -> bool:
 	stop()
 	why = ""
@@ -79,6 +80,7 @@ static func devices() -> Array:
 	return out
 
 
+## The display name of input device `id`; the id itself if it is not found.
 static func device_label(id: String) -> String:
 	for d in devices():
 		if d["id"] == id:

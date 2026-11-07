@@ -32,6 +32,36 @@ ENGINE = {"initialize", "build", "setup"}
 DOC_TRIVIAL = 3  # a func whose body is this many lines or fewer needs no doc comment
 MEMBER = re.compile(r"(?:static\s+)?(?:func|var|const|signal|enum|@)")
 
+_CLASSES = None
+
+def ancestors(lines):
+    """Source lines of every script this one extends, nearest first (found by class_name or res:// path)."""
+    global _CLASSES
+    if _CLASSES is None:
+        _CLASSES = {}
+        for dp, dn, fn in os.walk("."):
+            dn[:] = [d for d in dn if d not in (".git", ".godot", "vendor", "addons")]
+            for f in fn:
+                if f.endswith(".gd"):
+                    pth = os.path.join(dp, f)
+                    for l in open(pth, errors="replace").read().split("\n")[:6]:
+                        m = re.match(r"class_name\s+(\w+)", l)
+                        if m:
+                            _CLASSES[m.group(1)] = pth
+    out = []
+    cur = lines
+    for _ in range(12):
+        t = next((re.match(r"extends\s+(.+?)\s*$", l) for l in cur if l.startswith("extends")), None)
+        if not t:
+            break
+        name = t.group(1).strip("\"")
+        pth = name[6:] if name.startswith("res://") else _CLASSES.get(name)
+        if not pth or not os.path.isfile(pth):
+            break
+        cur = open(pth, errors="replace").read().split("\n")
+        out.append(cur)
+    return out
+
 def undocumented(path):
     """Return (missing class header?, [(line, kind, name, body lines)]) for one .gd file."""
     lines = open(path, errors="replace").read().split("\n")
@@ -42,10 +72,15 @@ def undocumented(path):
         if l.startswith("##"):
             header = True
     out = []
+    inherited = set()
+    for up in ancestors(lines):
+        inherited |= {m.group(1) for l in up for m in [re.match(r"(?:static\s+)?func\s+(\w+)", l)] if m}
     for i, l in enumerate(lines):
         m = re.match(r"(?:static\s+)?(func|signal)\s+(\w+)", l)
         if not m or m.group(2).startswith("_") or m.group(2) in ENGINE:
             continue
+        if m.group(1) == "func" and m.group(2) in inherited:
+            continue  # an override: the base class's comment is the contract
         j = i - 1
         while j >= 0 and lines[j].startswith("@"):
             j -= 1
@@ -156,8 +191,8 @@ def main():
     print("\n== doc comments: public signals and non-trivial funcs without a ## above, files without a ## class header ==")
     no_header, no_sig, no_fn, long_fn = [], 0, 0, 0
     for p in files:
-        if not p.endswith(".gd"):
-            continue
+        if not p.endswith(".gd") or p.startswith(("tests/", "tools/probe/")):
+            continue  # a test group is named for what it checks; probes are scripts
         miss, items = undocumented(p)
         if miss:
             no_header.append(p)

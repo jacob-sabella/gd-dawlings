@@ -110,6 +110,7 @@ var _spine_world := PackedVector3Array()
 var _spine_at := Transform3D()
 
 
+## A cable between two jack transforms, in `tint`; `seed_value` varies its sag.
 static func create(a: Transform3D, b: Transform3D, tint: Color, seed_value: int = 0) -> PatchCable:
 	var c := PatchCable.new()
 	c.from_xform = a
@@ -127,6 +128,7 @@ func _ready() -> void:
 	rebuild()
 
 
+## Throw the cable's meshes away and build them again between `from_xform` and `to_xform`.
 func rebuild() -> void:
 	for child in get_children():
 		child.queue_free()
@@ -159,6 +161,7 @@ func rebuild() -> void:
 
 # --- what its beads ride (SignalBeads) ----------------------------------------------------
 
+## The cable's centre line in world space, for the beads that ride it; cached until the cable moves.
 func signal_spine() -> PackedVector3Array:
 	if _spine_world.size() != _spine.size() or global_transform != _spine_at:
 		_spine_at = global_transform

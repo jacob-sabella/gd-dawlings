@@ -220,6 +220,7 @@ func claim_hold(key: String) -> void:
 		session._claim.rpc_id(1, key)
 
 
+## Let go of the hold on control `key`: here if this process is the host, else by asking the host.
 func release_hold(key: String) -> void:
 	if key.is_empty() or not session._connected():
 		return

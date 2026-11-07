@@ -6,7 +6,9 @@ extends ControlAffordance
 ## and rings that spread from it, all drawn by one shader, and the orb bobs and swells under a hand. The
 ## wall maps its two axes onto two of the module's knobs; the pad only says where the orb is.
 
+## The orb moved to (`x`, `y`), each 0..1, while held.
 signal moved(x: float, y: float)
+## The orb was let go at (`x`, `y`).
 signal released(x: float, y: float)
 
 const SHADER := """
@@ -154,6 +156,7 @@ func _draw_curve() -> void:
 	_curve.mesh = mesh
 
 
+## Place the orb at (`nx`, `ny`), clamped to 0..1; ignored while a hand holds it.
 func set_xy(nx: float, ny: float) -> void:
 	if is_held():
 		return

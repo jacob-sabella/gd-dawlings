@@ -62,12 +62,14 @@ static func first_spill(rng: RandomNumberGenerator, band_size: int) -> Array[Str
 	return pool.slice(0, n)
 
 
+## Every Tour part, built on first use.
 static func all() -> Array[TourPart]:
 	if _cached.is_empty():
 		_cached = _build()
 	return _cached
 
 
+## The part with `id`; null if there is none.
 static func by_id(id: StringName) -> TourPart:
 	for p in all():
 		if p.id == id:
