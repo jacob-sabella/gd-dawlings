@@ -15,38 +15,8 @@ const PATTERN_WAVE := &"wave"
 const PATTERN_BARS := &"bars"
 const PATTERN_ZIGZAG := &"zigzag"
 
-# type: [face, accent, pattern, tagline]
-const SKINS := {
-	"keys": [Color(0.30, 0.10, 0.12), Color(1.00, 0.35, 0.30), &"checker", "PLAY ME"],
-	"clock": [Color(0.22, 0.17, 0.05), Color(1.00, 0.78, 0.15), &"stripes", "TICK TOCK"],
-	"seq": [Color(0.06, 0.20, 0.26), Color(0.25, 0.90, 0.95), &"bars", "STEP UP"],
-	"lfo": [Color(0.07, 0.24, 0.17), Color(0.35, 1.00, 0.60), &"wave", "WOBBLE"],
-	"noise": [Color(0.20, 0.20, 0.22), Color(0.85, 0.85, 0.90), &"dots", "SSSHHH"],
-	"sh": [Color(0.18, 0.16, 0.26), Color(0.70, 0.60, 1.00), &"bars", "DICE ROLL"],
-	"slew": [Color(0.08, 0.20, 0.22), Color(0.40, 0.95, 0.85), &"wave", "GLIDE"],
-	"att": [Color(0.20, 0.20, 0.13), Color(0.90, 0.90, 0.50), &"stripes", "EASY NOW"],
-	"quant": [Color(0.26, 0.12, 0.22), Color(1.00, 0.50, 0.85), &"checker", "IN TUNE"],
-	"env": [Color(0.28, 0.14, 0.06), Color(1.00, 0.55, 0.20), &"zigzag", "SHAPE IT"],
-	"vco": [Color(0.30, 0.07, 0.07), Color(1.00, 0.30, 0.25), &"wave", "BUZZ"],
-	"drum": [Color(0.27, 0.10, 0.03), Color(1.00, 0.62, 0.10), &"dots", "BOOM TSS"],
-	"svf": [Color(0.05, 0.17, 0.28), Color(0.30, 0.70, 1.00), &"zigzag", "SWEEP"],
-	"ladder": [Color(0.18, 0.07, 0.28), Color(0.80, 0.35, 1.00), &"stripes", "SQUELCH"],
-	"vca": [Color(0.12, 0.22, 0.10), Color(0.60, 0.95, 0.35), &"bars", "VOLUME"],
-	"mix": [Color(0.22, 0.20, 0.10), Color(0.95, 0.85, 0.40), &"bars", "ALL TOGETHER"],
-	"fold": [Color(0.28, 0.07, 0.17), Color(1.00, 0.35, 0.65), &"zigzag", "ORIGAMI"],
-	"drive": [Color(0.30, 0.09, 0.04), Color(1.00, 0.45, 0.15), &"stripes", "HOT HOT HOT"],
-	"crush": [Color(0.10, 0.12, 0.26), Color(0.45, 0.55, 1.00), &"checker", "CRUNCH"],
-	"scope": [Color(0.04, 0.12, 0.10), Color(0.40, 1.00, 0.70), &"wave", "WHAT DO YOU SEE"],
-	"delay": [Color(0.05, 0.20, 0.24), Color(0.35, 0.95, 1.00), &"dots", "ECHO ECHO"],
-	"chorus": [Color(0.07, 0.23, 0.24), Color(0.45, 1.00, 0.85), &"wave", "SHIMMER"],
-	"out": [Color(0.10, 0.10, 0.11), Color(1.00, 1.00, 1.00), &"stripes", "TO THE DAW"],
-	"world": [Color(0.07, 0.22, 0.09), Color(0.50, 1.00, 0.40), &"dots", "LISTEN OUT"],
-	"hand": [Color(0.24, 0.13, 0.04), Color(1.00, 0.72, 0.25), &"dots", "HANDS ON"],
-	"plaits": [Color(0.26, 0.12, 0.28), Color(1.00, 0.55, 1.00), &"checker", "ONE OF 16"],
-	"rings": [Color(0.24, 0.17, 0.05), Color(1.00, 0.80, 0.30), &"dots", "DING"],
-	"reverb": [Color(0.05, 0.08, 0.26), Color(0.40, 0.45, 1.00), &"dots", "CAVERN"],
-	"clouds": [Color(0.14, 0.16, 0.24), Color(0.70, 0.85, 1.00), &"dots", "GRAINY"],
-}
+## The skin of a module no mod gives one: `[face, accent, pattern, tagline]`. Every skin is that
+## four-tuple; the real ones are the `skin` of each `rack_module` entry in `res://mods/builtin/`.
 const DEFAULT := [Color(0.16, 0.16, 0.17), Color(0.8, 0.8, 0.8), &"none", ""]
 
 
@@ -60,7 +30,7 @@ static func _forget() -> void:
 
 
 ## The skin of a module type as `[face, accent, pattern, tagline]`: the mod that provides the type
-## decides, then the table above, then DEFAULT.
+## decides, else DEFAULT.
 static func of(type: String) -> Array:
 	var reg := ModRegistry.ensure_current()
 	if reg != _watching:
@@ -69,7 +39,7 @@ static func of(type: String) -> Array:
 		reg.changed.connect(_forget)
 	if _from_mods.has(type):
 		return _from_mods[type]
-	var skin: Array = SKINS.get(type, DEFAULT)
+	var skin: Array = DEFAULT
 	var e := reg.rack_module_entry(type)
 	if not e.is_empty():
 		var s: Dictionary = e["skin"]

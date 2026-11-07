@@ -1,0 +1,37 @@
+{
+  "modules": {
+    "cho": {"at": [25, 0], "knobs": {"delay": 0.2413793103448276, "depth": 0.5, "fb": 0.22222222222222224, "mix": 0.4, "rate": 0.3}, "type": "chorus"},
+    "clk": {"at": [10, 0], "knobs": {"bpm": 0.38, "swing": 0.0, "sync": 0.0}, "type": "clock"},
+    "dly": {"at": [27, 0], "knobs": {"fb": 0.35, "mix": 0.2, "pp": 0.25, "sync": 0.5, "time": 0.6775932438262062, "tone": 0.7861760963081325}, "type": "delay"},
+    "env": {"at": [16, 0], "knobs": {"a": 0.0, "d": 0.55, "r": 0.35, "s": 0.0}, "type": "env"},
+    "hat": {"at": [12, 0], "knobs": {"accent": 0.8, "decay": 0.1, "freq": 0.2727272727272728, "kind": 0.99, "tone": 0.5}, "type": "drum"},
+    "kick": {"at": [12, 1], "knobs": {"accent": 0.8, "decay": 0.5, "freq": 0.2727272727272728, "kind": 0.0, "tone": 0.5}, "type": "drum"},
+    "mix": {"at": [23, 0], "knobs": {"l1": 0.75, "l2": 0.95, "l3": 0.6, "l4": 0.35, "master": 0.6666666666666666}, "type": "mix"},
+    "out": {"at": [29, 0], "knobs": {"level": 0.65}, "type": "out"},
+    "seq": {"at": [12, 2], "knobs": {"gate": 0.35, "len": 1.0, "s1": 0.35526315789473684, "s10": 0.0, "s11": 0.4868421052631579, "s12": 0.0, "s13": 0.4342105263157895, "s14": 0.0, "s15": 0.35526315789473684, "s16": 0.0, "s2": 0.0, "s3": 0.35526315789473684, "s4": 0.4342105263157895, "s5": 0.0, "s6": 0.35526315789473684, "s7": 0.0, "s8": 0.4868421052631579, "s9": 0.5394736842105263}, "type": "seq"},
+    "sn": {"at": [12, 3], "knobs": {"accent": 0.8, "decay": 0.35, "freq": 0.2727272727272728, "kind": 0.5, "tone": 0.5}, "type": "drum"},
+    "svf": {"at": [18, 0], "knobs": {"cutoff": 0.3, "cv": 0.85, "drive": 0.3, "res": 0.55}, "type": "svf"},
+    "v": {"at": [16, 1], "knobs": {"fine": 0.5, "fm": 0.0, "pw": 0.35, "tune": 0.3, "wave": 0.99}, "type": "vco"},
+    "vca": {"at": [21, 0], "knobs": {"curve": 0.75, "level": 0.5}, "type": "vca"}
+  },
+  "cables": [
+    ["clk.16th", "seq.clk"],
+    ["seq.pitch", "v.pitch"],
+    ["seq.gate", "env.gate"],
+    ["v.out", "svf.in"],
+    ["env.out", "svf.cutoff"],
+    ["svf.lp", "vca.in"],
+    ["env.out", "vca.cv"],
+    ["clk.beat", "kick.trig"],
+    ["clk.bar", "sn.trig"],
+    ["clk.8th", "hat.trig"],
+    ["vca.out", "mix.in1"],
+    ["kick.out", "mix.in2"],
+    ["sn.out", "mix.in3"],
+    ["hat.out", "mix.in4"],
+    ["mix.out", "cho.in"],
+    ["cho.l", "dly.in"],
+    ["dly.l", "out.l"],
+    ["dly.r", "out.r"]
+  ]
+}

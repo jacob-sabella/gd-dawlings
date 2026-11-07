@@ -1,0 +1,31 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "builtin.presets",
+  "name": "Rack presets",
+  "version": "1.0.0",
+  "author": "dawlings",
+  "description": "The ready-made patches of the rack's PRESETS group.",
+  "licence": {"spdx": "MIT", "copyright": "Copyright (c) 2026 Jacob Sabella"},
+  "source": {"kind": "data"},
+  "requires": [{"mod": "builtin.core", "min": "1.0.0"}, {"mod": "builtin.daisysp", "min": "1.0.0"}, {"mod": "builtin.mutable", "min": "1.0.0"}],
+  "provides": [
+    {"kind": "rack_preset", "name": "keys_voice", "title": "Keys voice", "patch": {"file": "patches/keys_voice.patch.json"}},
+    {"kind": "rack_preset", "name": "acid_line", "title": "Acid line", "patch": {"file": "patches/acid_line.patch.json"}},
+    {"kind": "rack_preset", "name": "drum_machine", "title": "Drum machine", "patch": {"file": "patches/drum_machine.patch.json"}},
+    {"kind": "rack_preset", "name": "ambient_bells", "title": "Ambient bells", "patch": {"file": "patches/ambient_bells.patch.json"}},
+    {"kind": "rack_preset", "name": "fm_bass", "title": "Wobble bass", "patch": {"file": "patches/fm_bass.patch.json"}},
+    {"kind": "rack_preset", "name": "big_rig", "title": "Big rig (33 modules)", "patch": {"file": "patches/big_rig.patch.json"}},
+    {"kind": "rack_preset", "name": "heavy_machine", "title": "Heavy machine", "patch": {"file": "patches/heavy_machine.patch.json"}},
+    {"kind": "rack_preset", "name": "techno_drive", "title": "Techno drive", "patch": {"file": "patches/techno_drive.patch.json"}},
+    {"kind": "rack_preset", "name": "dub_wobble", "title": "Dub wobble", "patch": {"file": "patches/dub_wobble.patch.json"}},
+    {"kind": "rack_preset", "name": "glitch_idm", "title": "Glitch IDM", "patch": {"file": "patches/glitch_idm.patch.json"}},
+    {"kind": "rack_preset", "name": "ambient_pad", "title": "Ambient pad", "patch": {"file": "patches/ambient_pad.patch.json"}},
+    {"kind": "rack_preset", "name": "bell_garden", "title": "Bell garden", "patch": {"file": "patches/bell_garden.patch.json"}},
+    {"kind": "rack_preset", "name": "granular_cloud", "title": "Granular cloud", "patch": {"file": "patches/granular_cloud.patch.json"}},
+    {"kind": "rack_preset", "name": "arp_space", "title": "Space arp", "patch": {"file": "patches/arp_space.patch.json"}},
+    {"kind": "rack_preset", "name": "bass_drone", "title": "Bass drone", "patch": {"file": "patches/bass_drone.patch.json"}},
+    {"kind": "rack_preset", "name": "electro_funk", "title": "Electro funk", "patch": {"file": "patches/electro_funk.patch.json"}},
+    {"kind": "rack_preset", "name": "empty", "title": "Empty", "patch": {"file": "patches/empty.patch.json"}}
+  ]
+}

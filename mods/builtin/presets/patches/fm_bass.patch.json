@@ -1,0 +1,23 @@
+{
+  "modules": {
+    "env": {"at": [16, 0], "knobs": {"a": 0.2776189187319261, "d": 0.6876957243031447, "r": 0.6346564550075221, "s": 0.6}, "type": "env"},
+    "fold": {"at": [18, 0], "knobs": {"gain": 0.3, "offset": 0.5}, "type": "fold"},
+    "keys": {"at": [14, 0], "knobs": {"glide": 0.0, "oct": 0.2}, "type": "keys"},
+    "lfo": {"at": [18, 1], "knobs": {"depth": 1.0, "rate": 0.55, "shape": 0.1}, "type": "lfo"},
+    "out": {"at": [25, 0], "knobs": {"level": 0.35}, "type": "out"},
+    "svf": {"at": [20, 0], "knobs": {"cutoff": 0.55, "cv": 0.5, "drive": 0.1, "res": 0.4}, "type": "svf"},
+    "vca": {"at": [23, 0], "knobs": {"curve": 0.75, "level": 0.5}, "type": "vca"},
+    "vco": {"at": [16, 1], "knobs": {"fine": 0.5, "fm": 0.0, "pw": 0.5000000000000001, "tune": 0.5, "wave": 0.5}, "type": "vco"}
+  },
+  "cables": [
+    ["keys.pitch", "vco.pitch"],
+    ["keys.gate", "env.gate"],
+    ["lfo.out", "svf.cutoff"],
+    ["vco.out", "fold.in"],
+    ["env.out", "fold.fold"],
+    ["fold.out", "svf.in"],
+    ["svf.lp", "vca.in"],
+    ["env.out", "vca.cv"],
+    ["vca.out", "out.l"]
+  ]
+}

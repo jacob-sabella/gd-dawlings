@@ -1,0 +1,21 @@
+{
+  "modules": {
+    "clock": {"at": [15, 0], "knobs": {"bpm": 0.5, "swing": 0.0, "sync": 0.0}, "type": "clock"},
+    "drive": {"at": [21, 0], "knobs": {"drive": 0.35, "level": 0.5333333333333333}, "type": "drive"},
+    "hat": {"at": [17, 0], "knobs": {"accent": 0.8, "decay": 0.15, "freq": 0.2727272727272728, "kind": 0.99, "tone": 0.5}, "type": "drum"},
+    "kick": {"at": [17, 1], "knobs": {"accent": 0.8, "decay": 0.5, "freq": 0.2727272727272728, "kind": 0.0, "tone": 0.5}, "type": "drum"},
+    "mix": {"at": [19, 0], "knobs": {"l1": 0.8, "l2": 0.55, "l3": 0.35, "l4": 0.4666666666666666, "master": 0.6666666666666666}, "type": "mix"},
+    "out": {"at": [23, 0], "knobs": {"level": 0.35}, "type": "out"},
+    "snare": {"at": [17, 2], "knobs": {"accent": 0.8, "decay": 0.5, "freq": 0.2727272727272728, "kind": 0.5, "tone": 0.5}, "type": "drum"}
+  },
+  "cables": [
+    ["clock.beat", "kick.trig"],
+    ["clock.bar", "snare.trig"],
+    ["clock.8th", "hat.trig"],
+    ["kick.out", "mix.in1"],
+    ["snare.out", "mix.in2"],
+    ["hat.out", "mix.in3"],
+    ["mix.out", "drive.in"],
+    ["drive.out", "out.l"]
+  ]
+}

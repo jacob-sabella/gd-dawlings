@@ -139,7 +139,7 @@ How today's pieces map onto fields:
 | Build globs for `plaits/dsp`, `stmlib` (`tools/rack_build.sh`) | `source` of the mod: submodule `vendor/mutable-eurorack` @ `f4cfa76` |
 | `RackSkin.SKINS["plaits"]` = `[Color(0.26,0.12,0.28), Color(1,0.55,1), &"checker", "ONE OF 16"]` (`rack_skin.gd:45`) | `skin` (hex: 0.26,0.12,0.28 -> `#421F47`; 1,0.55,1 -> `#FF8CFF`) |
 | `PAD_KNOBS["plaits"] = ["harm","timbre"]` (`rack_wall.gd:114`) | `pad_knobs` |
-| Presets naming `plaits` (`rack_patch.gd:52,154,224,306`) | stay presets, in `builtin.core`'s preset entries, which `requires` `builtin.mutable` |
+| Presets naming `plaits` (`rack_patch.gd:52,154,224,306`) | stay presets, in `builtin.presets`, which `requires` `builtin.core`, `builtin.daisysp` and `builtin.mutable` (step 4) |
 | `THIRD_PARTY_NOTICES.md` row | generated from `licence` + `source` (3.6) |
 
 ```json
@@ -488,10 +488,38 @@ Each step ends with the suite green and no behaviour change unless stated. Steps
      snapshot, as 3.3 says; it rebuilds its table when the registry emits `changed`.
    * Skin colours are stored as hex, so they are the 8-bit rounding of the old floats (at most 0.002
      off per channel; invisible). The test holds them to 0.003; the old table stays for fallback.
-4. **The rest of the rack.** `tools/mods_from_legacy.py` generates manifests for the other 28 modules
-   and the 30 presets from the old tables; an equivalence test proves registry data equals the tables;
-   then the tables, `PAD_KNOBS` and `RackPatch.preset` bodies are deleted and the two enumerating tests
-   rewritten (section 10). `RackCatalogue` is now a forwarder.
+4. **The rest of the rack.** Part (a), built (2026-11-07): all 29 rack modules and the 17 presets are on
+   the registry and the old tables are deleted. Part (b), the `builtin.<name>` rename and the DAW plugins,
+   is still to do. What differs from the sketch:
+   * `tools/mods_from_legacy.py` generates the manifests. Its input is
+     `tests/fixtures/rack_legacy_tables.json`, the old `RackSkin.SKINS`, `RackWall.PAD_KNOBS`,
+     `RackCatalogue.GROUPS` and `RackPatch` presets dumped from the live GDScript at `26b79fc` by a
+     throw-away script, plus `modules.json` (title, group, blurb) and the C++ sources (which module uses
+     `daisysp::`). `--check` says whether the files on disk are what it would write.
+   * Four mods, not three: `builtin.core` (the seven groups and the 14 modules with no third-party DSP,
+     source `in_tree`), `builtin.daisysp` (11 modules, pinned to `vendor/daisysp` @ `2c72eaf`; OUT is here
+     because it uses `DcBlock`), `builtin.mutable` (plaits, rings, reverb, clouds) and **`builtin.presets`**
+     (the 17 presets), not "presets in `builtin.core`" as 3.3 sketches. A preset names modules of all three
+     others, so `builtin.core` would have to `requires` the other two, and a missing `builtin.mutable` would
+     then take KEYS and CLOCK down with it. `builtin.presets` requires the three; losing one loses presets
+     only. Palette groups are global across available mods, so the module mods do not `requires` core for
+     them. `builtin.mutable` no longer declares `Voice`.
+   * Each preset's patch is a file, `mods/builtin/presets/patches/<name>.patch.json` (`{modules, cables}`,
+     one module and one cable per line), named by `patch.file`. `ModRegistry.rack_preset_names/title/patch`
+     serve them; the patch is read on first ask, kept, and handed out as a deep copy with `at` as ints (JSON
+     has one number type). An unreadable file is an empty patch (`RackPatch.preset` returns `empty()`) and
+     a `missing_file` warning; the preset stays listed. Knobs are stored in full (the engine defaults the
+     old code filled in at run time), so a preset no longer follows a later change of a knob's default.
+   * Gone: `RackSkin.SKINS`, `RackWall.PAD_KNOBS`, `RackCatalogue.GROUPS` (now `RackCatalogue.groups()`, the
+     registry's) and the preset bodies and helpers in `rack_patch.gd`. `RackSkin.DEFAULT` stays for a module no
+     mod skins. `RackCatalogue` keeps `modules.json` for jacks and knobs and, for an engine module no mod
+     claims, its title/group/blurb (doc 8: it appears, with the default skin). Nothing else falls back.
+   * Skin colours are rounded to hex exactly as Godot's `Color.to_html` rounds the 32-bit floats (`0.9` is
+     `E6`), so `tests/rack_mod_tests.gd` can compare them to the old floats to the 8-bit step.
+   * The `face` (`out`, `scope`, `seq`) and `mood` keys are not emitted: nothing reads them yet.
+   * Tests: `_test_the_manifests_equal_the_old_tables` (in `tests/rack_mod_tests.gd`, against the frozen
+     fixture) and `_test_a_preset_with_a_bad_file_is_empty_and_never_a_crash`; the catalogue and skin tests
+     now enumerate the registry.
 5. **Patch file and keep-unknown.** `RackPatch.to_dict/from_dict`, `w`, `uses`, the keep-unknown
    `sanitize`, autosave/load in `user://patches/`. Tests of 6.1 and 6.2. The unavailable plate is a
    plain label for now.

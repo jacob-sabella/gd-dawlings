@@ -152,6 +152,7 @@ Do the first unchecked item. Break it down in the log if it is too big for one p
 
 (newest first; one line per pass: date, slice, commit, what changed, numbers)
 
+- 2026-11-07 — slice 4a, rack modules and presets on the registry: `tools/mods_from_legacy.py` writes `builtin.core`, `builtin.daisysp`, `builtin.mutable` (29 modules) and `builtin.presets` (17 presets as patch files) from the frozen old tables (`tests/fixtures/rack_legacy_tables.json`); `RackSkin.SKINS`, `PAD_KNOBS`, `RackCatalogue.GROUPS` and the preset bodies deleted (rack_patch.gd 672 -> 347 lines); new `tests/rack_mod_tests.gd` (`_test_the_manifests_equal_the_old_tables`, bad-preset-file test; old Plaits test replaced); 525 checks over 26 rack/registry tests, only the known cv-bench failure; still to do: the `builtin.<name>` rename and the DAW plugins (queue 4).
 - 2026-11-07 — slice 3 step 3, Plaits on the registry: `res://mods/builtin/mutable/mod.json` (type stays `plaits`, rename to `builtin.*` is step 4), `ModRegistry.ensure_current`, catalogue/skin/pad_knobs read the registry first; new test `_test_the_registry_says_what_the_old_tables_say_for_plaits` (25 checks), 356 checks 0 failed over the rack/registry subset; shipped root is now `res://mods/builtin/`.
 
 - 2026-11-07 — slice 2 closed: owner answers folded into docs/mods.md §11 and docs/layouts.md §13; docs only.

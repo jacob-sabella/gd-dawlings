@@ -1,0 +1,24 @@
+{
+  "modules": {
+    "cho": {"at": [22, 0], "knobs": {"delay": 0.2413793103448276, "depth": 0.5, "fb": 0.22222222222222224, "mix": 0.3, "rate": 0.4343488518418744}, "type": "chorus"},
+    "clk": {"at": [12, 0], "knobs": {"bpm": 0.3, "swing": 0.0, "sync": 0.0}, "type": "clock"},
+    "dly": {"at": [20, 0], "knobs": {"fb": 0.5, "mix": 0.35, "pp": 1.0, "sync": 0.5, "time": 0.6775932438262062, "tone": 0.7861760963081325}, "type": "delay"},
+    "noise": {"at": [14, 1], "knobs": {}, "type": "noise"},
+    "out": {"at": [26, 0], "knobs": {"level": 0.9}, "type": "out"},
+    "rev": {"at": [24, 0], "knobs": {"damp": 0.7, "diff": 0.7, "mix": 0.4, "time": 0.8}, "type": "reverb"},
+    "rg": {"at": [18, 0], "knobs": {"bright": 0.7, "damping": 0.7, "model": 0.2, "note": 0.25, "poly": 0.5, "position": 0.4, "structure": 0.55}, "type": "rings"},
+    "seq": {"at": [14, 0], "knobs": {"gate": 0.3, "len": 1.0, "s1": 0.35526315789473684, "s10": 0.6710526315789473, "s11": 0.0, "s12": 0.5394736842105263, "s13": 0.7763157894736842, "s14": 0.0, "s15": 0.5921052631578947, "s16": 0.0, "s2": 0.5394736842105263, "s3": 0.6710526315789473, "s4": 0.0, "s5": 0.5921052631578947, "s6": 0.0, "s7": 0.7236842105263158, "s8": 0.4605263157894737, "s9": 0.0}, "type": "seq"}
+  },
+  "cables": [
+    ["clk.8th", "seq.clk"],
+    ["seq.pitch", "rg.pitch"],
+    ["seq.gate", "rg.strum"],
+    ["noise.white", "rg.in"],
+    ["rg.odd", "dly.in"],
+    ["dly.l", "cho.in"],
+    ["cho.l", "rev.l"],
+    ["dly.r", "rev.r"],
+    ["rev.l", "out.l"],
+    ["rev.r", "out.r"]
+  ]
+}

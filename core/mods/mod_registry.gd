@@ -35,6 +35,9 @@ var _by_id: Dictionary = {}
 var _problems: Array[ModProblem] = []
 var _owner: Dictionary = {}
 var _rack_modules: Dictionary = {}
+var _preset_names: Array[StringName] = []
+## Preset name -> {"entry": the manifest entry, "folder": the mod's folder, "patch": the patch once read}.
+var _presets: Dictionary = {}
 
 
 ## The shared registry, scanning `default_roots()` into `current` the first time it is asked. This
@@ -76,6 +79,7 @@ func scan(roots: Array[String]) -> void:
 	_claim_entries()
 	_check_groups()
 	_index_rack_modules()
+	_index_presets()
 	for p in _problems:
 		problem_found.emit(p)
 	changed.emit()
@@ -143,6 +147,66 @@ func rack_module_entry(type: String) -> Dictionary:
 ## True when an available mod provides a rack module of this type.
 func has_rack_module(type: String) -> bool:
 	return _rack_modules.has(type)
+
+
+## The names of the rack presets of every available mod, in the order the mods and their entries
+## give them (the PRESETS group of the palette).
+func rack_preset_names() -> Array[StringName]:
+	return _preset_names
+
+
+## The title of a rack preset, or "" when no available mod provides it.
+func rack_preset_title(name: StringName) -> String:
+	return str(_presets.get(name, {}).get("entry", {}).get("title", ""))
+
+
+## A fresh copy of a rack preset's patch (`{modules, cables}`, with column and row as ints), or an
+## empty Dictionary when no available mod provides it or its patch file cannot be read. The file is
+## read on the first ask and kept.
+func rack_preset_patch(name: StringName) -> Dictionary:
+	var held: Dictionary = _presets.get(name, {})
+	if held.is_empty():
+		return {}
+	if not held.has("patch"):
+		held["patch"] = _read_patch(held["entry"], held["folder"])
+	return (held["patch"] as Dictionary).duplicate(true)
+
+
+func _index_presets() -> void:
+	_preset_names.clear()
+	_presets.clear()
+	for m in _mods:
+		if m.status != ModManifest.STATUS_OK:
+			continue
+		for e in m.entries:
+			if e.get("kind") == "rack_preset":
+				_preset_names.append(StringName(e["name"]))
+				_presets[StringName(e["name"])] = {"entry": e, "folder": m.folder}
+
+
+## The patch an entry holds, inline or in the file it names; {} (and a warning) when unreadable.
+func _read_patch(entry: Dictionary, folder: String) -> Dictionary:
+	var src: Dictionary = entry["patch"]
+	if src.get("file") is String:
+		var json := JSON.new()
+		var path := folder.path_join(src["file"])
+		if not FileAccess.file_exists(path) or json.parse(FileAccess.get_file_as_string(path)) != OK \
+				or not json.data is Dictionary:
+			push_warning("ModRegistry: preset %s: %s cannot be read" % [entry["name"], path])
+			return {}
+		src = json.data
+	if not src.get("modules") is Dictionary or not src.get("cables") is Array:
+		return {}
+	var out := {"modules": {}, "cables": (src["cables"] as Array).duplicate(true)}
+	for id in src["modules"]:
+		if not src["modules"][id] is Dictionary:
+			continue
+		var m: Dictionary = (src["modules"][id] as Dictionary).duplicate(true)
+		# JSON has one number type; the rack's cells are ints.
+		var at: Variant = m.get("at")
+		m["at"] = [int(at[0]), int(at[1])] if at is Array and (at as Array).size() >= 2 else [0, 0]
+		out["modules"][id] = m
+	return out
 
 
 func _index_rack_modules() -> void:

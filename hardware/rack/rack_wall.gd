@@ -110,19 +110,11 @@ var _glow: OmniLight3D
 var _halo: MeshInstance3D
 var _halo_material := StandardMaterial3D.new()
 var _drag := {}
-## Modules with an orb pad: the two knobs its two axes are.
-const PAD_KNOBS := {"svf": ["cutoff", "res"], "ladder": ["cutoff", "res"], "vco": ["tune", "wave"], "plaits": ["harm", "timbre"],
-		"reverb": ["time", "mix"], "delay": ["time", "fb"], "clouds": ["position", "density"], "rings": ["structure", "bright"],
-		"chorus": ["rate", "depth"], "crush": ["rate", "bits"], "lfo": ["rate", "depth"], "drum": ["freq", "decay"],
-		"fold": ["gain", "offset"], "env": ["a", "r"], "drive": ["drive", "level"], "slew": ["rise", "fall"],
-		"att": ["gain", "offset"], "quant": ["scale", "root"], "clock": ["bpm", "swing"], "scope": ["time", "gain"], "keys": ["oct", "glide"]}
-## The two knobs of a module's orb pad, or an empty Array when it has none: the mod that provides
-## the type decides, then PAD_KNOBS.
+## The two knobs of a module's orb pad, or an empty Array when it has none: the `pad_knobs` of the
+## `rack_module` entry that provides the type.
 static func pad_knobs(type: String) -> Array:
 	var e := ModRegistry.ensure_current().rack_module_entry(type)
-	if e.get("pad_knobs") is Array:
-		return e["pad_knobs"]
-	return PAD_KNOBS.get(type, [])
+	return e["pad_knobs"] if e.get("pad_knobs") is Array else []
 
 
 ## Pads and bars on the modules: id -> {"node", "keys": [knob ids]}.
@@ -903,7 +895,7 @@ func _build_palette() -> void:
 		if is_instance_valid(n):
 			_drop(n)
 	_palette_nodes.clear()
-	var groups: Array = RackCatalogue.GROUPS.duplicate()
+	var groups: Array = RackCatalogue.groups()
 	groups.append(GROUP_PRESETS)
 	var key_size := Vector2(MODULE_WIDE - 0.008, 0.05)
 	for i in groups.size():

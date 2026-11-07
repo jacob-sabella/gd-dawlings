@@ -6,8 +6,6 @@ extends RefCounted
 ## room needs no compiler to be drawn, and a test holds the two to each other.
 
 const PATH := "res://core/music/rack/modules.json"
-## Groups in the order the palette shows them.
-const GROUPS: Array[String] = ["Source", "Voice", "Control", "Filter", "Shape", "Time", "Mix"]
 
 static var _modules := {}
 static var _order: Array[String] = []
@@ -33,9 +31,9 @@ static func _load() -> void:
 		_modules[m["type"]] = _from_registry(m, reg)
 
 
-## The mods are asked first: a module a mod provides takes its title, group and blurb from the
-## manifest. The jacks and knobs stay the engine's own (docs/mods.md section 7), and every module
-## no mod provides yet keeps the engine snapshot's text.
+## A module a mod provides takes its title, group and blurb from the manifest. The jacks and knobs
+## stay the engine's own (docs/mods.md section 7), and an engine module no mod claims keeps the
+## engine snapshot's text.
 static func _from_registry(m: Dictionary, reg: ModRegistry) -> Dictionary:
 	var e := reg.rack_module_entry(m["type"])
 	if e.is_empty():
@@ -51,6 +49,14 @@ static func _from_registry(m: Dictionary, reg: ModRegistry) -> Dictionary:
 static func _forget() -> void:
 	_modules.clear()
 	_order.clear()
+
+
+## The palette groups in the order the palette shows them: those the available mods declare.
+static func groups() -> Array[String]:
+	var out: Array[String] = []
+	for g in ModRegistry.ensure_current().groups():
+		out.append(g["id"])
+	return out
 
 
 ## Every module type, in palette order.

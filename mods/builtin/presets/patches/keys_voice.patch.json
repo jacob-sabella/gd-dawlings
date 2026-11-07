@@ -1,0 +1,19 @@
+{
+  "modules": {
+    "delay": {"at": [20, 0], "knobs": {"fb": 0.4210526315789474, "mix": 0.25, "pp": 0.25, "sync": 0.5, "time": 0.6775932438262062, "tone": 0.7861760963081325}, "type": "delay"},
+    "keys": {"at": [15, 0], "knobs": {"glide": 0.0, "oct": 0.5}, "type": "keys"},
+    "out": {"at": [24, 0], "knobs": {"level": 0.35}, "type": "out"},
+    "plaits": {"at": [17, 0], "knobs": {"decay": 0.5, "engine": 0.3541666666666667, "fine": 0.5, "fma": 0.5, "harm": 0.5, "lpg": 0.5, "mma": 0.5, "morph": 0.5, "note": 0.5, "timbre": 0.5, "tma": 0.5}, "type": "plaits"},
+    "reverb": {"at": [22, 0], "knobs": {"damp": 0.7, "diff": 0.7, "mix": 0.3, "time": 0.6}, "type": "reverb"}
+  },
+  "cables": [
+    ["keys.pitch", "plaits.pitch"],
+    ["keys.gate", "plaits.trig"],
+    ["keys.gate", "plaits.level"],
+    ["plaits.out", "delay.in"],
+    ["delay.l", "reverb.l"],
+    ["delay.r", "reverb.r"],
+    ["reverb.l", "out.l"],
+    ["reverb.r", "out.r"]
+  ]
+}

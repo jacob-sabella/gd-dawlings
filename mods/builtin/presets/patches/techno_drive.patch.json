@@ -1,0 +1,40 @@
+{
+  "modules": {
+    "clap": {"at": [11, 0], "knobs": {"accent": 0.8, "decay": 0.35, "freq": 0.2727272727272728, "kind": 0.5, "tone": 0.5}, "type": "drum"},
+    "clk": {"at": [9, 0], "knobs": {"bpm": 0.45, "swing": 0.0, "sync": 0.0}, "type": "clock"},
+    "dly": {"at": [25, 0], "knobs": {"fb": 0.4, "mix": 0.18, "pp": 0.25, "sync": 0.5, "time": 0.6775932438262062, "tone": 0.7861760963081325}, "type": "delay"},
+    "drive": {"at": [23, 0], "knobs": {"drive": 0.3, "level": 0.6}, "type": "drive"},
+    "env": {"at": [15, 0], "knobs": {"a": 0.0, "d": 0.6, "r": 0.4, "s": 0.0}, "type": "env"},
+    "hat": {"at": [11, 1], "knobs": {"accent": 0.8, "decay": 0.1, "freq": 0.2727272727272728, "kind": 0.99, "tone": 0.5}, "type": "drum"},
+    "kick": {"at": [11, 2], "knobs": {"accent": 0.8, "decay": 0.55, "freq": 0.15, "kind": 0.0, "tone": 0.5}, "type": "drum"},
+    "lad": {"at": [17, 0], "knobs": {"cutoff": 0.35, "cv": 0.8, "drive": 0.35, "mode": 0.08333333333333333, "res": 0.62}, "type": "ladder"},
+    "mix": {"at": [21, 0], "knobs": {"l1": 0.65, "l2": 1.0, "l3": 0.3, "l4": 0.28, "master": 0.6666666666666666}, "type": "mix"},
+    "out": {"at": [29, 0], "knobs": {"level": 0.6}, "type": "out"},
+    "rev": {"at": [27, 0], "knobs": {"damp": 0.7, "diff": 0.7, "mix": 0.15, "time": 0.45}, "type": "reverb"},
+    "seq": {"at": [11, 3], "knobs": {"gate": 0.45, "len": 1.0, "s1": 0.35526315789473684, "s10": 0.0, "s11": 0.35526315789473684, "s12": 0.6710526315789473, "s13": 0.35526315789473684, "s14": 0.4868421052631579, "s15": 0.4342105263157895, "s16": 0.35526315789473684, "s2": 0.0, "s3": 0.35526315789473684, "s4": 0.6710526315789473, "s5": 0.35526315789473684, "s6": 0.0, "s7": 0.4342105263157895, "s8": 0.35526315789473684, "s9": 0.35526315789473684}, "type": "seq"},
+    "v": {"at": [15, 1], "knobs": {"fine": 0.5, "fm": 0.0, "pw": 0.5000000000000001, "tune": 0.25, "wave": 0.5}, "type": "vco"},
+    "vca": {"at": [19, 0], "knobs": {"curve": 0.75, "level": 0.5}, "type": "vca"}
+  },
+  "cables": [
+    ["clk.16th", "seq.clk"],
+    ["seq.pitch", "v.pitch"],
+    ["seq.gate", "env.gate"],
+    ["v.out", "lad.in"],
+    ["env.out", "lad.cutoff"],
+    ["lad.out", "vca.in"],
+    ["env.out", "vca.cv"],
+    ["clk.beat", "kick.trig"],
+    ["clk.8th", "hat.trig"],
+    ["clk.bar", "clap.trig"],
+    ["vca.out", "mix.in1"],
+    ["kick.out", "mix.in2"],
+    ["hat.out", "mix.in3"],
+    ["clap.out", "mix.in4"],
+    ["mix.out", "drive.in"],
+    ["drive.out", "dly.in"],
+    ["dly.l", "rev.l"],
+    ["dly.r", "rev.r"],
+    ["rev.l", "out.l"],
+    ["rev.r", "out.r"]
+  ]
+}
