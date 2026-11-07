@@ -143,7 +143,7 @@ func anchor_axis(name: StringName, axis: String) -> Variant:
 
 ## Whether an opening `width` wide, its middle at `z`, can be cut through the live room's side wall
 ## `wall` (`wall.left` or `wall.right`). Every shell cuts what is boxy at the doorway and leaves open
-## ground alone (ModularAnnex.cut_the_wall), so the one thing that can say no is the opening not
+## ground alone (AnnexSite.cut_the_wall), so the one thing that can say no is the opening not
 ## lying wholly in the live room's depth, between the control room's rear and the back wall.
 func can_cut(wall: StringName, z: float, width: float) -> bool:
 	if wall != &"wall.left" and wall != &"wall.right":

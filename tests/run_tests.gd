@@ -1049,10 +1049,10 @@ func _fresh_link() -> ReaperBackend:
 ## A photograph has no debugging readout in its corner; an ordinary launch keeps it.
 func _test_no_hud_is_a_launch_switch() -> void:
 	var boot: Node = load("res://scenes/bootstrap.gd").new()
-	check("an ordinary launch has the corner readout", not boot._parse(PackedStringArray([]))["no_hud"])
-	check("--no-hud leaves it out", boot._parse(PackedStringArray(["--no-hud"]))["no_hud"])
+	check("an ordinary launch has the corner readout", not BootstrapArgs.parse(PackedStringArray([]))["no_hud"])
+	check("--no-hud leaves it out", BootstrapArgs.parse(PackedStringArray(["--no-hud"]))["no_hud"])
 	check("--play starts the song, and without it the song stands still (slice 44's shots)",
-			boot._parse(PackedStringArray(["--play"]))["play"] and not boot._parse(PackedStringArray([]))["play"])
+			BootstrapArgs.parse(PackedStringArray(["--play"]))["play"] and not BootstrapArgs.parse(PackedStringArray([]))["play"])
 	boot.free()
 
 
@@ -6690,8 +6690,8 @@ func _test_a_hosted_session_opens_to_the_internet_only_when_asked() -> void:
 	check("on your own there is nothing to open", Session.internet.state == InternetDoor.State.CLOSED)
 	var boot: Node = load("res://scenes/bootstrap.gd").new()
 	check("--public asks for it at launch, and an ordinary host does not",
-			boot._parse(PackedStringArray(["--host", "--public"]))["public"]
-			and not boot._parse(PackedStringArray(["--host"]))["public"])
+			BootstrapArgs.parse(PackedStringArray(["--host", "--public"]))["public"]
+			and not BootstrapArgs.parse(PackedStringArray(["--host"]))["public"])
 	boot.free()
 
 
@@ -17374,8 +17374,8 @@ func _test_each_kind_of_sound_has_its_own_bus() -> void:
 	backend.free()
 	var boot: Node = load("res://scenes/bootstrap.gd").new()
 	check("--direct-audio keeps everything on one output",
-			boot._parse(PackedStringArray(["--direct-audio"]))["direct_audio"]
-			and not boot._parse(PackedStringArray([]))["direct_audio"])
+			BootstrapArgs.parse(PackedStringArray(["--direct-audio"]))["direct_audio"]
+			and not BootstrapArgs.parse(PackedStringArray([]))["direct_audio"])
 	boot.free()
 	var none := AudioPorts.new()
 	none.player_tool = "dawlings-no-such-player"
@@ -44350,10 +44350,10 @@ func _test_noray_lines_and_codes_are_read_as_noray_writes_them() -> void:
 	OS.set_environment("DAWLINGS_NORAY", env)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	var boot: Node = load("res://scenes/bootstrap.gd").new()
-	var parsed: Dictionary = boot._parse(PackedStringArray(["--online", "--noray-server", "n.example:1", "--relay"]))
+	var parsed: Dictionary = BootstrapArgs.parse(PackedStringArray(["--online", "--noray-server", "n.example:1", "--relay"]))
 	check("--online, --noray-server and --relay are launch switches", parsed["online"]
 			and parsed["noray_server"] == "n.example:1" and parsed["relay"])
-	check("and --join-code", boot._parse(PackedStringArray(["--join-code", "N6U U9K"]))["join_code"] == "N6U U9K")
+	check("and --join-code", BootstrapArgs.parse(PackedStringArray(["--join-code", "N6U U9K"]))["join_code"] == "N6U U9K")
 	boot.free()
 
 

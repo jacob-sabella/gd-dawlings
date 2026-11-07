@@ -168,8 +168,8 @@ func _stand_the_modular() -> void:
 func _stand_the_annex() -> void:
 	if studio.venue == null or studio.venue.get_node_or_null("ModularAnnex") != null:
 		return
-	ModularAnnex.cut_the_wall(studio.venue)
-	ModularAnnex.clear_the_site(studio.venue)
+	AnnexSite.cut_the_wall(studio.venue)
+	AnnexSite.clear_the_site(studio.venue)
 	studio.modular_annex = ModularAnnex.build(studio.venue)
 	studio.rack_wall.extra_controls.clear()
 	for kn in studio.modular_annex.bench:
