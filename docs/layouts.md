@@ -1,17 +1,23 @@
 # Layouts: rooms as data
 
-Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 to 5 (11), steps 8, 9 and 10 (edit ops, building, the F3 panel; 7), parts 1 to 3 of step 6 and step 7 (the 14 venue files and the roulette room) are built; the game reads them for the five wheeled pieces, the four zone-mounted ones (`LiveRoom`, `PieceHost`) and the control room's eight trolleys (`ControlRoom`), and `Neighbourhoods` is the layouts' `groups`:
-`core/layouts/` (`LayoutData`, `LayoutCheck`, `LayoutMerge`, `LayoutSet`, `LayoutProblem`, `ShellFacts`, `LayoutResolver`,
-`LayoutValidator` with `LayoutChecks`, `LayoutIssue`, `LayoutReach`, `LayoutGeometry`, `PieceFeet`, `LiveRoom`, `ControlRoom`, `FloorImport`, `VenueCatalogue`, `ShellBuilders`), `layouts/common/live_room.layout.json`, `layouts/common/control_room.layout.json`, `layouts/import/floor_v1.json`, `layouts/venues/<id>.layout.json` (15 files),
-`layouts/layout.schema.json`, fixtures in `tests/fixtures/layouts/`. Where they differ from the text below, the
-text says so ("Built:"). It is queue item 2 of `docs/refactor_loop.md` and feeds items 6-8. "Today" claims cite `docs/refactor_state_map.md` (SM) or
-a file:line. Companion: `docs/mods.md` (manifests, registry; a piece is delivered as a mod entry).
+Status: **built**; sections 11 (current state) and 12 (tests) say how far, the rest is the design it was built from
+(where it still reads "Built:", that paragraph is the as-built record; "today" means before the refactor, see
+`docs/refactor_state_map.md`, SM). Companions: `docs/mods.md` (manifests and the registry), `docs/venues.md` (shells),
+`docs/studio.md` (who stands the pieces), `docs/README.md` (the index).
+
+Code: `core/layouts/` (parse and merge: `LayoutData`, `LayoutCheck`, `LayoutMerge`, `LayoutSet`; place and check:
+`ShellFacts`, `LayoutResolver`, `LayoutValidator`, `LayoutChecks`, `LayoutReach`, `LayoutGeometry`; stand: `LiveRoom`,
+`ControlRoom`, `PieceDef`, `PieceHost`, `PieceFeet`, `PieceBuilders`, `ShellBuilders`, `VenueCatalogue`; edit and keep:
+`RoomDelta`, `RoomDeltaFile`, `RoomDeltas`, `RoomSync`, `RoomFloor`, `LayoutEdit`, `LayoutEditor`, `PieceCatalogue`,
+`PieceGap`; make a room: `RoomMaker`, `MadeRoom`, `MadeRooms`; the one-off `FloorImport`). Data: `layouts/venues/<id>.layout.json`
+(14 venues and `roulette`), `layouts/common/{live_room,control_room}.layout.json`, `layouts/import/floor_v1.json`,
+`layouts/layout.schema.json`; fixtures in `tests/fixtures/layouts/`.
 
 ## 1. Terms
 
 | Term | Meaning |
 |---|---|
-| **Room** | What a player stands in: a shell plus a layout. The 14 venues, each in 3 arrangements, and the roulette room are the rooms that exist today (`Venue.IDS`, `venue.gd:21`; `Venue.VARIANTS`, `:31`). |
+| **Room** | What a player stands in: a shell plus a layout. The 14 venues, each in 3 arrangements, and the roulette room are the rooms that exist today (`Venue.IDS`, `venue.gd`; `Venue.VARIANTS`, ). |
 | **Shell** | The walls, ground, sky and fixed solids. Code today (`XVenue._ready`, SM 2.2). It reports its geometry as **shell facts** (3). |
 | **Layout** | A JSON file: which shell, which pieces stand where, how they are grouped and wired, what is attached. |
 | **Arrangement** | One of a venue's variants (Dusk / Golden hour / Night). In a layout: an entry in `variants` that overrides part of it. |
@@ -19,19 +25,19 @@ a file:line. Companion: `docs/mods.md` (manifests, registry; a piece is delivere
 | **Single item** | A piece that sits in any room: small, a footprint on the floor or a mount on a wall, a zone or a shelf. Cassette rack, sampler, hoop, tablet. |
 | **Room-scale mod** | A piece that needs a room of its own: it claims real estate beyond the live room and a doorway. Today only the modular room (`ModularAnnex`). |
 | **Anchor** | A named point or line the shell provides: `wall.left`, `control_rear`, `zone.synth`, `annex_edge`. Placements are written relative to anchors so they follow the room's width. |
-| **Slot** | A place inside a piece that holds smaller things (the prop shelf's item spots, `Venue.item_spots`, `venue.gd:412`). Slots belong to the piece definition, not the layout. |
+| **Slot** | A place inside a piece that holds smaller things (the prop shelf's item spots, `Venue.item_spots`, `venue.gd`). Slots belong to the piece definition, not the layout. |
 | **Wiring** | Declared relations between pieces: what feeds, rides on or opens onto what. Today these are fields of `Studio` and `if` branches. |
-| **Zone** | One of the five activity boxes (bricks, matrix, drums, vocals, synth, `Venue.ZONES`, `venue.gd:65`). |
+| **Zone** | One of the five activity boxes (bricks, matrix, drums, vocals, synth, `Venue.ZONES`, `venue.gd`). |
 
 Goals and tests this must keep (SM 2.6): every piece clear of every other (`ROOM_CLEAR` 0.6 m,
-`run_tests.gd:26733`) and of the footprint and solids, every station reachable from the mix position,
+`run_tests.gd`) and of the footprint and solids, every station reachable from the mix position,
 in all 42 venue/arrangement combinations.
 
 A correction to the SM for this design: SM 2.2 counts "11 of 14 venue files override `*_spot`".
 Comparing function names with `venue.gd`, those overrides are scenery (`pole_spots`, `chair_spots`).
 The overrides that matter for placement are few: every venue overrides `rooms()` and `zone_solids()`;
-`studio_venue.gd` also `zones()` (`:154`) and `default_prop_shelf_spot()` (`:185`); `greenhouse_venue.gd`
-`annex_edge()` (`:274`); `roulette_room.gd` `live_room_half`, `solids`, `zones`, `rig_roulette_spot`. That
+`studio_venue.gd` also `zones()` () and `default_prop_shelf_spot()` (); `greenhouse_venue.gd`
+`annex_edge()` (); `roulette_room.gd` `live_room_half`, `solids`, `zones`, `rig_roulette_spot`. That
 makes the conversion much smaller than SM 5.2 point 8 feared.
 
 ## 2. Architecture
@@ -130,8 +136,8 @@ side walls, +-`live_room_half`), `control_wall.left|right` (+-`room_width/2`), `
 
 A piece definition is a mod entry of kind `piece` (`docs/mods.md` 3.2), so a mod can add one. The built-in
 ones live in `res://mods/builtin/pieces/`. It replaces a `Stations.ALL` row (24 rows with strings naming
-`Venue` methods, `stations.gd`), a `LIVE_TROLLEYS` entry (`studio.gd:1790`), a `Venue.WHEELED` id and a
-branch in `_carry_live` (`studio.gd:1940`).
+`Venue` methods, `stations.gd`), a `LIVE_TROLLEYS` entry (`studio.gd`), a `Venue.WHEELED` id and a
+branch in `_carry_live` (`studio.gd`).
 
 | Field | R/O | Meaning |
 |---|---|---|
@@ -142,7 +148,7 @@ branch in `_carry_live` (`studio.gd:1940`).
 | `mobility` | O | `wheeled` or `fixed` (default `fixed`); the layout may override per placement |
 | `footprint` | R for floor | `{"half":[x,z],"offset":[x,z]}` and `top`: the same numbers `Stations` `foot`/`foot_z`/`top` and the trolley use, once |
 | `trolley` | O | `{"weight":9.0,"grips":[...]}` (`LIVE_TROLLEYS`) |
-| `needs` | O | zone ids it cannot stand without (`["synth"]` for the sampler, `default_sampler_spot` returns null without one, `venue.gd:658`) |
+| `needs` | O | zone ids it cannot stand without (`["synth"]` for the sampler, `default_sampler_spot` returns null without one, `venue.gd`) |
 | `station` | O | `area`, `air`, `seat`, `reach`, `at`, `frame`, `desk`/`hands` help: the rest of the `Stations` row |
 | `slots` | O | named places inside it that hold items |
 | `followers` | O | what rides with it when it moves (the shelf's toys, the rack's cassettes: today `_carry_live`) |
@@ -205,11 +211,11 @@ Not moved, and why: `levels` and `tv` (the venue's: their inset depends on `back
 
 | Piece | Class | Mount | Mobility | Today |
 |---|---|---|---|---|
-| `cassette_rack`, `sampler`, `tour_case`, `prop_shelf`, `hoop` | single | floor | wheeled | `Venue.WHEELED` (`venue.gd:889`) |
+| `cassette_rack`, `sampler`, `tour_case`, `prop_shelf`, `hoop` | single | floor | wheeled | `Venue.WHEELED` (`venue.gd`) |
 | `wheel`, `sections`, `drums`, `looper`, `lyrics` | single | zone | fixed | `Stations` `zone` field |
-| `stage_table`, `eq_wall`, `levels`, `tv`, `platter`, console, rack trolley, patch stand | single | floor / surface / cart | wheeled | `Studio._build_furniture` (`studio.gd:1229-1770`) + `SessionLayout`; part of the control-room fragment |
+| `stage_table`, `eq_wall`, `levels`, `tv`, `platter`, console, rack trolley, patch stand | single | floor / surface / cart | wheeled | `Studio._build_furniture` (`studio.gd`) + `SessionLayout`; part of the control-room fragment |
 | venue instrument, weather switch | single | venue | fixed | `Stations` `mounted`, `weather`; the shell supplies the spot |
-| plugin tablets, track racks | single | floor | wheeled, player-owned | `studio.gd:2056-2438` |
+| plugin tablets, track racks | single | floor | wheeled, player-owned | `studio.gd` |
 | toys, tablet, instruments on the prop shelf | item | shelf slot | picked up | `ItemRoom`, `item_spots` |
 | `modular_annex` | **room_scale** | beyond wall | fixed | `ModularAnnex`, built onto every venue (`modular_annex.gd`, SM 1.3) |
 
@@ -232,11 +238,11 @@ A room-scale piece declares what it takes:
 
 (these are the `ModularAnnex` constants `Z_FROM`/`Z_TO`/`DEEP`/`HEIGHT`/`DOOR_Z`/`DOOR_WIDE`/`DOOR_HIGH`,
 `modular_annex.gd`). The validator checks that no other room-scale claim overlaps the site, that the wall
-at the door can be cut (a shell fact `can_cut(wall, z, width)`, today `cut_the_wall`, `:648`), and that
+at the door can be cut (a shell fact `can_cut(wall, z, width)`, today `cut_the_wall`, ), and that
 nothing stands in the doorway's walkway. The piece's builder adds its own `floors()` to the walkable
-rooms (as `Venue.walk_rooms` does, `venue.gd:596`) and its `solids()`. The annex then becomes one
+rooms (as `Venue.walk_rooms` does, `venue.gd`) and its `solids()`. The annex then becomes one
 piece the layout lists or omits, instead of `Studio._stand_the_annex` for every venue
-(`studio.gd:4739`); the roulette room omits it (today `modular_spot` returns null there, `venue.gd:588`).
+(`studio.gd`); the roulette room omits it (today `modular_spot` returns null there, `venue.gd`).
 
 ## 5. The layout file
 
@@ -273,7 +279,7 @@ piece the layout lists or omits, instead of `Studio._stand_the_annex` for every 
 the anchors' values plus `pos` (an absent anchor means the floor's origin), `yaw` is about +Y as in
 `Transform3D(Basis(Vector3.UP, yaw), ...)`. `{"frame": "authored:<piece id>", "local": [x, z], "yaw": r}`
 places a piece in another's authored frame (not its pushed one; this is what `default_cassette_rack_spot`
-does, `venue.gd:641`). A zone-mounted piece has no `at`: its definition's zone-relative rule applies.
+does, `venue.gd`). A zone-mounted piece has no `at`: its definition's zone-relative rule applies.
 (**Built, step 6 part 2**: that is superseded for the four whose rule was arithmetic on a zone box. They have an `at` against the zone's anchors;
 see 4.1 "Built (part 2)" and the two extra `at` keys there.)
 
@@ -347,7 +353,7 @@ already take the spot from `venue.*_spot()`, which now reads the layout, and are
 
 The rooftop (`rooftop_venue.gd`, 858 lines) overrides none of the placement functions; it stands on the base
 class (SM 2.2), at base width (`room_width` 11.2, so `live_room_half` 8.8 and zone growth 0). The five
-wheeled pieces' defaults, from `venue.gd:399-540,641-672`:
+wheeled pieces' defaults, from `venue.gd`:
 
 | Piece | Formula in code | Resolves to (x, z, yaw) |
 |---|---|---|
@@ -419,14 +425,14 @@ The venue file, `res://layouts/venues/rooftop.layout.json`:
 ```
 
 The annex resolves, at base width and the rooftop's `annex_edge` = `live_room_half` = 8.8
-(`venue.gd:1275`): near wall centre x = 8.8 + `GAP` 0.63 + `WALL`/2 0.1 = 9.53; inside x 9.63 to 17.63,
+(`venue.gd`): near wall centre x = 8.8 + `GAP` 0.63 + `WALL`/2 0.1 = 9.53; inside x 9.63 to 17.63,
 z 6.0 to 13.0; doorway at z 9.0, 1.9 wide, 2.35 high; the rack at (17.49, 1.0, 9.2), yaw -pi/2, scale 1.2
-(`ModularAnnex.rack_spot`, `modular_annex.gd:87`). The mood is `RackMood.MOODS[&"rooftop"]`
-(`rack_mood.gd:15`: 0.45,0.6,1.0 / 1.0,0.7,0.9 / 0.75).
+(`ModularAnnex.rack_spot`, `modular_annex.gd`). The mood is `RackMood.MOODS[&"rooftop"]`
+(`rack_mood.gd`: 0.45,0.6,1.0 / 1.0,0.7,0.9 / 0.75).
 
 A variant that does change placement shows the idea. `studio` arrangement 1 ("Live room beside") overrides
-`default_prop_shelf_spot` (`studio_venue.gd:185`) to x = `-room_width`/2 + 0.05 + 0.08 + 0.21, z = `ROOM_BACK` +
-`BESIDE_TOYS_IN` 2.4, and `zones()` to `SIDE_ZONES` (`:51`). As data:
+`default_prop_shelf_spot` (`studio_venue.gd`) to x = `-room_width`/2 + 0.05 + 0.08 + 0.21, z = `ROOM_BACK` +
+`BESIDE_TOYS_IN` 2.4, and `zones()` to `SIDE_ZONES` (). As data:
 
 ```json
 {
@@ -442,18 +448,18 @@ A variant that does change placement shows the idea. `studio` arrangement 1 ("Li
 }
 ```
 
-(The real code subtracts `_grow()` from the side-room boxes, `studio_venue.gd:159`: a `grow` value `"inward"` is
-added for it.) Studio's `rooms()` for this arrangement (`:171`) is shell facts and stays code.
+(The real code subtracts `_grow()` from the side-room boxes, `studio_venue.gd`: a `grow` value `"inward"` is
+added for it.) Studio's `rooms()` for this arrangement () is shell facts and stays code.
 
 ### 5.3 The 14 venues, the roulette room and their 3 arrangements
 
 * 14 files `res://layouts/venues/<id>.layout.json`, each with `variants` of 3 titles taken from `Venue.VARIANTS`
-  (`venue.gd:31`). Only the studio's arrangements change placements or zones; in the other 13 a variant is a
+  (`venue.gd`). Only the studio's arrangements change placements or zones; in the other 13 a variant is a
   title and the shell builder reads the index.
 * `roulette.layout.json`: one variant, `"order": null` (not cycled), `zones: {}`, no `modular_annex`, one piece
   `rig_roulette` at x -2.2, z -1.5, yaw 0.5, y 1.45 (`roulette_room.gd`). Its `live_room_half` and `solids`
   are shell facts. The pieces that need no zone (`prop_shelf`, `hoop`, `tour_case`, `cassette_rack`) stand as in the base
-  class, inside the room's own half-width (`:39`); `sampler` has `needs: ["synth"]` and is skipped by the
+  class, inside the room's own half-width (); `sampler` has `needs: ["synth"]` and is skipped by the
   rule "a piece whose `needs` zone is missing is skipped, not an error".
 * 42 combinations remain 14 x 3; the validator test (8) loops the files, not the classes.
 * `Venue.IDS`, `Venue.make_title`, `Venue.variant_titles`, `RackMood.MOODS`, `VENUE_SETS` (tests) are (**built**, step 7)
@@ -494,12 +500,12 @@ class_name LayoutValidator
 | Code | Rule | Replaces |
 |---|---|---|
 | `schema`, `duplicate_id`, `unknown_piece`, `unknown_anchor`, `cycle` | structure, `frame` cycles | new |
-| `off_floor` | footprint inside `rooms` (polygon test) | `_test_every_venue_stands_every_station_clear` (`:26660`) "on the floor" |
+| `off_floor` | footprint inside `rooms` (polygon test) | `_test_every_venue_stands_every_station_clear` () "on the floor" |
 | `hits_solid` | footprint clear of `solids`, zone boxes (`zones` minus the zone it is mounted in) and the control-room footprint | same test |
-| `too_close` | polygon gap between footprints at least `ROOM_CLEAR` (0.6 m) | `_..._keeps_its_pieces_apart...` (`:26741`) |
+| `too_close` | polygon gap between footprints at least `ROOM_CLEAR` (0.6 m) | `_..._keeps_its_pieces_apart...` () |
 | `unreachable` | every station with `station.seat` is reached from the mix position by a clearance-0.3 grid walk over `rooms` minus `solids` and footprints | same test; the walker query is extracted from the test into `LayoutReach` |
 | `no_seat` | the seat point (`station.seat`) is on the floor and faces the piece | same test, "a seat to fit at, facing it" |
-| `group_spread` | group members within `Neighbourhoods.RADIUS` (3.4 m) of their middle | the six `_test_the_*_neighbourhood_*` tests (`:27062`) |
+| `group_spread` | group members within `Neighbourhoods.RADIUS` (3.4 m) of their middle | the six `_test_the_*_neighbourhood_*` tests () |
 | `needs_missing` | a piece whose `needs` zone is absent is **skipped** (no error) | `null` = "no room here" in `Stations` |
 | `door_blocked`, `site_taken`, `wall_uncuttable` | room-scale claims (4.3) | `_test_every_venue_has_a_clear_door_to_the_roulette_room` is separate and stays |
 | `unavailable_mod` | a piece or mod it needs is missing | warning, the piece stays (as plates in `docs/mods.md`) |
@@ -552,30 +558,30 @@ ask_layout(op, args):  move(id, x, z)  rotate(id, yaw)  add(piece, x, z, yaw)  r
 
 Authority applies the op to the room delta, runs `validate_piece`, and either commits (a new `rev`,
 `_publish_room_soon`) or answers with the issues; the ghost goes red. A guest sends the op through
-`Session.ask_room(&"layout", [op, args])` (argument types validated at `session.gd:1686`) and predicts it
+`Session.ask_room(&"layout", [op, args])` (argument types validated at `session.gd`) and predicts it
 locally as `_predict` does now. Fixed pieces can be moved in edit mode only if their placement is
 overridable (`mobility` is a trolley property; a zone-mounted piece moves with its zone, not alone).
 Pushing a wheeled piece in normal play (the Trolley) is the same `move` op at the end of the push, as
-today's `_on_trolley_settled` (`studio.gd:3285`).
+today's `_on_trolley_settled` (`studio.gd`).
 
 **Reset.** `reset(id)` removes that piece from `moved`/`added`/`removed`; `reset("all")` deletes the delta.
 A pushed position equal to the default is not stored (today's `_where_the_venue_stands_it`,
-`studio.gd:3269`) so a wider room re-stands it.
+`studio.gd`) so a wider room re-stands it.
 
 **Reconciling with today.**
 
 | Today | New |
 |---|---|
-| `LayoutProfile` key `floor/<id>`, per player (`layout_profile.gd`) | **Done (step 8)** except a player's own stands: gone as a position store. First run: each stored `floor/*` that is not an old default (`was_an_old_default`, `studio.gd:3249`) becomes a `moved` entry in the delta of the room the player is in; then the keys are removed |
-| Room row `floor {id: [x, z, yaw]}` (`studio.gd:2446`) | **Done (step 8)**: replaced by `layout {room, base, variant, rev, moved, added, removed}` |
+| `LayoutProfile` key `floor/<id>`, per player (`layout_profile.gd`) | **Done (step 8)** except a player's own stands: gone as a position store. First run: each stored `floor/*` that is not an old default (`was_an_old_default`, `studio.gd`) becomes a `moved` entry in the delta of the room the player is in; then the keys are removed |
+| Room row `floor {id: [x, z, yaw]}` (`studio.gd`) | **Done (step 8)**: replaced by `layout {room, base, variant, rev, moved, added, removed}` |
 | Guest's wheel as prediction, host confirms (`move_piece`) | the same, as the `move` op |
 | Room row `placed`, `tablets`, `track_racks` | unchanged (surface homes and player-owned pieces) |
-| `OLD_FLOOR_DEFAULTS`, `OLD_FIT_LINES`, `OLD_EQ_WALL` (`studio.gd:3219-3240`) | **Done (step 6 part 3)**: data in `layouts/import/floor_v1.json`; `FloorImport.run` forgets the saved `floor/<id>` spots that are old defaults once, before `_build_furniture`, and marks the profile (`LayoutProfile.floor_import`, in `[profile]`); the per-build checks in `_trolley` and `_wheel_in_live_pieces` are deleted |
+| `OLD_FLOOR_DEFAULTS`, `OLD_FIT_LINES`, `OLD_EQ_WALL` (`studio.gd`) | **Done (step 6 part 3)**: data in `layouts/import/floor_v1.json`; `FloorImport.run` forgets the saved `floor/<id>` spots that are old defaults once, before `_build_furniture`, and marks the profile (`LayoutProfile.floor_import`, in `[profile]`); the per-build checks in `_trolley` and `_wheel_in_live_pieces` are deleted |
 
 **Persistence unit.** A room is `(base venue or kit, variant)` plus its delta, keyed `<venue>.<variant>` for the
 built-in rooms and `<slug>` for made ones. Positions are therefore **per room**, not global: today a pushed
 hoop keeps its x,z in every venue (re-spotted against each venue's solids on arrival, `_wheel_in_live_pieces`
-`studio.gd:1902`). Open question 2.
+`studio.gd`). Open question 2.
 
 **Sharing and the guest.** The host's delta rides in the room row; the guest builds the same room from the
 shared `base`/`variant` and the delta, so no layout file is transferred. A guest sees everything. A guest
@@ -619,7 +625,7 @@ A panel in the stage manager (the first row picks a venue today, `docs/venues.md
 
 1. **Name** (becomes the slug).
 2. **Shell**: a kit and a size. First kit: `box`, one size, `standard` (the live room every venue has:
-   8.4 x 17.6 m, `venue.gd:81-82` and the `ZONES` comment), walls and floor materials chosen by style. More
+   8.4 x 17.6 m, `venue.gd` and the `ZONES` comment), walls and floor materials chosen by style. More
    sizes are an open question (4).
 3. **Style**: a preset (`warm`, `cool`, `neon`, `daylight`, `dark`) setting the environment, lamps, gear
    style and the rack mood colours (the `RackMood` triple), or "like venue X" which copies that venue's `dress()`
@@ -694,41 +700,56 @@ room falls back to its default, and the player sees a toast.
 | Today | Collapses into |
 |---|---|
 | `Stations.ALL` rows and the `spot: &"name"` strings (`stations.gd`) | piece definitions (`station` block); placement is the layout's `at`, no method names |
-| `Venue.WHEELED`, `Venue.default_spot` (`venue.gd:889,895`) | `mobility: wheeled` + the placement |
+| `Venue.WHEELED`, `Venue.default_spot` (`venue.gd`) | `mobility: wheeled` + the placement |
 | `Venue.default_*_spot` (5) and the ~60 `*_spot()` | `LayoutResolver.transform(layout, id, facts)`; the `*_spot()` methods become one generic `Venue.spot(id)` |
-| `Studio.LIVE_TROLLEYS` (`studio.gd:1790`) | `trolley` and `footprint` in the definition |
+| `Studio.LIVE_TROLLEYS` (`studio.gd`) | `trolley` and `footprint` in the definition |
 | `Studio._carry_live` `match` | `followers` + the builder's `moved()` |
-| `Neighbourhoods.ALL` (`neighbourhoods.gd:30`) | `groups` (**done**, part 3: `Neighbourhoods.all()`) |
+| `Neighbourhoods.ALL` (`neighbourhoods.gd`) | `groups` (**done**, part 3: `Neighbourhoods.all()`) |
 | `Venue.IDS`, `make`, `VARIANTS`, `make_title`, `RackMood.MOODS`, tests' `VENUE_SETS` | the layout directory (`id`, `title`, `order`, `variants`, `mood`) + one `ShellBuilders` table |
 | venue overrides `zones()`, `default_prop_shelf_spot()`, `annex_edge()`, `rig_roulette_spot()` | variant `zones`/`pieces` entries; `annex_edge` a shell fact |
-| `Studio._stand_the_*` (11 functions, `studio.gd:619-1070`) | one `PieceHost` loop over resolved pieces |
+| `Studio._stand_the_*` (11 functions, `studio.gd`) | one `PieceHost` loop over resolved pieces |
 
-## 11. Migration plan
+## 11. Current state
 
-Each step keeps the suite green; none changes behaviour until step 5. Steps 1-7 are queue item 6, 8-10
-item 7, 11-12 item 8.
+| Part | State |
+|---|---|
+| Parser, merge (`extends`, variants), schema, validators, resolver, `ShellFacts` | Built; no Studio needed to validate (`_test_every_layout_is_valid`). |
+| The five wheeled pieces, the zone-mounted pieces, the control-room fragment, `Neighbourhoods` as `groups` | Built. `Studio.pieces` (`PieceHost`) stands them; `LiveRoom` answers `Venue.default_spot`. `OLD_FLOOR_DEFAULTS`, `OLD_FIT_LINES`, `OLD_EQ_WALL` are gone (decision 5; the frozen `floor_v1.json` is read once by `FloorImport`). |
+| 14 venue files and the roulette room | Built. `VenueCatalogue` derives `Venue.IDS`, `variant_titles`, `make_title`, the moods; the shell geometry stays code (decision 1) behind `ShellBuilders`. |
+| Room delta, the `layout` row, persistence | Built (`user://layouts/rooms/`, atomic, `.bak`/`.bad`). |
+| Edit ops (`ask_layout`), the F3 panel, reset | Built for the single items `PieceCatalogue` lists. Not built: other kinds of piece, a station-board or VR entry point. |
+| Sharing: guest apply, unavailable pieces, host-only | Built (`tests/layout_share_tests.gd`). |
+| New-room maker (F4), `MadeRooms`, the two classes of piece | Built; `modular_annex` is the one room-scale piece. |
+| Not moved to data | The `Stations` text rows (title, help lines, look point, seat), the venue's instrument and weather spots (each shell's own geometry), the timeline stand and lamps, `levels` and `tv` placement. They stay code, as the "Not moved" notes in 4.1 say. |
 
-1. **`LayoutData` parser and merge** (`extends`, variants), `layouts/layout.schema.json`, fixtures. Unused. **Done** (see 5.1 "Built").
-2. **`ShellFacts`** and the un-readied-venue equivalence test over 42 + 1. **Done** (see 3 "Built"; no fact needs `_ready`).
-3. **`LayoutResolver`** and `common.live_room` for the five wheeled pieces; a test that resolved transforms
-   equal `Venue.default_spot` for every combination (1e-4). Venues untouched. **Done** (see 5.2 "Built").
-4. **`LayoutValidator`** and `_test_every_layout_is_valid`, with seeded violations. Old tests unchanged. **Done** (see 6 "Built").
-5. **Switch the five.** `default_*_spot` bodies, `WHEELED`, `LIVE_TROLLEYS`, the five `_carry_live` arms read
-   the layout; studio's shelf override becomes its variant entry. Old placement tests must pass untouched. **Done** for
-   the spots, `WHEELED` and the studio entry (see 5.2 "Built (step 5)"); `LIVE_TROLLEYS` and the five `_carry_live` arms moved in step 6a (see 4.1 "Built").
-6. **The rest of `Stations.ALL`**, zone-mounted pieces, the control-room fragment and `Neighbourhoods` to
-   data; `PieceHost` replaces `_stand_the_*`. Old Studio placement tests deleted once equal (each deletion
-   noted in the commit). **Part 1 done** (piece definitions, 4.1); **part 2 done for** the four zone-mounted pieces
-   placed from the layout and nine `_stand_the_*` replaced by `PieceHost.stand` (4.1 "Built (part 2)"); **part 3 done**: the control-room fragment
-   (eight trolleys, the MIXING banner, `fit`), `Neighbourhoods` as `groups` and the one `FloorImport` step (4.1 "Built (part 3)"); still to do: the `Stations` text rows, and the pieces listed there as not moved (`lyrics`, `venue`, `weather`, `modular`, `levels`, `tv`, the timeline stand, the lamps).
-7. **14 venue files and the roulette room**; `IDS`, `VARIANTS`, `make_title`, `RackMood.MOODS` derived. **Done** (see 5.3 "Built (step 7)"; the instrument and weather mounts and the `Stations` text rows stay in code).
-8. **Room delta and the `layout` row**, import of `floor/*`, persistence in `user://layouts/rooms/`. **Done** (see 7 "Built (step 8)").
-9. **Edit ops** (`ask_layout`), edit mode, reset; validators in the loop. **Done** for the single items the catalogue lists (see 7 "Built (step 9)"); not done: other kinds of piece, the station-board and VR entry point.
-10. **Sharing**: guest apply, unavailable pieces, host-only rules; two-instance test. **Done** (see 7 "Built (step 10)").
-11. **`modular_annex` as a room-scale piece** (`claims`, `PieceBuilders`), `class` enforced, and **the new-room maker** (steps 11 and 12 together; the commit says design step 11). **Done** (see 8 "Built (step 11)").
+### How to add a piece (a single item)
 
-`studio.gd` loses lines 619-1070, 1229-2055 and 3000-3320 (SM 3.1, about 2,000 lines) to `PieceHost`,
-`LayoutResolver` and the room-row code in steps 5-8; `venue.gd` loses its `*_spot` block (385-1100).
+1. Write its node class (a `Trolley` child or a node on the venue) and its `PieceDef` row (`core/layouts/piece_def.gd`:
+   trolley name, footprint, top, weight, grips, `needs`, followers). If the node is code, add the builder to
+   `PieceBuilders.BY_NAME`.
+2. Give it a placement in `layouts/common/live_room.layout.json` (or a venue file), written against anchors, not numbers.
+3. To let a player add and remove it in game, add it to `PieceCatalogue` (`REMOVABLE`, `ZONED` or `ADDABLE`).
+4. Run `_test_every_layout_is_valid`, the layout resolver and edit tests (`tests/layout_*_tests.gd`), and
+   `_test_every_venue_leaves_room_for_the_activities`.
+
+A new item a person carries (a toy, an instrument) is not a piece: see `docs/item_room.md`.
+
+### How to add a venue
+
+1. Write `layouts/venues/<id>.layout.json` (copy a small one such as `rooftop`): `id`, `title`, `order`, `extends`
+   the two common fragments, `shell.builder`, `mood`, `variants`.
+2. Write the shell class (`core/venues/<id>_venue.gd`, a `Venue` subclass that dresses all five zones) and add it
+   to `ShellBuilders.BY_NAME`. Nothing else lists venues.
+3. Run `tests/venue_files_tests.gd`, `_test_every_layout_is_valid`, `_test_venues_change_the_world_and_not_the_setup`.
+
+A player-made room needs neither: `RoomMaker` writes a layout whose builder is `BoxVenue`.
+
+### How to add a room-scale piece
+
+There is one (`ModularAnnex`, built onto the right-hand side of every venue but the roulette room, placed by
+`RackHost`). A second needs a `PieceDef` of the room-scale kind, a builder in `PieceBuilders`, and its `claims`
+(4.3), which `LayoutChecks.claims` holds against each other and the shell; check that function and the shell facts
+(`ShellFacts`) cover a second site before relying on them.
 
 ## 12. Tests
 
