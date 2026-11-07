@@ -145,7 +145,7 @@ Do the first unchecked item. Break it down in the log if it is too big for one p
       `builtin.<name>` rename done; plugin catalogue names done; plugin skins, the unavailable plugin slot
       and Reaper's list move into items 5 and 10.)
 - [x] 5. Sample mod as a folder: appears, plays, saves, reloads, replicates (the proof test).
-- [ ] 6. Layouts as data: one venue first, then all of them, keeping the placement guarantees.
+- [x] 6. Layouts as data: one venue first, then all of them, keeping the placement guarantees.
 - [ ] 7. In-game editing (move, add, remove, save, reset) and sharing the layout with the room.
 - [ ] 8. The new-room maker, and the single-item vs room-scale split.
 - [ ] 9. Split `studio.gd` and `venue.gd` as responsibilities move out of them (this happens inside
