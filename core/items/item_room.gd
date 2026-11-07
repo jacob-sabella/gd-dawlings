@@ -161,6 +161,17 @@ var mint_refusal := ""
 var _made_after: Dictionary = {}
 
 
+## Holders and the slots items lie in.
+var slotting := ItemSlots.new(self)
+## Made items: minting, applying and forgetting their rows.
+var made_items := ItemMade.new(self)
+## Throws, flights, hoops and targets.
+var flight := ItemFlight.new(self)
+## Putting items down, wearing, pocketing and where they may lie.
+var placing := ItemPlacing.new(self)
+## The room's items as a row for the session, and back.
+var replica := ItemReplica.new(self)
+
 static func make(kind: StringName) -> Item:
 	match kind:
 		&"duck":
@@ -397,202 +408,59 @@ func made_ids() -> Array[StringName]:
 	return out
 
 
-## On the host: a made item of `kind` carrying `data`, made by `maker` (a peer id), under the next
-## free id (`cassette1`, ...), its row kept in `made` and said (`minted`), and spawned at its home.
-## Null, and `mint_refusal` saying why, past MADE_MOST, MADE_TOTAL or MADE_BYTES, or for no data.
-func mint(kind: StringName, data: Dictionary, maker := 1) -> Item:
-	mint_refusal = ""
-	if not (kind in MADE_KINDS) or data.is_empty():
-		mint_refusal = "There is nothing there to make a %s of." % kind
-		return null
-	var bytes := var_to_bytes(data)
-	mint_refusal = made_refusal(made, bytes.size())
-	if not mint_refusal.is_empty():
-		return null
-	var n := int(_made_after.get(kind, 0)) + 1
-	while items.has(StringName("%s%d" % [kind, n])) or made.has(StringName("%s%d" % [kind, n])):
-		n += 1
-	_made_after[kind] = n
-	var id := StringName("%s%d" % [kind, n])
-	made[id] = [kind, maker, bytes]
-	var item := _make_real(id)
-	minted.emit(item)
-	return item
+## On the host: a made item of `kind` carrying `data`, made by `maker` (a peer id), under the next free id (`cassette1`, ...), its row kept in `made` and said (`minted`), and spawned at its home. Null, and `mint_refusal` saying why, past MADE_MOST, MADE_TOTAL or MADE_BYTES, or for no data (`ItemMade.mint`).
+func mint(kind: StringName, data: Dictionary, maker := 1) -> Item: return made_items.mint(kind, data, maker)
 
 
-## Made item `id` real here, from its row in `made`: spawned at its home and given what it carries.
-## Idempotent, as `spawn` is. Null without a row, or with one that does not read.
-func _make_real(id: StringName) -> Item:
-	if items.has(id):
-		return items[id]
-	var row: Variant = made.get(id)
-	if not (row is Array) or (row as Array).size() != 3 or not ((row as Array)[2] is PackedByteArray):
-		return null
-	var data: Variant = bytes_to_var((row as Array)[2])
-	if not (data is Dictionary):
-		return null
-	var kind := kind_of(id)
-	var n := int(String(id).trim_prefix(String(kind)))
-	_made_after[kind] = maxi(int(_made_after.get(kind, 0)), n)
-	var item := spawn(kind, id, made_home.call(kind, n) if made_home.is_valid() else Transform3D.IDENTITY)
-	if item != null and item.has_method("read"):
-		item.read(data)
-	return item
+## Made item `id` real here, from its row in `made`: spawned at its home and given what it carries (`ItemMade._make_real`).
+func _make_real(id: StringName) -> Item: return made_items._make_real(id)
 
 
-## The made items the host's room names (`made_ids`), here: each one this machine has the row of
-## and has not met made real, and each one here the room no longer names gone. Its row, if any,
-## stays until the host says it is gone (`forget_made`): a row can arrive before the room names it.
-func apply_made(ids: Array) -> void:
-	for id in ids:
-		_make_real(StringName(id))
-	for id in made_ids():
-		if not ids.has(id) and not ids.has(String(id)):
-			despawn(id)
+## The made items the host's room names (`made_ids`), here: each one this machine has the row of and has not met made real, and each one here the room no longer names gone. Its row, if any, stays until the host says it is gone (`forget_made`): a row can arrive before the room names it (`ItemMade.apply_made`).
+func apply_made(ids: Array) -> void: made_items.apply_made(ids)
 
 
-## Made item `id` gone for good, on the host: out of the room and out of `made`, and said.
-func unmake(id: StringName) -> void:
-	if not is_made(id):
-		return
-	despawn(id)
-	made.erase(id)
-	unmade.emit(id)
+## Made item `id` gone for good, on the host: out of the room and out of `made`, and said (`ItemMade.unmake`).
+func unmake(id: StringName) -> void: made_items.unmake(id)
 
 
-## The host said made item `id` is gone: here too, row and all.
-func forget_made(id: StringName) -> void:
-	despawn(id)
-	made.erase(id)
+## The host said made item `id` is gone: here too, row and all (`ItemMade.forget_made`).
+func forget_made(id: StringName) -> void: made_items.forget_made(id)
 
 
 # --- slots (docs/spatial_loop.md part two, slice 23) -------------------------------------------
 
-## Holder `holder`'s slots are `slots` now (this node's frame): what is in them is laid there again.
-func set_holder(holder: StringName, slots: Array[Transform3D]) -> void:
-	holders[holder] = slots
-	for id in items:
-		var item: Item = items[id]
-		if item.slot_in == holder and item.slot_n >= 0 and item.slot_n < slots.size():
-			_lay_in_slot(item, holder, item.slot_n)
+## Holder `holder`'s slots are `slots` now (this node's frame): what is in them is laid there again (`ItemSlots.set_holder`).
+func set_holder(holder: StringName, slots: Array[Transform3D]) -> void: slotting.set_holder(holder, slots)
 
 
-## Whatever is in `holder`'s slot `n`, or null. A bin's is never taken: it swallows.
-func in_slot(holder: StringName, n: int) -> Item:
-	if is_bin(holder):
-		return null
-	for id in items:
-		var item: Item = items[id]
-		if item.slot_in == holder and item.slot_n == n and item.state == Item.State.LOOSE:
-			return item
-	return null
+## Whatever is in `holder`'s slot `n`, or null. A bin's is never taken: it swallows (`ItemSlots.in_slot`).
+func in_slot(holder: StringName, n: int) -> Item: return slotting.in_slot(holder, n)
 
 
-## Why `item` may not go into `holder`'s slot `n`, or "".
+## Why `item` may not go into `holder`'s slot `n`, or "" (`ItemSlots.slot_refusal`).
 func slot_refusal(item: Item, holder: StringName, n: int) -> String:
-	var why := kind_refusal(item, holder)
-	if not why.is_empty():
-		return why
-	var slots: Array = holders.get(holder, [])
-	if n < 0 or n >= slots.size():
-		return "There is no slot %d there." % (n + 1)
-	var there := in_slot(holder, n)
-	if there != null and there != item:
-		return "That slot has %s in it." % there.item_title().to_lower()
-	return ""
+	return slotting.slot_refusal(item, holder, n)
 
 
-## Why `item` may not go into `holder` at all, whichever slot, or "": it was not made while
-## playing, or it is not of a kind the holder takes (HOLDS).
-func kind_refusal(item: Item, holder: StringName) -> String:
-	if not is_made(item.id):
-		return "Only things made while playing go on the %s." % holder
-	var kind := kind_of(item.id)
-	if HOLDS.has(holder) and not kind in HOLDS[holder]:
-		return "Only %s go on the %s." % [" and ".join(PackedStringArray((HOLDS[holder] as Array).map(
-				func(k): return HOLDS_SAID.get(k, String(k))))), holder]
-	return ""
 
 
-## The room's word: `item` into `holder`'s slot `n`, if it may go there. The bin, on the host,
-## retires it. Whether it went.
-func slot(item: Item, holder: StringName, n: int) -> bool:
-	if not slot_refusal(item, holder, n).is_empty():
-		return false
-	if is_bin(holder) and (not authority.is_valid() or authority.call()):
-		unmake(item.id)
-		return true
-	_lay_in_slot(item, holder, n)
-	return true
+## The room's word: `item` into `holder`'s slot `n`, if it may go there. The bin, on the host, retires it. Whether it went (`ItemSlots.slot`).
+func slot(item: Item, holder: StringName, n: int) -> bool: return slotting.slot(item, holder, n)
 
 
-## A hand here put `item` into `holder`'s slot `n`: done at once, and said; or refused, and told.
-func slot_item(item: Item, holder: StringName, n: int) -> bool:
-	var why := slot_refusal(item, holder, n)
-	if not why.is_empty():
-		told.emit(why)
-		return false
-	var id := item.id
-	slot(item, holder, n)
-	asked.emit(&"slot_item", [id, holder, n])
-	return true
+## A hand here put `item` into `holder`'s slot `n`: done at once, and said; or refused, and told (`ItemSlots.slot_item`).
+func slot_item(item: Item, holder: StringName, n: int) -> bool: return slotting.slot_item(item, holder, n)
 
 
-## `item` into `holder`'s slot `n` (`slot_item`), or, with no slot free there (-1), told so; it stays
-## in the hand.
-func _slot_or_tell(item: Item, holder: StringName, n: int) -> void:
-	if n < 0:
-		told.emit("The %s is full: bin one first." % holder)
-		return
-	slot_item(item, holder, n)
 
 
-func _lay_in_slot(item: Item, holder: StringName, n: int) -> void:
-	var slots: Array = holders.get(holder, [])
-	if n < 0 or n >= slots.size():
-		return
-	item.stick_at(slots[n])
-	item.slot_in = holder
-	item.slot_n = n
 
 
-## The slot nearest `at` (global) within `reach`, [holder, n], taken or not; [] for none.
-func slot_near(at: Vector3, reach := SLOT_REACH) -> Array:
-	var best: Array = []
-	var nearest := reach
-	var local := global_transform.affine_inverse() * at if is_inside_tree() else at
-	for holder in holders:
-		var slots: Array = holders[holder]
-		for n in slots.size():
-			var d := ((slots[n] as Transform3D) * Vector3(0, CassetteItem.SIZE.y * 0.5, 0)).distance_to(local)
-			if d < nearest:
-				nearest = d
-				best = [holder, n]
-	return best
+## The slot nearest `at` (global) within `reach`, [holder, n], taken or not; [] for none (`ItemSlots.slot_near`).
+func slot_near(at: Vector3, reach := SLOT_REACH) -> Array: return slotting.slot_near(at, reach)
 
 
-## The free slot nearest the line `aim` (global) points along, within PUT_REACH, and within
-## SLOT_REACH and a half of it: [holder, n], or [] for none.
-func free_slot_along(item: Item, aim: Transform3D) -> Array:
-	var inv := global_transform.affine_inverse() if is_inside_tree() else Transform3D.IDENTITY
-	var local := inv * aim
-	var origin := local.origin
-	var toward := -local.basis.z.normalized()
-	var best: Array = []
-	var nearest := SLOT_REACH * 1.5
-	for holder in holders:
-		var slots: Array = holders[holder]
-		for n in slots.size():
-			var at := (slots[n] as Transform3D) * Vector3(0, CassetteItem.SIZE.y * 0.5, 0)
-			var along := (at - origin).dot(toward)
-			if along <= 0.0 or along > PUT_REACH:
-				continue
-			var off := (origin + toward * along).distance_to(at)
-			var fits := slot_refusal(item, holder, n).is_empty()
-			if off < nearest and fits:
-				nearest = off
-				best = [holder, n]
-	return best
 
 
 ## `id`'s kind, said in the same breath: not `kind_of(id)`, which is also true of the dispenser
@@ -697,7 +565,7 @@ func _rehome() -> void:
 				item.snap_home()
 			Item.State.LOOSE:
 				var at := Vector2(item.resting.origin.x, item.resting.origin.z)
-				if item.slot_in == &"" and not _can_lie(at):
+				if item.slot_in == &"" and not placing._can_lie(at):
 					item.snap_home()
 
 
@@ -738,243 +606,45 @@ func stands(id: StringName) -> bool:
 	return item != null and item.fixed and item.visible
 
 
-## Every item that is not at home, as the room has it: {id: [x, y, z, yaw]} for one lying on
-## the floor (and "stuck" and the quaternion it is turned by after, for one stuck in a board),
-## {id: []} for one in a hand, {id: [true]} for one on a head, {id: ["pocket", n]} for one in a
-## pocket, {id: ["slot", holder, n]} for one in a slot (`holders`). One left out is on the
-## shelf, or, made, at its home (`made_home`). What a made item carries is never here.
-func state() -> Dictionary:
-	var out := {}
-	for id in items:
-		var item: Item = items[id]
-		match item.state:
-			Item.State.LOOSE:
-				# In a slot: which holder's, and which slot; where that is, the holder's.
-				if item.slot_in != &"":
-					out[id] = ["slot", String(item.slot_in), item.slot_n]
-					continue
-				var at := item.resting.origin
-				var entry := [at.x, at.y, at.z, item.resting.basis.get_euler().y]
-				# In the air: how it was thrown too, for a copy that has not flown it to fly.
-				if item.is_flying() and item.launched_with.size() == 3:
-					entry.append(item.throws)
-					entry.append_array(item.launched_with)
-				elif item.is_stuck():
-					# Not lying flat -- stuck in a board: how it is turned, whole.
-					var q := item.resting.basis.get_rotation_quaternion()
-					entry.append_array(["stuck", q.x, q.y, q.z, q.w])
-				out[id] = entry
-			Item.State.HELD:
-				if item.pocket >= 0:
-					out[id] = ["pocket", item.pocket]
-				else:
-					out[id] = [true] if item.on_head else []
-	return out
+## Every item that is not at home, as the room has it: {id: [x, y, z, yaw]} for one lying on the floor (and "stuck" and the quaternion it is turned by after, for one stuck in a board), {id: []} for one in a hand, {id: [true]} for one on a head, {id: ["pocket", n]} for one in a pocket, {id: ["slot", holder, n]} for one in a slot (`holders`). One left out is on the shelf, or, made, at its home (`made_home`). What a made item carries is never here (`ItemReplica.state`).
+func state() -> Dictionary: return replica.state()
 
 
-## Make the items what the host's room says (`state`). Not one a hand here has, nor one this
-## guest has put somewhere and not heard back about (`pending`, by id); nor one the room says is
-## in a hand, which the holds put there (Presence). One the room has on the floor lands there;
-## one it leaves out goes home -- unless it is a personal copy nobody here has met yet (spawned
-## by another peer's pick-up, or already out there when this one joined), which is made real
-## here too, the same way a Tour spill reaches a guest that was not there when it fell; or one
-## nobody holds any more, which is retired rather than sent home.
-func apply(room_items: Dictionary, pending: Dictionary = {}) -> void:
-	for id in room_items:
-		if items.has(id) or not is_personal_copy(id):
-			continue
-		var kind := kind_of(id)
-		var item := spawn(kind, id, items[kind].home if items.has(kind) else Transform3D.IDENTITY)
-		if item != null:
-			item.bound_to = peer_of(id)
-			personal_taken.emit(item)
-	var gone: Array[StringName] = []
-	for id in items:
-		var item: Item = items[id]
-		# A fixed instrument never leaves its station, whatever a room says.
-		if pending.has(id) or item.carried_by != null or item.fixed:
-			continue
-		var entry: Variant = room_items.get(id)
-		if entry == null:
-			if is_personal_copy(id):
-				gone.append(id)
-			elif item.state != Item.State.HOME:
-				item.go_home()
-			continue
-		var spot := entry as Array
-		# On somebody's head: that it is worn is the room's; whose it is, the holds'.
-		if spot.size() == 1:
-			item.set_pocket(-1)
-			item.set_worn(bool(spot[0]))
-			continue
-		# In a slot: laid there, unless it already is.
-		if spot.size() == 3 and spot[0] is String and spot[0] == "slot":
-			var holder := StringName(str(spot[1]))
-			if item.slot_in != holder or item.slot_n != int(spot[2]) or item.state != Item.State.LOOSE:
-				_lay_in_slot(item, holder, int(spot[2]))
-			continue
-		# In somebody's pocket: which, the room's; whose, the holds'.
-		if spot.size() == 2 and spot[0] is String and spot[0] == "pocket":
-			item.set_worn(false)
-			item.set_pocket(int(spot[1]))
-			continue
-		if spot.size() < 4:
-			if spot.is_empty() and item.state == Item.State.HELD:
-				item.set_worn(false)
-				item.set_pocket(-1)
-			continue
-		var at := Vector3(float(spot[0]), float(spot[1]), float(spot[2]))
-		# A throw this copy has not flown: flown here from the same launch, to where the room
-		# says it lands.
-		if spot.size() == 8 and int(spot[4]) > item.throws:
-			item.throws = int(spot[4]) - 1
-			fly(item, spot[5], spot[6], spot[7])
-			if not item.resting.origin.is_equal_approx(at):
-				item.resting = Transform3D(Basis(Vector3.UP, float(spot[3])), at)
-			continue
-		if item.state == Item.State.LOOSE and item.resting.origin.is_equal_approx(at):
-			continue
-		if spot.size() == 9 and spot[4] is String:
-			item.stick_at(Transform3D(Basis(Quaternion(float(spot[5]), float(spot[6]), float(spot[7]),
-					float(spot[8])).normalized()), at))
-			continue
-		item.lay_down(at, float(spot[3]))
-	for id in gone:
-		despawn(id)
+## Make the items what the host's room says (`state`). Not one a hand here has, nor one this guest has put somewhere and not heard back about (`pending`, by id); nor one the room says is in a hand, which the holds put there (Presence). One the room has on the floor lands there; one it leaves out goes home -- unless it is a personal copy nobody here has met yet (spawned by another peer's pick-up, or already out there when this one joined), which is made real here too, the same way a Tour spill reaches a guest that was not there when it fell; or one nobody holds any more, which is retired rather than sent home (`ItemReplica.apply`).
+func apply(room_items: Dictionary, pending: Dictionary = {}) -> void: replica.apply(room_items, pending)
 
 
-## Lay `item` on the floor at `at` (this node's frame), turned to `yaw`, if it can lie there;
-## home if it cannot. True if it lies there. The host's answer to a put-down, and a hand's own.
-## A personal copy never lies anywhere: putting it down retires it (`retire`), same as sending it
-## home, since there is no floor spot that would mean anything once two people can each have one.
-func lay(item: Item, at: Vector2, yaw: float) -> bool:
-	# A fixed instrument lies nowhere but its station.
-	if item.fixed:
-		item.snap_home()
-		return false
-	if is_personal_copy(item.id):
-		retire(item)
-		return false
-	if not _can_lie(at):
-		retire(item)
-		return false
-	var y: float = ground_at.call(at) if ground_at.is_valid() else 0.0
-	item.lay_down(Vector3(at.x, y, at.y), yaw)
-	return true
+## Lay `item` on the floor at `at` (this node's frame), turned to `yaw`, if it can lie there; home if it cannot. True if it lies there. The host's answer to a put-down, and a hand's own. A personal copy never lies anywhere: putting it down retires it (`retire`), same as sending it home, since there is no floor spot that would mean anything once two people can each have one (`ItemReplica.lay`).
+func lay(item: Item, at: Vector2, yaw: float) -> bool: return replica.lay(item, at, yaw)
 
 
-## Throw `item` from a hand here: from `origin` at `velocity` (world space), spinning at `spin`
-## (rad/s, world axes). Flown at once, and said, for the host to fly too.
+## Throw `item` from a hand here: from `origin` at `velocity` (world space), spinning at `spin` (rad/s, world axes). Flown at once, and said, for the host to fly too (`ItemFlight.throw`).
 func throw(item: Item, origin: Vector3, velocity: Vector3, spin: Vector3) -> void:
-	if item.fixed:
-		return
-	var into := global_transform.affine_inverse()
-	var from := into * origin
-	var v := into.basis * velocity
-	var w := into.basis * spin
-	fly(item, from, v, w, int(local_peer.call()) if local_peer.is_valid() else 1)
-	asked.emit(&"throw_item", [item.id, from, v, w])
+	flight.throw(item, origin, velocity, spin)
 
 
-## Fly `item` from `origin` at `velocity`, spinning at `spin` -- all in this node's frame -- the
-## same flight on every machine. `thrown_by` is whoever's throw this is (their peer id, 1 for
-## the host): carried only for a registered target (the Tour case) to tell a host's own throw
-## from a guest's; nothing else here reads it. Where it comes down, it stays if it can lie
-## there; if not, it goes home when it has.
+## Fly `item` from `origin` at `velocity`, spinning at `spin` -- all in this node's frame -- the same flight on every machine. `thrown_by` is whoever's throw this is (their peer id, 1 for the host): carried only for a registered target (the Tour case) to tell a host's own throw from a guest's; nothing else here reads it. Where it comes down, it stays if it can lie there; if not, it goes home when it has (`ItemFlight.fly`).
 func fly(item: Item, origin: Vector3, velocity: Vector3, spin: Vector3, thrown_by: int = 1) -> void:
-	if item.fixed:
-		return
-	var floor: Array = floor_rects.call() if floor_rects.is_valid() else []
-	var start := _onto(floor, origin)
-	var how := item.flies()
-	# Facing the way it was thrown, not the way it sat in the hand: the hand is not the same on
-	# every machine, and the throw has to be.
-	var facing := Quaternion(Basis(Vector3.UP, atan2(-velocity.x, -velocity.z)))
-	var f := Flight.fly(start, velocity, spin, facing, floor,
-			solids.call() if solids.is_valid() else [], how.get("bounce", 0.35), how.get("roll", 3.0),
-			how.get("drag", 0.08), how.get("wing", {}), boards, how.get("point", 0.0),
-			hoops if how.has("radius") else [], how.get("radius", 0.0))
-	item.thrown_by = thrown_by
-	# A personal copy never stays where a throw lands, same as a put-down (`lay`): there is no
-	# floor spot that would mean anything once two people can each have their own, so it always
-	# goes home after -- which `retire` turns into "gone" rather than "back on the shelf".
-	var stays := (f.stuck or _can_lie(Vector2(f.rest.x, f.rest.z))) and not is_personal_copy(item.id)
-	item.launch(f, [origin, velocity, spin], stays)
+	flight.fly(item, origin, velocity, spin, thrown_by)
 
 
-## Something in flight hit a hoop's rim or board (Flight.RIM, Flight.BOARD) at `at` (world
-## space): the nearest hoop sounds it. Whether there was one to.
-func hoop_struck(on: int, speed: float, at: Vector3) -> bool:
-	var hoop := _nearest_hoop(at)
-	if hoop == null:
-		return false
-	hoop.struck(on == Flight.RIM, speed)
-	return true
+## Something in flight hit a hoop's rim or board (Flight.RIM, Flight.BOARD) at `at` (world space): the nearest hoop sounds it. Whether there was one to (`ItemFlight.hoop_struck`).
+func hoop_struck(on: int, speed: float, at: Vector3) -> bool: return flight.hoop_struck(on, speed, at)
 
 
-## `item` has just dropped through hoop `index`, touching nothing on the way if `clean`.
-func basket(item: Item, index: int, clean: bool) -> void:
-	if index < 0 or index >= hoops.size():
-		return
-	var hoop = hoops[index].get("node")
-	if hoop is Hoop and is_instance_valid(hoop):
-		(hoop as Hoop).sink(clean, item)
+## `item` has just dropped through hoop `index`, touching nothing on the way if `clean` (`ItemFlight.basket`).
+func basket(item: Item, index: int, clean: bool) -> void: flight.basket(item, index, clean)
 
 
-## Something in flight hit furniture registered in `targets` at `at` (world space), going at
-## `speed`, thrown by `thrown_by` (its peer id, item.gd's `thrown_by`): the nearest one within
-## its own radius takes it (`struck`, the same duck-typed call `hoop_struck` makes on a Hoop).
-## Whether there was one close enough to.
+## Something in flight hit furniture registered in `targets` at `at` (world space), going at `speed`, thrown by `thrown_by` (its peer id, item.gd's `thrown_by`): the nearest one within its own radius takes it (`struck`, the same duck-typed call `hoop_struck` makes on a Hoop). Whether there was one close enough to (`ItemFlight.target_struck`).
 func target_struck(speed: float, at: Vector3, thrown_by: int) -> bool:
-	var best: Node = null
-	var nearest := INF
-	for t: Dictionary in targets:
-		var node = t.get("node")
-		if not is_instance_valid(node):
-			continue
-		var d := (node as Node3D).global_position.distance_to(at)
-		if d < float(t.get("radius", 0.3)) and d < nearest:
-			nearest = d
-			best = node
-	if best == null:
-		return false
-	best.struck(speed, thrown_by)
-	return true
+	return flight.target_struck(speed, at, thrown_by)
 
 
-func _nearest_hoop(at: Vector3) -> Hoop:
-	var best: Hoop = null
-	var nearest := INF
-	for h: Dictionary in hoops:
-		var node = h.get("node")
-		if not (node is Hoop) or not is_instance_valid(node):
-			continue
-		var d := (node as Hoop).global_position.distance_to(at)
-		if d < nearest:
-			nearest = d
-			best = node
-	return best
 
 
-## What `aim` (world space) is aimed at, for a thrown thing that is aimed (Item.aim_scatter):
-## where it meets a board in front of it, or a throw's length along it. World space.
-func aim_point(aim: Transform3D) -> Vector3:
-	var origin := aim.origin
-	var toward := -aim.basis.z.normalized()
-	for b: Dictionary in boards:
-		var frame: Transform3D = global_transform * (b["at"] as Transform3D)
-		var normal := frame.basis.z.normalized()
-		var facing := toward.dot(normal)
-		if facing > -0.05:
-			continue
-		var along := (frame.origin - origin).dot(normal) / facing
-		if along <= 0.0 or along > AIM_REACH:
-			continue
-		var hit := origin + toward * along
-		var local := frame.affine_inverse() * hit
-		if Vector2(local.x, local.y).length() < float(b.get("radius", b.get("half", 0.0))) * 1.6:
-			return hit
-	return origin + toward * AIM_LENGTH
+## What `aim` (world space) is aimed at, for a thrown thing that is aimed (Item.aim_scatter): where it meets a board in front of it, or a throw's length along it. World space (`ItemFlight.aim_point`).
+func aim_point(aim: Transform3D) -> Vector3: return flight.aim_point(aim)
 
 
 ## The velocity that takes a thing from `from` to `to` at about `speed`, falling as it goes:
@@ -1004,115 +674,30 @@ static func _onto(floor: Array, at: Vector3) -> Vector3:
 	return Vector3(best.x, at.y, best.y)
 
 
-## Put `item` on a head here or take it off (`on`), and say so.
-func wear(item: Item, on: bool) -> void:
-	item.set_worn(on)
-	asked.emit(&"wear_item", [item.id, on])
+## Put `item` on a head here or take it off (`on`), and say so (`ItemPlacing.wear`).
+func wear(item: Item, on: bool) -> void: placing.wear(item, on)
 
 
-## Put `item` in pocket `slot` here, or out of it into the hand (-1), and say so.
-func pocket(item: Item, slot: int) -> void:
-	if item.fixed:
-		return
-	item.set_pocket(slot)
-	asked.emit(&"pocket_item", [item.id, slot])
+## Put `item` in pocket `slot` here, or out of it into the hand (-1), and say so (`ItemPlacing.pocket`).
+func pocket(item: Item, slot: int) -> void: placing.pocket(item, slot)
 
 
-## Send `item` home from a hand here, and say so. "Home" for a personal copy is nowhere at all
-## (`retire`): it is gone, not sent to a shelf spot two people's copies would have to share.
-func send_home(item: Item) -> void:
-	var id := item.id
-	retire(item)
-	asked.emit(&"home_item", [id])
+## Send `item` home from a hand here, and say so. "Home" for a personal copy is nowhere at all (`retire`): it is gone, not sent to a shelf spot two people's copies would have to share (`ItemPlacing.send_home`).
+func send_home(item: Item) -> void: placing.send_home(item)
 
 
-## Put `item` down along `aim` (world space): where the aim meets the floor within reach, or at
-## the aimer's feet when it does not. Home if neither is somewhere it can lie. A made item let go
-## within SLOT_REACH of a slot, or aimed at a free one, goes into it instead (`slot_item`).
-func put_down(item: Item, aim: Transform3D) -> void:
-	if item.fixed:
-		return
-	# A made item let go by a slot goes into it -- or, the slot taken, stays in the hand and says
-	# so -- and one aimed at a free slot within reach goes there.
-	if is_made(item.id) and not holders.is_empty():
-		var middle := item.middle()
-		var near := slot_near(middle)
-		if not near.is_empty():
-			_slot_or_tell(item, near[0], near[1])
-			return
-		var along := free_slot_along(item, aim)
-		if not along.is_empty():
-			_slot_or_tell(item, along[0], along[1])
-			return
-	var local := global_transform.affine_inverse() * aim
-	var origin := local.origin
-	var toward := -local.basis.z.normalized()
-	var spot := Vector2.INF
-	if toward.y < -0.02:
-		var along := -origin.y / toward.y
-		if along > 0.0 and along < PUT_REACH:
-			var hit := origin + toward * along
-			spot = Vector2(hit.x, hit.z)
-			# Aimed at the floor through the gear: it was aimed at the gear.
-			if _through_gear(origin, hit):
-				item.go_home()
-				asked.emit(&"home_item", [item.id])
-				return
-	if spot == Vector2.INF:
-		var ahead := Vector2(toward.x, toward.z)
-		ahead = ahead.normalized() if ahead.length() > 0.01 else Vector2(0, -1)
-		spot = Vector2(origin.x, origin.z) + ahead * AT_FEET
-	# Facing the way you were looking, as if you had set it down in front of you.
-	var yaw := atan2(-toward.x, -toward.z)
-	if lay(item, spot, yaw):
-		asked.emit(&"put_item", [item.id, spot.x, spot.y, yaw])
-	else:
-		asked.emit(&"home_item", [item.id])
+## Put `item` down along `aim` (world space): where the aim meets the floor within reach, or at the aimer's feet when it does not. Home if neither is somewhere it can lie. A made item let go within SLOT_REACH of a slot, or aimed at a free one, goes into it instead (`slot_item`) (`ItemPlacing.put_down`).
+func put_down(item: Item, aim: Transform3D) -> void: placing.put_down(item, aim)
 
 
-## Whether the line from `from` to `to` passes through any gear below its top: a hand reaching
-## past a console puts the thing on the console, not on the floor behind it.
-func _through_gear(from: Vector3, to: Vector3) -> bool:
-	if not gear.is_valid():
-		return false
-	var prints: Array = gear.call()
-	var n := maxi(1, int(from.distance_to(to) / 0.05))
-	for i in n + 1:
-		var p := from.lerp(to, float(i) / n)
-		if p.y >= Walker.SOLID_HEIGHT:
-			continue
-		for f: Dictionary in prints:
-			if Walker._gap(f, Vector2(p.x, p.z)) <= 0.0:
-				return true
-	return false
 
 
-## How high the floor is at `at` (this node's frame).
-func ground(at: Vector2) -> float:
-	return ground_at.call(at) if ground_at.is_valid() else 0.0
+## How high the floor is at `at` (this node's frame) (`ItemPlacing.ground`).
+func ground(at: Vector2) -> float: return placing.ground(at)
 
 
-## Whether something flying at `p` (this node's frame) has hit something: a wall, which is the
-## edge of the floor, or anything standing on the floor -- the venue's solids, the gear -- below
-## its top. For the radio plane (RcPlaneItem), which flies where it is steered.
-func blocked(p: Vector3) -> bool:
-	var at := Vector2(p.x, p.z)
-	var floor: Array = floor_rects.call() if floor_rects.is_valid() else []
-	if not floor.is_empty() and not Flight._on_floor(floor, at):
-		return true
-	var standing: Array = solids.call() if solids.is_valid() else []
-	for f: Dictionary in standing:
-		if p.y < float(f.get("top", Walker.SOLID_HEIGHT)) and Walker._gap(f, at) <= 0.0:
-			return true
-	if gear.is_valid() and p.y < Walker.SOLID_HEIGHT:
-		for f: Dictionary in gear.call():
-			if Walker._gap(f, at) <= 0.0:
-				return true
-	return false
+## Whether something flying at `p` (this node's frame) has hit something: a wall, which is the edge of the floor, or anything standing on the floor -- the venue's solids, the gear -- below its top. For the radio plane (RcPlaneItem), which flies where it is steered (`ItemPlacing.blocked`).
+func blocked(p: Vector3) -> bool: return placing.blocked(p)
 
 
-func _can_lie(at: Vector2) -> bool:
-	if fits.is_valid():
-		return fits.call(at)
-	return true
 
