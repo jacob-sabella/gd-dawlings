@@ -107,8 +107,9 @@ DAWLINGS_TESTS=_test_a,_test_b CLAUDE_JOB_DIR=<scratchpad>/j timeout 500 godot -
 git checkout project.godot        # after every godot run
 ```
 
-The full suite takes 20-40 minutes: run it in the background to a file, at the end of every third
-slice and at the end.
+The full suite takes 20-40 minutes. **Owner instruction (2026-11-07): do NOT run it until the very end
+(item 12).** Every slice runs only its targeted tests (`DAWLINGS_TESTS=...`, in chunks of about 20) plus the
+import check. Last full run: 19411 checks, 46 failed, all known, at `4189d52`.
 
 ## Known failures (not ours; do not fix inside a refactor slice)
 
@@ -124,6 +125,9 @@ As of 2026-11-07, full suite 17880 checks, 46 failed, all of:
 - `_test_you_walk_into_the_room_and_not_through_it`: "the desk has a footprint to walk into" (alone)
 - `_test_the_rooms_cv_bench_is_reached_from_the_wall_and_drives_the_rack` ("the bench has fifteen
   controls", out-of-bounds index 7 on `Array[Knob]`)
+- Subset-only flakes (pass alone, depend on test order): the COLOUR palette check, three `x -5.33`
+  walking checks, the instrument keys-box "hidden for an ordinary host on Reaper" checks.
+- 21 tour-chaos and brief checks fail identically on a clean checkout of `c702838^` (seen in 6f).
 - GuestMidi 60 Hz throttle: take tests that depend on call parity are flaky in subsets.
 
 ## The queue
