@@ -768,6 +768,8 @@ func _ready() -> void:
 	_test_the_layout_resolves_to_the_venues_own_defaults()
 	_test_a_placement_is_anchors_plus_an_offset_or_a_frame()
 	_test_every_layout_is_valid()
+	_test_the_piece_definitions_are_the_classes_own_numbers()
+	_test_a_defined_piece_carries_its_followers()
 	_test_the_validator_names_each_seeded_violation()
 	await _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates()
 	_test_a_rack_catalogue_is_the_engines_own_description()
@@ -45825,6 +45827,45 @@ func _test_shell_anchors_have_the_values_placement_uses() -> void:
 ## docs/layouts.md section 11 step 3: the shipped live-room fragment resolves to Venue.default_spot.
 func _test_the_layout_resolves_to_the_venues_own_defaults() -> void:
 	LayoutResolverTests.new(self).equals_the_venue()
+
+
+## Step 6: the five wheeled pieces are defined once (`PieceDef`) from the classes' own constants.
+func _test_the_piece_definitions_are_the_classes_own_numbers() -> void:
+	check("the definitions are the wheeled five, in trolley order", PieceDef.ids() == Venue.WHEELED
+			and PieceDef.ids().size() == 5)
+	var rack := PieceDef.of(&"cassette_rack")
+	check("the rack's footprint is the class's", rack.foot_half == CassetteRack.FOOT and rack.top == CassetteRack.TOP
+			and rack.weight == 9.0 and rack.followers == [PieceDef.HOLD_RACK])
+	var hoop := PieceDef.of(&"hoop")
+	check("the hoop's footprint is its base and pole, its body the pole", is_equal_approx(hoop.foot_half.x, Hoop.BASE_HALF.x)
+			and hoop.body_centre == Vector2(0, Hoop.POLE_Z) and hoop.grips.size() == 2 and hoop.weight == 10.0)
+	check("the shelf is as big as ZoneKit's", PieceDef.of(&"prop_shelf").foot_half == Vector2(ZoneKit.SHELF.x, ZoneKit.SHELF.z) * 0.5)
+	check("the sampler needs a synth zone, the rest need none", PieceDef.of(&"sampler").needs == [&"synth"]
+			and PieceDef.of(&"tour_case").needs.is_empty())
+	check("a piece nobody defined has no definition", PieceDef.of(&"annex") == null and not PieceFeet.known(&"annex"))
+	var spot := Transform3D(Basis(Vector3.UP, 0.5), Vector3(2, 0, 3))
+	var fp := PieceFeet.footprint(&"tour_case", spot)
+	check("the validator's footprint is the definition's", fp["h"] == PieceDef.of(&"tour_case").foot_half
+			and is_equal_approx(fp["top"], TourCase.BODY_H + TourCase.LID_H))
+
+
+## A trolley is built from the definition, and pushing the shelf takes its followers (the hoops' and
+## the dart boards' places, the items' homes) with it.
+func _test_a_defined_piece_carries_its_followers() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	for id in PieceDef.ids():
+		var def := PieceDef.of(id)
+		var tr: Trolley = studio.live_pieces[id]
+		check("%s's trolley is its definition" % id, tr.name == def.trolley_name and tr.footprint_half == def.foot_half
+				and tr.footprint_centre == def.foot_centre and tr.follow == def.weight and not tr.rolls)
+	var shelf_t: Trolley = studio.live_pieces[&"prop_shelf"]
+	shelf_t.position += Vector3(0.2, 0, 0)
+	check("carry moves the shelf's node to its trolley", studio.pieces.carry(&"prop_shelf")
+			and (studio.venue.get_node("PropShelf") as Node3D).transform.origin.is_equal_approx(studio.venue.prop_shelf_spot().origin))
+	check("and the boards' places follow it", studio.items.boards.size() == studio.venue.dart_boards().size())
+	check("a piece with no definition is left to the studio", not studio.pieces.carry(&"station_board"))
+	_drop_floor_studio(rig)
 
 
 func _test_a_placement_is_anchors_plus_an_offset_or_a_frame() -> void:

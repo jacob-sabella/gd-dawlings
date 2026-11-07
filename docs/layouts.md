@@ -143,6 +143,18 @@ branch in `_carry_live` (`studio.gd:1940`).
 | `claims` | R for `room_scale` | see 4.3 |
 | `limit` | O | max copies per room (1 for `modular_annex`) |
 
+**Built (step 6, first part)**: the code side of the definition exists for the five wheeled pieces. `PieceDef`
+(`core/layouts/piece_def.gd`) has `id`, `kind` (`SINGLE`), `trolley_name`, `foot_centre`/`foot_half`/`top`, `weight`, `grips`,
+`body_centre`/`body_half` (the hoop's pole), `needs` (the sampler: `synth`), the node it moves (`studio_node` or `venue_child`,
+`node_in_set`) and `followers` (`HOLD_RACK`, `HOLD_RACK_IF_GONE`, `SPILLS`, `BOARDS`, `HOOPS`, `ITEMS`); `PieceDef.of(id)` /
+`has` / `ids()`. The numbers are the classes' own constants, written once in `_build()`, and are not in JSON (the doc's `footprint`
+and `trolley` fields stay the data form for when a mod can add a piece; the layout file has only placements). `PieceHost`
+(`core/layouts/piece_host.gd`, held as `Studio.pieces`) is what `studio.gd` lost: `build()` makes each trolley from its definition
+(was `LIVE_TROLLEYS` + the loop in `_build_live_pieces`), `carry(id)` moves the node to `venue.<id>_spot()` and runs the followers
+(was four of the six `_carry_live` arms; `station_board`, `patch_wall` and `mini_table` stay in the studio, they are not in the
+five), and `rehome_items`, `rehome_spills`, `hold_the_rack` moved over from the studio. `PieceFeet` reads `PieceDef`; `Studio.LIVE_TROLLEYS`
+is gone. Not yet: the `piece` mod entry, `PieceBuilders`, `station`, `slots`, `claims` and the annex as a definition.
+
 ### 4.2 Catalogue of today's things
 
 | Piece | Class | Mount | Mobility | Today |
@@ -574,7 +586,7 @@ item 7, 11-12 item 8.
 4. **`LayoutValidator`** and `_test_every_layout_is_valid`, with seeded violations. Old tests unchanged. **Done** (see 6 "Built").
 5. **Switch the five.** `default_*_spot` bodies, `WHEELED`, `LIVE_TROLLEYS`, the five `_carry_live` arms read
    the layout; studio's shelf override becomes its variant entry. Old placement tests must pass untouched. **Done** for
-   the spots, `WHEELED` and the studio entry (see 5.2 "Built (step 5)"); `LIVE_TROLLEYS` and the `_carry_live` arms move with step 6.
+   the spots, `WHEELED` and the studio entry (see 5.2 "Built (step 5)"); `LIVE_TROLLEYS` and the five `_carry_live` arms moved in step 6a (see 4.1 "Built").
 6. **The rest of `Stations.ALL`**, zone-mounted pieces, the control-room fragment and `Neighbourhoods` to
    data; `PieceHost` replaces `_stand_the_*`. Old Studio placement tests deleted once equal (each deletion
    noted in the commit).

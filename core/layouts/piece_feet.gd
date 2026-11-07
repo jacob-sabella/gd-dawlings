@@ -2,9 +2,9 @@ class_name PieceFeet
 extends RefCounted
 
 ## What the validator knows about each kind of piece before piece definitions are data (docs/layouts.md
-## 4.1; queue step 6 moves this into them): the floor footprint of a wheeled piece, the seat of a
+## 4.1; `PieceDef` now holds the wheeled five; the station and the annex move in with the rest of step 6): the floor footprint of a wheeled piece, the seat of a
 ## station, the claims of the one room-scale piece. Nothing is copied: the footprints are the ones the
-## studio's trolleys use (`Studio.LIVE_TROLLEYS`), the heights are the classes' own, the seat is the
+## studio's trolleys use (`PieceDef`), the heights are the classes' own, the seat is the
 ## station row's (`Stations`), the claims are the modular room's constants (`ModularAnnex`).
 
 ## The room-scale piece kind (docs/layouts.md 4.3).
@@ -15,7 +15,7 @@ const CLEAR_IN_FRONT_OF_DOOR := 1.2
 
 ## True for a kind with a known footprint: the wheeled five.
 static func known(kind: StringName) -> bool:
-	return Studio.LIVE_TROLLEYS.has(kind)
+	return PieceDef.has(kind)
 
 
 ## The footprint of `kind` stood at `spot` (studio space): `{c, h, a, top}`, in the form of the walker.
@@ -23,9 +23,9 @@ static func known(kind: StringName) -> bool:
 static func footprint(kind: StringName, spot: Transform3D) -> Dictionary:
 	if not known(kind):
 		return {}
-	var spec: Array = Studio.LIVE_TROLLEYS[kind]
-	var middle: Vector3 = spot * Vector3((spec[1] as Vector2).x, 0.0, (spec[1] as Vector2).y)
-	return LayoutGeometry.footprint(Vector2(middle.x, middle.z), spec[2], LayoutGeometry.yaw_of(spot.basis), _top(kind))
+	var def := PieceDef.of(kind)
+	var middle: Vector3 = spot * Vector3(def.foot_centre.x, 0.0, def.foot_centre.y)
+	return LayoutGeometry.footprint(Vector2(middle.x, middle.z), def.foot_half, LayoutGeometry.yaw_of(spot.basis), def.top)
 
 
 ## The station behind a free-standing piece, or an empty dictionary when it is not one: `{seat, look
@@ -53,19 +53,3 @@ static func claims(kind: StringName, edge: float) -> Dictionary:
 					ModularAnnex.Z_TO - ModularAnnex.Z_FROM),
 			"door_z": ModularAnnex.DOOR_Z, "door_width": wide,
 			"door_walk": Rect2(edge - CLEAR_IN_FRONT_OF_DOOR, ModularAnnex.DOOR_Z - wide * 0.5, CLEAR_IN_FRONT_OF_DOOR - 0.15, wide)}
-
-
-## How tall `kind` stands: the greatest `top` of its class's own solids.
-static func _top(kind: StringName) -> float:
-	match kind:
-		&"prop_shelf":
-			return ZoneKit.SHELF.y
-		&"cassette_rack":
-			return CassetteRack.TOP
-		&"sampler":
-			return Sampler.TOP
-		&"tour_case":
-			return TourCase.BODY_H + TourCase.LID_H
-		&"hoop":
-			return maxf(Hoop.BASE_TOP, Hoop.POLE_TOP)
-	return Walker.SOLID_HEIGHT
