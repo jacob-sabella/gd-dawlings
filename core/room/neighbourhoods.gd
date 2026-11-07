@@ -16,27 +16,40 @@ extends RefCounted
 ## The mixing neighbourhood is the control room's ring round the seat. The venue's own instrument
 ## and weather belong to no neighbourhood: they are the venue's, wherever it puts them.
 
-## In the order a person meets them coming out of the control room. `stations` are the Stations
-## ids that make up the neighbourhood (those of them that stand in a venue); `pieces`, what else of
-## the room's furniture belongs there (Venue.WHEELED ids), which helps place the middle; `lift` (m),
-## how much higher than SIGN_HEIGHT its own banner hangs: the harmony and synth banners can both be
-## on the right-hand wall, one along from the other, and their long titles at one height ran into
-## each other, so the near one hangs lower and the far one higher.
-const ALL := [
-	{"id": &"mixing", "title": "MIXING", "colour": Color(0.95, 0.86, 0.62),
-			"stations": [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv"], "pieces": []},
-	{"id": &"rhythm", "title": "RHYTHM", "colour": Color(1.0, 0.62, 0.42),
-			"stations": [&"drums", &"looper"], "pieces": []},
-	{"id": &"harmony", "title": "HARMONY", "colour": Color(0.62, 0.86, 1.0),
-			"stations": [&"wheel", &"sections"], "pieces": [],
-			"lift": -0.4},
-	{"id": &"synth", "title": "SYNTH & SOUND DESIGN", "colour": Color(0.78, 0.66, 1.0),
-			"stations": [&"sampler"], "pieces": [], "lift": 0.25},
-	{"id": &"vocals", "title": "VOCALS", "colour": Color(1.0, 0.7, 0.82),
-			"stations": [&"lyrics"], "pieces": []},
-	{"id": &"tape", "title": "TAPE & TOYS", "colour": Color(0.7, 1.0, 0.72),
-			"stations": [&"cassette_rack"], "pieces": [&"prop_shelf", &"tour_case", &"hoop"]},
-]
+## The neighbourhoods, in the order a person meets them coming out of the control room: the layout's
+## `groups` (docs/layouts.md section 5), the control-room fragment's first (`mixing`) then the live
+## room's, read once and kept. Each row is {id, title, colour, stations, pieces, lift, banner}:
+## `stations` are the group's members that have a `Stations` row (those of them that stand in a venue),
+## `pieces` the rest (Venue.WHEELED ids), which help place the middle; `lift` (m), how much higher
+## than SIGN_HEIGHT its own banner hangs: the harmony and synth banners can both be on the
+## right-hand wall, one along from the other, and their long titles at one height ran into each
+## other, so the near one hangs lower and the far one higher; `banner`, when the group says where
+## its banner hangs instead of on a wall (the mixing one).
+static func all() -> Array:
+	if _rows.is_empty():
+		for room: LayoutData in [ControlRoom.layout(), LiveRoom.layouts().resolve(LiveRoom.FRAGMENT)]:
+			for g: Dictionary in room.body.get("groups", []):
+				_rows.append(_row(g))
+	return _rows
+
+
+static var _rows: Array = []
+
+
+static func _row(g: Dictionary) -> Dictionary:
+	var stations: Array[StringName] = []
+	var pieces: Array[StringName] = []
+	for m: String in g["members"]:
+		(stations if not Stations.row(StringName(m)).is_empty() else pieces).append(StringName(m))
+	var out := {"id": StringName(g["id"]), "title": g["title"], "colour": Color.html(g.get("colour", "#FFFFFF")),
+			"stations": stations, "pieces": pieces}
+	if g.has("lift"):
+		out["lift"] = float(g["lift"])
+	if g.has("banner"):
+		out["banner"] = g["banner"]
+	return out
+
+
 ## How high a banner hangs on its wall, by default (Venue.sign_height): over the lattice's
 ## shoulders and the booth's lid, under any ceiling a live room has.
 const SIGN_HEIGHT := 2.9
@@ -48,7 +61,7 @@ const LETTER := 0.3
 
 
 static func row(id: StringName) -> Dictionary:
-	for r: Dictionary in ALL:
+	for r: Dictionary in all():
 		if r["id"] == id:
 			return r
 	return {}
@@ -56,7 +69,7 @@ static func row(id: StringName) -> Dictionary:
 
 ## Which neighbourhood station `station` belongs to, or empty for none (the venue's own).
 static func of(station: StringName) -> StringName:
-	for r: Dictionary in ALL:
+	for r: Dictionary in all():
 		if (r["stations"] as Array).has(station):
 			return r["id"]
 	return &""
@@ -94,12 +107,6 @@ static func middle(venue: Venue, id: StringName) -> Variant:
 	return Vector3(c.x, 0, c.y)
 
 
-## How far over the control room's ceiling, and out from its open rear into the live room, the
-## MIXING banner hangs.
-const MIXING_ABOVE := 0.45
-const MIXING_OUT := 0.12
-
-
 ## How far in from a wall's face a banner is (m): proud of what is on the wall, as the studio's
 ## back-wall slats are (12 cm), so they do not cut through its letters.
 const OFF_WALL := 0.15
@@ -126,10 +133,10 @@ static func sign_spot(venue: Venue, id: StringName) -> Variant:
 	if m == null:
 		return null
 	var at: Vector3 = m
-	if id == &"mixing":
+	if row(id).has("banner"):
 		# On the live room's side of the header over the opening, read from the live room only: from
 		# the seat a banner overhead was the biggest thing in the view of the room behind.
-		return Transform3D(Basis.IDENTITY, Vector3(0, Studio.WALL_HEIGHT + MIXING_ABOVE, Studio.ROOM_BACK + MIXING_OUT))
+		return LayoutResolver.place(row(id)["banner"], ControlRoom.facts(venue.room_width))
 	var high := venue.sign_height() + float(row(id).get("lift", 0.0))
 	var mid := Vector2(at.x, at.z)
 	var wall := _nearest_wall(venue, mid, sign_width(id))

@@ -773,6 +773,9 @@ func _ready() -> void:
 	_test_the_zone_mounted_pieces_stand_where_the_old_code_stood_them()
 	_test_a_piece_host_stands_each_piece_where_its_station_is()
 	_test_the_validator_names_each_seeded_violation()
+	_test_the_control_room_fragment_stands_the_furniture_where_the_old_code_did()
+	_test_the_groups_are_the_old_neighbourhoods()
+	_test_the_floor_import_forgets_old_defaults_once()
 	await _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates()
 	_test_a_rack_catalogue_is_the_engines_own_description()
 	_test_a_rack_patch_checks_every_verb()
@@ -8596,7 +8599,7 @@ func _test_what_stands_on_its_own_is_pushed_about_too() -> void:
 	_push(board_t, hand, Vector2(-0.4, 0.2))
 	_roll_until_still(board_t)
 	check("a pushed station board is where its stand is", studio.station_board.transform.is_equal_approx(board_t.transform)
-			and not board_t.position.is_equal_approx(Studio.BOARD_AT))
+			and not board_t.position.is_equal_approx(ControlRoom.spot(&"station_board", studio.room_width).origin))
 	var legs: Trolley = studio.live_pieces[&"patch_wall"]
 	_push(legs, hand, Vector2(0.5, 0.3))
 	_roll_until_still(legs)
@@ -8604,7 +8607,7 @@ func _test_what_stands_on_its_own_is_pushed_about_too() -> void:
 	check("a pushed patch wall's screen is on its legs", screen.has_meta(&"on_legs")
 			and screen.transform.is_equal_approx(legs.transform * Transform3D(
 				Basis.IDENTITY.scaled(Vector3.ONE * Studio.PATCH_WALL_SCALE), Vector3(0, Studio.PATCH_WALL_TOP, 0)))
-			and legs.position.distance_to(studio._patch_wall_default().origin) > 0.3)
+			and legs.position.distance_to((ControlRoom.spot(&"patch_wall", studio.room_width) as Transform3D).origin) > 0.3)
 
 	# Another venue and back: what was pushed is where it was left, and in the Rig Roulette room,
 	# which has no booth to stand it against, the sampler is not there at all.
@@ -8759,7 +8762,7 @@ func _test_the_wheel_turns_furniture_only_while_held() -> void:
 	var turned := rad_to_deg(wrapf(piece.rotation.y - heading, -PI, PI))
 	check("two notches and one fine notch back is 27 degrees (%.2f)" % turned,
 			absf(turned - 27.0) < 0.05)
-	var deck_turned := rad_to_deg(wrapf(studio.deck.rotation.y - deg_to_rad(SessionLayout.DECK_HEADING), -PI, PI))
+	var deck_turned := rad_to_deg(wrapf(studio.deck.rotation.y - ControlRoom.fit_of(&"deck_trolley")["yaw"], -PI, PI))
 	check("and the tape machine turned with its cart (%.2f)" % deck_turned,
 			absf(deck_turned - 27.0) < 0.05)
 	_drop_floor_studio(rig)
@@ -11631,7 +11634,7 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	check("and walls everything else (%d edges)" % edges.size(), edges.size() == 8)
 
 	# Momentum: letting go does not stop you dead, but friction does stop you. Walked toward -x,
-	# away from the stage table's trolley (Studio.STAGE_AT), which stands across the +x lane.
+	# away from the stage table's trolley (the fragment's stage_trolley), which stands across the +x lane.
 	walker.global_position = Vector3(0, 0, 1.6)
 	walker.velocity = Vector3.ZERO
 	for i in 60:
@@ -11688,8 +11691,8 @@ func _test_the_room_is_laid_out_for_the_size_of_the_session() -> void:
 	# The rule on its own: the authored room is what a thirteen-track desk gets.
 	var small := SessionLayout.fit(0.461)
 	close_to("a small desk keeps the authored room width", small["room_width"], SessionLayout.BASE_WIDTH)
-	check("and the rack where it was authored", (small["rack"][0] as Vector2).distance_to(SessionLayout.RACK_AT) < 0.01)
-	check("and the deck", (small["deck_trolley"][0] as Vector2).distance_to(SessionLayout.DECK_AT) < 0.01)
+	check("and the rack where it was authored", (small["rack"][0] as Vector2).distance_to(ControlRoom.fit_of(&"rack")["at"]) < 0.01)
+	check("and the deck", (small["deck_trolley"][0] as Vector2).distance_to(ControlRoom.fit_of(&"deck_trolley")["at"]) < 0.01)
 	var huge := SessionLayout.fit(3.0)
 	check("a six-metre desk gets a wider room (%.1f m)" % huge["room_width"],
 			huge["room_width"] > 6.0 + SessionLayout.RACK_GAP * 2.0)
@@ -27065,7 +27068,7 @@ func _check_neighbourhood(hood: StringName) -> void:
 				var own := flat.distance_to(Vector2(mid.x, mid.z))
 				if own > Neighbourhoods.RADIUS:
 					strays.append("%s %.1f m from the middle" % [s, own])
-				for other: Dictionary in Neighbourhoods.ALL:
+				for other: Dictionary in Neighbourhoods.all():
 					if other["id"] == hood or other["id"] == &"mixing":
 						continue
 					var m: Variant = Neighbourhoods.middle(venue, other["id"])
@@ -27135,34 +27138,34 @@ func _test_an_old_rooms_saved_defaults_give_way_to_the_new_room() -> void:
 	var at := func(x: float, z: float, deg: float) -> Transform3D:
 		return Transform3D(Basis(Vector3.UP, deg_to_rad(deg)), Vector3(x, 0, z))
 	check("the 8 x 6 m room's rack, deck, patch stand, stage table, EQ wall, board, patch wall and lamps are old defaults",
-			Studio.was_an_old_default(&"rack", at.call(-1.75, -0.42, 45.0))
-			and Studio.was_an_old_default(&"deck_trolley", at.call(1.25, -0.10, -50.0))
-			and Studio.was_an_old_default(&"patch_stand", at.call(3.05, 1.25, -90.0))
-			and Studio.was_an_old_default(&"stage_trolley", at.call(-2.1, 1.95, 30.0))
-			and Studio.was_an_old_default(&"eq_wall", at.call(3.38, -1.55, Studio.EQ_WALL_HEADING))
-			and Studio.was_an_old_default(&"station_board", at.call(1.55, 2.3, Studio.BOARD_HEADING))
-			and Studio.was_an_old_default(&"patch_wall", at.call(-3.45, -1.3, 90.0))
-			and Studio.was_an_old_default(&"lamp_1", at.call(-2.85, 1.25, 0.0))
-			and Studio.was_an_old_default(&"lamp_3", at.call(-2.30, 0.95, 0.0)))
+			FloorImport.was_old_default(&"rack", at.call(-1.75, -0.42, 45.0))
+			and FloorImport.was_old_default(&"deck_trolley", at.call(1.25, -0.10, -50.0))
+			and FloorImport.was_old_default(&"patch_stand", at.call(3.05, 1.25, -90.0))
+			and FloorImport.was_old_default(&"stage_trolley", at.call(-2.1, 1.95, 30.0))
+			and FloorImport.was_old_default(&"eq_wall", at.call(3.38, -1.55, -74.0))
+			and FloorImport.was_old_default(&"station_board", at.call(1.55, 2.3, 223.0))
+			and FloorImport.was_old_default(&"patch_wall", at.call(-3.45, -1.3, 90.0))
+			and FloorImport.was_old_default(&"lamp_1", at.call(-2.85, 1.25, 0.0))
+			and FloorImport.was_old_default(&"lamp_3", at.call(-2.30, 0.95, 0.0)))
 	check("and so are the old room's, widened for a bigger desk: the rack further out on its old line, the EQ wall on a wider wall",
-			Studio.was_an_old_default(&"rack", at.call(-2.63, -0.42, 45.0))
-			and Studio.was_an_old_default(&"deck_trolley", at.call(2.05, -0.10, -50.0))
-			and Studio.was_an_old_default(&"eq_wall", at.call(3.78, -1.55, Studio.EQ_WALL_HEADING)))
+			FloorImport.was_old_default(&"rack", at.call(-2.63, -0.42, 45.0))
+			and FloorImport.was_old_default(&"deck_trolley", at.call(2.05, -0.10, -50.0))
+			and FloorImport.was_old_default(&"eq_wall", at.call(3.78, -1.55, -74.0)))
 	check("a spot a player pushed a piece to is not",
-			not Studio.was_an_old_default(&"rack", at.call(-2.4, 0.6, 10.0))
-			and not Studio.was_an_old_default(&"eq_wall", at.call(3.38, -0.4, Studio.EQ_WALL_HEADING))
-			and not Studio.was_an_old_default(&"stage_trolley", at.call(-1.0, 2.5, 0.0)))
+			not FloorImport.was_old_default(&"rack", at.call(-2.4, 0.6, 10.0))
+			and not FloorImport.was_old_default(&"eq_wall", at.call(3.38, -0.4, -74.0))
+			and not FloorImport.was_old_default(&"stage_trolley", at.call(-1.0, 2.5, 0.0)))
 	var fit := SessionLayout.fit(0.9)
-	check("nor is where the new room stands them", not Studio.was_an_old_default(&"rack", at.call((fit["rack"][0] as Vector2).x, (fit["rack"][0] as Vector2).y, fit["rack"][1]))
-			and not Studio.was_an_old_default(&"deck_trolley", at.call((fit["deck_trolley"][0] as Vector2).x, (fit["deck_trolley"][0] as Vector2).y, fit["deck_trolley"][1]))
-			and not Studio.was_an_old_default(&"patch_stand", at.call((fit["patch_stand"][0] as Vector2).x, (fit["patch_stand"][0] as Vector2).y, fit["patch_stand"][1])))
+	check("nor is where the new room stands them", not FloorImport.was_old_default(&"rack", at.call((fit["rack"][0] as Vector2).x, (fit["rack"][0] as Vector2).y, fit["rack"][1]))
+			and not FloorImport.was_old_default(&"deck_trolley", at.call((fit["deck_trolley"][0] as Vector2).x, (fit["deck_trolley"][0] as Vector2).y, fit["deck_trolley"][1]))
+			and not FloorImport.was_old_default(&"patch_stand", at.call((fit["patch_stand"][0] as Vector2).x, (fit["patch_stand"][0] as Vector2).y, fit["patch_stand"][1])))
 
 	# In a studio: a layout that saved the old defaults opens with the gear in the new room's places.
 	var saved_layout := Session.layout
 	Session.layout = LayoutProfile.new()
 	Session.layout.save_path = "user://test_old_room_layout.cfg"
 	Session.layout.set_transform(&"floor/stage_trolley", Presentation.Mode.STUDIO, at.call(-2.1, 1.95, 30.0))
-	Session.layout.set_transform(&"floor/station_board", Presentation.Mode.STUDIO, at.call(1.55, 2.3, Studio.BOARD_HEADING))
+	Session.layout.set_transform(&"floor/station_board", Presentation.Mode.STUDIO, at.call(1.55, 2.3, 223.0))
 	Session.layout.set_transform(&"floor/lamp_1", Presentation.Mode.STUDIO, at.call(-1.0, 3.0, 0.0))
 	# The tight room's rack and deck, as a layout saved them (2026-10-30: the deck a centimetre off
 	# its old spot, and the room "back to things being pretty cramped around the mixing console").
@@ -27176,8 +27179,8 @@ func _test_an_old_rooms_saved_defaults_give_way_to_the_new_room() -> void:
 	var near := func(t: Node3D, x: float, z: float) -> bool:
 		return Vector2(t.position.x, t.position.z).distance_to(Vector2(x, z)) < 0.05
 	check("the stage table saved at its old default stands at the new one",
-			near.call(studio.stage_trolley, Studio.STAGE_AT.x, Studio.STAGE_AT.z))
-	check("so does the station board", near.call(studio.live_pieces[&"station_board"], Studio.BOARD_AT.x, Studio.BOARD_AT.z))
+			near.call(studio.stage_trolley, ControlRoom.spot(&"stage_trolley", studio.room_width).origin.x, ControlRoom.spot(&"stage_trolley", studio.room_width).origin.z))
+	check("so does the station board", near.call(studio.live_pieces[&"station_board"], ControlRoom.spot(&"station_board", studio.room_width).origin.x, ControlRoom.spot(&"station_board", studio.room_width).origin.z))
 	var lamp: Node3D = null
 	for t in studio.floor_plan.pieces:
 		if (t as Trolley).piece_id == &"lamp_1":
@@ -27188,10 +27191,10 @@ func _test_an_old_rooms_saved_defaults_give_way_to_the_new_room() -> void:
 	var rack: Node3D = studio.live_pieces.get(&"rack", studio.rack_trolley)
 	check("the rack and the deck saved at the tight room's spots are fitted out of the desk's way (%s, %s)"
 			% [rack.position, studio.deck_trolley.position],
-			rack.position.x <= SessionLayout.RACK_AT.x + 0.05 and studio.deck_trolley.position.x >= SessionLayout.DECK_AT.x - 0.05)
+			rack.position.x <= ControlRoom.fit_of(&"rack")["at"].x + 0.05 and studio.deck_trolley.position.x >= ControlRoom.fit_of(&"deck_trolley")["at"].x - 0.05)
 	check("and their old spots are not kept as anyone's choice",
-			not Studio.was_an_old_default(&"rack", Session.layout.transform_for(&"floor/rack", Presentation.Mode.STUDIO, rack.transform))
-			and not Studio.was_an_old_default(&"deck_trolley",
+			not FloorImport.was_old_default(&"rack", Session.layout.transform_for(&"floor/rack", Presentation.Mode.STUDIO, rack.transform))
+			and not FloorImport.was_old_default(&"deck_trolley",
 					Session.layout.transform_for(&"floor/deck_trolley", Presentation.Mode.STUDIO, studio.deck_trolley.transform)))
 	studio.queue_free()
 	await get_tree().process_frame
@@ -40209,9 +40212,9 @@ func _test_f_visits_the_eq_wall_on_its_trolley() -> void:
 	check("with its plaque on the trolley, folded", trolley.find_child("Plaque", true, false) != null
 			and not Stations.plaque_open(trolley.find_child("Plaque", true, false)))
 	var facing := trolley.global_basis.z
-	# In off the wall into the ring round the seat (Studio.EQ_WALL_IN), where the seat sees it.
+	# In off the wall into the ring round the seat (the fragment's eq_wall), where the seat sees it.
 	check("on the right-hand side, in off its wall, facing into the room (%s, %s)" % [trolley.position, facing],
-			trolley.position.x > studio.room_width * 0.5 - Studio.EQ_WALL_IN - 0.1 and trolley.position.x > 2.0
+			trolley.position.x > (ControlRoom.spot(&"eq_wall", studio.room_width) as Transform3D).origin.x - 0.1 and trolley.position.x > 2.0
 			and facing.x < -0.9)
 	var crowded: Array = []
 	var walker := studio.walker
@@ -45792,6 +45795,7 @@ func _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_repl
 const LayoutDataTests := preload("res://tests/layout_data_tests.gd")
 const ShellFactsTests := preload("res://tests/shell_facts_tests.gd")
 const LayoutResolverTests := preload("res://tests/layout_resolver_tests.gd")
+const ControlRoomTests := preload("res://tests/control_room_tests.gd")
 const LayoutValidatorTests := preload("res://tests/layout_validator_tests.gd")
 
 
@@ -45911,3 +45915,24 @@ func _test_every_layout_is_valid() -> void:
 
 func _test_the_validator_names_each_seeded_violation() -> void:
 	LayoutValidatorTests.new(self).names_each_seeded_violation()
+
+
+## Section 11 step 6 (part 3): the control-room fragment places the eight trolleys of `_build_furniture`
+## where the frozen fixture says they stood, and `SessionLayout.fit` reads its `fit` entries.
+func _test_the_control_room_fragment_stands_the_furniture_where_the_old_code_did() -> void:
+	ControlRoomTests.new(self).defaults()
+	ControlRoomTests.new(self).fits()
+
+
+## The layout's `groups` are the rows of the deleted `Neighbourhoods.ALL`, the MIXING banner is the
+## fragment's, and the `fit` and `banner` keys are validated.
+func _test_the_groups_are_the_old_neighbourhoods() -> void:
+	ControlRoomTests.new(self).groups()
+	ControlRoomTests.new(self).seeded_violations()
+
+
+## The import step that replaced OLD_FLOOR_DEFAULTS, OLD_FIT_LINES and OLD_EQ_WALL.
+func _test_the_floor_import_forgets_old_defaults_once() -> void:
+	ControlRoomTests.new(self).classification()
+	ControlRoomTests.new(self).import_runs_once()
+

@@ -95,12 +95,13 @@ func equals_the_venue() -> void:
 	placed.sort()
 	var wheeled_ids: Array = Venue.WHEELED.map(func(p: StringName) -> String: return String(p))
 	wheeled_ids.sort()
-	# The fragment also places the four zone-mounted pieces (step 6 part 2); the wheeled ones are the five.
+	# The fragment also places the four zone-mounted pieces (step 6 part 2) and lists `lyrics` with no place
+	# (the vocals group names it; its spot reads the booth's mic stand, so it is the venue's: part 3); the wheeled ones are the five.
 	var wheeled_placed: Array = fragment.pieces().filter(func(p: Dictionary) -> bool: return p.get("mobility") == "wheeled") \
 			.map(func(p: Dictionary) -> String: return p["id"])
 	wheeled_placed.sort()
-	check("and places exactly the five wheeled pieces, the venue's own list, and the four in zones (%s)" % [placed],
-			wheeled_placed == wheeled_ids and wheeled_placed.size() == 5 and placed.size() == 9)
+	check("and places exactly the five wheeled pieces, the venue's own list, and the four in zones, and lyrics unplaced (%s)" % [placed],
+			wheeled_placed == wheeled_ids and wheeled_placed.size() == 5 and placed.size() == 10)
 	check("in the order the studio has always built their trolleys", Venue.WHEELED == [&"cassette_rack", &"sampler",
 			&"tour_case", &"prop_shelf", &"hoop"])
 	var studio_file := LiveRoom.layouts().layouts.get("studio") as LayoutData

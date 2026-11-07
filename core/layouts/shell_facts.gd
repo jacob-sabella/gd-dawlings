@@ -12,7 +12,10 @@ extends RefCounted
 ## combinations, the roulette room and a widened room. No Studio is needed either.
 
 ## The anchors a shell provides (section 3), as one pattern: the contract layout files are written to.
-const ANCHOR_RE := "^(?:(?:wall|control_wall)\\.(?:left|right)|control_rear|live_back|mix|annex_edge|height\\.table|zone\\.[a-z][a-z0-9_]*(?:\\.(?:cx|cz|min|max|floor))?)$"
+const ANCHOR_RE := "^(?:(?:wall|control_wall)\\.(?:left|right)|control_rear|live_back|mix|annex_edge|height\\.(?:table|control_header)|zone\\.[a-z][a-z0-9_]*(?:\\.(?:cx|cz|min|max|floor))?)$"
+## How far over the control room's wall height the header over its open rear reaches (m): where the
+## MIXING banner hangs (`height.control_header`).
+const HEADER_ABOVE := 0.45
 const _EPSILON := 1e-5
 
 ## The venue's id and arrangement the facts are for.
@@ -82,7 +85,8 @@ static func of(venue: Venue) -> ShellFacts:
 ## The value of anchor `name`, or null when this shell has no such anchor: a float for a line (a
 ## wall's x, a back wall's z), a Vector2 for a point (`zone.<id>` is the zone's middle) and for
 ## `zone.<id>.min|max` its corners; `.cx`, `.cz` and `.floor` (the height of the floor at the zone's
-## middle) are floats, as is `height.table` (the bricks table's top, `ZoneKit.TABLE_HEIGHT`).
+## middle) are floats, as is `height.table` (the bricks table's top, `ZoneKit.TABLE_HEIGHT`) and
+## `height.control_header` (the top of the header over the control room's open rear).
 func anchor(name: StringName) -> Variant:
 	var s := String(name)
 	if not is_anchor_name(s):
@@ -106,6 +110,8 @@ func anchor(name: StringName) -> Variant:
 			return annex_edge
 		"height.table":
 			return ZoneKit.TABLE_HEIGHT
+		"height.control_header":
+			return Studio.WALL_HEIGHT + HEADER_ABOVE
 	var parts := s.split(".")
 	var box: Variant = zones.get(StringName(parts[1]))
 	if box == null:

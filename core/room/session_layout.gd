@@ -31,36 +31,35 @@ const DECK_GAP := 0.51
 ## Between that gear and the wall behind it.
 const WALL_CLEARANCE := 1.2
 
-## The authored positions for a thirteen-track desk, which this must reproduce.
-const RACK_AT := Vector2(-1.9, -0.5)
-const RACK_HEADING := 45.0
+## Half the width of the rack's and the deck's footprint, for the clearance from the wall.
 const RACK_HALF := 0.30
-const DECK_AT := Vector2(1.42, -0.15)
-const DECK_HEADING := -50.0
 const DECK_HALF := 0.28
-## The patch stand, along the right-hand wall behind the deck, turned to face across the room: a
-## walkway clear of it, and out of the way of the seat.
-const PATCH_AT := Vector2(3.4, 1.3)
-const PATCH_HEADING := -90.0
+## The patch stand, along the right-hand wall behind the deck: a walkway clear of it.
 const PATCH_GAP := 1.3
 
 
 ## `desk_half`: half the console's width on the floor, in metres. Returns room_width, and for each
 ## piece that has to make room for the desk, where it stands: {"rack": [Vector2, degrees], ...}.
+## The spots for a thirteen-track desk, which this must reproduce, are the control-room fragment's
+## (`ControlRoom.fit_of`: the `fit` of the rack and the deck, the authored place of the patch stand);
+## the rule here is the gaps, the halves and the clearance only.
 static func fit(desk_half: float) -> Dictionary:
+	var rack: Dictionary = ControlRoom.fit_of(&"rack")
+	var deck: Dictionary = ControlRoom.fit_of(&"deck_trolley")
+	var patch: Dictionary = ControlRoom.fit_of(&"patch_stand")
 	# Never closer in than authored: a desk smaller than the default leaves the room as it was.
-	var rack_x := minf(RACK_AT.x, -(desk_half + RACK_GAP))
-	var deck_x := maxf(DECK_AT.x, desk_half + DECK_GAP)
-	var patch_x := maxf(PATCH_AT.x, deck_x + PATCH_GAP)
+	var rack_x := minf(rack["at"].x, -(desk_half + RACK_GAP))
+	var deck_x := maxf(deck["at"].x, desk_half + DECK_GAP)
+	var patch_x := maxf(patch["at"].x, deck_x + PATCH_GAP)
 	var reach := maxf(-rack_x + RACK_HALF, maxf(deck_x + DECK_HALF, patch_x + 0.2)) + WALL_CLEARANCE
 	var width := BASE_WIDTH
 	if reach * 2.0 > BASE_WIDTH:
 		width = BASE_WIDTH + ceilf((reach * 2.0 - BASE_WIDTH) / WIDTH_STEP) * WIDTH_STEP
 	return {
 		"room_width": width,
-		"rack": [Vector2(rack_x, RACK_AT.y), RACK_HEADING],
-		"deck_trolley": [Vector2(deck_x, DECK_AT.y), DECK_HEADING],
-		"patch_stand": [Vector2(patch_x, PATCH_AT.y), PATCH_HEADING],
+		"rack": [Vector2(rack_x, rack["at"].y), rad_to_deg(rack["yaw"])],
+		"deck_trolley": [Vector2(deck_x, deck["at"].y), rad_to_deg(deck["yaw"])],
+		"patch_stand": [Vector2(patch_x, patch["at"].y), rad_to_deg(patch["yaw"])],
 	}
 
 

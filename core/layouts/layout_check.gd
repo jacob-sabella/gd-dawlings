@@ -10,10 +10,10 @@ const MAX_COORD := 200.0
 const MOBILITIES: Array[String] = ["wheeled", "fixed"]
 const GROW: Array[String] = ["outward", "inward", "none"]
 const WIRE_KINDS: Array[String] = ["feeds", "rides", "loom", "opens_onto"]
-const PIECE_KEYS: Array[String] = ["id", "piece", "at", "mobility", "enabled"]
+const PIECE_KEYS: Array[String] = ["id", "piece", "at", "fit", "mobility", "enabled"]
 const AT_KEYS: Array[String] = ["anchor", "pos", "frame", "local", "up", "yaw"]
 const ZONE_KEYS: Array[String] = ["min", "size", "grow"]
-const GROUP_KEYS: Array[String] = ["id", "title", "colour", "lift", "members"]
+const GROUP_KEYS: Array[String] = ["id", "title", "colour", "lift", "banner", "members"]
 const WIRE_KEYS: Array[String] = ["kind", "from", "to", "enabled"]
 const SHELL_KEYS: Array[String] = ["builder", "kit", "size", "style"]
 const MOOD_KEYS: Array[String] = ["base", "hit", "glow"]
@@ -141,6 +141,22 @@ func piece(p: Variant, where: String) -> void:
 		bad(where + ".enabled", "must be true or false")
 	if p.has("at"):
 		placement(p["at"], where + ".at")
+	if p.has("fit"):
+		fit(p["fit"], where + ".fit")
+
+
+## A piece's `fit`: where the room puts it once the desk has grown (`at` as [x, z], `yaw` in radians).
+func fit(f: Variant, where: String) -> void:
+	if not f is Dictionary:
+		bad(where, "must be an object")
+		return
+	unknown_keys(f, ["at", "yaw"], where)
+	if not f.has("at"):
+		bad(where, "has no at")
+	else:
+		vector(f["at"], 2, where + ".at")
+	if f.has("yaw") and not is_number(f["yaw"], 1000.0):
+		bad(where + ".yaw", "must be a number of radians")
 
 
 ## An `at` object (section 5.1): an anchor form or a frame form, never both.
@@ -205,6 +221,8 @@ func group(g: Variant, where: String) -> void:
 		text(g["colour"], _COLOUR_RE, where + ".colour", "colour")
 	if g.has("lift") and not is_number(g["lift"], 10.0):
 		bad(where + ".lift", "must be a number of metres")
+	if g.has("banner"):
+		placement(g["banner"], where + ".banner")
 	if g.has("members"):
 		var m: Variant = g["members"]
 		if not (m is Array and (m as Array).all(func(x: Variant) -> bool: return x is String)):

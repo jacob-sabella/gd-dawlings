@@ -1,0 +1,23 @@
+{
+  "format": "dawlings.floor_import",
+  "version": 1,
+  "about": "Where pieces stood by default before the room was spread out, each time it was (2026-10-26, and the 8 x 6 m room of 2026-10-28). A layout saved every piece once it settled, moved or not, so a saved spot that is one of these was never chosen by anyone. FloorImport forgets them once; a piece somebody did move keeps its place. Frozen: the probes in tests/fixtures/layouts/control_room_legacy.json pin what it answers.",
+  "defaults": {
+    "rack": [[-1.18, -0.42], [-1.75, -0.42]],
+    "deck_trolley": [[0.80, -0.22], [1.25, -0.10]],
+    "patch_stand": [[1.80, -0.30], [3.05, 1.25]],
+    "stage_trolley": [[1.10, 1.40], [-2.1, 1.95]],
+    "eq_wall": [[3.38, -1.55]],
+    "station_board": [[1.55, 2.3]],
+    "patch_wall": [[-3.45, -1.3]],
+    "lamp_1": [[-2.85, 1.25]],
+    "lamp_2": [[3.10, 0.95], [1.9, -2.7], [2.7, -3.1]],
+    "lamp_3": [[-2.30, 0.95]]
+  },
+  "fit_lines": {
+    "rack": [-0.42, 45.0],
+    "deck_trolley": [-0.10, -50.0],
+    "patch_stand": [1.25, -90.0]
+  },
+  "eq_wall": {"off": [0.62, -1.55], "heading": -74.0}
+}

@@ -1,8 +1,8 @@
 # Layouts: rooms as data
 
-Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 to 5 (11) and parts 1 and 2 of step 6 are built; the game reads them for the five wheeled pieces and the four zone-mounted ones (`LiveRoom`, `PieceHost`):
+Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 to 5 (11) and parts 1 to 3 of step 6 are built; the game reads them for the five wheeled pieces, the four zone-mounted ones (`LiveRoom`, `PieceHost`) and the control room's eight trolleys (`ControlRoom`), and `Neighbourhoods` is the layouts' `groups`:
 `core/layouts/` (`LayoutData`, `LayoutCheck`, `LayoutMerge`, `LayoutSet`, `LayoutProblem`, `ShellFacts`, `LayoutResolver`,
-`LayoutValidator` with `LayoutChecks`, `LayoutIssue`, `LayoutReach`, `LayoutGeometry`, `PieceFeet`, `LiveRoom`), `layouts/common/live_room.layout.json`, `layouts/venues/studio.layout.json`,
+`LayoutValidator` with `LayoutChecks`, `LayoutIssue`, `LayoutReach`, `LayoutGeometry`, `PieceFeet`, `LiveRoom`, `ControlRoom`, `FloorImport`), `layouts/common/live_room.layout.json`, `layouts/common/control_room.layout.json`, `layouts/import/floor_v1.json`, `layouts/venues/studio.layout.json`,
 `layouts/layout.schema.json`, fixtures in `tests/fixtures/layouts/`. Where they differ from the text below, the
 text says so ("Built:"). It is queue item 2 of `docs/refactor_loop.md` and feeds items 6-8. "Today" claims cite `docs/refactor_state_map.md` (SM) or
 a file:line. Companion: `docs/mods.md` (manifests, registry; a piece is delivered as a mod entry).
@@ -113,6 +113,8 @@ the booth's felt height is then a constant of the zone kit.
 
 `ShellFacts.anchors_of(venue)` (step 5) is the part `of` starts from: id, arrangement, width, zones, `live_room_half`, `annex_edge`, and no solid. `Venue.default_spot` resolves against it, because `of` asks the venue for `solids()`, which asks for the wheeled pieces' spots, which are `default_spot`.
 
+**Built (step 6, part 3)**: one more anchor, `height.control_header` (`Studio.WALL_HEIGHT` + `ShellFacts.HEADER_ABOVE` 0.45: the header over the control room's open rear, where the MIXING banner hangs). `LayoutResolver.place(at, facts)` is the public form of the non-frame branch of `of`, for a placement that is not a piece's (a group's `banner`). `ANCHOR_RE` and the schema carry the anchor.
+
 **Built (step 6, part 2)**: two more anchor forms, both heights, for the zone-mounted pieces: `height.table` (the bricks table's top,
 `ZoneKit.TABLE_HEIGHT`) and `zone.<id>.floor` (the floor at the zone's middle: the riser's top where the zone has a stepped riser, else 0;
 `ShellFacts.zone_floors`, from `Walker.ground_of(zone_solids())`, the very call `Venue.drum_floor` made). `ANCHOR_RE` and the schema carry them.
@@ -193,7 +195,11 @@ a room-scale piece (step 11). The control-room furniture rows (`stage_table`, `e
 `_build_furniture`, wheeled or hung by `SessionLayout`, not stood by `_stand_the_*`; they wait for the control-room fragment. The `Stations.ALL`
 rows themselves (title, help lines, look point, frame, seat) are written in terms of the pieces' class constants (`RackWall.FRAME_TOP`,
 `Looper.PLAQUE_FOOT`, ...) and stay code until the `station` field and `PieceBuilders` exist; their `spot` method names now resolve to the layout for
-the nine pieces that are in it. The groups `rhythm`, `harmony` and `vocals` wait for `Neighbourhoods` (next slice).
+the nine pieces that are in it. The groups `rhythm`, `harmony` and `vocals` are in the live-room fragment now (part 3); `lyrics` is listed there as a piece with no `at`, so that the vocals group does not name a piece the room lacks.
+
+**Built (step 6, part 3)**: the control-room fragment `layouts/common/control_room.layout.json` (`common.control_room`, loaded by `ControlRoom`, not yet `extends`ed by the venue files: that is step 7) holds the furniture rows of `Studio._build_furniture`: `stage_trolley` (`yaw: {toward: mix}`), `eq_wall` (anchored to `control_wall.right`, so it follows the wall out as the room widens), `deck_trolley`, `rack`, `patch_stand`, `patch_wall` (anchored to `control_wall.left`), `station_board` and `mini_table`, and the riders `stage_table` and `platter` as `rides` wires to their trolleys. Their ids are the trolleys' piece ids; `Studio._authored(name, id)` builds each where `ControlRoom.trolley_args` says, in the room's width. `STAGE_AT`, `EQ_WALL_IN/Z/HEADING`, `_eq_wall_at`, `PATCH_STAND_AT/HEADING`, `_patch_wall_default`, `BOARD_AT/HEADING`, `MINI_TABLE_AT/HEADING` and `SessionLayout`'s `RACK_AT/HEADING`, `DECK_AT/HEADING`, `PATCH_AT/HEADING` are gone. A new placement key, `fit` (`{at: [x, z], yaw}`), is where the rack and the deck stand for the thirteen-track desk that `SessionLayout.fit` reproduces (it keeps the rule: the gaps, the halves and the clearance), which is not where they are first built. The frozen fixture `tests/fixtures/layouts/control_room_legacy.json`, dumped from the code before it was deleted, holds the trolleys at four room widths, `fit` for five desks, the old `Neighbourhoods.ALL` rows, the MIXING banner's frame and 4536 probes of `was_an_old_default`.
+
+Not moved, and why: `levels` and `tv` (the venue's: their inset depends on `back_wall_gear_stands`, which is a fact of the built wall, not in `ShellFacts`; the layout's entries carry no `at`), the timeline stand (its z is `Studio.TIMELINE_Z - 0.04`, derived from the surface it holds) and the lamp stands (a lamp and its light are one row of `Studio.PRACTICALS`, widened by `SessionLayout.widen`).
 
 ### 4.2 Catalogue of today's things
 
@@ -382,7 +388,7 @@ Shared fragment, `res://layouts/common/live_room.layout.json`:
 }
 ```
 
-The groups are `Neighbourhoods.ALL` (`neighbourhoods.gd:30`; `mixing` goes in the control-room fragment).
+The groups are the layouts' `groups` now (step 6 part 3): `Neighbourhoods.all()` reads them, `mixing` from the control-room fragment (with its `banner`: `{anchor: {z: control_rear}, pos: [0, 0.12], up: height.control_header}`) and the others from the live-room fragment; a member with a `Stations` row is a station of the neighbourhood, any other (`prop_shelf`, `tour_case`, `hoop`) a piece that helps place its middle. The hex colours are a byte a channel, up to 1/510 off the old floats.
 The `feeds` wire is "one sample, a WAV and a cassette on the rack" (`stations.gd`, sampler row).
 
 The venue file, `res://layouts/venues/rooftop.layout.json`:
@@ -554,7 +560,7 @@ A pushed position equal to the default is not stored (today's `_where_the_venue_
 | Room row `floor {id: [x, z, yaw]}` (`studio.gd:2446`) | replaced by `layout {base, variant, rev, moved, added, removed}` |
 | Guest's wheel as prediction, host confirms (`move_piece`) | the same, as the `move` op |
 | Room row `placed`, `tablets`, `track_racks` | unchanged (surface homes and player-owned pieces) |
-| `OLD_FLOOR_DEFAULTS`, `OLD_FIT_LINES`, `OLD_EQ_WALL` (`studio.gd:3219-3240`) | used once by the import above, then deleted (open question 5) |
+| `OLD_FLOOR_DEFAULTS`, `OLD_FIT_LINES`, `OLD_EQ_WALL` (`studio.gd:3219-3240`) | **Done (step 6 part 3)**: data in `layouts/import/floor_v1.json`; `FloorImport.run` forgets the saved `floor/<id>` spots that are old defaults once, before `_build_furniture`, and marks the profile (`LayoutProfile.floor_import`, in `[profile]`); the per-build checks in `_trolley` and `_wheel_in_live_pieces` are deleted |
 
 **Persistence unit.** A room is `(base venue or kit, variant)` plus its delta, keyed `<venue>.<variant>` for the
 built-in rooms and `<slug>` for made ones. Positions are therefore **per room**, not global: today a pushed
@@ -611,7 +617,7 @@ room falls back to its default, and the player sees a toast.
 | `Venue.default_*_spot` (5) and the ~60 `*_spot()` | `LayoutResolver.transform(layout, id, facts)`; the `*_spot()` methods become one generic `Venue.spot(id)` |
 | `Studio.LIVE_TROLLEYS` (`studio.gd:1790`) | `trolley` and `footprint` in the definition |
 | `Studio._carry_live` `match` | `followers` + the builder's `moved()` |
-| `Neighbourhoods.ALL` (`neighbourhoods.gd:30`) | `groups` |
+| `Neighbourhoods.ALL` (`neighbourhoods.gd:30`) | `groups` (**done**, part 3: `Neighbourhoods.all()`) |
 | `Venue.IDS`, `make`, `VARIANTS`, `make_title`, `RackMood.MOODS`, tests' `VENUE_SETS` | the layout directory (`id`, `title`, `order`, `variants`, `mood`) + one `ShellBuilders` table |
 | venue overrides `zones()`, `default_prop_shelf_spot()`, `annex_edge()`, `rig_roulette_spot()` | variant `zones`/`pieces` entries; `annex_edge` a shell fact |
 | `Studio._stand_the_*` (11 functions, `studio.gd:619-1070`) | one `PieceHost` loop over resolved pieces |
@@ -632,8 +638,8 @@ item 7, 11-12 item 8.
 6. **The rest of `Stations.ALL`**, zone-mounted pieces, the control-room fragment and `Neighbourhoods` to
    data; `PieceHost` replaces `_stand_the_*`. Old Studio placement tests deleted once equal (each deletion
    noted in the commit). **Part 1 done** (piece definitions, 4.1); **part 2 done for** the four zone-mounted pieces
-   placed from the layout and nine `_stand_the_*` replaced by `PieceHost.stand` (4.1 "Built (part 2)"); still to do: the
-   control-room fragment, `Neighbourhoods`, the `Stations` text rows, and the pieces listed there as not moved.
+   placed from the layout and nine `_stand_the_*` replaced by `PieceHost.stand` (4.1 "Built (part 2)"); **part 3 done**: the control-room fragment
+   (eight trolleys, the MIXING banner, `fit`), `Neighbourhoods` as `groups` and the one `FloorImport` step (4.1 "Built (part 3)"); still to do: the `Stations` text rows, and the pieces listed there as not moved (`lyrics`, `venue`, `weather`, `modular`, `levels`, `tv`, the timeline stand, the lamps).
 7. **14 venue files and the roulette room**; `IDS`, `VARIANTS`, `make_title`, `RackMood.MOODS` derived.
 8. **Room delta and the `layout` row**, import of `floor/*`, persistence in `user://layouts/rooms/`.
 9. **Edit ops** (`ask_layout`), edit mode, reset; validators in the loop.
@@ -651,6 +657,7 @@ item 7, 11-12 item 8.
 | `_test_a_layout_parses_and_names_every_error`, `_test_layout_fragments_and_variants_merge_and_resolve`, `_test_a_layout_that_cannot_be_resolved_says_why`, `_test_the_layout_schema_agrees_with_the_parser` (`tests/layout_data_tests.gd`) | step 1 (built) |
 | `_test_shell_facts_from_an_unreadied_venue_match_the_built_one`, `_test_shell_facts_of_a_venue_in_a_studio_are_the_unreadied_ones`, `_test_shell_anchors_have_the_values_placement_uses` (`tests/shell_facts_tests.gd`) | step 2 (built) |
 | `_test_the_layout_resolves_to_the_venues_own_defaults` (since step 5 a regression check of 428 transforms against the frozen `live_room_legacy_spots.json`, for the venue and for the layout), `_test_a_placement_is_anchors_plus_an_offset_or_a_frame` (`tests/layout_resolver_tests.gd`) | steps 3, 5 (built) |
+| `_test_the_control_room_fragment_stands_the_furniture_where_the_old_code_did`, `_test_the_groups_are_the_old_neighbourhoods`, `_test_the_floor_import_forgets_old_defaults_once` (`tests/control_room_tests.gd`, against the frozen `control_room_legacy.json`) | step 6 part 3 (built) |
 | `_test_every_layout_is_valid` | the 42 guarantees as far as a layout holds them, no Studio (built; 86 runs, 8 s with start-up) |
 | `_test_the_validator_names_each_seeded_violation` | each code in 6 fires (built, `tests/layout_validator_tests.gd`) |
 | `_test_deleting_and_adding_a_piece_survives_a_restart` | brief proof: delete in one venue, add in another, make a room, reload |
@@ -668,7 +675,7 @@ item 7, 11-12 item 8.
 4. **Room sizes.** The maker offers small, standard and large. Each size needs its own shell kit and
    placement tests; the kit form is settled in queue slice 8.
 5. **Old data.** `OLD_FLOOR_DEFAULTS`, `OLD_FIT_LINES`, `OLD_EQ_WALL` are dropped after one import step;
-   the mixing neighbourhood's banner moves into the control-room fragment.
+   the mixing neighbourhood's banner moves into the control-room fragment. **Done** (step 6 part 3).
 6. **Zones.** A made room may have any subset of the zones; pieces with `needs` are skipped without them.
 7. **Single-item rack.** None: `modular_annex` stays the only room-scale piece.
 8. **Limits.** 64 pieces and a 16 kB delta per room.

@@ -1,0 +1,28 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "common.control_room",
+  "title": "Control room",
+  "pieces": [
+    {"id": "stage_trolley", "piece": "stage_trolley", "mobility": "wheeled", "at": {"pos": [-2.3, 2.3], "yaw": {"toward": "mix"}}},
+    {"id": "stage_table", "piece": "stage_table"},
+    {"id": "eq_wall", "piece": "eq_wall", "mobility": "wheeled", "at": {"anchor": {"x": "control_wall.right"}, "pos": [-1.9, -1.6], "yaw": -1.2915436464758039}},
+    {"id": "levels", "piece": "levels"},
+    {"id": "tv", "piece": "tv"},
+    {"id": "deck_trolley", "piece": "deck_trolley", "mobility": "wheeled", "at": {"pos": [0.8, -0.22], "yaw": -0.5585053606381855}, "fit": {"at": [1.42, -0.15], "yaw": -0.8726646259971648}},
+    {"id": "platter", "piece": "platter"},
+    {"id": "rack", "piece": "rack", "mobility": "wheeled", "at": {"pos": [-1.18, -0.42], "yaw": 0.6632251157578453}, "fit": {"at": [-1.9, -0.5], "yaw": 0.7853981633974483}},
+    {"id": "patch_stand", "piece": "patch_stand", "mobility": "wheeled", "at": {"pos": [3.4, 1.3], "yaw": -1.5707963267948966}},
+    {"id": "patch_wall", "piece": "patch_wall", "mobility": "wheeled", "at": {"anchor": {"x": "control_wall.left"}, "pos": [0.55, -1.5], "yaw": 1.5707963267948966}},
+    {"id": "station_board", "piece": "station_board", "mobility": "wheeled", "at": {"pos": [2.2, 2.9], "yaw": 3.8920842319473548}},
+    {"id": "mini_table", "piece": "mini_table", "mobility": "wheeled", "at": {"pos": [-0.92, 0.36], "yaw": 1.1868238913561442}}
+  ],
+  "groups": [
+    {"id": "mixing", "title": "MIXING", "colour": "#F2DB9E", "members": ["stage_table", "platter", "eq_wall", "levels", "tv"],
+      "banner": {"anchor": {"z": "control_rear"}, "pos": [0.0, 0.12], "up": "height.control_header"}}
+  ],
+  "wiring": [
+    {"kind": "rides", "from": "stage_table", "to": "stage_trolley"},
+    {"kind": "rides", "from": "platter", "to": "deck_trolley"}
+  ]
+}

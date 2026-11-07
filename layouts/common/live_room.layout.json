@@ -12,10 +12,14 @@
     {"id": "wheel", "piece": "wheel", "at": {"anchor": {"x": "zone.bricks.cx", "z": "zone.bricks.cz"}, "pos": [0.0, -0.94], "up": "height.table", "yaw": 3.141592653589793}},
     {"id": "sections", "piece": "sections", "at": {"anchor": {"x": "zone.bricks.cx", "z": "zone.bricks.cz"}, "pos": [0.3, 0.29], "up": "height.table", "yaw": -1.5707963267948966}},
     {"id": "drums", "piece": "drums", "at": {"anchor": {"x": "zone.drums.cx", "z": "zone.drums.cz"}, "up": "zone.drums.floor", "yaw": {"toward": "mix", "snap": 1.5707963267948966}}},
-    {"id": "looper", "piece": "looper", "at": {"frame": "authored:drums", "local": [-0.98, 0.98], "yaw": 0.0}}
+    {"id": "looper", "piece": "looper", "at": {"frame": "authored:drums", "local": [-0.98, 0.98], "yaw": 0.0}},
+    {"id": "lyrics", "piece": "lyrics"}
   ],
   "groups": [
+    {"id": "rhythm", "title": "RHYTHM", "colour": "#FF9E6B", "members": ["drums", "looper"]},
+    {"id": "harmony", "title": "HARMONY", "colour": "#9EDBFF", "lift": -0.4, "members": ["wheel", "sections"]},
     {"id": "synth", "title": "SYNTH & SOUND DESIGN", "colour": "#C7A8FF", "lift": 0.25, "members": ["sampler"]},
+    {"id": "vocals", "title": "VOCALS", "colour": "#FFB3D1", "members": ["lyrics"]},
     {"id": "tape", "title": "TAPE & TOYS", "colour": "#B3FFB8", "members": ["cassette_rack", "prop_shelf", "tour_case", "hoop"]}
   ],
   "wiring": [{"kind": "feeds", "from": "sampler", "to": "cassette_rack"}]

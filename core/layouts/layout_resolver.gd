@@ -68,8 +68,16 @@ static func _of(layout: LayoutData, id: String, facts: ShellFacts, depth: int) -
 		var local: Array = at.get("local", [0.0, 0.0])
 		return (base as Transform3D) * Transform3D(Basis(Vector3.UP, _yaw(at, Vector2.ZERO, facts)),
 				Vector3(float(local[0]), float(up), float(local[1])))
+	return place(at, facts)
+
+
+## Where a bare anchor placement (an `at` that belongs to no piece: a group's `banner`) puts a frame,
+## or null when the shell lacks an anchor it names. A frame placement needs a piece and is not
+## handled here.
+static func place(at: Dictionary, facts: ShellFacts) -> Variant:
+	var up: Variant = _height(at, facts)
 	var xz: Variant = point(at, facts)
-	if xz == null:
+	if up == null or xz == null:
 		return null
 	return Transform3D(Basis(Vector3.UP, _yaw(at, xz, facts)), Vector3((xz as Vector2).x, float(up), (xz as Vector2).y))
 

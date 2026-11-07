@@ -40,7 +40,7 @@
     "triple": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/number"}},
     "anchor_name": {
       "type": "string",
-      "pattern": "^(?:(?:wall|control_wall)\\.(?:left|right)|control_rear|live_back|mix|annex_edge|height\\.table|zone\\.[a-z][a-z0-9_]*(?:\\.(?:cx|cz|min|max|floor))?)$"
+      "pattern": "^(?:(?:wall|control_wall)\\.(?:left|right)|control_rear|live_back|mix|annex_edge|height\\.(?:table|control_header)|zone\\.[a-z][a-z0-9_]*(?:\\.(?:cx|cz|min|max|floor))?)$"
     },
     "shell": {
       "type": "object",
@@ -78,7 +78,7 @@
         "pos": {"$ref": "#/$defs/pair"},
         "frame": {"type": "string", "pattern": "^authored:[a-z][a-z0-9_]{0,39}$"},
         "local": {"$ref": "#/$defs/pair"},
-        "up": {"description": "Height of the piece's origin: metres, or an anchor name read as a height (height.table, zone.<id>.floor).", "oneOf": [{"$ref": "#/$defs/number"}, {"$ref": "#/$defs/anchor_name"}]},
+        "up": {"description": "Height of the piece's origin: metres, or an anchor name read as a height (height.table, height.control_header, zone.<id>.floor).", "oneOf": [{"$ref": "#/$defs/number"}, {"$ref": "#/$defs/anchor_name"}]},
         "yaw": {"description": "Radians about +Y, or {toward, snap}: turned to face the anchor `toward` (a line anchor is the point (0, value)), rounded to a multiple of `snap` radians.",
           "oneOf": [{"type": "number", "minimum": -1000, "maximum": 1000}, {"type": "object", "required": ["toward"], "properties": {"toward": {"$ref": "#/$defs/anchor_name"}, "snap": {"type": "number", "minimum": 0, "maximum": 7}}}]}
       }
@@ -91,6 +91,8 @@
         "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$"},
         "piece": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"},
         "at": {"$ref": "#/$defs/at"},
+        "fit": {"type": "object", "required": ["at"], "description": "Where the piece stands when the room is fitted round the desk (SessionLayout.fit), if that is not its `at`.",
+          "properties": {"at": {"$ref": "#/$defs/pair"}, "yaw": {"$ref": "#/$defs/number"}}},
         "mobility": {"enum": ["wheeled", "fixed"]},
         "enabled": {"type": "boolean", "default": true}
       }
@@ -104,6 +106,7 @@
         "title": {"type": "string", "minLength": 1},
         "colour": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
         "lift": {"type": "number", "minimum": -10, "maximum": 10},
+        "banner": {"$ref": "#/$defs/at", "description": "Where the group's banner hangs, when it is not on a wall by the group's middle (the mixing group's header over the control room's open rear)."},
         "members": {"type": "array", "items": {"type": "string"}}
       }
     },

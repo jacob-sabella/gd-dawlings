@@ -107,8 +107,6 @@ const LAMP_SHADE_HEIGHT := 0.150
 ## face the mix position. Its own station rather than a strip on a meter bridge between the timeline and
 ## the console, where it was a hand's width tall and read as part of both. Where on the stand the
 ## bay's top edge is, and how far the cabinet under it reaches back.
-const PATCH_STAND_AT := Vector3(SessionLayout.PATCH_AT.x, 0, SessionLayout.PATCH_AT.y)
-const PATCH_STAND_HEADING := SessionLayout.PATCH_HEADING
 const PATCH_BAY_TOP := 1.78
 const PATCH_BAY_FRONT := 0.03
 ## How far up the arm from MY KEYS the wrist's INTO ME socket is worn (m): clear of both reaches.
@@ -769,7 +767,7 @@ func _door_footprint() -> Array:
 ## is the one; anywhere else it stands on two legs, at a little over half the size of the room's
 ## own: the legs are a trolley (`live_pieces`' "patch_wall"), pushed about like the rest of the
 ## gear, and the screen goes where they are. By default against the control room's left side,
-## turned to face the desk (`_patch_wall_default`).
+## turned to face the desk (`ControlRoom`, the `patch_wall` piece).
 func _stand_a_patch_wall() -> void:
 	if venue.get_node_or_null("PatchWall") != null:
 		return
@@ -791,15 +789,9 @@ const PATCH_WALL_LEG_Z := -0.04
 
 func _patch_wall_frame() -> Transform3D:
 	var legs: Trolley = live_pieces.get(&"patch_wall")
-	var at := legs.transform if legs != null else _patch_wall_default()
+	var at: Transform3D = legs.transform if legs != null else ControlRoom.spot(&"patch_wall", room_width)
 	return _set_to_venue(at) * Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * PATCH_WALL_SCALE),
 			Vector3(0, PATCH_WALL_TOP, 0))
-
-
-## Where the legs stand until they are pushed: 55 cm off the control room's left wall, a little
-## behind the desk's left end, facing across the room.
-func _patch_wall_default() -> Transform3D:
-	return Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(-room_width * 0.5 + 0.55, 0, -1.5))
 
 
 ## The practicals back to the venue's own colour and energy, and the venue's own house lights
@@ -1049,6 +1041,8 @@ func _assembly(of_name: String) -> Node3D:
 
 
 func _build_furniture() -> void:
+	# Saved spots that are an older room's defaults go, once, before anything reads them.
+	FloorImport.run(Session.layout)
 	floor_plan = FloorPlan.new()
 	floor_plan.name = "FloorPlan"
 	floor_plan.bounds = _room_bounds()
@@ -1067,7 +1061,7 @@ func _build_furniture() -> void:
 	# A trolley for the deck. Two uprights and a shelf on a caster base; a tape machine on a
 	# cart is what the right-hand side of a control room looks like, and it is the thing in
 	# the room most often wheeled somewhere else.
-	deck_trolley = _trolley("DeckTrolley", &"deck_trolley", Vector3(0.80, 0, -0.22), -32.0)
+	deck_trolley = _authored("DeckTrolley", &"deck_trolley")
 	deck_trolley.footprint_half = Vector2(0.28, 0.21)
 	deck_trolley.follow = 10.0
 	var base := MeshInstance3D.new()
@@ -1105,7 +1099,7 @@ func _build_furniture() -> void:
 	# A plinth under the rack. A floor-standing rack puts its lowest unit at ankle height; every
 	# control room that has one has it up on something -- and here the something has wheels,
 	# because a rack of outboard is the piece of a studio people actually push about.
-	rack_trolley = _trolley("RackTrolley", &"rack", Vector3(-1.18, 0, -0.42), 38.0)
+	rack_trolley = _authored("RackTrolley", &"rack")
 	rack_trolley.footprint_centre = Vector2(0, -0.15)
 	rack_trolley.footprint_half = Vector2(0.30, 0.17)
 	# Heavier than anything else on the floor. It is a cabinet full of steel.
@@ -1231,7 +1225,6 @@ func _build_platter_leaf() -> void:
 ## desk grows (the desk's footprint ends in front of the mix position, and these stand behind
 ## it). The top is desk height; the rail along its front drops RAIL below it. Far enough back
 ## that from the seat the right-hand lamp's foot is seen past its corner, not through it.
-const STAGE_AT := Vector3(-2.3, 0, 2.3)
 const STAGE_TOP := 0.74
 
 
@@ -1239,8 +1232,7 @@ const STAGE_TOP := 0.74
 ## table's plaque on its front under the rail (Stations.plaque). The table itself is a surface
 ## and rides it (`_ride`, in `_build_surfaces`).
 func _build_stage_trolley() -> void:
-	var at := Vector2(STAGE_AT.x, STAGE_AT.z)
-	stage_trolley = _trolley("StageTrolley", &"stage_trolley", STAGE_AT, rad_to_deg(_facing_mix(at)))
+	stage_trolley = _authored("StageTrolley", &"stage_trolley")
 	# The table and the rail along its front, on the floor.
 	stage_trolley.footprint_centre = Vector2(0, 0.065)
 	stage_trolley.footprint_half = Vector2(0.62, 0.53)
@@ -1292,20 +1284,14 @@ const STAGE_PLAQUE_TOP := 0.6
 ## room widens (`_fit_room_to_session`).
 ## Off the wall and into the ring since the room grew: against an 11 m room's wall its handle was
 ## 5.5 px from the seat.
-const EQ_WALL_IN := 1.9
-const EQ_WALL_Z := -1.6
-const EQ_WALL_HEADING := -74.0
-
-
-func _eq_wall_at() -> Vector3:
-	return Vector3(room_width * 0.5 - EQ_WALL_IN, 0, EQ_WALL_Z)
+## (The fragment's `eq_wall`: 1.9 m in from the right-hand wall, 1.6 m behind the seat.)
 
 
 ## The EQ wall's trolley: a plinth on casters and two uprights behind the board's edges, and the
 ## wall's plaque on the board's right-hand column, under SHOW (Stations.plaque, narrowed to the
 ## column). The board itself is a surface and rides it (`_ride`, in `_build_surfaces`).
 func _build_eq_wall_trolley() -> void:
-	eq_wall_trolley = _trolley("EqWallTrolley", &"eq_wall", _eq_wall_at(), EQ_WALL_HEADING)
+	eq_wall_trolley = _authored("EqWallTrolley", &"eq_wall")
 	var wide := EqWall.PLATE_WIDE + EqWall.BORDER * 2.0
 	eq_wall_trolley.footprint_centre = Vector2(0, -0.06)
 	eq_wall_trolley.footprint_half = Vector2(wide * 0.5, 0.16)
@@ -1563,7 +1549,7 @@ func _niche_box(of_name: String, size: Vector3, at: Vector3, paint: Material) ->
 ## running up past its top, so the bay stands in a frame rather than on a post. The carcass and
 ## cheeks are sized to the bay once it knows how many rows it has (`_fit_stand_to_bay`).
 func _build_patch_stand() -> void:
-	patch_stand = _trolley("PatchStand", &"patch_stand", PATCH_STAND_AT, PATCH_STAND_HEADING)
+	patch_stand = _authored("PatchStand", &"patch_stand")
 	patch_stand.footprint_centre = Vector2(0, -0.03)
 	patch_stand.footprint_half = Vector2(0.62, 0.15)
 	patch_stand.follow = 9.0
@@ -1638,8 +1624,7 @@ func _go_live(t: Trolley) -> void:
 ## The patch wall's two legs, on a trolley; the screen is the venue's child (`_stand_a_patch_wall`),
 ## and goes where the legs are.
 func _build_patch_wall_legs() -> void:
-	var at := _patch_wall_default()
-	var legs := _trolley("PatchWallLegs", &"patch_wall", at.origin, rad_to_deg(at.basis.get_euler().y))
+	var legs := _authored("PatchWallLegs", &"patch_wall")
 	legs.footprint_centre = Vector2(0, PATCH_WALL_LEG_Z)
 	legs.footprint_half = Vector2(PATCH_WALL_LEG_X + 0.06, 0.06)
 	legs.follow = 8.0
@@ -1664,12 +1649,12 @@ func _live_default(id: StringName) -> Variant:
 		return null
 	match id:
 		&"station_board":
-			return Transform3D(Basis(Vector3.UP, deg_to_rad(BOARD_HEADING)), BOARD_AT)
+			return ControlRoom.spot(&"station_board", room_width)
 		&"patch_wall":
 			var hung := venue.get_node_or_null("PatchWall")
 			if hung != null and not hung.has_meta(&"on_legs"):
 				return null
-			return _patch_wall_default()
+			return ControlRoom.spot(&"patch_wall", room_width)
 	var spot: Variant = venue.default_spot(id)
 	return _venue_to_set(spot) if spot != null else null
 
@@ -1696,10 +1681,7 @@ func _wheel_in_live_pieces() -> void:
 		var key := StringName("floor/%s" % id)
 		if not _showing_hosts_room and Session.layout != null \
 				and Session.layout.has_transform(key, Presentation.Mode.STUDIO):
-			var saved := Session.layout.transform_for(key, Presentation.Mode.STUDIO, at)
-			# Saved where an older, smaller room stood it: nobody's choice, so where this one does.
-			if not was_an_old_default(id, saved):
-				at = saved
+			at = Session.layout.transform_for(key, Presentation.Mode.STUDIO, at)
 		t.position = Vector3(at.origin.x, 0, at.origin.z)
 		t.rotation = Vector3(0, at.basis.get_euler().y, 0)
 		placing.append(t)
@@ -1741,7 +1723,7 @@ func _carry_live(id: StringName) -> void:
 func _hang_hood_signs() -> void:
 	if venue == null or medium == Presentation.Medium.AR:
 		return
-	for r: Dictionary in Neighbourhoods.ALL:
+	for r: Dictionary in Neighbourhoods.all():
 		if Neighbourhoods.sign_spot(venue, r["id"]) == null:
 			continue
 		venue.add_child(Neighbourhoods.make_sign(r["id"]))
@@ -1754,7 +1736,7 @@ func _hang_hood_signs() -> void:
 func _place_hood_signs() -> void:
 	if venue == null or not is_instance_valid(venue):
 		return
-	for r: Dictionary in Neighbourhoods.ALL:
+	for r: Dictionary in Neighbourhoods.all():
 		var sign := venue.get_node_or_null("Sign_%s" % r["id"]) as Node3D
 		if sign == null:
 			continue
@@ -2856,8 +2838,8 @@ func _fit_room_to_session() -> void:
 		if fit.has(id):
 			want = [fit[id][0], deg_to_rad(fit[id][1])]
 		elif id == "eq_wall":
-			var at := _eq_wall_at()
-			want = [Vector2(at.x, at.z), deg_to_rad(EQ_WALL_HEADING)]
+			var at: Transform3D = ControlRoom.spot(&"eq_wall", room_width)
+			want = [Vector2(at.origin.x, at.origin.z), ControlRoom.heading(at)]
 		elif t.built_in:
 			continue
 		elif id.begins_with("lamp_") and _authored_floor.has(t.piece_id):
@@ -2934,12 +2916,7 @@ func _trolley(of_name: String, id: StringName, at: Vector3, heading_degrees: flo
 		Session.layout.clear_transform(key, Presentation.Mode.STUDIO)
 	elif Session.layout != null and Session.layout.has_transform(key, Presentation.Mode.STUDIO):
 		var saved := Session.layout.transform_for(key, Presentation.Mode.STUDIO, piece.transform)
-		if not _left_where_it_was_authored(id, saved):
-			piece.transform = saved
-		else:
-			# Forgotten, not only passed over: kept, it read as a spot somebody chose, so the room
-			# never fitted the piece out of the desk's way and saved it back where it stood.
-			Session.layout.clear_transform(key, Presentation.Mode.STUDIO)
+		piece.transform = saved
 	piece.settled.connect(_on_trolley_settled.bind(piece))
 	piece.moved.connect(_on_trolley_moved.bind(piece))
 	studio_set.add_child(piece)
@@ -2947,55 +2924,11 @@ func _trolley(of_name: String, id: StringName, at: Vector3, heading_degrees: flo
 	return piece
 
 
-## Where pieces stood by default before the room was spread out, each time it was (2026-10-26, and
-## the 8 x 6 m room of 2026-10-28). A layout saves every piece once it settles, moved or not, so a
-## saved spot that is one of these was never chosen by anyone: the piece takes its new default
-## instead. A piece somebody did move keeps its place.
-const OLD_FLOOR_DEFAULTS := {
-	&"rack": [Vector2(-1.18, -0.42), Vector2(-1.75, -0.42)],
-	&"deck_trolley": [Vector2(0.80, -0.22), Vector2(1.25, -0.10)],
-	&"patch_stand": [Vector2(1.80, -0.30), Vector2(3.05, 1.25)],
-	&"stage_trolley": [Vector2(1.10, 1.40), Vector2(-2.1, 1.95)],
-	&"eq_wall": [Vector2(3.38, -1.55)],
-	&"station_board": [Vector2(1.55, 2.3)],
-	&"patch_wall": [Vector2(-3.45, -1.3)],
-	&"lamp_1": [Vector2(-2.85, 1.25)],
-	&"lamp_2": [Vector2(3.10, 0.95), Vector2(1.9, -2.7), Vector2(2.7, -3.1)],
-	&"lamp_3": [Vector2(-2.30, 0.95)],
-}
-## The old rule's lines for the pieces that make room for the desk (SessionLayout.fit): in a room
-## widened for a bigger desk the rack, the deck and the patch stand stood further out along these
-## z, so a saved spot on one of them, at the old heading, was the old room's too.
-const OLD_FIT_LINES := {
-	&"rack": [-0.42, 45.0],
-	&"deck_trolley": [-0.10, -50.0],
-	&"patch_stand": [1.25, -90.0],
-}
-## Where the 8 x 6 m room's EQ wall stood off its right-hand wall, whatever its width.
-const OLD_EQ_WALL := Vector2(0.62, -1.55)
-
-
-func _left_where_it_was_authored(id: StringName, saved: Transform3D) -> bool:
-	return Studio.was_an_old_default(id, saved)
-
-
-## Whether a saved floor spot `saved` for piece `id` is one of the defaults an older room stood it
-## at (OLD_FLOOR_DEFAULTS, OLD_FIT_LINES, OLD_EQ_WALL), rather than somewhere a player pushed it.
-static func was_an_old_default(id: StringName, saved: Transform3D) -> bool:
-	var at := Vector2(saved.origin.x, saved.origin.z)
-	for was: Vector2 in OLD_FLOOR_DEFAULTS.get(id, []):
-		if at.distance_to(was) < 0.02:
-			return true
-	var heading := rad_to_deg(saved.basis.get_euler().y)
-	if OLD_FIT_LINES.has(id):
-		var line: Array = OLD_FIT_LINES[id]
-		if absf(at.y - float(line[0])) < 0.02 and absf(wrapf(heading - float(line[1]), -180.0, 180.0)) < 0.5:
-			return true
-	if id == &"eq_wall" and absf(at.y - OLD_EQ_WALL.y) < 0.02 and absf(wrapf(heading - EQ_WALL_HEADING, -180.0, 180.0)) < 0.5:
-		# Its x followed the old room's right-hand wall out, in 0.8 m steps.
-		var off := at.x + OLD_EQ_WALL.x
-		return absf(off / SessionLayout.WIDTH_STEP * 2.0 - roundf(off / SessionLayout.WIDTH_STEP * 2.0)) < 0.03
-	return false
+## A piece of furniture the control-room fragment places (`ControlRoom`), standing where it says
+## in this room's width: `_trolley` with its authored spot and turn.
+func _authored(of_name: String, id: StringName) -> Trolley:
+	var args := ControlRoom.trolley_args(id, room_width)
+	return _trolley(of_name, id, args[0], args[1])
 
 
 ## Whether a piece of `live_pieces` is where this venue stands it (`_live_default`), as near as
@@ -3343,8 +3276,7 @@ func _build_surfaces() -> void:
 	patchbay = PatchbaySurface.new()
 	patchbay.name = "Patchbay"
 	StageLink.wire_bay(patchbay)
-	patchbay.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(PATCH_STAND_HEADING)),
-			PATCH_STAND_AT) * Transform3D(Basis.IDENTITY, Vector3(0, PATCH_BAY_TOP, PATCH_BAY_FRONT))
+	patchbay.transform = (ControlRoom.spot(&"patch_stand", room_width) as Transform3D) * Transform3D(Basis.IDENTITY, Vector3(0, PATCH_BAY_TOP, PATCH_BAY_FRONT))
 	studio_set.add_child(patchbay)
 	mount.register(patchbay)
 
@@ -7215,8 +7147,7 @@ const STATION_PACE := 4.0
 ## mix position: out of the seat's view of the desk (it stood at the desk's left elbow, in the face
 ## of everyone who sat down), and on the way to the stations it lists. Desktop players reach the
 ## same rows with I and F1; a headset player turns round to it.
-const BOARD_AT := Vector3(2.2, 0, 2.9)
-const BOARD_HEADING := 223.0
+## (The fragment's `station_board`.)
 
 ## The board by the desk (StationBoard): every station that stands here, a row each, and a press
 ## goes there. Null in AR, where nothing stands yet (slice 60).
@@ -7236,10 +7167,10 @@ func _build_station_board() -> void:
 	station_board = StationBoard.new()
 	station_board.name = "StationBoard"
 	station_board.venue = venue
-	station_board.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(BOARD_HEADING)), BOARD_AT)
+	station_board.transform = ControlRoom.spot(&"station_board", room_width)
 	station_board.chosen.connect(_on_board_chosen)
 	studio_set.add_child(station_board)
-	var stand := _trolley("StationBoardStand", &"station_board", BOARD_AT, BOARD_HEADING)
+	var stand := _authored("StationBoardStand", &"station_board")
 	stand.follow = 11.0
 	stand.rolls = false
 	_board_grip = _grip(stand, Vector3.ONE * 0.1, Vector3.ZERO)
@@ -7424,8 +7355,6 @@ const WING_PAD := 0.10
 const WING_TOP := 0.74
 ## Where the table stands at home, on the floor under the middle of its board, and its turn: its
 ## reader's edge (+Z, the side the miniature is read from) toward the mix position.
-const MINI_TABLE_AT := Vector3(-0.92, 0, 0.36)
-const MINI_TABLE_HEADING := 68.0
 ## How far into the timeline's window an item it is brought to starts, of the window's span.
 const SHOWN_IN := 0.1
 
@@ -7443,7 +7372,7 @@ const NOTE_PAD_GAP := 0.04
 ## any of it, the tray's bed still being pressed. The apron first, the grip a click from the seat
 ## finds: the board's top is under the tray.
 func _build_desk_wing() -> void:
-	desk_wing = _trolley("MiniTable", &"mini_table", MINI_TABLE_AT, MINI_TABLE_HEADING)
+	desk_wing = _authored("MiniTable", &"mini_table")
 	desk_wing.follow = 10.0
 	desk_wing.rolls = false
 	desk_wing.footprint_centre = Vector2(-WING_PAD * 0.5, 0)
