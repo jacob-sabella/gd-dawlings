@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """Quality check for the refactor (docs/refactor_loop.md, "done when" item 4).
 
-Scope: every file changed between master and HEAD (`git diff --name-only master...HEAD`)
-plus scenes/studio.gd and core/venues/venue.gd. Prints
+Scope of the symbol check: every file changed between master and HEAD
+(`git diff --name-only master...HEAD`) plus scenes/studio.gd and core/venues/venue.gd.
+Scope of the LINE LIMIT: "touched" means SUBSTANTIVELY changed (decision 8 in docs/refactor_loop.md,
+an autonomous interpretation of decision 4, owner to confirm): added+removed lines in
+`git diff --numstat master...HEAD` >= SUBSTANTIVE (100), plus ALWAYS, plus every file the refactor
+created. `--all` scopes the line limit to every changed file (the literal reading) and lists the
+files otherwise left out. To flip the reading for good set SUBSTANTIVE = 0. Prints
   1. files over the line limit (800; tests/run_tests.gd and generated files are exempt)
   2. unreferenced public symbols in the scoped .gd files: class_name, public funcs,
      consts and signals whose name is used nowhere but its own declaration(s) in scenes/ core/ hardware/ tools/
      tests/ mods/ layouts/ (any text file, so strings, has_method, call, groups and
      .tscn/.json references all count).
-Exit status 1 when anything is reported. Usage: tools/quality_check.sh [--limit N]
+Exit status 1 when anything is reported. Usage: tools/quality_check.sh [--limit N] [--all]
 """
 import os, re, subprocess, sys
 
 LIMIT = 800
+SUBSTANTIVE = 100  # added+removed lines that make a changed file "touched" for the line limit; 0 = literal reading
 EXEMPT = {"tests/run_tests.gd"}
 ALWAYS = ["scenes/studio.gd", "core/venues/venue.gd"]
 ROOTS = ["scenes", "core", "hardware", "tools", "tests", "mods", "layouts"]
@@ -40,20 +46,33 @@ def main():
     root = sh("git", "rev-parse", "--show-toplevel").strip()
     os.chdir(root)
     names = set(sh("git", "diff", "--name-only", "master...HEAD").split()) | set(ALWAYS)
+    churn = {}
+    for line in sh("git", "diff", "--numstat", "master...HEAD").splitlines():
+        a, r, path = line.split("\t", 2)
+        churn[path] = (int(a) + int(r)) if a != "-" else 10 ** 6
+    created = {l.split("\t", 1)[1] for l in sh("git", "diff", "--name-status", "--diff-filter=A", "master...HEAD").splitlines()}
+    show_all = "--all" in sys.argv
+    def substantive(p):
+        return p in ALWAYS or p in created or churn.get(p, 0) >= SUBSTANTIVE
     files = sorted(p for p in names if os.path.isfile(p) and p not in EXEMPT
                    and not p.endswith((".uid", ".import")) and not generated(p))
     # 1. line limit (code and docs-as-code only: gd, sh, py, gdshader, tscn)
-    print("== files over %d lines ==" % LIMIT)
-    over = []
+    print("== files over %d lines (substantively changed: >= %d added+removed, or created, or studio/venue) =="
+          % (LIMIT, SUBSTANTIVE))
+    over, out_of_scope = [], []
     for p in files:
         if os.path.splitext(p)[1] in (".gd", ".sh", ".py", ".gdshader", ".tscn"):
             n = sum(1 for _ in open(p, errors="replace"))
             if n > LIMIT:
-                over.append((n, p))
+                (over if (show_all or substantive(p)) else out_of_scope).append((n, p))
     for n, p in sorted(over, reverse=True):
         print("%6d  %s" % (n, p))
     if not over:
         print("(none)")
+    if out_of_scope:
+        print("\n== over the limit but only lightly changed (out of scope; --all counts them) ==")
+        for n, p in sorted(out_of_scope, reverse=True):
+            print("%6d  %s  (%d lines changed)" % (n, p, churn.get(p, 0)))
     # 2. unreferenced public symbols
     counts = {}
     decls = {}  # how many declarations of each name (a delegate and its body count as two)
@@ -97,8 +116,8 @@ def main():
                 total += 1
     if not total:
         print("(none)")
-    print("\n%d file(s) over the limit, %d unreferenced public symbol(s), %d file(s) in scope"
-          % (len(over), total, len(files)))
+    print("\n%d file(s) over the limit (%d more lightly changed, out of scope), %d unreferenced public symbol(s), %d file(s) in scope"
+          % (len(over), len(out_of_scope), total, len(files)))
     return 1 if (over or total) else 0
 
 sys.exit(main())
