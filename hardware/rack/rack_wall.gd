@@ -116,6 +116,15 @@ const PAD_KNOBS := {"svf": ["cutoff", "res"], "ladder": ["cutoff", "res"], "vco"
 		"chorus": ["rate", "depth"], "crush": ["rate", "bits"], "lfo": ["rate", "depth"], "drum": ["freq", "decay"],
 		"fold": ["gain", "offset"], "env": ["a", "r"], "drive": ["drive", "level"], "slew": ["rise", "fall"],
 		"att": ["gain", "offset"], "quant": ["scale", "root"], "clock": ["bpm", "swing"], "scope": ["time", "gain"], "keys": ["oct", "glide"]}
+## The two knobs of a module's orb pad, or an empty Array when it has none: the mod that provides
+## the type decides, then PAD_KNOBS.
+static func pad_knobs(type: String) -> Array:
+	var e := ModRegistry.ensure_current().rack_module_entry(type)
+	if e.get("pad_knobs") is Array:
+		return e["pad_knobs"]
+	return PAD_KNOBS.get(type, [])
+
+
 ## Pads and bars on the modules: id -> {"node", "keys": [knob ids]}.
 var _pads := {}
 ## A module being carried about the case: its id, node, ghost cell and where it came from.
@@ -793,12 +802,12 @@ func _build_second_face(holder: Node3D, id: String, type: String, spec: Dictiona
 		bars.released.connect(func(steps: Array) -> void: _face_done(id, steps.map(func(n: int) -> String: return keys[n])))
 		_pads[id] = {"node": bars, "keys": keys}
 		return
-	if not PAD_KNOBS.has(type):
+	var ids := pad_knobs(type)
+	if ids.is_empty():
 		return
 	var size := minf(minf(wide - 0.024, band - 0.012), 0.09)
 	if size < 0.045:
 		return
-	var ids: Array = PAD_KNOBS[type]
 	if RackCatalogue.knob(type, ids[0]).is_empty() or RackCatalogue.knob(type, ids[1]).is_empty():
 		return
 	var pad := RackPad.new()

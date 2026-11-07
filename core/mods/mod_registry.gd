@@ -6,14 +6,15 @@ extends RefCounted
 ## `requires`, settles id and entry collisions (first wins) and records every failure as a
 ## ModProblem. It never throws: a bad mod is a recorded problem and the rest still load.
 ##
-## One shared instance lives in `current`; tests build their own. Not used by the game yet.
+## One shared instance lives in `current`; tests build their own. The game opens it lazily through
+## `ensure_current` (the rack catalogue, skins and orb pads do, docs/mods.md section 9 step 3).
 
 const API_MIN := ModManifest.API_MIN
 const API_MAX := ModManifest.API_MAX
 ## Extra roots for tests and development, separated by ":" (";" on Windows).
 const ENV := "DAWLINGS_MODS"
 ## The in-tree root; only mods found under a shipped root may use `builtin.*` ids.
-const SHIPPED_ROOT := "res://mods/"
+const SHIPPED_ROOT := "res://mods/builtin/"
 
 ## The registry the game asks; set at startup, replaced by tests.
 static var current: ModRegistry
@@ -33,6 +34,17 @@ var _mods: Array[ModManifest] = []
 var _by_id: Dictionary = {}
 var _problems: Array[ModProblem] = []
 var _owner: Dictionary = {}
+var _rack_modules: Dictionary = {}
+
+
+## The shared registry, scanning `default_roots()` into `current` the first time it is asked. This
+## is the game's single entry point: there is no autoload and no startup call to forget.
+static func ensure_current() -> ModRegistry:
+	if current == null:
+		var reg := ModRegistry.new()
+		reg.scan(default_roots())
+		current = reg
+	return current
 
 
 ## The roots a normal run scans, in order: the shipped folder, the player's `user://mods/`, then
@@ -63,6 +75,7 @@ func scan(roots: Array[String]) -> void:
 	_order_and_check(found)
 	_claim_entries()
 	_check_groups()
+	_index_rack_modules()
 	for p in _problems:
 		problem_found.emit(p)
 	changed.emit()
@@ -119,6 +132,27 @@ func groups() -> Array[Dictionary]:
 				out.append({"id": g["id"], "title": g["title"], "order": int(g["order"]), "mod": m.id})
 	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["order"] < b["order"])
 	return out
+
+
+## The `rack_module` entry for this type as the mod gave it, or an empty Dictionary when no
+## available mod provides it. The caller must not modify it.
+func rack_module_entry(type: String) -> Dictionary:
+	return _rack_modules.get(type, {})
+
+
+## True when an available mod provides a rack module of this type.
+func has_rack_module(type: String) -> bool:
+	return _rack_modules.has(type)
+
+
+func _index_rack_modules() -> void:
+	_rack_modules.clear()
+	for m in _mods:
+		if m.status != ModManifest.STATUS_OK:
+			continue
+		for e in m.entries:
+			if e.get("kind") == "rack_module":
+				_rack_modules[str(e["type"])] = e
 
 
 func _discover(root: String, found: Array[ModManifest]) -> void:

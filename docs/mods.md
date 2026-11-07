@@ -35,7 +35,7 @@ Rules fixed by the owner (2026-11-07, `docs/refactor_loop.md` "Decisions"):
 
 ```mermaid
 flowchart LR
-  subgraph shipped[res://mods/ in-tree, exported]
+  subgraph shipped[res://mods/builtin/ in-tree, exported]
     B1[builtin.core mod.json] --- B2[builtin.mutable mod.json]
     B3[builtin.daisysp mod.json]
   end
@@ -276,7 +276,7 @@ Reaper the plugin is Reaper's; entries only supply a look (open question 6).
 
 **Roots**, in order:
 
-1. `res://mods/` (shipped; `builtin.*` ids only).
+1. `res://mods/builtin/` (shipped; `builtin.*` ids only).
 2. `DataHome.dir("mods")` = `user://mods/` (per player).
 3. `$DAWLINGS_MODS` (colon-separated; tests and development).
 
@@ -456,7 +456,7 @@ step that has the thing to check (`ModProblem.LATER_CODES`). Details settled whi
 source_path, game_version)` reads `source_path` as the path of the `mod.json` (file checks run only then);
 the game version is `ModManifest.GAME_VERSION` until the game has one constant; a non-shipped mod's rack
 module `type` must equal its id or start with `<id>.`, else that entry is `reserved_id` (the sample mod's type
-is its id); "shipped" roots are `ModRegistry.shipped_roots` (default `res://mods/`); `$DAWLINGS_MODS`
+is its id); "shipped" roots are `ModRegistry.shipped_roots` (default `res://mods/builtin/`: each folder in it is one mod; `res://mods/` itself holds `mod.schema.json`); `$DAWLINGS_MODS`
 splits on `;` on Windows; an empty or missing root is skipped; mods that fail a dependency stay in
 `mods()` with status `unavailable`, invalid ones appear only in `problems()`.
 
@@ -470,7 +470,24 @@ Each step ends with the suite green and no behaviour change unless stated. Steps
    collisions, `$DAWLINGS_MODS`. Still not used by the game.
 3. **Plaits.** `res://mods/builtin/mutable/mod.json` with `plaits` only; `RackCatalogue`, `RackSkin.of`
    and `PAD_KNOBS` consult the registry first and fall back to the old tables. Test: registry result for
-   `plaits` equals the old tables.
+   `plaits` equals the old tables. **Built (2026-11-07), and what differs from the sketch above:**
+   * The entry's `type` is still `plaits`, not `builtin.plaits`. Decision 2 (no alias table) means a
+     renamed type must be renamed everywhere at once: `modules.json`, the engine's `add` lines, the
+     presets, `PAD_KNOBS`, `SKINS` and the tests. Renaming one module now would break every patch that
+     names it, so the rename of all 29 types to `builtin.<name>` happens in step 4 with the generated
+     manifests, in one commit. A shipped mod may use a bare type (the `reserved_id` rule only polices
+     user mods). Until then `builtin.mutable` and its `plaits` entry are the only manifest data.
+   * The shipped root is `res://mods/builtin/` (each folder in it is a mod), not `res://mods/`, so
+     `mods/mod.schema.json` is not scanned as a mod. `ModRegistry.SHIPPED_ROOT` changed to match.
+   * `builtin.mutable` declares the `Voice` group itself, because `builtin.core` (which declares the
+     seven) does not exist yet; step 4 moves it. Without it every start would log `unknown_group`.
+   * The registry loads lazily: `ModRegistry.ensure_current()` scans `default_roots()` into `current`
+     the first time the catalogue, `RackSkin.of` or `RackWall.pad_knobs` asks. No autoload, no startup
+     call. `ModRegistry.rack_module_entry(type)` / `has_rack_module(type)` expose the entry.
+   * `RackCatalogue` takes `title`, `group`, `blurb` from the entry and the jacks/knobs from the engine
+     snapshot, as 3.3 says; it rebuilds its table when the registry emits `changed`.
+   * Skin colours are stored as hex, so they are the 8-bit rounding of the old floats (at most 0.002
+     off per channel; invisible). The test holds them to 0.003; the old table stays for fallback.
 4. **The rest of the rack.** `tools/mods_from_legacy.py` generates manifests for the other 28 modules
    and the 30 presets from the old tables; an equivalence test proves registry data equals the tables;
    then the tables, `PAD_KNOBS` and `RackPatch.preset` bodies are deleted and the two enumerating tests

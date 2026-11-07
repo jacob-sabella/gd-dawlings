@@ -50,8 +50,32 @@ const SKINS := {
 const DEFAULT := [Color(0.16, 0.16, 0.17), Color(0.8, 0.8, 0.8), &"none", ""]
 
 
+static var _from_mods := {}
+static var _watching: ModRegistry
+
+
+## The registry rescanned: read the skins again.
+static func _forget() -> void:
+	_from_mods.clear()
+
+
+## The skin of a module type as `[face, accent, pattern, tagline]`: the mod that provides the type
+## decides, then the table above, then DEFAULT.
 static func of(type: String) -> Array:
-	return SKINS.get(type, DEFAULT)
+	var reg := ModRegistry.ensure_current()
+	if reg != _watching:
+		_watching = reg
+		_from_mods.clear()
+		reg.changed.connect(_forget)
+	if _from_mods.has(type):
+		return _from_mods[type]
+	var skin: Array = SKINS.get(type, DEFAULT)
+	var e := reg.rack_module_entry(type)
+	if not e.is_empty():
+		var s: Dictionary = e["skin"]
+		skin = [Color.html(s["face"]), Color.html(s["accent"]), StringName(s["pattern"]), s["tagline"]]
+	_from_mods[type] = skin
+	return skin
 
 
 static func face(type: String, alt := false) -> Color:

@@ -11,6 +11,7 @@ const GROUPS: Array[String] = ["Source", "Voice", "Control", "Filter", "Shape", 
 
 static var _modules := {}
 static var _order: Array[String] = []
+static var _watching: ModRegistry
 
 
 static func _load() -> void:
@@ -23,11 +24,36 @@ static func _load() -> void:
 	var data: Variant = JSON.parse_string(f.get_as_text())
 	if not data is Dictionary:
 		return
+	var reg := ModRegistry.ensure_current()
+	if reg != _watching:
+		_watching = reg
+		reg.changed.connect(_forget)
 	for m in data["modules"]:
-		_modules[m["type"]] = m
 		_order.append(m["type"])
+		_modules[m["type"]] = _from_registry(m, reg)
 
 
+## The mods are asked first: a module a mod provides takes its title, group and blurb from the
+## manifest. The jacks and knobs stay the engine's own (docs/mods.md section 7), and every module
+## no mod provides yet keeps the engine snapshot's text.
+static func _from_registry(m: Dictionary, reg: ModRegistry) -> Dictionary:
+	var e := reg.rack_module_entry(m["type"])
+	if e.is_empty():
+		return m
+	var out := m.duplicate()
+	for f in ["title", "group", "blurb"]:
+		if e.get(f) is String:
+			out[f] = e[f]
+	return out
+
+
+## The registry rescanned: read the table again the next time it is asked.
+static func _forget() -> void:
+	_modules.clear()
+	_order.clear()
+
+
+## Every module type, in palette order.
 static func types() -> Array[String]:
 	_load()
 	return _order.duplicate()

@@ -733,6 +733,7 @@ func _ready() -> void:
 	_test_the_registry_orders_mods_and_resolves_collisions()
 	_test_a_bad_mod_is_a_problem_and_never_a_crash()
 	_test_the_mod_roots_come_from_the_data_home_and_the_environment()
+	_test_the_registry_says_what_the_old_tables_say_for_plaits()
 	_test_a_rack_catalogue_is_the_engines_own_description()
 	_test_a_rack_patch_checks_every_verb()
 	_test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input()
@@ -45609,9 +45610,69 @@ func _test_a_bad_mod_is_a_problem_and_never_a_crash() -> void:
 	_mod_rmdir(tmp)
 
 
+func _test_the_registry_says_what_the_old_tables_say_for_plaits() -> void:
+	var kept := ModRegistry.current
+	var reg := ModRegistry.new()
+	reg.scan([ModRegistry.SHIPPED_ROOT])
+	check("the shipped mods load with no problem", reg.problems().is_empty())
+	var mutable := reg.mod("builtin.mutable")
+	check("the Mutable Instruments mod is there, available and pinned to the submodule",
+			mutable != null and reg.is_available("builtin.mutable") and mutable.source["commit"] == "f4cfa76"
+			and mutable.source["path"] == "vendor/mutable-eurorack")
+	check("it provides plaits and the registry knows it", reg.has_rack_module("plaits") and not reg.has_rack_module("rings"))
+	var e := reg.rack_module_entry("plaits")
+	# The old tables, read raw.
+	var old: Dictionary = {}
+	for m in JSON.parse_string(FileAccess.get_file_as_string(RackCatalogue.PATH))["modules"]:
+		old[m["type"]] = m
+	var o: Dictionary = old["plaits"]
+	check("title, group and blurb equal modules.json", e["title"] == o["title"] and e["group"] == o["group"] and e["blurb"] == o["blurb"])
+	check("the engine type is the module's own", e["sound"] == {"kind": "engine", "type": "plaits"})
+	check("pad knobs equal PAD_KNOBS", e["pad_knobs"] == RackWall.PAD_KNOBS["plaits"])
+	var table: Array = RackSkin.SKINS["plaits"]
+	var skin: Dictionary = e["skin"]
+	check("skin colours equal the table to the nearest 8-bit step",
+			_colours_within(Color.html(skin["face"]), table[0], 0.003) and _colours_within(Color.html(skin["accent"]), table[1], 0.003))
+	check("skin pattern and tagline equal the table", StringName(skin["pattern"]) == table[2] and skin["tagline"] == table[3])
+	# Through the game's own entry points, with this registry as the shared one.
+	ModRegistry.current = reg
+	reg.changed.emit()
+	var got := RackSkin.of("plaits")
+	check("RackSkin.of reads the registry for plaits", got[2] == table[2] and got[3] == table[3]
+			and _colours_within(got[0], table[0], 0.003) and _colours_within(got[1], table[1], 0.003))
+	check("RackSkin.of keeps the table for everything else", RackSkin.of("keys") == RackSkin.SKINS["keys"] and RackSkin.of("nope") == RackSkin.DEFAULT)
+	check("pad_knobs reads the registry for plaits and the table for the rest",
+			RackWall.pad_knobs("plaits") == ["harm", "timbre"] and RackWall.pad_knobs("svf") == ["cutoff", "res"] and RackWall.pad_knobs("nope").is_empty())
+	var spec := RackCatalogue.spec("plaits")
+	check("the catalogue's plaits has the title, group and blurb of the old table and the engine's jacks",
+			spec["title"] == o["title"] and spec["group"] == o["group"] and spec["blurb"] == o["blurb"]
+			and str(spec["ins"]) == str(o["ins"]) and str(spec["knobs"]) == str(o["knobs"]))
+	check("the palette order is untouched", RackCatalogue.types() == old.keys())
+	check("every other module's spec is the old table's", RackCatalogue.types().all(
+			func(t: String) -> bool: return t == "plaits" or str(RackCatalogue.spec(t)) == str(old[t])))
+	# With no mods at all, plaits falls back to the old tables.
+	var none := ModRegistry.new()
+	none.scan([])
+	ModRegistry.current = none
+	none.changed.emit()
+	check("without the mod the skin is the table's, exactly", RackSkin.of("plaits") == table)
+	check("without the mod the pads are the table's", RackWall.pad_knobs("plaits") == RackWall.PAD_KNOBS["plaits"])
+	check("without the mod the catalogue is the snapshot's", str(RackCatalogue.spec("plaits")) == str(o))
+	ModRegistry.current = kept
+	if kept != null:
+		kept.changed.emit()
+	else:
+		RackCatalogue._forget()
+		RackSkin._forget()
+
+
+func _colours_within(a: Color, b: Color, tol: float) -> bool:
+	return absf(a.r - b.r) <= tol and absf(a.g - b.g) <= tol and absf(a.b - b.b) <= tol
+
+
 func _test_the_mod_roots_come_from_the_data_home_and_the_environment() -> void:
 	var roots := ModRegistry.default_roots("")
-	check("the shipped root is first", roots[0] == "res://mods/")
+	check("the shipped root is first", roots[0] == "res://mods/builtin/")
 	check("the player's mods folder is second and exists", roots[1] == "user://mods/" and DirAccess.dir_exists_absolute("user://mods/"))
 	check("with no environment there are two roots", roots.size() == 2)
 	var sep := ";" if OS.get_name() == "Windows" else ":"

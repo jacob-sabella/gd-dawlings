@@ -1,0 +1,30 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "builtin.mutable",
+  "name": "Mutable Instruments modules",
+  "version": "1.0.0",
+  "author": "Emilie Gillet (Mutable Instruments); wrapper by dawlings",
+  "licence": {"spdx": "MIT", "copyright": "Copyright Emilie Gillet"},
+  "source": {
+    "kind": "submodule",
+    "path": "vendor/mutable-eurorack",
+    "commit": "f4cfa76",
+    "upstream": "https://github.com/pichenettes/eurorack"
+  },
+  "groups": [
+    {"id": "Voice", "title": "Voice", "order": 1}
+  ],
+  "provides": [
+    {
+      "kind": "rack_module",
+      "type": "plaits",
+      "title": "PLAITS",
+      "group": "Voice",
+      "blurb": "Mutable Instruments' macro oscillator: 24 engines from virtual analogue to modal, granular, drums and speech.",
+      "sound": {"kind": "engine", "type": "plaits"},
+      "skin": {"face": "#421F47", "accent": "#FF8CFF", "pattern": "checker", "tagline": "ONE OF 16"},
+      "pad_knobs": ["harm", "timbre"]
+    }
+  ]
+}
