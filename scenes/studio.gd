@@ -448,11 +448,11 @@ func _ready() -> void:
 			set_venue(Session.layout.venue, false, Session.layout.venue_variant)
 		else:
 			set_venue(Venue.IDS[0], false)
-	_build_anchors()
+	surface_host._build_anchors()
 	if medium != Presentation.Medium.AR:
-		_build_furniture()
-	_build_surfaces()
-	_build_point_and_mark()
+		furniture_host._build_furniture()
+	surface_host._build_surfaces()
+	station_host._build_point_and_mark()
 	if camera != null:
 		_build_walker()
 		_update_camera()
@@ -648,7 +648,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	Materials.apply_style(venue.gear_style())
 	GearShape.use(id, venue.roll_board_chalky(), get_tree() if is_inside_tree() else null)
 	TrackColours.use(venue.track_palette())
-	_recolour_tracks()
+	tablet_host._recolour_tracks()
 	# Every venue a touch brighter than it dressed itself: the mid-tones read dark on an ordinary
 	# monitor, AgX's above all. Exposure rather than brightness, so blacks stay black.
 	env.tonemap_exposure *= EXPOSURE_LIFT
@@ -660,14 +660,14 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	pieces.stand_all()
 	_stand_the_modular()
 	pieces.stand(&"weather")
-	_hang_hood_signs()
+	furniture_host._hang_hood_signs()
 	var mirror := venue.make_mirror(env)
 	venue.add_child(mirror)
 	_stand_a_patch_wall()
-	_set_levels_niche()
-	_set_tv_mount()
+	furniture_host._set_levels_niche()
+	furniture_host._set_tv_mount()
 	# The venue built its shelf and hoop where their trolleys stood in the last one.
-	_carry_all_live()
+	furniture_host._carry_all_live()
 	mirror.wardrobe.look = Session.local_look
 	mirror.wardrobe.look_changed.connect(Session.set_look)
 	_relight()
@@ -677,7 +677,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 		Session.layout.save()
 	_walk_where_the_venue_lets()
 	venue_changed.emit(id)
-	_publish_room()
+	room_rows._publish_room()
 
 
 ## Rig Roulette is switched off for now (the door, the room and the roll): the code is all here,
@@ -1046,187 +1046,6 @@ func _assembly(of_name: String) -> Node3D:
 	return node
 
 
-func _build_furniture() -> void:
-	# Saved spots that are an older room's defaults go, once, before anything reads them.
-	FloorImport.run(Session.layout)
-	FloorImport.into_room(Session.layout, room_deltas)
-	floor_plan = FloorPlan.new()
-	floor_plan.name = "FloorPlan"
-	floor_plan.bounds = _room_bounds()
-	floor_plan.fixtures.append(_desk_footprint)
-	floor_plan.fixtures.append(_door_footprint)
-	add_child(floor_plan)
-
-	_build_lamp_stands()
-	# Before the board, whose rows are the stations standing here, the stage table among them.
-	_build_stage_trolley()
-	_build_eq_wall_trolley()
-	_build_levels_niche()
-	_build_tv_mount()
-	_build_station_board()
-
-	# A trolley for the deck. Two uprights and a shelf on a caster base; a tape machine on a
-	# cart is what the right-hand side of a control room looks like, and it is the thing in
-	# the room most often wheeled somewhere else.
-	deck_trolley = _authored("DeckTrolley", &"deck_trolley")
-	deck_trolley.footprint_half = Vector2(0.28, 0.21)
-	deck_trolley.follow = 10.0
-	var base := MeshInstance3D.new()
-	var base_mesh := BoxMesh.new()
-	base_mesh.size = Vector3(0.56, 0.025, 0.42)
-	base.mesh = base_mesh
-	base.position = Vector3(0, Caster.HEIGHT + 0.0125, 0)
-	base.material_override = Materials.furniture()
-	deck_trolley.add_part(base)
-	var shelf := MeshInstance3D.new()
-	var shelf_mesh := BoxMesh.new()
-	shelf_mesh.size = Vector3(0.56, 0.04, 0.42)
-	shelf.mesh = shelf_mesh
-	shelf.position = Vector3(0, 0.86, 0)
-	shelf.material_override = Materials.furniture()
-	GearTrim.edges(shelf)
-	deck_trolley.add_part(shelf)
-	var post_bottom := Caster.HEIGHT + 0.025
-	for dx in [-0.22, 0.22]:
-		for dz in [-0.16, 0.16]:
-			var post := MeshInstance3D.new()
-			var post_mesh := BoxMesh.new()
-			post_mesh.size = Vector3(0.03, 0.84 - post_bottom, 0.03)
-			post.mesh = post_mesh
-			post.position = Vector3(dx, (0.84 + post_bottom) * 0.5, dz)
-			post.material_override = Materials.brushed_metal()
-			deck_trolley.add_part(post)
-	deck_trolley.add_corner_casters()
-	_build_platter_leaf()
-	# The board was made before the cart, and the platter on it is a station: its rows again.
-	if station_board != null:
-		station_board.set_venue(venue)
-		_fit_board_stand()
-
-	# A plinth under the rack. A floor-standing rack puts its lowest unit at ankle height; every
-	# control room that has one has it up on something -- and here the something has wheels,
-	# because a rack of outboard is the piece of a studio people actually push about.
-	rack_trolley = _authored("RackTrolley", &"rack")
-	rack_trolley.footprint_centre = Vector2(0, -0.15)
-	rack_trolley.footprint_half = Vector2(0.30, 0.17)
-	# Heavier than anything else on the floor. It is a cabinet full of steel.
-	rack_trolley.follow = 7.5
-	var plinth := MeshInstance3D.new()
-	var plinth_mesh := BoxMesh.new()
-	plinth_mesh.size = Vector3(0.60, 0.30 - Caster.HEIGHT, 0.34)
-	plinth.mesh = plinth_mesh
-	plinth.position = Vector3(0, (0.30 + Caster.HEIGHT) * 0.5, -0.15)
-	plinth.material_override = Materials.furniture()
-	GearTrim.edges(plinth)
-	rack_trolley.add_part(plinth)
-	rack_trolley.add_corner_casters(0.05)
-
-	# A stand under the timeline, which until now hung in the air.
-	#
-	# It is the only thing in the room that did. The rack has a plinth, the deck a trolley, the
-	# bay a bridge, the console its own carcass -- and then a metre of lit panel floating at
-	# head height with nothing holding it. In a close-up that reads as a screen. In a wide shot
-	# of the room it reads as the one object that is software, which is the single thing this
-	# project is trying not to be.
-	#
-	# Two legs and a crossbar, deliberately the same vocabulary as the patch stand rather than
-	# a new idea: a room furnished out of three kinds of part looks like a room, and one
-	# furnished out of six looks like a kit. The feet are on casters, like a whiteboard's.
-	timeline_stand = _trolley("TimelineStand", &"timeline_stand",
-			Vector3(0, 0, TIMELINE_STAND_Z), 0.0)
-	timeline_stand.footprint_half = Vector2(TIMELINE_LEG_X + 0.05, 0.11)
-	var foot_top := Caster.HEIGHT + 0.022
-	for side in [-1.0, 1.0]:
-		var leg := MeshInstance3D.new()
-		var leg_mesh := BoxMesh.new()
-		leg_mesh.size = Vector3(0.035, TIMELINE_STAND_TOP - foot_top, 0.05)
-		leg.mesh = leg_mesh
-		leg.position = Vector3(side * TIMELINE_LEG_X, (TIMELINE_STAND_TOP + foot_top) * 0.5, 0)
-		leg.material_override = Materials.furniture()
-		timeline_stand.add_part(leg)
-
-		# A foot, because a 35mm post standing on a floor is a post that fell over a moment ago.
-		var foot := MeshInstance3D.new()
-		var foot_mesh := BoxMesh.new()
-		foot_mesh.size = Vector3(0.10, 0.022, 0.22)
-		foot.mesh = foot_mesh
-		foot.position = Vector3(side * TIMELINE_LEG_X, Caster.HEIGHT + 0.011, 0)
-		foot.material_override = Materials.furniture()
-		timeline_stand.add_part(foot)
-		for end in [-0.075, 0.075]:
-			timeline_stand.add_caster(Vector2(side * TIMELINE_LEG_X, end))
-
-	var crossbar := MeshInstance3D.new()
-	var crossbar_mesh := BoxMesh.new()
-	crossbar_mesh.size = Vector3(TIMELINE_LEG_X * 2.0 + 0.07, 0.028, 0.04)
-	crossbar.mesh = crossbar_mesh
-	# Behind the panel, all of it: nine centimetres deep and centred on the legs, its front stood
-	# out through the panel's face across the scrub rail, and seen from below it was a bright
-	# slab cut into the bottom of the timeline.
-	crossbar.position = Vector3(0, TIMELINE_STAND_TOP + 0.012,
-			(TIMELINE_Z - TimelineSurface.DEPTH * TIMELINE_SCALE - 0.004 - 0.02) - TIMELINE_STAND_Z)
-	crossbar.material_override = Materials.brushed_metal()
-	timeline_stand.add_part(crossbar)
-
-	_build_patch_stand()
-	_build_live_pieces()
-
-
-## The leaf off the deck cart's far end, away from the seat, at the shelf's height, on two posts
-## and a foot with casters of its own, and the DJ platter on it (Platter.ON_CART, slice 27). The
-## cart's footprint grows to take it in, so it is pushed, and stood clear of, as one piece.
-func _build_platter_leaf() -> void:
-	var leaf_x := Platter.ON_CART.origin.x
-	var top := Platter.ON_CART.origin.y
-	# From just under the shelf's end, a step below it, so the two never share a face.
-	var leaf_from := Platter.LEAF_FROM
-	var leaf_to := leaf_x + Platter.LEAF.x * 0.5
-	var leaf := MeshInstance3D.new()
-	leaf.name = "PlatterLeaf"
-	var leaf_mesh := BoxMesh.new()
-	leaf_mesh.size = Vector3(leaf_to - leaf_from, Platter.LEAF_THICK, Platter.LEAF.y)
-	leaf.mesh = leaf_mesh
-	leaf.position = Vector3((leaf_from + leaf_to) * 0.5, top - Platter.LEAF_THICK * 0.5, 0)
-	leaf.material_override = Materials.furniture()
-	GearTrim.edges(leaf)
-	deck_trolley.add_part(leaf)
-	var outer := leaf_x + Platter.LEAF.x * 0.5 - 0.03
-	var post_bottom := Caster.HEIGHT + 0.025
-	for dz in [-0.16, 0.16]:
-		var post := MeshInstance3D.new()
-		var post_mesh := BoxMesh.new()
-		post_mesh.size = Vector3(0.03, top - Platter.LEAF_THICK - post_bottom, 0.03)
-		post.mesh = post_mesh
-		post.position = Vector3(outer, (top - Platter.LEAF_THICK + post_bottom) * 0.5, dz)
-		post.material_override = Materials.brushed_metal()
-		deck_trolley.add_part(post)
-	var foot := MeshInstance3D.new()
-	var foot_mesh := BoxMesh.new()
-	foot_mesh.size = Vector3(0.06, 0.025, 0.42)
-	foot.mesh = foot_mesh
-	foot.position = Vector3(outer, Caster.HEIGHT + 0.0125, 0)
-	foot.material_override = Materials.furniture()
-	deck_trolley.add_part(foot)
-	for dz in [-0.165, 0.165]:
-		deck_trolley.add_caster(Vector2(outer, dz))
-	# From the cart's near end to the leaf's far one.
-	var near := -0.28
-	var far := leaf_x + Platter.LEAF.x * 0.5
-	deck_trolley.footprint_centre = Vector2((near + far) * 0.5, 0)
-	deck_trolley.footprint_half = Vector2((far - near) * 0.5, maxf(0.21, Platter.LEAF.y * 0.5))
-	platter = Platter.new()
-	platter.transform = Platter.ON_CART
-	platter.authority = Session.is_authority
-	platter.find_file = _platter_file
-	platter.fetching = func(source: String) -> bool:
-		return Session.role == Session.Role.GUEST and Session.files != null \
-				and Session.files.fetch_state(source) == FileSend.FETCHING
-	platter.scratched.connect(_on_scratched)
-	deck_trolley.add_child(platter)
-	deck_trolley.moved.connect(_hold_the_platter)
-	deck_trolley.settled.connect(_hold_the_platter)
-
-
 ## Where the stage table's trolley stands: beside the mix position on the right and a little
 ## behind it, turned to face it, clear of the deck trolley and the patch stand however wide the
 ## desk grows (the desk's footprint ends in front of the mix position, and these stand behind
@@ -1235,108 +1054,8 @@ func _build_platter_leaf() -> void:
 const STAGE_TOP := 0.74
 
 
-## The stage table's trolley: four legs under an apron, a shelf low down, casters, and the
-## table's plaque on its front under the rail (Stations.plaque). The table itself is a surface
-## and rides it (`_ride`, in `_build_surfaces`).
-func _build_stage_trolley() -> void:
-	stage_trolley = _authored("StageTrolley", &"stage_trolley")
-	# The table and the rail along its front, on the floor.
-	stage_trolley.footprint_centre = Vector2(0, 0.065)
-	stage_trolley.footprint_half = Vector2(0.62, 0.53)
-	stage_trolley.follow = 9.0
-	var apron := MeshInstance3D.new()
-	apron.name = "Apron"
-	var apron_mesh := BoxMesh.new()
-	apron_mesh.size = Vector3(1.12, 0.07, 0.82)
-	apron.mesh = apron_mesh
-	apron.position = Vector3(0, STAGE_TOP - StageTable.THICK - 0.035, 0)
-	apron.material_override = Materials.furniture()
-	GearTrim.edges(apron)
-	stage_trolley.add_part(apron)
-	var shelf := MeshInstance3D.new()
-	shelf.name = "Shelf"
-	var shelf_mesh := BoxMesh.new()
-	shelf_mesh.size = Vector3(1.08, 0.025, 0.78)
-	shelf.mesh = shelf_mesh
-	shelf.position = Vector3(0, Caster.HEIGHT + 0.12, 0)
-	shelf.material_override = Materials.furniture()
-	stage_trolley.add_part(shelf)
-	var leg_bottom := Caster.HEIGHT
-	var leg_top := STAGE_TOP - StageTable.THICK - 0.07
-	for dx in [-0.53, 0.53]:
-		for dz in [-0.38, 0.38]:
-			var leg := MeshInstance3D.new()
-			var leg_mesh := BoxMesh.new()
-			leg_mesh.size = Vector3(0.035, leg_top - leg_bottom, 0.035)
-			leg.mesh = leg_mesh
-			leg.position = Vector3(dx, (leg_top + leg_bottom) * 0.5, dz)
-			leg.material_override = Materials.brushed_metal()
-			stage_trolley.add_part(leg)
-			stage_trolley.add_caster(Vector2(dx, dz))
-	var plaque := Stations.plaque(&"stage_table")
-	# Hung by its top edge, which is where a folded plaque's title and key row stay: low enough
-	# under the rail that its title key is not in the way of the rail's tags from the seat.
-	plaque.position = Vector3(0, STAGE_PLAQUE_TOP - float(plaque.get_meta(&"plaque_tall")) * 0.5,
-			StageTable.SIZE.y * 0.5 + 0.135)
-	stage_trolley.add_child(plaque)
-
-
 ## The plaque's top edge on the trolley's front, under the rail.
 const STAGE_PLAQUE_TOP := 0.6
-
-
-## Where the EQ wall's trolley stands: against the right-hand side wall in front of the deck, this
-## far in from it, turned a little toward the mix position, clear of the deck's cart, the corner's
-## lamp and the door to the Rig Roulette room in the front wall. Its x follows the wall out as the
-## room widens (`_fit_room_to_session`).
-## Off the wall and into the ring since the room grew: against an 11 m room's wall its handle was
-## 5.5 px from the seat.
-## (The fragment's `eq_wall`: 1.9 m in from the right-hand wall, 1.6 m behind the seat.)
-
-
-## The EQ wall's trolley: a plinth on casters and two uprights behind the board's edges, and the
-## wall's plaque on the board's right-hand column, under SHOW (Stations.plaque, narrowed to the
-## column). The board itself is a surface and rides it (`_ride`, in `_build_surfaces`).
-func _build_eq_wall_trolley() -> void:
-	eq_wall_trolley = _authored("EqWallTrolley", &"eq_wall")
-	var wide := EqWall.PLATE_WIDE + EqWall.BORDER * 2.0
-	eq_wall_trolley.footprint_centre = Vector2(0, -0.06)
-	eq_wall_trolley.footprint_half = Vector2(wide * 0.5, 0.16)
-	eq_wall_trolley.follow = 9.0
-	# The uprights first: they are its handle, standing up over the deck's reels from the seat,
-	# where the plinth at the floor is behind them (and is taken all the same).
-	for side in [-1.0, 1.0]:
-		var post := MeshInstance3D.new()
-		post.name = "Upright"
-		var post_mesh := BoxMesh.new()
-		var high := EqWall.BOTTOM + EqWall.TALL + EqWall.BORDER
-		post_mesh.size = Vector3(0.05, high - Caster.HEIGHT, 0.05)
-		post.mesh = post_mesh
-		post.position = Vector3(side * (wide * 0.5 - 0.06), (high + Caster.HEIGHT) * 0.5, -0.06)
-		post.material_override = Materials.brushed_metal()
-		eq_wall_trolley.add_part(post)
-	var plinth := MeshInstance3D.new()
-	plinth.name = "Plinth"
-	var plinth_mesh := BoxMesh.new()
-	plinth_mesh.size = Vector3(wide, 0.04, 0.3)
-	plinth.mesh = plinth_mesh
-	plinth.position = Vector3(0, Caster.HEIGHT + 0.02, -0.06)
-	plinth.material_override = Materials.furniture()
-	GearTrim.edges(plinth)
-	eq_wall_trolley.add_part(plinth)
-	eq_wall_trolley.add_corner_casters(0.06)
-	var plaque := Stations.plaque(&"eq_wall", EqWall.SIDE - 0.02)
-	plaque.position = Vector3(EqWall.PLATE_WIDE * 0.5 - EqWall.SIDE * 0.5,
-			EqWall.PLAQUE_TOP - float(plaque.get_meta(&"plaque_tall")) * 0.5, 0.012)
-	eq_wall_trolley.add_child(plaque)
-
-
-## The LEVELS niche (slice 66; 2026-10-30, "its own like divet in the wall so it can be an entire
-## wall"): where it is is the venue's (Venue.levels_niche_spot), in the set's frame.
-func _levels_niche_at() -> Transform3D:
-	return _venue_to_set(venue.levels_niche_spot()) if venue != null \
-			else Transform3D(Basis.IDENTITY, Vector3(-room_width * 0.5 + Venue.LEVELS_NICHE_FROM_LEFT, 0,
-					ROOM_FRONT + Venue.LEVELS_NICHE_IN))
 
 
 ## The niche's measures (m): the surround either side, its depth out of the wall (shallower where
@@ -1352,375 +1071,6 @@ const NICHE_TOP := 3.3
 const NICHE_SILL := 0.38
 const NICHE_STEP := 0.025
 const NICHE_PLASTER := Color(0.36, 0.35, 0.33)
-
-
-## The niche LEVELS is set into: a surround either side and over it standing out of the wall, a
-## sill under it and a dark back, so the board is sunk in the wall rather than hung on it; a lit
-## strip under the lintel. Where the venue has no wall to build into, a cabinet of the same, with
-## a back of its own. A Trolley so the floor plan, the stations and the board's ride treat it as
-## they treat every piece, but with nothing to take hold of and never rolled: it stays in the wall
-## (`_set_levels_niche`), and a board put down by its handle goes back into it (`_reseat`).
-func _build_levels_niche() -> void:
-	var at := _levels_niche_at()
-	levels_niche = _trolley("LevelsNiche", &"levels", at.origin, rad_to_deg(at.basis.get_euler().y))
-	levels_niche.built_in = true
-	levels_niche.follow = 9.0
-	_set_levels_niche()
-
-
-## Build the niche for this venue and stand it where this venue keeps it. Its boxes overlap where
-## they meet rather than touch, the lintel and the sill a step back from the cheeks, so no two faces
-## share a plane to flicker between.
-func _set_levels_niche() -> void:
-	if levels_niche == null:
-		return
-	for old in levels_niche.get_children():
-		if old.has_meta(&"niche"):
-			levels_niche.remove_child(old)
-			old.queue_free()
-	var standing := venue != null and venue.back_wall_gear_stands()
-	var out := NICHE_STANDING_OUT if standing else NICHE_OUT
-	var board := LevelsWall.room_y(LevelsWall.WIDE * 0.5 + LevelsWall.BORDER)
-	# Room either side for the board's handle, on its left (LevelsWall.handle_left).
-	var open := board + 0.12
-	var outer := open + NICHE_SIDE
-	var back := -(NICHE_STANDING_BACK if standing else NICHE_INTO_WALL)
-	var lintel := LevelsWall.room_y(LevelsWall.BOTTOM + LevelsWall.TALL + LevelsWall.BORDER + 0.08) + 0.06
-	var behind_board := -LevelsWall.room_y(0.031) - 0.004
-	# Plaster a shade off every venue's walls, so it reads as the wall built out round a hollow and
-	# not as one more black cabinet against it.
-	var surround := Materials.painted_wall(NICHE_PLASTER)
-	for side in [-1.0, 1.0]:
-		# A hair off the floor, which the wall's own foot is on.
-		_niche_box("Cheek", Vector3(NICHE_SIDE, NICHE_TOP - 0.002, out - back),
-				Vector3(side * (open + NICHE_SIDE * 0.5), NICHE_TOP * 0.5 + 0.001, (out + back) * 0.5), surround)
-	# Into the cheeks either side; a step back from their faces, and short of their tops and backs.
-	var span := open * 2.0 + NICHE_SIDE
-	var front := out - NICHE_STEP
-	var rear := back + 0.01
-	_niche_box("Lintel", Vector3(span, NICHE_TOP - 0.01 - lintel, front - rear),
-			Vector3(0, (NICHE_TOP - 0.01 + lintel) * 0.5, (front + rear) * 0.5), surround)
-	_niche_box("Sill", Vector3(span, NICHE_SILL - 0.004, front - rear),
-			Vector3(0, (NICHE_SILL + 0.004) * 0.5, (front + rear) * 0.5), surround)
-	_niche_box("Back", Vector3(span - 0.02, lintel - NICHE_SILL + 0.04, 0.02),
-			Vector3(0, (lintel + NICHE_SILL) * 0.5, behind_board - 0.01), Materials.recess())
-	if standing:
-		# Its back: behind the cheeks' and a little inside their sides and top.
-		_niche_box("Cabinet", Vector3(outer * 2.0 - 0.02, NICHE_TOP - 0.02, behind_board - 0.02 - (back - 0.01)),
-				Vector3(0, NICHE_TOP * 0.5 - 0.005, (behind_board - 0.02 + back - 0.01) * 0.5), surround)
-	# Light along the lintel's underside, to the board.
-	var strip := MeshInstance3D.new()
-	var strip_mesh := BoxMesh.new()
-	strip_mesh.size = Vector3(open * 2.0 - 0.1, 0.012, 0.03)
-	strip.mesh = strip_mesh
-	strip.position = Vector3(0, lintel - 0.007, front - 0.06)
-	strip.material_override = Materials.led(Color(1.0, 0.86, 0.66), true)
-	strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	strip.set_meta(&"niche", true)
-	strip.name = "Strip"
-	levels_niche.add_child(strip)
-	# On the floor only in front of the wall: what is in the wall is the wall's.
-	var foot_back := back - 0.01 if standing else -0.08
-	levels_niche.footprint_centre = Vector2(0, (out + foot_back) * 0.5)
-	levels_niche.footprint_half = Vector2(outer, (out - foot_back) * 0.5)
-	var plaque := Stations.plaque(&"levels", LevelsWall.room_y(LevelsWall.MASTER_WIDE))
-	plaque.set_meta(&"niche", true)
-	plaque.position = Vector3(LevelsWall.room_y(LevelsWall.master_left() + LevelsWall.MASTER_WIDE * 0.5),
-			LevelsWall.PLAQUE_TOP - float(plaque.get_meta(&"plaque_tall")) * 0.5, front + 0.006)
-	levels_niche.add_child(plaque)
-	var at := _levels_niche_at()
-	levels_niche.place(Vector2(at.origin.x, at.origin.z), at.basis.get_euler().y)
-
-
-## The TV's bracket (docs/sampling_station.md): where it is is the venue's (Venue.tv_mount_spot), in
-## the set's frame.
-func _tv_mount_at() -> Transform3D:
-	return _venue_to_set(venue.tv_mount_spot()) if venue != null \
-			else Transform3D(Basis.IDENTITY, Vector3(room_width * 0.5 - Venue.TV_FROM_RIGHT, 0,
-					ROOM_FRONT + Venue.TV_IN))
-
-
-func _build_tv_mount() -> void:
-	var at := _tv_mount_at()
-	tv_mount = _trolley("TvMount", &"tv", at.origin, rad_to_deg(at.basis.get_euler().y))
-	tv_mount.built_in = true
-	tv_mount.follow = 9.0
-	_set_tv_mount()
-
-
-## The TV's bracket for this venue, or its stand where the wall is not one to hang it on, and the
-## plaque under it; stood where this venue keeps it.
-func _set_tv_mount() -> void:
-	if tv_mount == null:
-		return
-	for old in tv_mount.get_children():
-		if old.has_meta(&"mount"):
-			tv_mount.remove_child(old)
-			old.queue_free()
-	var standing := venue != null and venue.back_wall_gear_stands()
-	var metal := Materials.brushed_metal()
-	var back := -TvSurface.DEPTH
-	if standing:
-		# Two legs from feet on the floor up the case's back, and a bar across them.
-		for side in [-1.0, 1.0]:
-			var x: float = side * TvSurface.SCREEN.x * 0.3
-			# The leg's foot sunk into the foot's top, the foot a hair off the floor: no face shared.
-			_mount_box("Leg", Vector3(0.05, TvSurface.TOP - 0.12, 0.05),
-					Vector3(x, 0.02 + (TvSurface.TOP - 0.12) * 0.5, back - 0.03), metal)
-			_mount_box("Foot", Vector3(0.08, 0.03, 0.62), Vector3(x, 0.017, back - 0.03 + 0.08), metal)
-		# Into the legs, short of their far sides.
-		_mount_box("Bar", Vector3(TvSurface.SCREEN.x * 0.6 - 0.02, 0.04, 0.03),
-				Vector3(0, TvSurface.FOOT + 0.2, back - 0.03), metal)
-		tv_mount.footprint_centre = Vector2(0, back + 0.05)
-		tv_mount.footprint_half = Vector2(TvSurface.SCREEN.x * 0.3 + 0.05, 0.31)
-	else:
-		# An arm from the wall to the case's back.
-		var wall := -Venue.TV_IN + 0.05
-		_mount_box("Arm", Vector3(0.12, 0.12, back - wall - 0.004),
-				Vector3(0, (TvSurface.TOP + TvSurface.FOOT) * 0.5, (back - 0.002 + wall) * 0.5), metal)
-		tv_mount.footprint_centre = Vector2(0, -0.06)
-		tv_mount.footprint_half = Vector2(TvSurface.SCREEN.x * 0.5 + TvSurface.BEZEL, 0.06)
-	var plaque := Stations.plaque(&"tv", TvSurface.SCREEN.x * 0.5)
-	plaque.set_meta(&"mount", true)
-	plaque.position = Vector3(0, TvSurface.PLAQUE_TOP - float(plaque.get_meta(&"plaque_tall")) * 0.5, 0.006)
-	tv_mount.add_child(plaque)
-	var at := _tv_mount_at()
-	tv_mount.place(Vector2(at.origin.x, at.origin.z), at.basis.get_euler().y)
-
-
-func _mount_box(of_name: String, size: Vector3, at: Vector3, paint: Material) -> void:
-	var box := MeshInstance3D.new()
-	box.name = of_name
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	box.mesh = mesh
-	box.position = at
-	box.material_override = paint
-	box.set_meta(&"mount", true)
-	tv_mount.add_part(box, false)
-
-
-## FIND on the TV: a search or a link asked for on the monitor; a link plays, a search lists what it
-## found (`_on_tv_searched`). From a desk: a headset has no keyboard to type a search with yet.
-func find_on_tv() -> void:
-	if tv == null or not is_instance_valid(tv):
-		return
-	if get_viewport() != null and get_viewport().use_xr:
-		Session.notice.emit("The TV's FIND is typed: from a desk, for now.")
-		return
-	var prompt := NamePrompt.ask(self, "YouTube: a search, or paste a link", "", 300)
-	prompt.answered.connect(func(text: String) -> void:
-		if text.strip_edges() != "" and tv != null and is_instance_valid(tv):
-			tv.find(text))
-
-
-## A pad struck at the sampling station (PadDeck): onto the armed track as a note while the song
-## records, as a played key is. The host takes it down; a guest's pads are slice 7's.
-func _on_pad_struck(note: int, velocity: int, seconds: float) -> void:
-	var track := HitRecorder.armed_track()
-	if track <= 0 or hit_recorder == null or not Session.is_authority():
-		return
-	hit_recorder.note(track, note, velocity, InstrumentItem.MELODIC_CHANNEL, maxf(seconds, 0.05),
-			hit_recorder.stamp())
-
-
-func _on_tv_searched(query: String, rows: Array, error: String) -> void:
-	if error != "" or rows.is_empty() or tv == null or not is_instance_valid(tv):
-		return
-	if get_viewport() != null and get_viewport().use_xr:
-		return
-	var choices: Array = []
-	for row: Dictionary in rows:
-		var long := TvSurface._clock(float(row.seconds)) if float(row.seconds) > 0.0 else "live"
-		var by := ("  ·  " + str(row.channel)) if str(row.channel) != "" else ""
-		choices.append([str(row.id), "%s  ·  %s%s" % [row.title, long, by]])
-	var picker := PluginPicker.ask(self, "YouTube: " + query.strip_edges(), choices)
-	picker.chosen.connect(func(id: String) -> void:
-		if tv != null and is_instance_valid(tv):
-			tv.watch(id))
-
-
-func _niche_box(of_name: String, size: Vector3, at: Vector3, paint: Material) -> void:
-	var box := MeshInstance3D.new()
-	box.name = of_name
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	box.mesh = mesh
-	box.position = at
-	box.material_override = paint
-	box.set_meta(&"niche", true)
-	levels_niche.add_part(box, false)
-
-
-## The bay's own cabinet: a plinth on casters, a carcass under the panel and a cheek either side
-## running up past its top, so the bay stands in a frame rather than on a post. The carcass and
-## cheeks are sized to the bay once it knows how many rows it has (`_fit_stand_to_bay`).
-func _build_patch_stand() -> void:
-	patch_stand = _authored("PatchStand", &"patch_stand")
-	patch_stand.footprint_centre = Vector2(0, -0.03)
-	patch_stand.footprint_half = Vector2(0.62, 0.15)
-	patch_stand.follow = 9.0
-	var plinth := MeshInstance3D.new()
-	var plinth_mesh := BoxMesh.new()
-	plinth_mesh.size = Vector3(1.20, 0.03, 0.28)
-	plinth.mesh = plinth_mesh
-	plinth.position = Vector3(0, Caster.HEIGHT + 0.015, -0.03)
-	plinth.material_override = Materials.furniture()
-	patch_stand.add_part(plinth)
-	_patch_cabinet = MeshInstance3D.new()
-	_patch_cabinet.name = "Cabinet"
-	_patch_cabinet.mesh = BoxMesh.new()
-	_patch_cabinet.material_override = Materials.furniture()
-	patch_stand.add_part(_patch_cabinet)
-	for side in [-1.0, 1.0]:
-		var cheek := MeshInstance3D.new()
-		cheek.name = "Cheek"
-		cheek.mesh = BoxMesh.new()
-		cheek.material_override = Materials.end_cheek()
-		patch_stand.add_part(cheek)
-		_patch_cheeks.append(cheek)
-	patch_stand.add_corner_casters(0.06)
-	_fit_stand_to_bay()
-
-
-# --- what stands out in the venue on its own ------------------------------------------------
-#
-# The cassette rack, the sampler, the Tour case, the prop shelf and
-# the hoop stand on the floor by themselves, the way the rack and the deck's cart do, so they are
-# pushed about the same way: a trolley each, saved where it was left (the room's delta, `RoomDeltas`) and shared
-# with the room like the rest. What is built into a venue -- its walls and doors, the riser, the
-# booth, the bricks table and the wheel on it, the lattice's frame, the screens on the walls --
-# stays where the venue put it, and is what a pushed piece stops at (FloorPlan.stops).
-#
-# The things themselves are still the venue's children, built with each venue in its own
-# materials; their trolley is the studio's and says where they stand (Venue._spot_of), so moving
-# it moves them (`_carry_live`), and everything that is measured from them -- a station's seat
-# and the board's rows, the items' homes on the shelf, the rack's slots, the
-# baskets a ball goes through, the dartboard on the shelf's posts -- goes with them.
-
-## A wheeled piece's trolley for each of Venue.WHEELED (`PieceHost.build`, from its `PieceDef`), and the patch wall's legs; stood where
-## this venue has them (`RoomSync.wheel_in`) and what stands on them taken there.
-func _build_live_pieces() -> void:
-	floor_plan.rooms = venue.rooms() if venue != null else []
-	floor_plan.stops.append(_venue_stops)
-	pieces.build()
-	_build_patch_wall_legs()
-	RoomSync.wheel_in(self)
-	_carry_all_live()
-
-
-## A box to take a trolley by, of `size` centred at `at` in its frame, with nothing drawn: the
-## piece's own plinth or feet are drawn by the piece.
-func _grip(t: Trolley, size: Vector3, at: Vector3) -> CollisionShape3D:
-	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = size
-	shape.shape = box
-	shape.position = at
-	t.add_child(shape)
-	return shape
-
-
-## Known as one of `live_pieces`, and what stands on it carried along as it moves.
-func _go_live(t: Trolley) -> void:
-	live_pieces[t.piece_id] = t
-	t.moved.connect(_carry_live.bind(t.piece_id))
-	t.settled.connect(_carry_live.bind(t.piece_id))
-
-
-## The patch wall's two legs, on a trolley; the screen is the venue's child (`_stand_a_patch_wall`),
-## and goes where the legs are.
-func _build_patch_wall_legs() -> void:
-	var legs := _authored("PatchWallLegs", &"patch_wall")
-	legs.footprint_centre = Vector2(0, PATCH_WALL_LEG_Z)
-	legs.footprint_half = Vector2(PATCH_WALL_LEG_X + 0.06, 0.06)
-	legs.follow = 8.0
-	legs.rolls = false
-	for side in [-1.0, 1.0]:
-		var leg := MeshInstance3D.new()
-		leg.name = "PatchWallLeg"
-		var post := BoxMesh.new()
-		post.size = Vector3(0.06, 1.6, 0.06)
-		leg.mesh = post
-		leg.position = Vector3(side * PATCH_WALL_LEG_X, 0.8, PATCH_WALL_LEG_Z)
-		leg.material_override = Materials.furniture()
-		legs.add_part(leg)
-	_go_live(legs)
-
-
-## Where piece `id` of `live_pieces` stands in this venue until somebody moves it, in the set's
-## frame; null where this venue has no room for it: the Rig Roulette room has no booth for the
-## sampler to stand against, and a venue that hangs its own patch wall needs no legs for one.
-func _live_default(id: StringName) -> Variant:
-	if venue == null or room_deltas.delta.is_removed(id):
-		return null
-	var added: Variant = room_deltas.delta.transform_of(id) if room_deltas.delta.added_index(id) >= 0 else null
-	if added != null:
-		return added
-	match id:
-		&"station_board":
-			return ControlRoom.spot(&"station_board", room_width)
-		&"patch_wall":
-			var hung := venue.get_node_or_null("PatchWall")
-			if hung != null and not hung.has_meta(&"on_legs"):
-				return null
-			return ControlRoom.spot(&"patch_wall", room_width)
-	var spot: Variant = venue.default_spot(id)
-	return _venue_to_set(spot) if spot != null else null
-
-
-func _carry_all_live() -> void:
-	for id: StringName in live_pieces:
-		_carry_live(id)
-
-
-## Take what stands on piece `id` to where its trolley is now: the thing itself, and whatever is
-## measured from it. Each frame it moves, so a shelf's toys ride on it rather than catching up.
-func _carry_live(id: StringName) -> void:
-	if venue == null or not venue.is_inside_tree():
-		return
-	# The five defined pieces carry through their definitions (PieceDef); the rest are the studio's own.
-	if not pieces.carry(id):
-		match id:
-			&"mini_table":
-				pieces.rehome_items()
-			&"station_board":
-				if station_board != null and is_instance_valid(station_board):
-					station_board.transform = (live_pieces[id] as Trolley).transform
-			&"patch_wall":
-				var wall := venue.get_node_or_null("PatchWall") as Node3D
-				if wall != null and wall.has_meta(&"on_legs"):
-					wall.transform = _patch_wall_frame()
-	_place_hood_signs()
-
-
-## The neighbourhoods' banners (Neighbourhoods), the venue's children, one on the wall by each
-## neighbourhood that stands here: built with the venue, and moved with what they name
-## (`_place_hood_signs`).
-func _hang_hood_signs() -> void:
-	if venue == null or medium == Presentation.Medium.AR:
-		return
-	for r: Dictionary in Neighbourhoods.all():
-		if Neighbourhoods.sign_spot(venue, r["id"]) == null:
-			continue
-		venue.add_child(Neighbourhoods.make_sign(r["id"]))
-	_place_hood_signs()
-
-
-## Each banner on its wall by its neighbourhood's middle as it stands now: a piece wheeled across
-## the room takes its neighbourhood's middle, and so its banner, some of the way along the wall with
-## it, or round to another wall.
-func _place_hood_signs() -> void:
-	if venue == null or not is_instance_valid(venue):
-		return
-	for r: Dictionary in Neighbourhoods.all():
-		var sign := venue.get_node_or_null("Sign_%s" % r["id"]) as Node3D
-		if sign == null:
-			continue
-		var at: Variant = Neighbourhoods.sign_spot(venue, r["id"])
-		sign.visible = at != null
-		if at != null:
-			sign.transform = at
 
 
 ## What a pushed piece stops at among the venue's own things: its solids (Venue.solids), which in
@@ -1764,178 +1114,6 @@ const TABLET_FOOT := 0.19
 const TABLET_PULL := 0.6
 
 
-func _on_tear_requested(track: int, fx: int, at: Vector3, from: Node3D = null) -> void:
-	var f := DAW.state.fx(track, fx, false)
-	if f == null or f.name == "":
-		return
-	# Out from the rack along its facing, so a tablet pulled straight off lands in front of it
-	# rather than inside it.
-	var out := (from if from != null else rack).global_basis.z.normalized()
-	var landing := at + Vector3(out.x, 0, out.z).normalized() * TABLET_PULL
-	var id: StringName
-	if Session.is_authority():
-		id = open_tablet(track, fx, f.name, Vector2(landing.x, landing.z))
-	else:
-		# Out at once, under a name of this guest's own, and asked for: the host's room renames
-		# it when it answers, or takes it back if the host would not.
-		id = _predicted_tablet(track, fx, f.name, Vector2(landing.x, landing.z))
-		if id == StringName():
-			return
-	# It lands in front of the rack; nobody is walked to it (F does, as for any gear).
-
-
-## Put a plugin on a stand at `where` on the floor, facing the mix position. One stand per
-## plugin: asking again for one that is already out wheels that stand over instead.
-func open_tablet(track: int, fx: int, plugin_name: String, where: Vector2) -> StringName:
-	for id in tablets:
-		var tablet: PluginTablet = tablets[id][1]
-		if tablet.track_index == track and tablet.fx_index == fx:
-			(tablets[id][0] as Trolley).place(where, _facing_mix(where))
-			return id
-	var n := 1
-	while tablets.has(StringName("tablet_%d" % n)) or (Session.layout != null \
-			and Session.layout.tablets.has(StringName("tablet_%d" % n))):
-		n += 1
-	var id := StringName("tablet_%d" % n)
-	_build_tablet(id, track, fx, plugin_name)
-	(tablets[id][0] as Trolley).place(where, _facing_mix(where))
-	_remember_tablets()
-	_publish_room()
-	return id
-
-
-func _facing_mix(from: Vector2) -> float:
-	var to := Vector2(0, MIX_POSITION_Z) - from
-	return atan2(to.x, to.y)
-
-
-func _build_tablet(id: StringName, track: int, fx: int, plugin_name: String) -> void:
-	var stand := _trolley("PluginStand_%s" % id, id, Vector3(0, 0, 0.6), 0.0)
-	stand.rolls = false
-	stand.follow = 14.0
-	stand.footprint_half = Vector2(TABLET_FOOT, TABLET_FOOT)
-	var foot := MeshInstance3D.new()
-	foot.name = "Foot"
-	var disc := CylinderMesh.new()
-	disc.top_radius = TABLET_FOOT * 0.92
-	disc.bottom_radius = TABLET_FOOT
-	disc.height = 0.025
-	disc.radial_segments = 40
-	foot.mesh = disc
-	foot.position.y = 0.0125
-	foot.material_override = Materials.furniture()
-	stand.add_part(foot)
-	var pole := MeshInstance3D.new()
-	pole.name = "Pole"
-	var tube := CylinderMesh.new()
-	tube.top_radius = 0.012
-	tube.bottom_radius = 0.016
-	var pole_top := TABLET_TOP - PluginTablet.HEIGHT * cos(deg_to_rad(TABLET_LEAN)) * 0.5
-	tube.height = pole_top
-	tube.radial_segments = 16
-	pole.mesh = tube
-	pole.position = Vector3(0, pole_top * 0.5, -0.02)
-	pole.material_override = Materials.brushed_metal()
-	stand.add_part(pole)
-
-	var tablet := PluginTablet.create(track, fx, plugin_name)
-	tablet.surface_id = id
-	# Hung from its top edge's middle, leaning back: the cradle's lip is under its bottom edge.
-	var lean := Basis(Vector3.RIGHT, -deg_to_rad(TABLET_LEAN))
-	tablet.transform = Transform3D(lean, Vector3(0, TABLET_TOP, 0.0)) \
-			* Transform3D(Basis.IDENTITY, Vector3(0, -PluginTablet.HEIGHT * 0.5, 0))
-	var lip := MeshInstance3D.new()
-	lip.name = "Cradle"
-	var ledge := BoxMesh.new()
-	ledge.size = Vector3(PluginTablet.WIDTH * 0.8, 0.012, 0.03)
-	lip.mesh = ledge
-	lip.transform = tablet.transform * Transform3D(Basis.IDENTITY,
-			Vector3(0, -PluginTablet.HEIGHT * 0.5 - 0.006, -0.002))
-	lip.material_override = Materials.brushed_metal()
-	stand.add_part(lip, false)
-	stand.add_child(tablet)
-	tablet.dock_requested.connect(_dock_tablet.bind(id))
-	tablet.grows_with_window = true
-	# Gear like the rest: F walks to it, and it comes up close to be worked.
-	if focus != null:
-		focus.surfaces.append(tablet)
-		tablet.rebuilt.connect(focus._on_surface_rebuilt.bind(tablet))
-	tablets[id] = [stand, tablet]
-
-
-func close_tablet(id: StringName) -> void:
-	if not tablets.has(id):
-		return
-	_take_down_tablet(id)
-	if Session.layout != null and Session.is_authority():
-		Session.layout.clear_transform(StringName("floor/%s" % id), Presentation.Mode.STUDIO)
-	_remember_tablets()
-	_publish_room()
-
-
-## The stand gone from this room, and nothing remembered or told about it.
-func _take_down_tablet(id: StringName) -> void:
-	var stand: Trolley = tablets[id][0]
-	var tablet: PluginTablet = tablets[id][1]
-	if focus != null:
-		if focus.focused_id == id:
-			focus.release()
-		focus.surfaces.erase(tablet)
-	tablets.erase(id)
-	floor_plan.pieces.erase(stand)
-	stand.queue_free()
-
-
-## Put back on the rack: here if the room is ours; if it is the host's, here at once and asked.
-func _dock_tablet(id: StringName) -> void:
-	if Session.is_authority():
-		close_tablet(id)
-	elif tablets.has(id) and _predict(&"close_tablet", [id]) > 0:
-		_take_down_tablet(id)
-
-
-func _predicted_tablet(track: int, fx: int, plugin_name: String, where: Vector2) -> StringName:
-	for id in tablets:
-		var t: PluginTablet = tablets[id][1]
-		if t.track_index == track and t.fx_index == fx:
-			(tablets[id][0] as Trolley).place(where, _facing_mix(where))
-			return id
-	_predicted_tablets += 1
-	var id := StringName("mine_%d" % _predicted_tablets)
-	if _predict(&"open_tablet", [track, fx, plugin_name, where.x, where.y], id) == 0:
-		return StringName()
-	_build_tablet(id, track, fx, plugin_name)
-	_applying_room = true
-	(tablets[id][0] as Trolley).place(where, _facing_mix(where))
-	_applying_room = false
-	return id
-
-
-## The list of what is out, saved whenever a tablet is opened or closed. Not when a tablet finds
-## its plugin somewhere new: the name finds it again next time anyway, and a profile rewritten
-## because a different session happened to be open would be a file changed by looking at it.
-func _remember_tablets() -> void:
-	# A guest's tablets are the host's room, not its own: its own wait for it in the profile.
-	if Session.layout == null or not Session.is_authority():
-		return
-	var out := {}
-	for id in tablets:
-		var t: PluginTablet = tablets[id][1]
-		out[id] = [t.track_index, t.fx_index, t.fx_name]
-	if out == Session.layout.tablets:
-		return
-	Session.layout.tablets = out
-	Session.layout.save()
-
-
-func _restore_tablets() -> void:
-	if Session.layout == null or not Session.is_authority():
-		return
-	for id in Session.layout.tablets:
-		var entry: Array = Session.layout.tablets[id]
-		_build_tablet(id, int(entry[0]), int(entry[1]), str(entry[2]))
-
-
 # --- pulled-out track racks -----------------------------------------------------------------
 #
 # The rack's track window has a grip like a unit's name strip. Pulled, the whole track's chain
@@ -1949,225 +1127,6 @@ const TRACK_RACK_PULL := 0.9
 const TRACK_RACK_PLINTH := 0.30
 
 
-func _on_track_tear_requested(track: int, at: Vector3, from: Node3D) -> void:
-	if not DAW.state.tracks.has(track):
-		return
-	var out := from.global_basis.z.normalized()
-	var landing := at + Vector3(out.x, 0, out.z).normalized() * TRACK_RACK_PULL
-	var where := Vector2(landing.x, landing.z)
-	var id: StringName
-	if Session.is_authority():
-		id = open_track_rack(track, where)
-	else:
-		id = _predicted_track_rack(track, where)
-		if id == StringName():
-			return
-
-
-## Pull track `track` out on its own rack at `where` on the floor, facing the mix position. One
-## per track: asking again for one already out wheels that one over instead.
-func open_track_rack(track: int, where: Vector2) -> StringName:
-	for id in track_racks:
-		if (track_racks[id][1] as RackSurface).track_index == track:
-			(track_racks[id][0] as Trolley).place(where, _facing_mix(where))
-			return id
-	var n := 1
-	while track_racks.has(StringName("track_rack_%d" % n)) or (Session.layout != null \
-			and Session.layout.track_racks.has(StringName("track_rack_%d" % n))):
-		n += 1
-	var id := StringName("track_rack_%d" % n)
-	_build_track_rack(id, track)
-	(track_racks[id][0] as Trolley).place(where, _facing_mix(where))
-	_remember_track_racks()
-	_publish_room()
-	return id
-
-
-func _build_track_rack(id: StringName, track: int) -> void:
-	var stand := _trolley("TrackRackTrolley_%s" % id, id, Vector3(0, 0, 0.6), 0.0)
-	stand.footprint_centre = Vector2(0, -0.15)
-	stand.footprint_half = Vector2(0.30, 0.17)
-	stand.follow = 9.0
-	var plinth := MeshInstance3D.new()
-	plinth.name = "Plinth"
-	var plinth_mesh := BoxMesh.new()
-	plinth_mesh.size = Vector3(0.60, TRACK_RACK_PLINTH - Caster.HEIGHT, 0.34)
-	plinth.mesh = plinth_mesh
-	plinth.position = Vector3(0, (TRACK_RACK_PLINTH + Caster.HEIGHT) * 0.5, -0.15)
-	plinth.material_override = Materials.furniture()
-	GearTrim.edges(plinth)
-	stand.add_part(plinth)
-	# A band of the track's colour round the plinth's front: which track this rack is, from the
-	# far side of the room.
-	var band := MeshInstance3D.new()
-	band.name = "TrackBand"
-	var band_mesh := BoxMesh.new()
-	band_mesh.size = Vector3(0.56, 0.035, 0.004)
-	band.mesh = band_mesh
-	band.position = Vector3(0, (TRACK_RACK_PLINTH + Caster.HEIGHT) * 0.5, 0.024)
-	band.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	stand.add_part(band, false)
-	stand.add_corner_casters(0.05)
-
-	var pulled := RackSurface.new()
-	pulled.name = "TrackRack"
-	pulled.surface_id = id
-	pulled.pinned = true
-	pulled.track_index = track
-	pulled.position = Vector3(0, TRACK_RACK_PLINTH, 0)
-	stand.add_child(pulled)
-	pulled.tear_requested.connect(func(t: int, f: int, at: Vector3) -> void: _on_tear_requested(t, f, at, pulled))
-	pulled.fold_requested.connect(_fold_track_rack.bind(id))
-	# The rack rebuilds when its track's colour changes; the band goes with it.
-	pulled.rebuilt.connect(func() -> void:
-		if track_racks.has(id):
-			_paint_track_band(id))
-	pulled.rebuilt.connect(_show_patches)
-	if focus != null:
-		focus.surfaces.append(pulled)
-		pulled.rebuilt.connect(focus._on_surface_rebuilt.bind(pulled))
-	track_racks[id] = [stand, pulled]
-	_paint_track_band(id)
-
-
-## The band on a pulled-out rack's plinth, in its track's colour as this venue shows it.
-func _paint_track_band(id: StringName) -> void:
-	var band := (track_racks[id][0] as Node).find_child("TrackBand", true, false) as MeshInstance3D
-	var track := (track_racks[id][1] as RackSurface).track_index
-	if band != null and DAW.state.tracks.has(track):
-		band.material_override = Materials.track_stripe(DAW.state.track(track).shown_colour())
-
-
-## The venue's palette changed what every track is shown in: everything that shows a track's
-## colour is built again in it.
-func _recolour_tracks() -> void:
-	if mount != null:
-		for surface_id in mount.mounted_ids():
-			mount.surface(surface_id).mark_dirty()
-	for id in tablets:
-		(tablets[id][1] as Surface).mark_dirty()
-	for id in track_racks:
-		(track_racks[id][1] as Surface).mark_dirty()
-		_paint_track_band(id)
-
-
-func close_track_rack(id: StringName) -> void:
-	if not track_racks.has(id):
-		return
-	_take_down_track_rack(id)
-	if Session.layout != null and Session.is_authority():
-		Session.layout.clear_transform(StringName("floor/%s" % id), Presentation.Mode.STUDIO)
-	_remember_track_racks()
-	_publish_room()
-
-
-func _take_down_track_rack(id: StringName) -> void:
-	var stand: Trolley = track_racks[id][0]
-	var pulled: RackSurface = track_racks[id][1]
-	if focus != null:
-		if focus.focused_id == id:
-			focus.release()
-		focus.surfaces.erase(pulled)
-	track_racks.erase(id)
-	floor_plan.pieces.erase(stand)
-	stand.queue_free()
-
-
-## FOLD: back into the main rack. Here if the room is ours; if it is the host's, here at once
-## and asked.
-func _fold_track_rack(id: StringName) -> void:
-	if Session.is_authority():
-		close_track_rack(id)
-	elif track_racks.has(id) and _predict(&"close_track_rack", [id]) > 0:
-		_take_down_track_rack(id)
-
-
-func _predicted_track_rack(track: int, where: Vector2) -> StringName:
-	for id in track_racks:
-		if (track_racks[id][1] as RackSurface).track_index == track:
-			(track_racks[id][0] as Trolley).place(where, _facing_mix(where))
-			return id
-	_predicted_track_racks += 1
-	var id := StringName("mine_rack_%d" % _predicted_track_racks)
-	if _predict(&"open_track_rack", [track, where.x, where.y], id) == 0:
-		return StringName()
-	_build_track_rack(id, track)
-	_applying_room = true
-	(track_racks[id][0] as Trolley).place(where, _facing_mix(where))
-	_applying_room = false
-	return id
-
-
-## Tracks renumbered: each pulled-out rack follows its own track, and one whose track is gone
-## is folded away, since there is nothing left on it to rack.
-func _fold_orphaned_track_racks() -> void:
-	if not Session.is_authority():
-		return
-	for id in track_racks.keys():
-		if not DAW.state.tracks.has((track_racks[id][1] as RackSurface).track_index):
-			close_track_rack(id)
-	_remember_track_racks()
-
-
-## Saved like the tablets: what is out, by track. Where each stands is its floor transform.
-func _remember_track_racks() -> void:
-	if Session.layout == null or not Session.is_authority():
-		return
-	var out := {}
-	for id in track_racks:
-		out[id] = (track_racks[id][1] as RackSurface).track_index
-	if out == Session.layout.track_racks:
-		return
-	Session.layout.track_racks = out
-	Session.layout.save()
-
-
-func _restore_track_racks() -> void:
-	if Session.layout == null or not Session.is_authority():
-		return
-	for id in Session.layout.track_racks:
-		if not track_racks.has(id):
-			_build_track_rack(id, int(Session.layout.track_racks[id]))
-
-
-# --- the shared room -----------------------------------------------------------------------
-#
-# The venue and the plugins out on stands are facts about the room, like where the desk is, so
-# in a session they are the host's: one room, everyone in it. A guest asks and is shown; its own
-# venue and tablets wait in its profile for when it is on its own again.
-
-## The room as it stands here, in the shape Session.room carries.
-func room_state() -> Dictionary:
-	var out := {}
-	for id in tablets:
-		var stand: Trolley = tablets[id][0]
-		var t: PluginTablet = tablets[id][1]
-		out[id] = [t.track_index, t.fx_index, t.fx_name, stand.position.x, stand.position.z,
-				stand.rotation.y]
-	var pulled := {}
-	for id in track_racks:
-		var stand: Trolley = track_racks[id][0]
-		pulled[id] = [(track_racks[id][1] as RackSurface).track_index, stand.position.x, stand.position.z,
-				stand.rotation.y]
-	var placed := {}
-	if mount != null:
-		for surface_id in mount.mounted_ids():
-			if not mount.seats.has(surface_id):
-				placed[surface_id] = mount.studio_home(surface_id)
-	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0],
-			"variant": venue.variant if venue != null else 0, "tablets": out,
-			"layout": RoomFloor.row(self), "made_room": MadeRooms.row_of(venue.venue_id()) if venue != null else {},
-			"placed": placed, "items": items.state() if items != null else {},
-			"made": items.made_ids() if items != null else [],
-			"patches": patches.duplicate(true), "on_air": on_air.duplicate(), "board": board_source,
-			"track_racks": pulled, "jacks": jacks.state() if jacks != null else {},
-			"ropes": stage.ropes.duplicate() if stage != null else {},
-			"sampler": sampler.armed_by if sampler != null and is_instance_valid(sampler) else 0,
-			"weather": weather_listening, "looper": looper_row.duplicate(),
-			RackPatch.ROW: RackGaps.published(rack_row),
-			"tv": tv.row() if tv != null and is_instance_valid(tv) else {}, "pads": pads_row.duplicate(true)}
-
-
 ## The pads' row (PadShare): what the host's sampling station holds, for the room.
 var pads_row := {}
 var _pads_rev := -1
@@ -2176,509 +1135,15 @@ var _pads_followed := {}
 var _pads_loaded := ""
 
 
-## The host's TV changed what it plays: the room is told.
-func _on_tv_changed() -> void:
-	if Session.role == Session.Role.HOST:
-		_publish_room()
-
-
-## The host's pads changed: the sample written once (and offered to guests), the row remade.
-func _on_pads_changed() -> void:
-	if Session.role != Session.Role.HOST or tv == null or not is_instance_valid(tv):
-		return
-	var bank := tv.bank
-	if bank.revision != _pads_rev:
-		_pads_rev = bank.revision
-		_pads_file = PadShare.write(bank)
-	var made := PadShare.row(bank, _pads_file)
-	if made != pads_row:
-		pads_row = made
-		_publish_room()
-
-
-## A guest asked the host's TV for something (its FIND, PLAY, a skip): the host does it.
-func _answer_tv(video: String, playing: bool, at: float) -> void:
-	if tv != null and is_instance_valid(tv):
-		tv.apply(video, playing, at)
-
-
-## A guest: the room's TV and pads, as the host has them.
-func _follow_tv(state: Dictionary) -> void:
-	if tv == null or not is_instance_valid(tv):
-		return
-	tv.guest = Session.role == Session.Role.GUEST
-	if not tv.guest:
-		return
-	if state.has("tv"):
-		tv.follow(state["tv"])
-	if state.has("pads") and state["pads"] != _pads_followed:
-		_pads_followed = (state["pads"] as Dictionary).duplicate(true)
-		if not tv.own_pads:
-			_follow_pads_row(_pads_followed)
-
-
-func _follow_pads_row(row: Dictionary) -> void:
-	var file := str(row.get("file", ""))
-	if file == "" or file == _pads_loaded or tv.deck == null:
-		PadShare.set_settings(tv.bank, row)
-		if tv.deck != null:
-			tv.deck.refresh()
-		return
-	var have := Session.files.fetched_path(file) if Session.files != null else ""
-	if have == "":
-		if Session.files != null:
-			Session.files.fetch(file)
-			if not Session.files.fetched.is_connected(_on_pads_fetched):
-				Session.files.fetched.connect(_on_pads_fetched)
-		return
-	_pads_fetched_into(file, have, row)
-
-
-func _on_pads_fetched(file: String, path: String) -> void:
-	if file == str(_pads_followed.get("file", "")):
-		_pads_fetched_into(file, path, _pads_followed)
-
-
-func _pads_fetched_into(file: String, path: String, row: Dictionary) -> void:
-	if tv == null or not is_instance_valid(tv) or tv.deck == null:
-		return
-	var stream := AudioStreamWAV.load_from_file(path)
-	if stream == null:
-		return
-	_pads_loaded = file
-	PadShare.apply(tv.bank, row, stream)
-	tv.deck.refresh()
-
-
-func _publish_room() -> void:
-	if Session.role == Session.Role.HOST and not _applying_room:
-		Session.publish_room(room_state())
-
-
-func _on_room_changed() -> void:
-	if not Session.is_authority():
-		apply_room(Session.room, true)
-
-
-## Make this room the one `state` describes -- its venue, the same stands in the same places, the
-## desk where it stands -- and then put this guest's own unanswered moves back on top.
-##
-## That last part is the prediction. A guest does what it asked for at once, on its own screen,
-## and keeps a note of it until the host's room says the ask was answered: until then the note
-## wins over the room, so a stand does not flick back to where it was because a room published a
-## moment before the ask arrived crossed it on the wire. Once answered, the room is the truth --
-## and if the host would not do it, the stand goes back. That is the rollback.
-##
-## `glide` rolls things to where the room has them, as if pushed, instead of putting them there.
-func apply_room(state: Dictionary, glide := false) -> void:
-	_applying_room = true
-	_showing_hosts_room = true
-	var answered := int((state.get("acks", {}) as Dictionary).get(Session.local_peer_id, 0))
-	_predictions = _predictions.filter(func(p: Dictionary) -> bool: return int(p["seq"]) > answered)
-	var pending_open := {}
-	var pending_close := {}
-	var pending_move := {}
-	var pending_place := {}
-	var pending_items := {}
-	for p in _predictions:
-		match p["verb"]:
-			&"put_item", &"home_item", &"throw_item", &"wear_item", &"pocket_item", &"slot_item", &"give":
-				pending_items[p["args"][0]] = true
-			&"patch", &"on_air", &"plug", &"rope", &"make", &"paste", &"sampler", &"weather", \
-					&"looper", &"looper_layer", \
-					&"rack", &"tv": pass
-			&"open_tablet", &"open_track_rack": pending_open[p["id"]] = true
-			&"close_tablet", &"close_track_rack": pending_close[p["args"][0]] = true
-			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
-			&"place_surface": pending_place[p["args"][0]] = p["args"][1]
-
-	# A room the host made is a layout this guest has not got: held in memory, before the venue is asked for.
-	MadeRooms.adopt(state.get("made_room"))
-	room_deltas.adopt(state.get("layout"))
-	var id_wanted := StringName(state.get("venue", &""))
-	var variant_wanted := Venue.known_variant(id_wanted, int(state.get("variant", 0)))
-	if venue != null and Venue.is_known(id_wanted) \
-			and (venue.venue_id() != id_wanted or venue.variant != variant_wanted):
-		set_venue(id_wanted, false, variant_wanted)
-
-	var wanted: Dictionary = state.get("tablets", {})
-	for id in tablets.keys():
-		var t: PluginTablet = tablets[id][1]
-		var entry: Variant = wanted.get(id)
-		if entry != null and int(entry[0]) == t.track_index and int(entry[1]) == t.fx_index:
-			continue
-		if pending_open.has(id):
-			continue
-		# The host's answer to this guest's pull: the same stand, under the name the host gave
-		# it, rather than this one taken away and that one put up in its place.
-		var named := _hosts_name_for(wanted, t.track_index, t.fx_index)
-		if named != StringName() and not tablets.has(named):
-			_rename_tablet(id, named)
-			continue
-		_take_down_tablet(id)
-
-	if floor_plan != null:
-		for id in wanted:
-			if pending_close.has(id):
-				continue
-			var entry: Array = wanted[id]
-			if not tablets.has(id):
-				_build_tablet(id, int(entry[0]), int(entry[1]), str(entry[2]))
-				(tablets[id][0] as Trolley).place(Vector2(float(entry[3]), float(entry[4])), float(entry[5]))
-			elif not pending_move.has(id):
-				_follow_room(tablets[id][0], float(entry[3]), float(entry[4]), float(entry[5]), glide)
-		RoomFloor.follow(self, pending_move, glide)
-
-	if floor_plan != null and state.has("track_racks"):
-		var racks_wanted: Dictionary = state["track_racks"]
-		for id in track_racks.keys():
-			var entry: Variant = racks_wanted.get(id)
-			var mine: RackSurface = track_racks[id][1]
-			if (entry != null and int(entry[0]) == mine.track_index) or pending_open.has(id):
-				continue
-			_take_down_track_rack(id)
-		for id in racks_wanted:
-			if pending_close.has(id):
-				continue
-			var entry: Array = racks_wanted[id]
-			if not track_racks.has(id):
-				# The host's answer to this guest's own pull: its predicted one goes, the host's
-				# takes its place.
-				for mine_id in track_racks.keys():
-					if (track_racks[mine_id][1] as RackSurface).track_index == int(entry[0]) \
-							and not racks_wanted.has(mine_id):
-						_take_down_track_rack(mine_id)
-				_build_track_rack(id, int(entry[0]))
-				(track_racks[id][0] as Trolley).place(Vector2(float(entry[1]), float(entry[2])), float(entry[3]))
-			elif not pending_move.has(id):
-				_follow_room(track_racks[id][0], float(entry[1]), float(entry[2]), float(entry[3]), glide)
-
-	if mount != null:
-		var placed: Dictionary = (state.get("placed", {}) as Dictionary).duplicate()
-		placed.merge(pending_place, true)
-		mount.share_studio(placed, GLIDE_SECONDS if glide else 0.0)
-	if items != null and state.has("made"):
-		# The made items the room names, real here from the rows the host sent first.
-		items.apply_made(state["made"])
-	if items != null and state.has("items"):
-		items.apply(state["items"], pending_items)
-	item_host._settle_makes(answered)
-	if state.has("on_air"):
-		on_air = (state["on_air"] as Array).duplicate()
-		for p in _predictions:
-			if p["verb"] == &"on_air":
-				_set_on_air(Session.local_peer_id, p["args"][0], false)
-	if state.has("patches"):
-		patches = (state["patches"] as Dictionary).duplicate(true)
-		# This guest's plugs it has moved and not heard back about, on top.
-		for p in _predictions:
-			if p["verb"] == &"patch":
-				patch_host._set_patch(Session.local_peer_id, p["args"][0], p["args"][1], false)
-		_show_patches()
-	if jacks != null and state.has("jacks"):
-		var rows: Dictionary = (state["jacks"] as Dictionary).duplicate()
-		# The host's word alone first: a chord hand it now says goes into a bandmate sends again.
-		jacks.answered(rows)
-		# This guest's plugs it has not heard back about, on top: an empty sink, unplugged.
-		for p in _predictions:
-			if p["verb"] == &"plug":
-				rows[String(p["args"][0])] = String(p["args"][1])
-		jacks.set_patch(rows)
-	if stage != null and state.has("ropes"):
-		# The stage table keeps its own unanswered ties and cuts on top.
-		stage.apply_ropes(state["ropes"], answered)
-	_follow_tv(state)
-	if sampler != null and is_instance_valid(sampler) and state.has("sampler") \
-			and not _predictions.any(func(p): return p["verb"] == Sampler.VERB):
-		# Once its press is answered, the host's word: on for whoever the room says, or off.
-		sampler.armed_by = int(state["sampler"])
-	if state.has("weather") and not _predictions.any(func(p): return p["verb"] == Weather.VERB):
-		# Once its press is answered, the host's word: LISTEN or OFF.
-		item_host._show_weather(bool(state["weather"]))
-	if state.has("looper") and not _predictions.any(func(p): return p["verb"] == Looper.VERB or p["verb"] == Looper.LAYER_VERB):
-		# Once its slaps and layers are answered, the host's word: who is looping, from which bar.
-		item_host._show_looper(state["looper"])
-	if state.has(RackPatch.ROW):
-		# The host's rack, with this guest's own edits it has not heard back about on top.
-		var row: Dictionary = (state[RackPatch.ROW] as Dictionary).duplicate(true)
-		row["patch"] = RackPatch.sanitize(row.get("patch", {}))
-		for p in _predictions:
-			if p["verb"] == &"rack":
-				_rack_apply(row, String(p["args"][0]), p["args"][1])
-		_show_rack(row)
-	if state.has("board") and not _predictions.any(func(p): return p["verb"] == &"board_source"):
-		roll_room._show_board(StringName(state["board"]))
-	_applying_room = false
-	_looms_dirty = true
-
-
 ## The time a desk put down across the room takes to get there on this screen.
 const GLIDE_SECONDS := 0.25
-
-
-## A piece to where the room has it -- unless a hand here has hold of it, which wins.
-func _follow_room(t: Trolley, x: float, z: float, heading: float, glide: bool) -> void:
-	if t.held_by != null:
-		return
-	var at := Vector2(x, z)
-	if at.is_equal_approx(Vector2(t.position.x, t.position.z)) and is_equal_approx(t.rotation.y, heading):
-		return
-	if glide:
-		t.roll_to(at, heading)
-	else:
-		t.steered = true
-		t.place(at, heading)
-
-
-func _hosts_name_for(wanted: Dictionary, track: int, fx: int) -> StringName:
-	for id in wanted:
-		if int(wanted[id][0]) == track and int(wanted[id][1]) == fx:
-			return id
-	return StringName()
-
-
-## The same stand, known by another name: the one the host gave the stand this guest put out.
-func _rename_tablet(from: StringName, to: StringName) -> void:
-	var stand: Trolley = tablets[from][0]
-	var tablet: PluginTablet = tablets[from][1]
-	tablets.erase(from)
-	tablets[to] = [stand, tablet]
-	stand.piece_id = to
-	tablet.surface_id = to
-	_authored_floor[to] = _authored_floor.get(from, stand.transform)
-	_authored_floor.erase(from)
-	if focus != null and focus.focused_id == from:
-		focus.focused_id = to
-	for p in _predictions:
-		if p["verb"] != &"open_tablet" and p["args"].size() > 0 and p["args"][0] == from:
-			p["args"][0] = to
-
-
-## A guest's ask, sent, and done here at once. See apply_room.
-func _predict(verb: StringName, args: Array, id := StringName()) -> int:
-	var seq := Session.ask_room(verb, args)
-	if seq > 0:
-		_predictions.append({"seq": seq, "verb": verb, "args": args, "id": id})
-	return seq
-
-
-## A stand being pushed by a hand here, told to everyone else a few dozen times a second so
-## theirs rolls after it. The settled place is sent as an ask when it comes to rest.
-func _on_trolley_moved(piece: Trolley) -> void:
-	_looms_dirty = true
-	if piece.held_by == null or not Session.is_networked():
-		return
-	var now := Time.get_ticks_msec()
-	if now - _motion_sent_msec < MOTION_MSEC:
-		return
-	_motion_sent_msec = now
-	Session.send_motion(piece.piece_id, piece.position.x, piece.position.z, piece.rotation.y)
 
 
 const MOTION_MSEC := 50
 
 
-## Someone else's hand on a stand: roll ours after it. Not one this guest is pushing, nor one it
-## has let go of and not yet heard the host answer for.
-func _on_room_motion(id: StringName, x: float, z: float, heading: float, _from: int) -> void:
-	var t := _floor_piece(id)
-	if t == null or t.held_by != null:
-		return
-	for p in _predictions:
-		if (p["verb"] == &"move_piece" or p["verb"] == &"move_tablet") and p["args"][0] == id:
-			return
-	# Kept and played back a moment behind (_drive_pushed), rather than sprung after.
-	var trail: PoseTrail = _pushed_trails.get(id)
-	if trail == null:
-		trail = PoseTrail.new()
-		_pushed_trails[id] = trail
-	trail.push(PoseTrail.now(), Transform3D(Basis(Vector3.UP, heading), Vector3(x, 0, z)))
-
-
 ## The stands someone else is pushing, by id: what their push sent, played back.
 var _pushed_trails := {}
-
-
-func _drive_pushed() -> void:
-	var now := PoseTrail.now()
-	for id in _pushed_trails.keys():
-		var trail: PoseTrail = _pushed_trails[id]
-		var t := _floor_piece(id)
-		if t == null or t.held_by != null:
-			_pushed_trails.erase(id)
-			continue
-		var pose := trail.sample(now)
-		var heading := pose.basis.get_euler().y
-		if trail.settled(now):
-			# Let go over there: the spring brings it the last of the way and it settles.
-			_pushed_trails.erase(id)
-			t.roll_to(Vector2(trail.latest().origin.x, trail.latest().origin.z), trail.latest().basis.get_euler().y)
-			continue
-		t.drive_to(Vector2(pose.origin.x, pose.origin.z), heading)
-
-
-## The host, answering someone's ask. The same calls the host's own hands make, so the room is
-## then published the way any change to it is.
-func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
-	match verb:
-		&"look_solo":
-			_on_look_solo_asked(args[0], args[1], from)
-		&"patch":
-			# A monitor only while its performer is on air: off air, there is no socket to plug into.
-			var into := PersonalMix.monitor_of(args[1])
-			if PersonalMix.valid_socket(args[1]) and (into == 0 or into in on_air):
-				patch_host._set_patch(from, args[0], args[1])
-				_publish_room_soon()
-		&"on_air":
-			_set_on_air(from, args[0])
-			_publish_room_soon()
-		&"plug":
-			# The hand that holds it, or anyone while it is home; into a track there is or a
-			# bandmate in the room; and whoever a jack goes into may take it out.
-			if jacks != null and _plug_refusal(args[0], args[1], from) == "":
-				var was := jacks.sink_of(args[0])
-				jacks.plug(args[0], args[1])
-				patch_host._tell_plugged(args[0], was, args[1], from)
-				_publish_room_soon()
-		&"open_tablet":
-			if floor_plan != null and DAW.state.fx(args[0], args[1], false) != null:
-				open_tablet(args[0], args[1], args[2], Vector2(args[3], args[4]))
-		&"close_tablet":
-			close_tablet(args[0])
-		&"move_tablet", &"move_piece":
-			var piece := _floor_piece(args[0])
-			if piece != null:
-				piece.place(Vector2(args[1], args[2]), args[3])
-		&"place_surface":
-			if mount != null and mount.mounted_ids().has(args[0]) and not mount.seats.has(args[0]):
-				_place_in_studio(args[0], args[1])
-		&"put_item", &"home_item", &"throw_item", &"wear_item", &"pocket_item":
-			var item: Item = items.items.get(args[0]) if items != null else null
-			if item == null or not _may_put(item, from):
-				return
-			match verb:
-				&"wear_item":
-					# Only something in their hand goes on their head.
-					if item.state == Item.State.HELD:
-						item.set_worn(args[1])
-				&"pocket_item":
-					# Only something they have goes in their pocket, and only one of theirs.
-					if item.state == Item.State.HELD and args[1] >= -1 and args[1] < Pockets.COUNT:
-						item.set_pocket(args[1])
-				&"put_item": items.lay(item, Vector2(args[1], args[2]), args[3])
-				&"home_item": items.retire(item)
-				&"throw_item": items.fly(item, args[1], args[2], args[3], from)
-		&"take_personal":
-			if items != null:
-				items.take_personal(args[0], from)
-		&"make":
-			# A guest's pull: the host packs the clip from its own song, mints it, and it is in
-			# their hand -- or it is refused, and they are told why.
-			var made := _mint_for(args[0], args[1], from)
-			if made != null:
-				item_host._hand_made(made, from)
-		&"slot_item":
-			var item: Item = items.items.get(args[0]) if items != null else null
-			if item != null and _may_put(item, from) and not items.slot(item, args[1], args[2]):
-				Session.tell(from, items.slot_refusal(item, args[1], args[2]))
-		&"give":
-			var item: Item = items.items.get(args[0]) if items != null else null
-			if item != null and Session.holder_of(item.network_key()) == from and args[1] != from \
-					and Session.participants.has(args[1]):
-				item_host._give(item, args[1], from)
-		&"paste":
-			# A guest's paste: the cassette in its hand, by id; the clip is the host's own row.
-			var cassette := items.items.get(args[0]) as CassetteItem if items != null else null
-			if cassette == null or Session.holder_of(cassette.network_key()) != from:
-				Session.tell(from, "That cassette is not in your hand here yet: pick it up again and paste.")
-			else:
-				item_host.paste_cassette(cassette, args[1], args[2], from)
-		&"open_track_rack":
-			if floor_plan != null and DAW.state.tracks.has(args[0]):
-				open_track_rack(args[0], Vector2(args[1], args[2]))
-		&"close_track_rack":
-			close_track_rack(args[0])
-		&"harmony":
-			# A guest's SET on the fifths wheel: written at the bar they chose, if it reads.
-			FifthsWheel.answer(args[0], args[1])
-		&"rope":
-			# A guest's rope tied or cut on its stage table: the row says what the rope added.
-			if stage != null:
-				stage.answer_rope(args[0], args[1], args[2])
-		&"tv":
-			# A guest's wish for the TV: the video, whether it plays, where. The host does it.
-			_answer_tv(args[0], args[1], args[2])
-		&"sampler":
-			# A guest's REC: on for their next sound, or off.
-			_arm_sampler(args[0], from)
-		&"weather":
-			# A guest's press on the weather's switch: LISTEN or OFF, for everyone.
-			item_host._set_weather(args[0])
-		&"looper":
-			# A guest's slap on the looper's pad: armed for them, or refused while somebody else loops.
-			item_host._answer_looper(args[0], args[1], from)
-		&"looper_layer":
-			# A guest's finished layer: onto a track of theirs in the LOOPER folder.
-			item_host._write_looper_layer(args[0], args[1], args[2], from)
-		&"rack":
-			# A guest's edit of the rack, or its track: the room's row, or told why not.
-			_answer_rack(String(args[0]), args[1], from)
-		&"layout":
-			layout_edit.answer(String(args[0]), args[1], from)
-		&"scratch":
-			# A guest's scratch on the platter, for the sampler: of what is in its slot here, and
-			# a path that fits (Varispeed.fits: bounded in steps and in time). Rendered only when
-			# REC would catch it (_sample_scratch), so an ask with REC off costs the host nothing.
-			var path: PackedFloat32Array = args[1]
-			var there: Item = items.in_slot(Platter.HOLDER, 0) if items != null else null
-			if there != null and there.id == args[0] and there is CassetteItem and Varispeed.fits(path):
-				_sample_scratch(there as CassetteItem, path, from)
-		&"board_source":
-			if board_sources().has(args[0]):
-				roll_room._show_board(args[0])
-				_publish_room()
-
-
-## Only whoever has an item may put it down: the hand the host's table says has it, or anyone
-## when nobody does. Not the guest whose pick-up lost a race, still putting down what it thought
-## it had.
-func _may_put(item: Item, from: int) -> bool:
-	var holder := Session.holder_of(item.network_key())
-	return holder == 0 or holder == from
-
-
-func _floor_piece(id: StringName) -> Trolley:
-	if floor_plan == null:
-		return null
-	for piece in floor_plan.pieces:
-		var t := piece as Trolley
-		if t != null and is_instance_valid(t) and t.piece_id == id:
-			return t
-	return null
-
-
-## Gear that stands on nothing, put somewhere in the studio for the room: remembered as the
-## host's own placement, stood there if it is standing in the studio now, and the room told.
-func _place_in_studio(surface_id: StringName, where: Transform3D) -> void:
-	Session.layout.set_transform(surface_id, Presentation.Mode.STUDIO, where)
-	Session.layout.save()
-	mount.share_studio({})
-	if surface_id == &"console":
-		_fit_room_to_session()
-	_publish_room()
-
-
-## The mount's question when the desk is put down in the studio: a guest sends it to the host
-## and keeps nothing; the host saves it as ever and tells the room once it has.
-func _on_studio_placed(surface_id: StringName, where: Transform3D) -> bool:
-	if Session.is_authority():
-		_publish_room.call_deferred()
-		return false
-	if _predict(&"place_surface", [surface_id, where]) > 0:
-		var placed := mount.shared_studio.duplicate()
-		placed[surface_id] = where
-		mount.shared_studio = placed
-	return true
 
 
 ## Joined someone: their room arrives on its own. Back on our own, or hosting: our own room, and
@@ -2693,7 +1158,7 @@ func _on_role_changed() -> void:
 		_put_back_own_room()
 	# This player's made items, set aside while a guest (Session.join): theirs again.
 	_restore_made(true)
-	_publish_room()
+	room_rows._publish_room()
 
 
 func _put_back_own_room() -> void:
@@ -2703,9 +1168,9 @@ func _put_back_own_room() -> void:
 		return
 	room_deltas.enter_own(Session.layout)
 	for id in tablets.keys():
-		_take_down_tablet(id)
+		tablet_host._take_down_tablet(id)
 	for id in track_racks.keys():
-		_take_down_track_rack(id)
+		tablet_host._take_down_track_rack(id)
 	if mount != null:
 		mount.share_studio({})
 	if floor_plan != null:
@@ -2722,7 +1187,7 @@ func _put_back_own_room() -> void:
 			var own: Transform3D = left if left != null else _authored_floor[t.piece_id]
 			t.place(Vector2(own.origin.x, own.origin.z), own.basis.get_euler().y)
 		RoomSync.wheel_in(self)
-		_carry_all_live()
+		furniture_host._carry_all_live()
 		_applying_room = false
 		_fit_room_to_session()
 	var own := Session.layout.venue if Venue.is_known(Session.layout.venue) else Venue.IDS[0]
@@ -2733,8 +1198,8 @@ func _put_back_own_room() -> void:
 	# The host's made room goes with the host's room: it was held for this guest in memory only.
 	MadeRooms.drop_adopted()
 	if floor_plan != null:
-		_restore_tablets()
-		_restore_track_racks()
+		tablet_host._restore_tablets()
+		tablet_host._restore_track_racks()
 
 
 ## The carcass fills from the plinth up to the bay's lower edge and the cheeks run past its top,
@@ -2799,7 +1264,7 @@ func _fit_room_to_session() -> void:
 		_walk_where_the_venue_lets()
 	# A guest's room is fitted by the host, who says where everything went.
 	if _showing_hosts_room:
-		apply_room(Session.room)
+		room_rows.apply_room(Session.room)
 		return
 	_fitting = true
 	for piece in floor_plan.pieces:
@@ -2828,7 +1293,7 @@ func _fit_room_to_session() -> void:
 			t.place(here, t.rotation.y)
 	_fitting = false
 	_looms_dirty = true
-	_publish_room()
+	room_rows._publish_room()
 
 
 ## The console does not roll. It is the desk the room is arranged around and the one thing in
@@ -2885,7 +1350,7 @@ func _trolley(of_name: String, id: StringName, at: Vector3, heading_degrees: flo
 	if saved != null and not (id == &"levels" or id == &"tv"):
 		piece.transform = saved
 	piece.settled.connect(_on_trolley_settled.bind(piece))
-	piece.moved.connect(_on_trolley_moved.bind(piece))
+	piece.moved.connect(room_rows._on_trolley_moved.bind(piece))
 	studio_set.add_child(piece)
 	floor_plan.add_piece(piece)
 	return piece
@@ -2905,659 +1370,15 @@ func _on_trolley_settled(piece: Trolley) -> void:
 	if told and not Session.is_authority():
 		# Wheeled here: it stays here, and the host is told; see apply_room.
 		var verb := &"move_tablet" if tablets.has(piece.piece_id) else &"move_piece"
-		_predict(verb, [piece.piece_id, piece.position.x, piece.position.z, piece.rotation.y])
+		room_rows._predict(verb, [piece.piece_id, piece.position.x, piece.position.z, piece.rotation.y])
 	else:
 		# Where the host's room has things is not where this guest keeps its own. A spot that is where the
 		# room stands the piece is not a place anyone chose: in the next venue, or a wider room, it goes there.
 		if not (_fitting or _showing_hosts_room or piece.built_in):
 			room_deltas.settle(piece.piece_id, piece.transform, RoomFloor.at_default(self, piece), Session.layout)
 		if told:
-			_publish_room()
+			room_rows._publish_room()
 	_looms_dirty = true
-
-
-## The trolley a surface rides on, told how to move that surface's HOME.
-##
-## Not simply "move the node". A surface on a trolley may be somewhere else entirely when its
-## stand is pushed: summoned to the mix position by focus, or sitting on a monitor in SCREEN
-## mode. In both cases the stand still moves, and the surface must come back to where the stand
-## now is -- so what rides is the surface's studio placement, and the node only moves with it
-## when the node is actually standing on the trolley.
-## The clip editor, beside the timeline, opened by it: a double click on an item or its EDIT CLIP
-## key opens the item here, or retargets the editor to it if it is open on another.
-func _build_clip_editor() -> void:
-	clip_editor = ClipEditorSurface.new()
-	clip_editor.name = "ClipEditor"
-	var yaw := deg_to_rad(CLIP_EDITOR_YAW)
-	var basis := Basis(Vector3.UP, yaw).scaled(Vector3.ONE * CLIP_EDITOR_SCALE)
-	var left := Vector3(CLIP_EDITOR_LEFT.x, CLIP_EDITOR_Y, CLIP_EDITOR_LEFT.y)
-	var at := Transform3D(basis, left - basis * Vector3(-ClipEditorSurface.WIDE * 0.5, 0, 0))
-	clip_editor.transform = at
-	# Held by an arm from the stand's right-hand leg, which stands just behind it.
-	clip_editor.arm_to = at.affine_inverse() * Vector3(TIMELINE_LEG_X, CLIP_EDITOR_Y + 0.1, TIMELINE_STAND_Z)
-	studio_set.add_child(clip_editor)
-	mount.register(clip_editor)
-	timeline.edit_asked.connect(clip_editor.open)
-
-
-func _ride(piece: Trolley, surface: Surface) -> void:
-	var id := surface.surface_id
-	var standing := func() -> bool:
-		return mount.mode_of(id) == Presentation.Mode.STUDIO and surface.get_parent() == studio_set
-	piece.riders.append({
-		"get": func() -> Transform3D:
-			if focus != null and focus.holds(id):
-				return focus.home_of(id)
-			if standing.call():
-				return surface.transform
-			return mount.studio_home(id),
-		"set": func(xform: Transform3D, settled_now: bool) -> void:
-			if focus != null and focus.holds(id):
-				focus.rehome(id, xform)
-			elif standing.call():
-				surface.transform = xform
-			# Nothing saved: a seated surface's place is its stand's, and the stand saves
-			# itself. See SurfaceMount.seats.
-			pass,
-	})
-	var offset: Transform3D = _authored_floor[piece.piece_id].affine_inverse() * mount.authored_of(id)
-	_seated_on[id] = [piece, offset]
-	mount.seat(id, func() -> Transform3D: return piece.transform * offset)
-
-
-## A seated surface put down by its own handle: roll its stand to where that puts it.
-func _reseat(id: StringName, put: Transform3D) -> void:
-	if not _seated_on.has(id):
-		return
-	var piece: Trolley = _seated_on[id][0]
-	if piece.built_in:
-		return
-	var under: Transform3D = put * (_seated_on[id][1] as Transform3D).affine_inverse()
-	var ahead := under.basis.z
-	piece.place(Vector2(under.origin.x, under.origin.z), atan2(ahead.x, ahead.z))
-
-
-func _build_anchors() -> void:
-	# The head and the hands differ by medium; everything downstream of them does not. That is
-	# the point of putting screen_stage on whichever camera exists rather than on the desktop
-	# one: a surface in SCREEN mode is a panel in front of your face whether your face is behind
-	# a monitor or inside a headset.
-	var head: Node3D
-	if medium == Presentation.Medium.SCREEN:
-		camera = Camera3D.new()
-		camera.fov = ROOM_FOV
-		# Everything but your own ghost, which only mirrors draw. See core/venues/mirror.gd.
-		camera.cull_mask = Mirror.MAIN_VIEW_MASK
-
-		camera.near = 0.02
-		add_child(camera)
-		head = camera
-
-		var mouse := MouseInteractor.new()
-		mouse.camera = camera
-		mouse.name = "MouseHand"
-		add_child(mouse)
-		mouse.bare_jack.connect(patch_host._on_bare_jack)
-	else:
-		rig = XRRig.new()
-		rig.name = "XRRig"
-		rig.simulated = xr_bootstrap != null and xr_bootstrap.simulated
-		add_child(rig)
-		head = rig.head
-		rig.escape_requested.connect(_on_escape)
-		rig.travelled.connect(func(_home: bool) -> void:
-			if body != null:
-				body.recentre())
-		# A bare hand pinched at the floor goes there (Teleport).
-		teleport = Teleport.new()
-		teleport.name = "Teleport"
-		teleport.rig = rig
-		# The floor plan's frame, which the walker's footprints and floor are measured in.
-		teleport.frame = func() -> Transform3D:
-			return studio_set.global_transform if studio_set != null and studio_set.is_inside_tree() else Transform3D.IDENTITY
-		teleport.fits = func(p: Vector2) -> bool:
-			var fit := _station_fits()
-			return fit.is_valid() and bool(fit.call(p))
-		teleport.ground = func(p: Vector2) -> float:
-			return Walker.ground_of(venue.solids(), p) if venue != null else 0.0
-		teleport.refusal = travel_refusal
-		teleport.went.connect(func(_to: Vector3) -> void:
-			_put_away_beside()
-			station = &"")
-		add_child(teleport)
-		# A VR player's play space is centred on the mix position, in front of the desk, where a
-		# desktop's body stands: not at the room's origin, which is inside the console's carcass.
-		# From here the desk is at arm's length and the station board is in view, ahead and to
-		# the left. Passthrough keeps its own: its floor is a real one, put where the marks say.
-		if medium == Presentation.Medium.VR:
-			rig.settle(Transform3D(Basis.IDENTITY, Vector3(0, 0, MIX_POSITION_Z)))
-
-	screen_stage = Node3D.new()
-	screen_stage.name = "ScreenStage"
-	screen_stage.position = Vector3(0, 0, -0.75)
-	head.add_child(screen_stage)
-	if not get_tree().node_added.is_connected(_keep_out_of_mirrors):
-		get_tree().node_added.connect(_keep_out_of_mirrors)
-
-	room_anchor = RoomAnchor.new()
-	room_anchor.name = "RoomAnchor"
-	add_child(room_anchor)
-
-	studio_set = Node3D.new()
-	studio_set.name = "StudioSet"
-	add_child(studio_set)
-
-	# The frame a person's own gear sits in, as distinct from the room's. Parented to the studio
-	# rather than the head: it follows the head itself, with a deadzone, which is the whole
-	# reason it exists. See body_frame.gd.
-	body = BodyFrame.new()
-	body.name = "BodyFrame"
-	add_child(body)
-	if medium == Presentation.Medium.SCREEN:
-		# On a monitor the camera is NOT a head, and pretending it is makes people ill. The
-		# orbit camera swings on a two-metre boom; letting the body take its position meant a
-		# mouse drag carried the console bodily around the room on the end of that boom,
-		# through the furniture, while the mixer stood still. A drag on a screen is a LOOK.
-		#
-		# So the body is a mix position instead: a fixed standing spot in the room at eye
-		# height, facing the way the room faces. Summoned gear lands in front of it and stays
-		# there, and the camera is free to fly around and look at it from anywhere. The gear
-		# is still placed from a body -- it is just not a body that chases the lens.
-		# In FRONT of the desk, not on top of it. The first version stood the mixer at the room
-		# origin, which is where the console's own carcass is, so every summoned surface landed
-		# inside the furniture and the render came back with a table sawn through the middle of
-		# a mixing desk. A mix position is a place you could actually stand.
-		body.position = Vector3(0, ergonomics.eye_height, MIX_POSITION_Z)
-	else:
-		# In AR and VR it really is a head, and following it is the whole point. See
-		# body_frame.gd for the deadzone that keeps a glance from dragging the room.
-		body.head = head
-
-	# What a surface may assume it will be seen through. On a monitor that is the seated lens;
-	# in a headset it is the visor, which is far wider, and sizing gear to a 54-degree crop
-	# there would stack a patchbay into four units that would have fitted in one.
-	ergonomics.seated_fov = SEATED_FOV if medium == Presentation.Medium.SCREEN else HEADSET_FOV
-	_follow_viewport_shape()
-	var view := get_viewport()
-	if view != null and not view.size_changed.is_connected(_follow_viewport_shape):
-		view.size_changed.connect(_follow_viewport_shape)
-
-	# A light that travels with the person. Summoned gear leaves the room's lamps behind -- the
-	# first rack pulled to arm's length arrived in total darkness, which is both useless and a
-	# fair description of what body-relative content is: not in the room any more. A headlamp
-	# would flatten everything it hit, so this sits up and to the working side, which is where
-	# the lamp on a real desk goes and for the same reason. A little ahead of the head rather
-	# than over the shoulder, as a desk lamp is: the light is for what is in front, and the
-	# full-height rack, framed whole, stands nearly two metres off.
-	var work_light := OmniLight3D.new()
-	work_light.name = "WorkLight"
-	work_light.position = Vector3(0.42 * signf(ergonomics.handedness), 0.30, -0.08)
-	work_light.light_color = Color(1.0, 0.95, 0.88)
-	work_light.light_energy = 1.0
-	work_light.omni_range = 2.4
-	work_light.shadow_enabled = false
-	body.add_child(work_light)
-
-	mount = SurfaceMount.new()
-	mount.name = "SurfaceMount"
-	mount.screen_stage = screen_stage
-	mount.room_anchor = room_anchor
-	mount.studio_set = studio_set
-	add_child(mount)
-
-	if rig != null:
-		rig.room_anchor = room_anchor
-
-	# A participant with no physical room to mark adopts the session frame outright and stands in
-	# the same layout as everyone else. 1.2m is the span the default layout assumes between the
-	# two floor marks. An AR participant does NOT get this: they have a real room, and handing
-	# them a guessed frame would put the console somewhere plausible and wrong, which is harder
-	# to notice than no console at all.
-	if medium != Presentation.Medium.AR:
-		room_anchor.adopt_virtual_frame(1.2)
-
-	# Everyone else. Built for a solo run too, empty: a session can be hosted from the panel at
-	# any moment, and the people who then walk in need somewhere to stand.
-	presence = Presence.new()
-	presence.name = "Presence"
-	presence.head_node = head
-	presence.frame = room_anchor
-	add_child(presence)
-	_lend_fingertips()
-	_lend_chord_hand()
-
-
-## This player's fingertips as notes (FingertipNotes, docs/spatial_loop.md slice 8), one per hand:
-## each of the headset's, turned on by an open palm up; on a desktop the mouse's, whose fingers
-## are J K L ; on a KeyCatcher of their own (`fingertip_keys`), on while it has the keyboard (T).
-func _lend_fingertips() -> void:
-	if camera != null:
-		var mouse := get_node_or_null("MouseHand") as MouseInteractor
-		fingertip_keys = KeyCatcher.new()
-		fingertip_keys.name = "FingertipKeys"
-		fingertip_keys.layout = KeyCatcher.FINGERS
-		fingertip_keys.base = 0
-		fingertip_keys.octave_keys = false
-		fingertip_keys.velocity = FingertipNotes.KEY_VELOCITY
-		fingertip_keys.click_releases = true
-		add_child(fingertip_keys)
-		if mouse != null:
-			mouse.finger_source = fingertip_keys
-			_add_fingertips(mouse, null)
-	if rig != null:
-		for controller in rig.interactors:
-			_add_fingertips(rig.interactors[controller], rig.skeletons.get(controller) as HandSkeleton)
-
-
-func _add_fingertips(hand: Interactor, skeleton: HandSkeleton) -> void:
-	var notes := FingertipNotes.new()
-	notes.name = "Fingertips" + String(hand.get_parent().name if hand.get_parent() != self else hand.name)
-	notes.hand = hand
-	notes.skeleton = skeleton
-	if hand is MouseInteractor:
-		notes.catcher = fingertip_keys
-	add_child(notes)
-	fingertips.append(notes)
-
-
-## This player's chord hand (ChordHand): in a headset the rig's left hand, or its right for a
-## left-handed player (Ergonomics.handedness); on a desktop the chord layer, over the mouse's view
-## and the fingertips' keys.
-func _lend_chord_hand() -> void:
-	chord_hand = ChordHand.new()
-	if camera != null:
-		chord_hand.mouse = get_node_or_null("MouseHand") as MouseInteractor
-		chord_hand.fingertip_keys = fingertip_keys
-	if rig != null:
-		var controller: XRController3D = rig.left if ergonomics.handedness >= 0 else rig.right
-		if controller != null:
-			chord_hand.hand = rig.interactors.get(controller) as XRInteractor
-			chord_hand.gestures = rig.gestures.get(controller) as HandGestures
-			chord_hand.head = rig.head
-	add_child(chord_hand)
-
-
-## C on a desktop: the chord layer on, or off (ChordHand.set_layer). On, 1 to 7 pick the key's
-## chords in whichever keys have the keyboard, and with none, the fingertips' take it. Said the
-## first time.
-func toggle_chords() -> void:
-	if chord_hand == null or camera == null:
-		return
-	chord_hand.set_layer(not chord_hand.layer)
-	if chord_hand.layer and not _told_chords:
-		_told_chords = true
-		Session.notice.emit("Chords: 1 to 7 play the key's I to vii° on the fingertips (J K L ;); Shift adds the seventh, 0 the song's own. C or Esc ends it.")
-
-
-## T on a desktop: the fingertips' keys on, or back to the studio. Said the first time.
-func toggle_fingertips() -> void:
-	if fingertip_keys == null:
-		return
-	var on := not fingertip_keys.is_active()
-	fingertip_keys.set_active(on)
-	if on and not _told_fingertips:
-		_told_fingertips = true
-		Session.notice.emit("Fingertips: J K L ; play the chord's root, third, fifth and top, held as long as the key. T, Esc or a click gives the keys back.")
-
-
-func _build_surfaces() -> void:
-	# These transforms are the DEFAULT LAYOUT, used until a participant moves something and their
-	# LayoutProfile starts overriding them. Heights are real: the desk surface at 0.74m, the
-	# patchbay at eye level over it, the rack within arm's reach to the left.
-	console = ConsoleSurface.new()
-	console.name = "Console"
-	console.position = Vector3(0, 0.74, 0.1)
-	studio_set.add_child(console)
-	mount.register(console)
-	if medium != Presentation.Medium.AR:
-		_build_desk_wing()
-
-	# On its stand, as authored: the stand's own placement times where the bay sits on it. The
-	# stand may since have been wheeled somewhere else; riding it (below) takes care of that.
-	patchbay = PatchbaySurface.new()
-	patchbay.name = "Patchbay"
-	StageLink.wire_bay(patchbay)
-	patchbay.transform = (ControlRoom.spot(&"patch_stand", room_width) as Transform3D) * Transform3D(Basis.IDENTITY, Vector3(0, PATCH_BAY_TOP, PATCH_BAY_FRONT))
-	studio_set.add_child(patchbay)
-	mount.register(patchbay)
-
-	rack = RackSurface.new()
-	rack.name = "Rack"
-	rack.position = Vector3(-1.18, 0.30, -0.42)
-	rack.rotation_degrees = Vector3(0, 38, 0)
-	studio_set.add_child(rack)
-	mount.register(rack)
-
-	# Hung on the back wall in the virtual set, which is where it goes for anyone who has
-	# chosen to see it as an object. Its default mode is SCREEN in every medium -- a
-	# forty-minute song is not furniture -- so most of the time this placement is unused, and
-	# it is written anyway so that choosing ROOM does not drop it at the origin.
-	timeline = TimelineSurface.new()
-	timeline.name = "Timeline"
-	timeline.position = Vector3(0, TIMELINE_Y, TIMELINE_Z)
-	timeline.scale = Vector3.ONE * TIMELINE_SCALE
-	# Shelves or flat lanes, as this person last chose.
-	timeline.shelf = Session.layout != null and Session.layout.timeline_shelves
-	timeline.shelf_chosen.connect(_on_timeline_shelf_chosen)
-	if Session.layout != null:
-		timeline.set_size(Session.layout.timeline_width_scale, Session.layout.timeline_lane_height)
-	timeline.size_chosen.connect(_on_timeline_size_chosen)
-	studio_set.add_child(timeline)
-	mount.register(timeline)
-	# A write bead pulled out shows its lane on the timeline, so the pass is seen to land there.
-	WriteBead.on_pull = _show_written_lane
-	_build_clip_editor()
-
-	deck = TapeDeck.new()
-	deck.name = "TapeDeck"
-	deck.position = Vector3(0.80, 1.02, -0.20)
-	deck.rotation_degrees = Vector3(-20, -32, 0)
-	studio_set.add_child(deck)
-	mount.register(deck)
-
-	focus = FocusRig.new()
-	focus.name = "FocusRig"
-	focus.body = body
-	focus.ergonomics = ergonomics
-	focus.surfaces = [console, patchbay, rack, deck, timeline]
-	# The stage table, on its trolley beside the mix position (slice 18). None in AR, which has
-	# no furniture to stand it on yet.
-	if stage_trolley != null:
-		stage = StageTable.new()
-		stage.name = "StageTable"
-		StageLink.wire(stage)
-		stage.transform = stage_trolley.transform * Transform3D(Basis.IDENTITY, Vector3(0, STAGE_TOP, 0))
-		studio_set.add_child(stage)
-		mount.register(stage)
-		stage.ropes_changed.connect(_publish_room_soon)
-		focus.surfaces.append(stage)
-	# The spectra the EQ wall shows: measured here on the built-in engine, sent on to guests, or a
-	# guest's host's (slice 36). And the wall, on its trolley at the side wall; none in AR.
-	spectra = Spectra.new()
-	spectra.name = "Spectra"
-	add_child(spectra)
-	if eq_wall_trolley != null:
-		eq_wall = EqWall.new()
-		eq_wall.name = "EqWall"
-		eq_wall.spectra = spectra.latest
-		eq_wall.reason = spectra.reason
-		eq_wall.reference = func() -> float: return spectra.reference
-		eq_wall.motion = func() -> float: return ergonomics.motion_scale
-		eq_wall.transform = _authored_floor[&"eq_wall"]
-		studio_set.add_child(eq_wall)
-		mount.register(eq_wall)
-		focus.surfaces.append(eq_wall)
-	# LEVELS (slice 66), on its trolley at the front left; none in AR.
-	if levels_niche != null:
-		levels = LevelsWall.new()
-		levels.name = "Levels"
-		levels.motion = func() -> float: return ergonomics.motion_scale
-		levels.transform = _authored_floor[&"levels"]
-		studio_set.add_child(levels)
-		mount.register(levels)
-		focus.surfaces.append(levels)
-	# The TV (docs/sampling_station.md), on its bracket right of the timeline; none in AR.
-	if tv_mount != null:
-		tv = TvSurface.new()
-		tv.name = "Tv"
-		tv.transform = _authored_floor[&"tv"]
-		tv.find_asked.connect(find_on_tv)
-		tv.song_position = func() -> float: return hit_recorder.stamp() if hit_recorder != null else 0.0
-		tv.pad_struck.connect(_on_pad_struck)
-		tv.changed.connect(_on_tv_changed)
-		tv.asked.connect(func(video: String, playing: bool, at: float) -> void:
-			Session.ask_room(&"tv", [video, playing, at]))
-		tv.pads_changed.connect(_on_pads_changed)
-		tv.pads_said.connect(func(words: String) -> void: Session.notice.emit(words))
-		tv.pads_rejoined.connect(func() -> void:
-			_pads_loaded = ""
-			if not _pads_followed.is_empty():
-				_follow_pads_row(_pads_followed))
-		tv.searched.connect(_on_tv_searched)
-		studio_set.add_child(tv)
-		mount.register(tv)
-		focus.surfaces.append(tv)
-	# The modular wall, over the synth zone's keyboard stand (slice 51); none in AR.
-	if medium != Presentation.Medium.AR:
-		_build_rack()
-		focus.surfaces.append(rack_wall)
-	focus.show_halo = medium != Presentation.Medium.SCREEN
-	focus.visits = medium == Presentation.Medium.SCREEN
-	# Re-seat once the focused surface has been PLACED, which is when it finally knows both its
-	# own size and where it ended up. Without this the camera is always aimed using the layout
-	# the desk had before it was summoned, and a paged single-tier console is a very different
-	# object from the flat 48-track plank it was a frame earlier.
-	#
-	# Placement, not rebuilding. Both this and the rig itself used to listen to `rebuilt`, and
-	# which of them ran first was decided by connection order; this one won, so the camera sat
-	# down facing where the gear had been a moment before the rig moved it, and nothing fired
-	# again to correct it. `--focus rack` came back as a photograph of the floor.
-	focus.placed.connect(_sit_down)
-	# A release walks nobody anywhere on its own: what releases to go home (Escape, F off the end,
-	# G, BACK) sits down itself, and one that happens to something else -- a tablet closed, a rack
-	# folded, a guest handing focus back -- leaves the player where they are (2026-10-30, "i dont
-	# like how clicking things moves me to other things in almost all scenarios"). The monitor's
-	# panels, put away while gear is visited, come back all the same.
-	focus.focus_changed.connect(func(id: StringName) -> void:
-		if id == &"" and focus.visits:
-			_stand_down_screen(false))
-	focus.room = studio_set
-	focus.move = _glide
-	add_child(focus)
-	if mount != null:
-		mount.held = focus.holds
-	_stand_the_modular()
-
-	# What rides on what. After the rig, because a surface that is summoned rides by its home,
-	# and the rig is what holds that.
-	if floor_plan != null:
-		mount.reseat = _reseat
-		mount.studio_placed = _on_studio_placed
-		_ride(rack_trolley, rack)
-		_ride(deck_trolley, deck)
-		_ride(timeline_stand, timeline)
-		_ride(timeline_stand, clip_editor)
-		_ride(patch_stand, patchbay)
-		if stage != null:
-			_ride(stage_trolley, stage)
-		if eq_wall != null:
-			_ride(eq_wall_trolley, eq_wall)
-		if levels != null:
-			_ride(levels_niche, levels)
-		if tv != null:
-			_ride(tv_mount, tv)
-
-	# After the gear, because a loom is measured off the transforms of the two things it joins.
-	# Rebuilt with the bay, because the bay's width is the track count and the glands are spaced
-	# across it: a session that gains tracks moves where its own looms land.
-	patchbay.rebuilt.connect(refresh_looms)
-	refresh_looms()
-	# The beads ride whatever cables there are, found every frame, so a cable rebuilt or freed
-	# needs telling nobody.
-	signal_beads = SignalBeads.create()
-	add_child(signal_beads)
-
-	# The room is fitted to the desk every time the desk changes shape: a live session's tracks
-	# arrive after the room is built, and a project that gains a bank gains a metre of console.
-	console.rebuilt.connect(_forget_desk_box)
-	console.rebuilt.connect(_fit_room_to_session)
-	patchbay.rebuilt.connect(_fit_stand_to_bay)
-	_fit_room_to_session()
-
-	if floor_plan != null:
-		rack.tear_requested.connect(_on_tear_requested)
-		rack.track_tear_requested.connect(func(t: int, at: Vector3) -> void: _on_track_tear_requested(t, at, rack))
-		_restore_tablets()
-		_restore_track_racks()
-	Session.room_changed.connect(_on_room_changed)
-	# The tablets follow their tracks themselves; what is remembered and told follows them.
-	DAW.tracks_renumbered.connect(_on_tracks_renumbered)
-	Session.room_asked.connect(_on_room_asked)
-	Session.participant_left.connect(_on_look_solo_player_left)
-	DAW.project_replaced.connect(func() -> void:
-		look_solo.forget()
-		_look_by = &""
-		guest_look_solos.clear())
-	Session.role_changed.connect(_on_role_changed)
-	Session.room_motion.connect(_on_room_motion)
-	_publish_room()
-
-
-## A renumbering is answered a frame late, once every tablet has followed its track.
-##
-## A named method rather than a lambda, because DAW is an autoload that outlives every studio:
-## a bound method's connection goes when the studio is freed, and a lambda's does not, so a
-## renumbering after a studio was gone ran its deferred body on whatever object later took the
-## freed one's memory. A bound method is checked by instance id before it is called, deferred or
-## not, and the deferred half also stands down when the studio has left the tree between the
-## signal and the next idle frame.
-func _on_tracks_renumbered(_map: Dictionary) -> void:
-	_after_tracks_renumbered.call_deferred()
-
-
-func _after_tracks_renumbered() -> void:
-	if not is_inside_tree():
-		return
-	_remember_tablets()
-	_fold_orphaned_track_racks()
-	_publish_room_soon()
-
-
-## A stand under every practical.
-##
-## A tripod floor lamp rather than a pendant, and that is forced rather than chosen: this room
-## has three walls and no ceiling, so there is nothing for a hanging fixture to hang from, and a
-## stem disappearing into open sky above the wall line would be worse than no fixture at all.
-##
-## The shade is a cone open at the bottom with an emissive disc inside it, so the lamp reads as
-## ON. Nothing about the geometry emits light -- the OmniLight does that, from the middle of the
-## shade -- and that division is why the head sits where the light is rather than the other way
-## round. Move a practical in the table and its stand follows; there is a test on the pairing,
-## because the failure mode is an invisible light source, which is the thing this fixes.
-func _build_lamp_stands() -> void:
-	for spec in PRACTICALS:
-		var at: Vector3 = spec[0]
-		var tint: Color = spec[1]
-		var number := PRACTICALS.find(spec) + 1
-		var stand := _trolley("LampStand", StringName("lamp_%d" % number),
-				Vector3(at.x, 0.0, at.z), 0.0)
-		stand.add_to_group(&"lamp_stand")
-		stand.rolls = false
-		stand.follow = 15.0
-		stand.footprint_half = Vector2(0.15, 0.15)
-		# The light goes with its lamp. Reparented rather than built here, because an AR
-		# participant gets the lights with no stands at all -- see _build_environment.
-		if number - 1 < _lamps.size():
-			_lamps[number - 1].reparent(stand, true)
-
-		var base := MeshInstance3D.new()
-		var base_mesh := CylinderMesh.new()
-		base_mesh.top_radius = 0.085
-		base_mesh.bottom_radius = 0.150
-		base_mesh.height = 0.032
-		base_mesh.radial_segments = 16
-		base.mesh = base_mesh
-		base.position = Vector3(0, 0.016, 0)
-		base.material_override = Materials.furniture()
-		stand.add_part(base)
-
-		# Up to the middle of the shade, so the pole is hidden by the head rather than stopping
-		# just short of it and leaving a gap you can see the wall through.
-		var pole := MeshInstance3D.new()
-		var pole_mesh := CylinderMesh.new()
-		pole_mesh.top_radius = 0.0145
-		pole_mesh.bottom_radius = 0.0205
-		# Rising out of the base rather than standing on the floor inside it, where its foot and
-		# the base's underside were one plane.
-		pole_mesh.height = at.y - 0.02
-		pole_mesh.radial_segments = 10
-		pole.mesh = pole_mesh
-		pole.position = Vector3(0, (at.y + 0.02) * 0.5, 0)
-		pole.material_override = Materials.brushed_metal()
-		stand.add_part(pole)
-
-		var shade := MeshInstance3D.new()
-		shade.name = "Shade"
-		var shade_mesh := CylinderMesh.new()
-		shade_mesh.top_radius = LAMP_SHADE_RADIUS * 0.42
-		shade_mesh.bottom_radius = LAMP_SHADE_RADIUS
-		shade_mesh.height = LAMP_SHADE_HEIGHT
-		shade_mesh.radial_segments = 20
-		shade_mesh.cap_bottom = false
-		shade.mesh = shade_mesh
-		shade.position = Vector3(0, at.y, 0)
-		shade.material_override = Materials.lamp_shade()
-		stand.add_part(shade)
-
-		# The glowing bit. Above the shade's lower rim so the cone shields it from straight on,
-		# which is what stops a lamp pointing down reading as a bare bulb from across the room.
-		var glow := MeshInstance3D.new()
-		var glow_mesh := CylinderMesh.new()
-		glow_mesh.top_radius = LAMP_SHADE_RADIUS * 0.80
-		glow_mesh.bottom_radius = LAMP_SHADE_RADIUS * 0.80
-		glow_mesh.height = 0.004
-		glow_mesh.radial_segments = 20
-		glow.mesh = glow_mesh
-		glow.position = Vector3(0, at.y - LAMP_SHADE_HEIGHT * 0.28, 0)
-		glow.material_override = Materials.led(tint, true)
-		stand.add_part(glow, false)
-
-
-# --- looms --------------------------------------------------------------------------------
-
-## The permanent runs from each machine to the back of the patchbay. See hardware/gear_loom.gd
-## for what they are claiming.
-##
-## Skipped for any machine not standing in the virtual set. A surface in SCREEN mode is a panel
-## riding in front of someone's face, and a two-metre cable from a panel in the viewer's head
-## down to the floor of a room they may not even be rendering is worse than no cable: it moves
-## with them, so it reads as the room being dragged around rather than as a loose cable.
-func refresh_looms() -> void:
-	for loom in _looms:
-		if is_instance_valid(loom):
-			loom.queue_free()
-	_looms.clear()
-	if medium == Presentation.Medium.AR or studio_set == null or patchbay == null:
-		return
-	if patchbay.get_parent() != studio_set:
-		return
-	# A bay with no jacks has no width, so every landing fraction resolves to the same point and
-	# the three looms would stack into one. An empty session gets no looms.
-	if patchbay.loom_entry(-1.0).is_equal_approx(patchbay.loom_entry(1.0)):
-		return
-
-	for run in LOOM_RUNS:
-		var machine: Node3D = get(run[0])
-		if machine == null or machine.get_parent() != studio_set:
-			continue
-		var from_at: Vector3 = machine.transform * (run[1] as Vector3)
-		var from_dir: Vector3 = (machine.transform.basis * (run[2] as Vector3)).normalized()
-		var entry: Vector3 = patchbay.loom_entry(run[3])
-		var to_at: Vector3 = patchbay.transform * entry
-		# Into the panel, which is the bay's own -Z however the bay is tilted. Negated because a
-		# loom's axis is the direction it RUNS AWAY along, not the direction it points in.
-		var to_dir: Vector3 = (patchbay.transform.basis * Vector3.BACK).normalized()
-		# A bay standing in its cabinet takes its looms in low, through the cheek on the end
-		# that faces the desk, the way a floor-standing bay is wired: from there they go
-		# straight to the floor and away behind the desk instead of round the carcass.
-		if _stands_in_cabinet():
-			var side := -(PatchbaySurface.PANEL_WIDTH * 0.5 + 0.035)
-			var fraction: float = run[3]
-			to_at = patch_stand.transform * Vector3(side, Caster.HEIGHT + 0.14 + (fraction + 1.0) * 0.045,
-					PATCH_BAY_FRONT - 0.06 + fraction * 0.035)
-			to_dir = (patch_stand.transform.basis * Vector3.LEFT).normalized()
-		var via: Vector3 = run[4]
-		# The floor point was written against where the authored layout stood the machine. A
-		# machine that has been wheeled somewhere else takes its run of trunking with it.
-		var stand := _stand_of(String(run[0]))
-		if stand != null and _authored_floor.has(stand.piece_id):
-			via = stand.transform * (_authored_floor[stand.piece_id] as Transform3D).affine_inverse() * via
-		var loom := GearLoom.create(from_at, from_dir, to_at, to_dir, via, hash(run[0]))
-		loom.on_floor = run[5]
-		loom.level_source = loom_level(String(run[0]))
-		loom.name = "Loom_%s" % run[0]
-		studio_set.add_child(loom)
-		_looms.append(loom)
 
 
 ## What a machine's loom carries to the bay, for its beads: the console's every heard track (so a
@@ -3573,53 +1394,6 @@ static func loom_level(machine: String) -> Callable:
 		"deck":
 			return func() -> float: return SignalBeads.master_level()
 	return Callable()
-
-
-func _stands_in_cabinet() -> bool:
-	return patch_stand != null and _patch_cabinet != null and _seated_on.has(patchbay.surface_id) \
-			and (_patch_cabinet.mesh as BoxMesh).size.y > 0.2
-
-
-func _stand_of(machine: String) -> Trolley:
-	match machine:
-		"rack": return rack_trolley
-		"deck": return deck_trolley
-	return null
-
-
-## Looms follow furniture that is being pushed, but not every physics frame: a loom is a swept
-## mesh, and rebuilding three of them sixty times a second for a rack moving two centimetres is
-## the furniture costing more than the console.
-func _refresh_looms_if_moved(delta: float) -> void:
-	_loom_clock += delta
-	if _looms_dirty and _loom_clock >= 0.05:
-		_looms_dirty = false
-		_loom_clock = 0.0
-		refresh_looms()
-
-
-# --- desktop camera -----------------------------------------------------------------------
-
-## EDIT on the lyric board: in a headset, the typing pad by the singer's hand (LyricBoard.PAD_AT), its
-## line added to the end of the lyrics untimed; at a desk, the session panel's LYRICS box, which has
-## them all, or where it is when nothing opens it.
-func edit_lyrics() -> void:
-	if lyric_board == null or not is_instance_valid(lyric_board):
-		return
-	if get_viewport() != null and get_viewport().use_xr:
-		var old := lyric_board.get_node_or_null("TypingPad")
-		if old != null:
-			old.queue_free()
-		var pad := TypingPad.ask(lyric_board, "A line for the lyrics: OK adds it at the end, untimed", "",
-				LyricBoard.PAD_AT)
-		pad.answered.connect(func(words: String) -> void:
-			if lyric_board != null and is_instance_valid(lyric_board):
-				lyric_board.add_line(words))
-		return
-	if lyrics_edit_asked.get_connections().is_empty():
-		Session.notice.emit("M opens the session panel: its LYRICS box has the song's lyrics.")
-		return
-	lyrics_edit_asked.emit()
 
 
 # --- the modular room's rack (docs/architecture.md, "The modular room") ----------------------
@@ -3802,7 +1576,7 @@ func ask_rack(op: String, args: Array) -> void:
 		Session.ask_room(&"rack", [StringName(op), args])
 		_show_rack(row)
 		return
-	if _predict(&"rack", [StringName(op), args]) > 0:
+	if room_rows._predict(&"rack", [StringName(op), args]) > 0:
 		_show_rack(row)
 
 
@@ -4012,9 +1786,9 @@ func _station_seats() -> Dictionary:
 	if venue == null:
 		return _modular_seats
 	var frame_of := venue.global_transform if venue.is_inside_tree() else venue.transform
-	var fits := walker.fits if walker != null else _station_fits()
+	var fits := walker.fits if walker != null else station_host._station_fits()
 	var hands := medium != Presentation.Medium.SCREEN
-	for id in station_ids():
+	for id in station_host.station_ids():
 		var seat: Variant = Stations.seat(venue, id, fits, hands)
 		if seat != null:
 			var p: Vector3 = frame_of * (seat as Transform3D).origin
@@ -4104,7 +1878,7 @@ func _on_rec_pressed(on: bool) -> void:
 	var me := Session.local_peer_id
 	if Session.is_authority():
 		_arm_sampler(on, me)
-	elif _predict(Sampler.VERB, [on]) > 0:
+	elif room_rows._predict(Sampler.VERB, [on]) > 0:
 		sampler.armed_by = me if on else 0
 	var desk := medium == Presentation.Medium.SCREEN
 	Session.notice.emit(("Sampler REC: the next thing you squeeze, click or shake, a yo-yo or card trick, or a bounce of the ball, or anything used within %.1f m of its mic, is a sample on the rack. Click REC again to stop."
@@ -4603,7 +2377,7 @@ func _remember_made_due() -> void:
 ## A host's room is told by the item moving (`_publish_room_soon`).
 func _on_items_asked(verb: StringName, args: Array) -> void:
 	if not Session.is_authority():
-		_predict(verb, args)
+		room_rows._predict(verb, args)
 
 
 ## The room told once at the end of the frame, however many things in it moved during it.
@@ -4617,8 +2391,7 @@ func _publish_room_soon() -> void:
 
 func _publish_room_due() -> void:
 	_room_publish_due = false
-	_publish_room()
-
+	room_rows._publish_room()
 
 
 ## Off your head into the mouse's hand, or on from it.
@@ -4755,9 +2528,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.keycode == KEY_U and not event.echo and not event.ctrl_pressed:
 		# Look to solo: U held, with the signal view on, solos the track under the cursor alone.
 		if event.pressed:
-			look_solo_press(&"key")
+			signal_views.look_solo_press(&"key")
 		else:
-			look_solo_release(&"key")
+			signal_views.look_solo_release(&"key")
 	elif event is InputEventKey and event.keycode == KEY_L and not event.echo and not event.ctrl_pressed:
 		# Lean in to the stage voice under the cursor while L is held.
 		_lean_key = event.pressed
@@ -4771,7 +2544,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			# where you would find it by accident.
 			KEY_F:
 				focus.cycle(-1 if event.shift_pressed else 1)
-				_sit_down()
+				station_host._sit_down()
 			# The other half of the desk. A console pages by default, because twelve strips
 			# you can face beats forty-eight you have to turn your head through -- but a
 			# mix is sometimes a thing you want to see all of at once, and then the tiers
@@ -4779,7 +2552,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_E:
 				_toggle_expanded()
 			KEY_G:
-				_toggle_summoning()
+				station_host._toggle_summoning()
 			# Somewhere else to stand. The setup comes along; only the world changes.
 			KEY_V:
 				cycle_venue()
@@ -4801,13 +2574,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			# See the signal (docs/spatial_loop.md part three): X, an x-ray of the mix, with or
 			# without the glasses. G was taken by the gear's summoning.
 			KEY_X when not event.ctrl_pressed and not event.meta_pressed:
-				toggle_signal_view()
+				signal_views.toggle_signal_view()
 			# Why can't I hear this? Y over it, with the signal showing; Shift-Y does the fix.
 			KEY_Y when not event.ctrl_pressed and not event.meta_pressed:
 				if event.shift_pressed:
-					fix_traced()
+					signal_views.fix_traced()
 				else:
-					trace_pointed(get_node_or_null("MouseHand") as Interactor)
+					signal_views.trace_pointed(get_node_or_null("MouseHand") as Interactor)
 			# Your pockets: left hip, right hip, back. What is in the hand goes in, and what was
 			# in comes out.
 			KEY_1, KEY_2, KEY_3:
@@ -4821,17 +2594,17 @@ func _unhandled_input(event: InputEvent) -> void:
 				set_god_mode(not god_mode)
 			# Your fingertips as notes, on J K L ;: T, beside the home row they play on.
 			KEY_T:
-				toggle_fingertips()
+				surface_host.toggle_fingertips()
 			# The computer keyboard as a piano, to play whatever instrument is on the track: P.
 			KEY_P when not event.ctrl_pressed and not event.meta_pressed:
 				computer_keys_toggled.emit()
 			# The chord layer: C for chords. 1 to 7 then pick them in the keys that play.
 			KEY_C when not event.ctrl_pressed and not event.meta_pressed:
-				toggle_chords()
+				surface_host.toggle_chords()
 			# Go to the instruments one at a time, as F goes to the gear: I for instrument.
 			# Shift goes the other way. The help card's PLAY pages go to one by name.
 			KEY_I:
-				cycle_stations(-1 if event.shift_pressed else 1)
+				station_host.cycle_stations(-1 if event.shift_pressed else 1)
 			KEY_ESCAPE:
 				_on_escape()
 			# Backspace over a voice on the stage table, or anything of its tag: that track back to
@@ -4928,11 +2701,11 @@ func _fast_path_latency() -> float:
 
 func _process(delta: float) -> void:
 	_follow_hit_voices()
-	_follow_signal(delta)
-	_drive_pushed()
-	_refresh_looms_if_moved(delta)
+	signal_views._follow_signal(delta)
+	room_rows._drive_pushed()
+	surface_host._refresh_looms_if_moved(delta)
 	_follow_clap(delta)
-	_follow_look_solo(delta)
+	signal_views._follow_look_solo(delta)
 	_follow_lean()
 	_follow_ear()
 	_follow_wheel()
@@ -5059,7 +2832,7 @@ func _on_escape() -> void:
 	if focus != null:
 		focus.release()
 	_release_stray_screens()
-	_sit_down()
+	station_host._sit_down()
 
 
 func _release_stray_screens() -> void:
@@ -5069,175 +2842,7 @@ func _release_stray_screens() -> void:
 			mount.set_mode(id, mount.default_mode_of(id, medium))
 
 
-func _sit_down() -> void:
-	if camera == null or body == null or medium != Presentation.Medium.SCREEN:
-		return
-	if focus != null and focus.visits:
-		_walk_to_seat()
-		return
-	# Aimed at where focused gear GOES, not at where the focused surface currently is. Asking
-	# the surface was the first version, and it reads its bounds a frame too early -- focus
-	# moves the surface immediately but the rebuild that gives it its shape happens on the next
-	# _process, so the camera was aimed using the previous layout's box and ended up on the
-	# floor looking at a lamp. This point is a property of the body, which is already final.
-	var eye := body.global_position
-	var drop := deg_to_rad(ergonomics.gaze_down)
-	var ahead := Vector3(0, -sin(drop), -cos(drop)) * ergonomics.working_distance()
-	var at: Vector3 = eye + body.global_transform.basis * ahead
-	# Aimed at the focused surface's own middle once it HAS one. Reading its bounds is only
-	# safe after the rebuild -- focus moves a surface immediately but the rebuild that gives it
-	# its shape happens on the next _process -- so this takes the measurement when it is real
-	# and falls back to the body's working point when it is not.
-	if focus != null and focus.is_focused():
-		for surface in focus.surfaces:
-			if surface.surface_id == focus.focused_id:
-				var box := surface.content_aabb()
-				if box.size.y > 0.01:
-					# Aimed at where the surface is GOING, not where it currently is. Gear
-					# glides to the mix position over a few hundred milliseconds, and the
-					# camera is seated the instant placement is decided -- reading the live
-					# transform aims it at a console still halfway across the room, and
-					# nothing fires afterwards to correct it once the tween lands. This is
-					# why `--focus rack` kept coming back as a photograph of the floor even
-					# after the signal race behind it was fixed: two separate bugs with one
-					# symptom, and fixing the first changed the render not at all.
-					#
-					# Dead centre of the box, not a quarter up it. The lift was there to
-					# stop the camera staring into the desk's underside, and the underside
-					# was really the carcass being counted as content, which it no longer is.
-					var target := body.global_transform * focus.placement(surface, 0)
-					at = target * box.get_center()
-	var back := eye - at
-	# Through frame() rather than by assigning the four orbit fields, which is what the version
-	# before that did: those values are only read when something applies them, so setting them
-	# and stopping leaves the camera exactly where it was. The render came back identical twice
-	# and both times read as a placement bug rather than a call that never reached the camera.
-	#
-	# Negative pitch, because the offset is built with Basis(RIGHT, pitch), which sends +pitch
-	# DOWN -- the eye is above the desk, so it wants the sign that lifts it.
-	# A longer lens while you are working at something. The default 75-degree field is right
-	# for walking around a room and wrong for standing over a desk: at half a metre it bows the
-	# arc outward at the edges and spends most of the frame on everything that is not the desk.
-	# Nobody photographs a console on a wide angle either, and for the same reason.
-	camera.fov = SEATED_FOV if focus.is_focused() else ROOM_FOV
-	frame(at, back.length(), atan2(back.x, back.z),
-			-atan2(back.y, Vector2(back.x, back.z).length()))
-
-
-## Where the mix position stands when nothing is being visited.
-func _home_seat() -> Transform3D:
-	return Transform3D(Basis.IDENTITY, Vector3(0, ergonomics.eye_height, MIX_POSITION_Z))
-
-
-## Visiting: walk the mix position over to the focused gear and look at it from there.
-##
-## The body goes, not just the lens, because the body is what carries the work light -- and
-## because "where I am standing" is what release has to undo. A surface that is not standing in
-## the room (a timeline on the monitor) has no seat; focusing it leaves you where you are.
-func _walk_to_seat() -> void:
-	var seat := _home_seat()
-	var look_at := Vector3.ZERO
-	var target: Surface = null
-	if focus.is_focused():
-		for surface in focus.surfaces:
-			if surface.surface_id == focus.focused_id:
-				target = surface
-	# A surface that is a station mounted in a zone (the modular wall, slice 51) is visited where its
-	# station is played: where `seat_for` would stand a desk to fit it, the bricks table stands, and
-	# the fifths wheel's board across the view.
-	if target != null and target == rack_wall and venue != null and Stations.spot(venue, Modular.STATION) != null:
-		_walk_to_station(Modular.STATION)
-		return
-	# Anywhere in the set: a tablet stands on its own stand, a level further down.
-	if target != null and studio_set.is_ancestor_of(target):
-		var box := target.content_aabb()
-		if box.size.y > 0.01:
-			seat = focus.seat_for(target)
-			# Inside the room and at a height a person's eyes can be at. A rack's bottom unit
-			# asks for a seat on the floor; nobody mixes lying down.
-			var bounds := floor_plan.bounds if floor_plan != null \
-					else _room_bounds()
-			seat.origin = Vector3(
-					clampf(seat.origin.x, bounds.position.x + 0.2, bounds.end.x - 0.2),
-					clampf(seat.origin.y, 0.95, 1.95),
-					clampf(seat.origin.z, bounds.position.y + 0.2, bounds.end.y + 0.6))
-			look_at = target.global_transform * box.get_center()
-	elif target != null:
-		return
-	_stand_down_screen(target != null)
-	if look_at == Vector3.ZERO:
-		var drop := deg_to_rad(ergonomics.gaze_down)
-		look_at = seat * (Vector3(0, -sin(drop), -cos(drop)) * ergonomics.working_distance())
-	camera.fov = SEATED_FOV if target != null else ROOM_FOV
-	var back := seat.origin - look_at
-	var to := [look_at, back.length(), atan2(back.x, back.z),
-			-atan2(back.y, Vector2(back.x, back.z).length())]
-	var seconds := 0.55 * clampf(ergonomics.motion_scale, 0.0, 2.0)
-	if seconds <= 0.01 or not is_inside_tree():
-		body.transform = seat
-		frame(to[0], to[1], to[2], to[3])
-		return
-	# Both at once, on one curve. A body that arrived before its camera would leave the work
-	# light lighting the gear from an empty spot for half a second; a camera that arrived first
-	# would see the light swing in after it.
-	if walker != null and not god_mode:
-		_orbit_target = to[0]
-		walker.travel_to(seat.origin, look_at, seconds)
-		if _walk != null and _walk.is_valid():
-			_walk.kill()
-		_walk = create_tween()
-		_walk.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-		_walk.tween_property(body, "transform", seat, seconds)
-		return
-	var body_from := body.transform
-	var cam_from := camera.global_transform
-	frame(to[0], to[1], to[2], to[3])
-	var cam_to := camera.global_transform
-	camera.global_transform = cam_from
-	if _walk != null and _walk.is_valid():
-		_walk.kill()
-	_walk = create_tween()
-	_walk.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	_walk.tween_method(func(t: float) -> void:
-		body.transform = body_from.interpolate_with(seat, t)
-		camera.global_transform = cam_from.interpolate_with(cam_to, t), 0.0, 1.0, seconds)
-
-
 var _walk: Tween
-
-
-## The monitor's own panels step aside while you are over at a piece of gear.
-##
-## A surface on the screen stage hangs off the lens, so walking to the console carries the
-## timeline with you and holds it a hand's width in front of the desk you walked over to see --
-## the first honest visit render was a timeline with a console somewhere behind it. Summoning
-## never showed this because it pulled the timeline into the arc with everything else.
-##
-## Disabled as well as hidden: a hidden ControlAffordance is still in the physics space, and
-## a click aimed at a fader would land on the invisible clip lane in front of it.
-func _stand_down_screen(away: bool) -> void:
-	if screen_stage == null:
-		return
-	screen_stage.visible = not away
-	screen_stage.process_mode = Node.PROCESS_MODE_DISABLED if away \
-			else Node.PROCESS_MODE_INHERIT
-
-
-## Visit the gear, or have it brought. Visiting is the monitor's default; bringing is still
-## the right answer for some work -- a patchbay you want flat in front of you -- and is how a
-## headset works, so it is one key away rather than gone.
-func _toggle_summoning() -> void:
-	var was := focus.focused_id
-	focus.release()
-	focus.visits = not focus.visits
-	if not focus.visits:
-		# Summoned gear lands in front of the mix position, so the mix position has to be back
-		# where it stands before anything is summoned to it.
-		_stand_down_screen(false)
-		body.transform = _home_seat()
-	if was != &"":
-		focus.focus(was)
-	_sit_down()
 
 
 # --- going to the instruments (docs/spatial_loop.md part two, slice 10) ------------------------
@@ -5245,94 +2850,6 @@ func _toggle_summoning() -> void:
 ## The station last gone to (a Stations id), so I and Shift-I go on round from it; empty before
 ## the first.
 var station := &""
-
-
-## The stations that stand here, in Stations' order: none in AR, where the room is a real one and
-## nothing stands in it yet (slice 60), and none without a venue.
-func station_ids() -> Array[StringName]:
-	if medium == Presentation.Medium.AR or venue == null:
-		return []
-	return Stations.ids(venue)
-
-
-## I and Shift-I: go to the next station, or the one before, from the one last gone to, round
-## and round. Unlike F's cycle there is no end to walk off: Esc is the way back to the desk, and
-## the toast at each one says so. Answers the station gone to, or empty.
-func cycle_stations(direction: int) -> StringName:
-	var ids := station_ids()
-	if ids.is_empty():
-		Session.notice.emit("No instruments stand in this room.")
-		return &""
-	var at := ids.find(station)
-	var next := (0 if direction >= 0 else ids.size() - 1) if at < 0 \
-			else posmod(at + (1 if direction >= 0 else -1), ids.size())
-	return ids[next] if go_to_station(ids[next]) else &""
-
-
-## Walk to station `id`: the walker eased to its seat (Stations.seat, SEAT in front of it on
-## floor a person fits on), facing what is played, on the curve visiting gear uses
-## (`_walk_to_seat`), longer for a longer way and scaled by Ergonomics.motion_scale (a cut at 0),
-## and looking where it holds the station's controls in view (Stations.look_from). God mode is
-## left first and focused gear let go, and the monitor's own panels step aside, as they do at
-## gear, so the instrument is in full view. The body goes too, as it does to gear,
-## so Esc walks back to the desk. A toast says its title and its desk line. In a headset the
-## play space travels there instead (`_travel_to_station`). False where it does not stand here,
-## or travel is refused.
-func go_to_station(id: StringName) -> bool:
-	var r := Stations.row(id)
-	if r.is_empty() or not station_ids().has(id):
-		Session.notice.emit("%s does not stand in this room." % r.get("title", String(id)))
-		return false
-	# A headset puts the rows beside a plaque away only once it goes: refused, they stay up and
-	# say why, where the press was made.
-	if medium != Presentation.Medium.SCREEN or camera == null:
-		return _travel_to_station(id)
-	_put_away_beside()
-	if god_mode:
-		set_god_mode(false)
-	if focus != null and focus.is_focused():
-		focus.release()
-	station = id
-	_walk_to_station(id)
-	Session.notice.emit("%s, %s: %s  ·  Esc back to the desk" % [r["title"], Stations.where(r), r["desk"]])
-	return true
-
-
-## The walk (or the cut, at motion 0) to station `id`'s seat, the look framing it from there: for going
-## to it, and for visiting a surface that is one (the modular wall, `_walk_to_seat`).
-func _walk_to_station(id: StringName) -> void:
-	var fits := walker.fits if walker != null else Callable()
-	var frame_of := venue.global_transform if venue.is_inside_tree() else venue.transform
-	var seat: Transform3D = frame_of * (Stations.seat(venue, id, fits) as Transform3D)
-	_stand_down_screen(true)
-	camera.fov = ROOM_FOV
-	var standing := walker.standing_eye if walker != null else ergonomics.eye_height
-	var eye := seat.origin + Vector3(0, standing, 0)
-	# Framed from where you actually stand, which the room may have brought in short of SEAT:
-	# the look tips to hold the station's top and foot, its controls' top first.
-	var look: Vector3 = frame_of * (Stations.look_from(venue, id, frame_of.affine_inverse() * eye, camera.fov) as Vector3)
-	var from := walker.global_position if walker != null else camera.global_position
-	var way := Vector2(eye.x - from.x, eye.z - from.z).length()
-	var seconds := clampf(way / STATION_PACE, 0.55, 2.0) * clampf(ergonomics.motion_scale, 0.0, 2.0)
-	if not is_inside_tree():
-		seconds = 0.0
-	var stand := Transform3D(seat.basis, eye)
-	if walker != null:
-		walker.eye_height = walker.standing_eye
-		_orbit_target = look
-		walker.travel_to(eye, look, seconds)
-	else:
-		var back := eye - look
-		frame(look, back.length(), atan2(back.x, back.z), -atan2(back.y, Vector2(back.x, back.z).length()))
-	if body != null and focus != null and focus.visits:
-		if _walk != null and _walk.is_valid():
-			_walk.kill()
-		if seconds <= 0.01:
-			body.transform = stand
-		else:
-			_walk = create_tween()
-			_walk.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-			_walk.tween_property(body, "transform", stand, seconds)
 
 
 ## How fast going to a station covers the floor (m/s), at motion 1: a brisk walk, so the live
@@ -5358,177 +2875,8 @@ var _beside: StationBoard
 var _seat_finder: Walker
 
 
-## The board stands on a stand of its own on the floor, pushed about like the rest of the gear
-## (`live_pieces`' "station_board"): taken by its post or its foot, the face's rows still being
-## pressed. Behind the mix position, so a desk of any width grows clear of it; one it is pushed
-## into is shoved off the desk as the room is fitted to it.
-func _build_station_board() -> void:
-	station_board = StationBoard.new()
-	station_board.name = "StationBoard"
-	station_board.venue = venue
-	station_board.transform = ControlRoom.spot(&"station_board", room_width)
-	station_board.chosen.connect(_on_board_chosen)
-	studio_set.add_child(station_board)
-	var stand := _authored("StationBoardStand", &"station_board")
-	stand.follow = 11.0
-	stand.rolls = false
-	_board_grip = _grip(stand, Vector3.ONE * 0.1, Vector3.ZERO)
-	_go_live(stand)
-	_fit_board_stand()
-	_carry_live(&"station_board")
-	venue_changed.connect(func(_id: StringName) -> void:
-		_put_away_beside()
-		station_board.set_venue(venue)
-		_fit_board_stand())
-
-
 ## The stand's grip, round the board's foot and post.
 var _board_grip: CollisionShape3D
-
-
-## The stand's footprint and grip to the board as it now stands: the face is as tall as its rows,
-## and the foot comes forward under its middle (StationBoard.footprint).
-func _fit_board_stand() -> void:
-	var stand: Trolley = live_pieces.get(&"station_board")
-	if stand == null or station_board == null:
-		return
-	var z := station_board._middle_z()
-	stand.footprint_centre = Vector2(0, z)
-	stand.footprint_half = StationBoard.FOOT
-	var top := StationBoard.FACE_TOP - station_board._height * 0.5 * cos(StationBoard.TILT)
-	(_board_grip.shape as BoxShape3D).size = Vector3(StationBoard.FOOT.x * 2.0, maxf(top - 0.05, 0.1), 0.12)
-	_board_grip.position = Vector3(0, maxf(top - 0.05, 0.1) * 0.5, z - 0.03)
-
-
-func _on_board_chosen(id: StringName) -> void:
-	go_to_station(id)
-
-
-## A key on a station's plaque (StationBoard.PlaqueKey) was pressed: INSTRUMENTS puts the board's
-## rows up beside that plaque, or away again; BACK goes home to the desk.
-func plaque_key(id: StringName, kind: StringName, key: Node3D) -> void:
-	if kind == StationBoard.PlaqueKey.BACK:
-		go_home()
-		return
-	var plaque := key.get_parent() as Node3D
-	var shown := _beside != null and is_instance_valid(_beside) and _beside.get_parent() == plaque
-	_put_away_beside()
-	if shown or plaque == null:
-		return
-	_beside = StationBoard.new()
-	_beside.name = "Beside"
-	_beside.compact = true
-	_beside.venue = venue
-	_beside.chosen.connect(_on_board_chosen)
-	# To the plaque's right, its top level with the plaque's, on the plaque's own lean.
-	var plate := plaque.get_node_or_null("Plate") as MeshInstance3D
-	var size: Vector3 = (plate.mesh as BoxMesh).size if plate != null else Vector3(Stations.PLAQUE_WIDTH, 0.2, 0.01)
-	var top := plate.position.y + size.y * 0.5 if plate != null else 0.1
-	_beside.position = Vector3(size.x * 0.5 + 0.02 + _beside.face_width() * 0.5, top, 0)
-	plaque.add_child(_beside)
-	Session.notice.emit("Every instrument, beside the %s's plaque: press one to go there, INSTRUMENTS again to put them away."
-			% String(Stations.row(id).get("title", id)).to_lower())
-
-
-## Take the rows beside a plaque away, if they are up: hidden and out of the physics space at
-## once, freed at the frame's end, since the press that put them away may be one of their own.
-func _put_away_beside() -> void:
-	if _beside != null and is_instance_valid(_beside):
-		_beside.visible = false
-		_beside.process_mode = Node.PROCESS_MODE_DISABLED
-		_beside.queue_free()
-	_beside = null
-
-
-## Why a headset may not travel now, or empty if it may. In a co-located room (`co_located`) a
-## body has to stay where the others in the room see it: they see the real person, and a ghost
-## sent somewhere else would be standing in the wrong place for everyone.
-func travel_refusal() -> String:
-	if rig == null:
-		return "only a headset travels; on a screen I walks there"
-	if co_located():
-		return "you share this floor with the others in the room, who see you where you stand: walk over to it, as they would"
-	return ""
-
-
-## Whether this headset shares a real floor with someone else in the session: its frame was taken
-## from marks on a real floor (RoomAnchor.marked), and another headset is in the session. Two
-## rigs calibrated to the same marks are standing in the same room; a frame handed over whole
-## (`adopt_virtual_frame`) is a room of one's own.
-func co_located() -> bool:
-	if room_anchor == null or not room_anchor.marked or Session.role == Session.Role.SOLO:
-		return false
-	for peer: int in Session.participants:
-		var p: Session.Participant = Session.participants[peer]
-		if peer != Session.local_peer_id and p.medium != Presentation.Medium.SCREEN:
-			return true
-	return false
-
-
-## The headset's way to station `id`: the play space travels (XRRig.travel) so its centre is on
-## the station's seat, facing it, behind a blink of XRRig.FADE (a plain cut at motion 0). The seat
-## is the desktop's (Stations.seat, where a person fits) but for a set played only by hand, whose
-## headset seat is within arm's reach of it (its row's `reach`), and focused gear is let go first, as on
-## a desktop. Refused, the boards say why (StationBoard.refuse) and so does a toast, the rows
-## beside a plaque staying up to say it where they were pressed; going, those are put away. The
-## toast at the station says its title, its hands line and how to come back.
-func _travel_to_station(id: StringName) -> bool:
-	var r := Stations.row(id)
-	var refused := travel_refusal()
-	if refused != "":
-		for board in [station_board, _beside]:
-			if board != null and is_instance_valid(board):
-				(board as StationBoard).refuse(refused)
-		Session.notice.emit("%s: %s." % [StationBoard.REFUSED.capitalize(), refused])
-		return false
-	_put_away_beside()
-	if focus != null and focus.is_focused():
-		focus.release()
-	var frame_of := venue.global_transform if venue.is_inside_tree() else venue.transform
-	var seat: Transform3D = frame_of * (Stations.seat(venue, id, _station_fits(), true) as Transform3D)
-	station = id
-	if station_board != null:
-		station_board.clear_refusal()
-	rig.travel(seat, _travel_fade())
-	Session.notice.emit("%s, %s: %s  ·  BACK on its plaque comes home" % [r["title"], Stations.where(r),
-			r["hands"]])
-	return true
-
-
-## Home to the desk: BACK on a plaque. A headset's play space travels back to the mix position
-## (XRRig.travel_home), co-located or not, since home is where everyone expects you, and at home
-## already a toast says so; a desktop walks back as Esc does.
-func go_home() -> void:
-	_put_away_beside()
-	station = &""
-	if rig != null:
-		if rig.away:
-			rig.travel_home(_travel_fade())
-			Session.notice.emit("Back at the desk.")
-		else:
-			Session.notice.emit("Already at the desk.")
-		return
-	_on_escape()
-
-
-## How long the blink closes, and opens, on a travel: XRRig.FADE, or none at motion 0.
-func _travel_fade() -> float:
-	return XRRig.FADE if ergonomics.motion_scale > 0.0 else 0.0
-
-
-## Where a person fits on the floor (Walker.fits): our walker's, or, in a headset that has none,
-## one kept out of the tree for the purpose, told the same floor and solids.
-func _station_fits() -> Callable:
-	if walker != null:
-		return walker.fits
-	if floor_plan == null:
-		return Callable()
-	if _seat_finder == null:
-		_seat_finder = Walker.new()
-	_seat_finder.floor_plan = floor_plan
-	_seat_finder.walkable = _walkable()
-	_seat_finder.fixed = venue.solids() if venue != null else []
-	return _seat_finder.fits
 
 
 # --- the session in miniature (docs/spatial_loop.md part two, slice 34) --------------------------
@@ -5565,166 +2913,6 @@ var desk_wing: Trolley
 var point_and_mark: PointAndMark
 var note_pad: NotePad
 const NOTE_PAD_GAP := 0.04
-
-
-## The board on a cheek at either end down to the floor, an apron under its front edge: taken by
-## any of it, the tray's bed still being pressed. The apron first, the grip a click from the seat
-## finds: the board's top is under the tray.
-func _build_desk_wing() -> void:
-	desk_wing = _authored("MiniTable", &"mini_table")
-	desk_wing.follow = 10.0
-	desk_wing.rolls = false
-	desk_wing.footprint_centre = Vector2(-WING_PAD * 0.5, 0)
-	desk_wing.footprint_half = Vector2(WING.x + WING_PAD, WING.z) * 0.5
-	var apron := MeshInstance3D.new()
-	apron.name = "Apron"
-	var strip := BoxMesh.new()
-	strip.size = Vector3(WING.x + WING_PAD - 0.08, 0.07, 0.02)
-	apron.mesh = strip
-	apron.position = Vector3(-WING_PAD * 0.5, WING_TOP - WING.y - 0.035, WING.z * 0.5 - 0.03)
-	apron.material_override = Materials.furniture()
-	desk_wing.add_part(apron)
-	var board := MeshInstance3D.new()
-	board.name = "Board"
-	var top := BoxMesh.new()
-	top.size = WING + Vector3(WING_PAD, 0, 0)
-	board.mesh = top
-	board.position = Vector3(-WING_PAD * 0.5, WING_TOP - WING.y * 0.5, 0)
-	board.material_override = Materials.furniture()
-	GearTrim.edges(board)
-	desk_wing.add_part(board)
-	var side := BoxMesh.new()
-	side.size = Vector3(0.025, WING_TOP - WING.y, WING.z - 0.04)
-	var cheeks: Array[float] = [-WING.x * 0.5 - WING_PAD + 0.03, WING.x * 0.5 - 0.03]
-	for n in cheeks.size():
-		var cheek := MeshInstance3D.new()
-		cheek.name = "Cheek%d" % n
-		cheek.mesh = side
-		cheek.position = Vector3(cheeks[n], (WING_TOP - WING.y) * 0.5, 0)
-		cheek.material_override = Materials.furniture()
-		desk_wing.add_part(cheek)
-	_go_live(desk_wing)
-	pieces.rehome_items()
-
-
-## Point, mark and listen together (PointAndMark, docs/spatial_loop.md part two, slice 35): Z, Enter
-## and O at a desk, a pointing hand and its pinch in a headset. Presence reads song times through
-## it and finds them on this timeline's ruler; a note card's LISTEN key and the wing's note pad
-## (`note_pad`) are its too. A controller points by the stick click of the hand that is not the
-## chord hand (whose click is the chord stick's).
-func _build_point_and_mark() -> void:
-	point_and_mark = PointAndMark.new()
-	point_and_mark.name = "PointAndMark"
-	point_and_mark.studio = self
-	point_and_mark.mouse = get_node_or_null("MouseHand") as MouseInteractor
-	if rig != null:
-		var chords: XRController3D = rig.left if ergonomics.handedness >= 0 else rig.right
-		for controller in rig.interactors:
-			var hand := rig.interactors[controller] as XRInteractor
-			if hand != null:
-				hand.points_by_stick = controller != chords
-				point_and_mark.hands.append(hand)
-	add_child(point_and_mark)
-	if presence != null:
-		presence.time_at = point_and_mark.time_at
-		presence.ruler_point = func(seconds: float) -> Vector3:
-			return timeline.ruler_point(seconds) if timeline != null and is_instance_valid(timeline) \
-					and timeline.is_visible_in_tree() else Vector3.INF
-	if timeline != null:
-		timeline.listen_asked.connect(point_and_mark.listen_from)
-	if desk_wing == null and console == null:
-		return
-	note_pad = NotePad.new()
-	note_pad.name = "NotePad"
-	if desk_wing != null:
-		note_pad.position = Vector3(-WING.x * 0.5 - WING_PAD * 0.5, WING_TOP, 0.02)
-		desk_wing.add_child(note_pad)
-	else:
-		studio_set.add_child(note_pad)
-		_place_note_pad()
-		console.rebuilt.connect(_place_note_pad)
-	note_pad.stuck.connect(point_and_mark.on_pad_stuck)
-
-
-## In AR, the note pad beside the console's left end, as the wing would be, at the desk's height
-## and its front edge with the desk's: where the console is at home, wherever it has grown to.
-func _place_note_pad() -> void:
-	if note_pad == null or desk_wing != null or console == null:
-		return
-	var home := focus.home_of(&"console") if focus != null and focus.holds(&"console") \
-			else console.transform
-	var box := console.content_aabb()
-	if box.size.x <= 0.0:
-		return
-	note_pad.transform = home * Transform3D(Basis.IDENTITY,
-			Vector3(box.position.x - NOTE_PAD_GAP - NotePad.SIZE.x * 0.5, 0.0, box.end.z - NotePad.SIZE.z * 0.5))
-
-
-## The miniature's pins are the stations standing here; its presses are the studio's.
-func _wire_miniature() -> void:
-	var mini := items.items.get(MiniatureItem.KIND) as MiniatureItem
-	if mini == null:
-		return
-	mini.pressed.connect(_on_miniature_pressed)
-	mini.station_pressed.connect(func(id: StringName) -> void: go_to_station(id))
-	_pin_stations()
-	venue_changed.connect(func(_id: StringName) -> void: _pin_stations())
-
-
-## The stations standing here, for the miniature's pins: each with its plan bearing from the mix
-## position, the side of the tray its pin stands on.
-func _pin_stations() -> void:
-	var mini := items.items.get(MiniatureItem.KIND) as MiniatureItem if items != null else null
-	if mini == null:
-		return
-	var rows: Array = []
-	for id in station_ids():
-		var spot: Variant = Stations.spot(venue, id)
-		if spot == null:
-			continue
-		var at := _venue_to_set(spot as Transform3D).origin
-		var r := Stations.row(id)
-		rows.append([id, r["title"], r["area"], Vector2(at.x, at.z - MIX_POSITION_Z)])
-	mini.set_stations(rows)
-
-
-## A press on the miniature's bed: the song sought to `seconds` (none for a track's name), and the
-## gear for what was pressed brought by FocusRig. On an item, the item selected alone and the
-## timeline brought, its window scrolled so the item starts SHOWN_IN into it; on a track, the
-## console brought, banked to the page with that track on it. A guest's seek and selection are
-## intents like any other (DAW).
-func _on_miniature_pressed(track: int, seconds: float, item: int) -> void:
-	if seconds >= 0.0:
-		DAW.seek(seconds)
-	var it := DAW.state.item(track, item) if item >= 0 else null
-	if it != null:
-		DAW.select_item(track, item)
-		if timeline != null and is_instance_valid(timeline):
-			timeline.pick_track(track)
-			var span := timeline.view_span if timeline.view_span > 0.0 else DAW.state.timeline_length()
-			timeline.set_view(maxf(0.0, it.start - span * SHOWN_IN), span)
-			_bring(&"timeline")
-		return
-	if track > 0 and console != null:
-		console.bank_to_track(track)
-		_bring(&"console")
-
-
-## Bring surface `id` by FocusRig: to you in a headset, you to it at a desk (FocusRig.visits). One
-## the mount shows on the screen is in front of you already: at a desk, whatever gear you went to is
-## let go so the screen's panels come back (`_stand_down_screen`).
-func _bring(id: StringName) -> void:
-	if focus == null or focus.surface(id) == null:
-		return
-	if mount != null and mount.mode_of(id) == Presentation.Mode.SCREEN:
-		if focus.visits and focus.is_focused():
-			focus.release()
-		return
-	# At a desk that would walk the player to it: a press on the miniature only shows the track or
-	# the item, from where they are. A headset's is brought to them.
-	if focus.visits:
-		return
-	focus.focus(id)
 
 
 ## No-op in a headset, where the camera is a head. Kept callable either way so the screenshot
@@ -5863,143 +3051,7 @@ var _trace_holds := {}
 const OUT_RISE := 0.9
 
 
-## Whether this player sees the signal: the glasses on this player's own head, or X.
-func signal_view_on() -> bool:
-	if signal_key_on:
-		return true
-	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
-		var interactor := hand as Interactor
-		if interactor != null and is_instance_valid(interactor.worn) and interactor.worn is SignalGlassesItem:
-			return true
-	return false
-
-
-## X at a desk: the view on or off, glasses or none. Said, with what it shows and the next key.
-func toggle_signal_view() -> void:
-	signal_key_on = not signal_key_on
-	if signal_view_on():
-		Session.notice.emit("Seeing the signal: pipes as thick as the sound, amber near 0 dB, red over, a sign where it stops. Y over anything: why can't I hear it? Hold U over a track: hear it alone. X again: off.")
-	else:
-		Session.notice.emit("The signal view is off.")
-
-
-## The room's sound sources, as SignalGraph.build takes them: every instrument item and the venue's
-## set (onto its jack's track, armed or not, else the armed track), the
-## modular (the armed track), the mic (its voice track), and the sampler and the
-## platter, heard in one player's ears only.
-func signal_sources() -> Array:
-	var out: Array = []
-	var seen := {}
-	var armed := HitRecorder.armed_track()
-	var row := func(id: StringName, title: String, node: Node3D, kind: StringName, track: int, jacked := false) -> void:
-		if seen.has(id) or node == null or not is_instance_valid(node):
-			return
-		seen[id] = true
-		var r := {"id": String(id), "title": title, "track": track, "kind": kind, "jacked": jacked, "node": node}
-		if jacks != null and jacks.level_of(id) > 0.0:
-			r["level_db"] = linear_to_db(jacks.level_of(id))
-		out.append(r)
-	var onto := func(source: StringName, item: Item) -> Array:
-		var sink: StringName = jacks.goes_to(source, item) if jacks != null else &""
-		var track := Jack.track_of(sink)
-		return [track, true] if track > 0 else [armed, false]
-	if items != null:
-		for item: Item in items.items.values():
-			if not item.visible:
-				continue
-			if item is MicItem:
-				row.call(&"mic", "MIC", item, SignalGraph.VOICE, mic_arm.track if mic_arm.track > 0 else MicArm.track_for(DAW.state.tracks))
-			elif item is InstrumentItem:
-				var source := (item as InstrumentItem).jack_source()
-				var to: Array = onto.call(source, item)
-				row.call(source, (item as InstrumentItem).item_title(), item, SignalGraph.NOTES, to[0], to[1])
-	if rack_wall != null:
-		row.call(Modular.SOURCE, "MODULAR", rack_wall, SignalGraph.NOTES, armed)
-	for local in [[&"sampler", "SAMPLER", sampler], [&"platter", "PLATTER", platter]]:
-		if local[2] != null:
-			row.call(local[0], local[1], local[2], SignalGraph.LOCAL_SOURCE, 0)
-	return out
-
-
-## Where a stage stands in this room, or null: a source where it is; a track's stages at its voice on
-## the stage table, else its channel strip; the master at the console's master section, OUT over it.
-func signal_place(id: String) -> Variant:
-	if id.begins_with("src:"):
-		for r in _signal_rows:
-			if r["id"] == id.trim_prefix("src:"):
-				return (r["node"] as Node3D).global_position + Vector3.UP * 0.12 if is_instance_valid(r["node"]) else null
-		return null
-	if id == "master" or id == "out":
-		if console == null or console.master == null or not console.master.is_inside_tree():
-			return null
-		return console.master.global_position + Vector3.UP * (0.3 if id == "master" else OUT_RISE)
-	if id.begins_with("t"):
-		var track := int(id.substr(1, id.find(":") - 1))
-		return track_place(track)
-	return null
-
-
-## A track's place in the room: its voice on the stage table where it is shown, else its strip.
-func track_place(track: int) -> Variant:
-	if stage != null and is_instance_valid(stage) and stage.voices.has(track):
-		var voice := stage.voices[track] as Node3D
-		if voice != null and voice.is_inside_tree() and voice.is_visible_in_tree():
-			return voice.global_position + Vector3.UP * 0.08
-	if console != null:
-		for strip in console.strips:
-			if strip.track_index == track and strip.is_inside_tree() and strip.is_visible_in_tree():
-				return strip.global_position + Vector3.UP * 0.25
-	return null
-
-
 var _signal_rows: Array = []
-
-
-## Every frame: the view on or off; while on, the graph rebuilt, the meters kept wanted, the
-## pipes drawn, the headset's held trigger watched, and a trace run again after its fix.
-func _follow_signal(delta: float) -> void:
-	var on := signal_view_on()
-	_follow_skyline(on)
-	if not on:
-		if signal_view != null and signal_view.visible:
-			signal_view.visible = false
-			signal_view.clear_trace()
-			if signal_view.card != null:
-				signal_view.card.visible = false
-		return
-	if signal_view == null:
-		signal_view = SignalView.new()
-		signal_view.name = "SignalView"
-		signal_view.screen_card = medium == Presentation.Medium.SCREEN
-		signal_view.place = signal_place
-		signal_view.fix_asked.connect(_do_signal_fix)
-		add_child(signal_view)
-	signal_view.visible = true
-	signal_view.motion = ergonomics.motion_scale
-	DAW.backend.want_signal_meters()
-	_signal_clock += delta
-	if signal_graph == null or _signal_clock >= 1.0 / SIGNAL_GRAPH_HZ:
-		_signal_clock = 0.0
-		_signal_rows = signal_sources()
-		signal_graph = SignalGraph.build(DAW.state, _signal_rows)
-	signal_view.quiet = [SignalGraph.SOLOED_OUT] if look_solo_held() else []
-	signal_view.update(signal_graph, delta)
-	if _retrace_in >= 0.0:
-		_retrace_in -= delta
-		if _retrace_in < 0.0 and _traced_from != "":
-			signal_graph = SignalGraph.build(DAW.state, signal_sources())
-			signal_view.trace(signal_graph.trace(_traced_from), _traced_title)
-	_follow_trace_holds(delta)
-
-
-## The routing bay and the audio devices' wall stand up as skylines while the view is on
-## (PinMatrix.skyline, docs/spatial_loop.md part three, E): this player's alone, as the view is.
-func _follow_skyline(on: bool) -> void:
-	if patchbay != null and patchbay.matrix != null:
-		patchbay.matrix.skyline = on
-	var wall := venue.get_node_or_null("PatchWall") as PatchWallSurface if venue != null else null
-	if wall != null and wall.matrix != null:
-		wall.matrix.skyline = on
 
 
 # --- look to solo (docs/spatial_loop.md part three, G) -------------------------------------------
@@ -6019,283 +3071,10 @@ var _look_asked := 0
 var _look_resting := [0, 0.0]
 
 
-## The track looked at now: in a headset what the head's gaze meets, at a desk what the cursor is
-## over; through what the signal view would trace from it (an instrument, its track). 0 for none.
-func looked_track() -> int:
-	var under: Node = null
-	var point := Vector3.ZERO
-	if rig != null and rig.head != null and rig.head.is_inside_tree():
-		var from := rig.head.global_position
-		var query := PhysicsRayQueryParameters3D.create(from, from - rig.head.global_basis.z * Interactor.RAY_LENGTH)
-		query.collision_mask = 1 << (Interactor.CONTROL_LAYER - 1)
-		var hit := get_world_3d().direct_space_state.intersect_ray(query)
-		if not hit.is_empty():
-			under = hit["collider"]
-			point = hit["position"]
-	else:
-		var hand := get_node_or_null("MouseHand") as Interactor
-		if hand != null:
-			under = hand.held if hand.held != null else hand.hovered
-			point = hand.hover_point
-	var target := signal_target_of(under, point)
-	if target.is_empty():
-		return 0
-	var id: String = target[0]
-	if id.begins_with("src:"):
-		for r in _signal_rows if not _signal_rows.is_empty() else signal_sources():
-			if SignalGraph.source_id(r["id"]) == id:
-				return int(r["track"])
-		return 0
-	return int(id.substr(1, id.find(":") - 1)) if id.begins_with("t") else 0
-
-
-## Look to solo pressed, by `by` (&"key" or &"ear"): with the signal view on, the track looked at
-## alone; on a guest asked of the host. Said either way.
-func look_solo_press(by: StringName) -> void:
-	if _look_by != &"":
-		return
-	if not signal_view_on():
-		if by == &"key":
-			Session.notice.emit("Look to solo needs the signal view on: X, or the signal glasses. Then hold U over a track to hear it alone.")
-		return
-	_look_by = by
-	var on := looked_track()
-	if Session.is_authority():
-		var other := _look_solo_holder(Session.local_peer_id)
-		if other != "":
-			_look_by = &""
-			Session.notice.emit("Look to solo is %s's just now: one at a time, as the room hears it." % other)
-			return
-		look_solo.peer = 0
-		var words := look_solo.press(on)
-		if words != "":
-			Session.notice.emit(words)
-		return
-	_look_asked = on
-	_look_resting = [on, 0.0]
-	Session.ask_room(&"look_solo", [on, true])
-	Session.notice.emit("Look to solo asks the host: the whole room hears %s alone while you hold, as a guest hears only the host's mix." % (LookSolo._title(on) if on > 0 else "what you look at"))
-
-
-## Look to solo let go by `by`, or by anything (&"" -- the window's focus lost, the view off).
-func look_solo_release(by: StringName = &"") -> void:
-	if _look_by == &"" or (by != &"" and by != _look_by):
-		return
-	_look_by = &""
-	if Session.is_authority():
-		var words := look_solo.release()
-		if words != "":
-			Session.notice.emit(words)
-		return
-	Session.ask_room(&"look_solo", [0, false])
-	_look_asked = 0
-
-
-## Whether a look-solo is held in this room as far as this machine knows: its own (or, on a guest,
-## its ask), or a guest's the host runs.
-func look_solo_held() -> bool:
-	if _look_by != &"" or look_solo.held:
-		return true
-	for p in guest_look_solos:
-		if (guest_look_solos[p] as LookSolo).held:
-			return true
-	return false
-
-
-## Whoever other than `peer` holds a look-solo here (the host's own, or a guest's), by name; "".
-func _look_solo_holder(peer: int) -> String:
-	if look_solo.held and peer != Session.local_peer_id:
-		return Session.name_of(Session.local_peer_id)
-	for p in guest_look_solos:
-		if p != peer and (guest_look_solos[p] as LookSolo).held:
-			return Session.name_of(p)
-	return ""
-
-
-## Host: a guest's look-solo asked (`track`, 0 for nothing; `held` false to let go).
-func _on_look_solo_asked(track: int, held: bool, from: int) -> void:
-	var ls: LookSolo = guest_look_solos.get(from)
-	if not held:
-		if ls != null:
-			var words := ls.release()
-			guest_look_solos.erase(from)
-			if words != "":
-				Session.tell_room("%s let go of look to solo: every solo and mute as it was." % Session.name_of(from))
-		return
-	if ls != null and ls.held:
-		ls.look(track, LookSolo.FOLLOW_AFTER)
-		return
-	var other := _look_solo_holder(from)
-	if other != "":
-		Session.tell(from, "Look to solo is %s's just now: one at a time." % other)
-		return
-	ls = LookSolo.new()
-	ls.peer = from
-	guest_look_solos[from] = ls
-	ls.press(track)
-	if ls.track > 0:
-		Session.tell_room("%s is look-soloing %s: the room hears it alone while they hold." % [Session.name_of(from), LookSolo._title(ls.track)])
-
-
-## Host: a guest gone lets their look-solo go.
-func _on_look_solo_player_left(peer: int) -> void:
-	var ls: LookSolo = guest_look_solos.get(peer)
-	if ls != null:
-		ls.release()
-		guest_look_solos.erase(peer)
-
-
-## Every frame: a hand cupped to an ear holds it in a headset; held, the solo follows the look;
-## the view going off lets go.
-func _follow_look_solo(delta: float) -> void:
-	_follow_ear_cup(delta)
-	if _look_by == &"":
-		return
-	if not signal_view_on():
-		look_solo_release()
-		return
-	var on := looked_track()
-	if Session.is_authority():
-		var words := look_solo.look(on, delta)
-		if words != "":
-			Session.notice.emit(words)
-		return
-	# A guest's look rests FOLLOW_AFTER on another track before it is asked.
-	if on <= 0 or on == _look_asked:
-		_look_resting = [on, 0.0]
-		return
-	if on != int(_look_resting[0]):
-		_look_resting = [on, 0.0]
-	_look_resting[1] = float(_look_resting[1]) + delta
-	if float(_look_resting[1]) >= LookSolo.FOLLOW_AFTER:
-		_look_asked = on
-		Session.ask_room(&"look_solo", [on, true])
-
-
-## A headset's hand cupped to an ear, with the view on: a controller beside the head with its grip
-## squeezed, or a bare hand there, carrying nothing either way. Held EAR_DWELL, it presses; taken
-## away, it lets go.
-func _follow_ear_cup(delta: float) -> void:
-	if rig == null or rig.head == null or not rig.head.is_inside_tree():
-		return
-	var head := rig.head.global_transform
-	var nearest := INF
-	for controller in rig.interactors:
-		var hand := rig.interactors[controller] as XRInteractor
-		if hand == null or not is_instance_valid(hand) or is_instance_valid(hand.carrying) or hand.held != null:
-			continue
-		var palm := hand.clap_palm()
-		if palm.is_empty():
-			continue
-		if not hand._reads_hand() and not (hand.controller != null and hand.controller.is_button_pressed(hand.grip_action)):
-			continue
-		var at: Vector3 = palm[0]
-		for side in [-1.0, 1.0]:
-			nearest = minf(nearest, at.distance_to(head.origin + head.basis.x.normalized() * side * EAR_OUT))
-	if _look_by == &"ear":
-		if nearest > EAR_REACH + EAR_LEAVE:
-			look_solo_release(&"ear")
-		return
-	if nearest <= EAR_REACH and signal_view_on() and _look_by == &"":
-		_ear_for += delta
-		if _ear_for >= EAR_DWELL:
-			look_solo_press(&"ear")
-	else:
-		_ear_for = 0.0
-
-
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 		# Never a stuck solo: a key let go while another window had focus never comes here.
-		look_solo_release()
-
-
-## The stage a trace of what `node` is starts from, and what it is called: an instrument or a
-## station, its source; anything of a track (a strip, a voice, a control on one), that track's own
-## playback. Empty for nothing that sounds.
-func signal_target_of(node: Node, point := Vector3.ZERO) -> Array:
-	if node == null:
-		return []
-	for r in _signal_rows if not _signal_rows.is_empty() else signal_sources():
-		var n: Node = r["node"]
-		if is_instance_valid(n) and (n == node or n.is_ancestor_of(node)):
-			return [SignalGraph.source_id(r["id"]), str(r["title"])]
-	var track := track_of(node, point)
-	if track > 0 and DAW.state.tracks.has(track):
-		return [SignalGraph.play_id(track), DAW.state.track(track).display_name()]
-	return []
-
-
-## "Why can't I hear this?" for what `hand` points at: traced and shown a stage at a time. True if
-## there was something to trace.
-func trace_pointed(hand: Interactor) -> bool:
-	if not signal_view_on():
-		Session.notice.emit("Put on the signal glasses first (X at a desk, or a pair from the prop shelf): then Y asks why.")
-		return false
-	var under: Node = (hand.held if hand.held != null else hand.hovered) if hand != null else null
-	if under == null and hand != null and is_instance_valid(hand.carrying):
-		under = hand.carrying
-	var target := signal_target_of(under, hand.hover_point if hand != null else Vector3.ZERO)
-	if target.is_empty():
-		Session.notice.emit("Nothing that sounds is under the cursor: point at an instrument, a station, a stage voice or a channel strip.")
-		return false
-	return trace_from(target[0], target[1])
-
-
-## A trace from stage `from`, called `title`, shown in the view and said in the toast.
-func trace_from(from: String, title: String) -> bool:
-	if signal_view == null:
-		_follow_signal(0.0)
-	_signal_rows = signal_sources()
-	signal_graph = SignalGraph.build(DAW.state, _signal_rows)
-	if signal_graph.stage(from) == null:
-		return false
-	_traced_from = from
-	_traced_title = title
-	var tr := signal_graph.trace(from)
-	signal_view.trace(tr, title)
-	if tr.heard():
-		Session.notice.emit("%s is heard: it reaches the speakers." % title)
-	elif tr.broke_at != null:
-		Session.notice.emit("%s stops at %s: %s.%s" % [title, tr.broke_at.title, tr.words,
-				(" Shift-Y: %s." % tr.fix["label"]) if not tr.fix.is_empty() else ""])
-	return true
-
-
-## Shift-Y, the card's FIX or the key by the sign: the trace's fix, one undo step, then traced again.
-func fix_traced() -> bool:
-	if signal_view == null or signal_view.tracing == null or signal_view.tracing.fix.is_empty():
-		Session.notice.emit("No fix to do: trace something with Y first.")
-		return false
-	_do_signal_fix(signal_view.tracing.fix)
-	return true
-
-
-func _do_signal_fix(fix: Dictionary) -> void:
-	if not SignalGraph.apply_fix(fix):
-		return
-	Session.notice.emit("%s: done, one undo step (Ctrl-Z puts it back)." % fix["label"])
-	_retrace_in = 0.0 if Session.is_authority() else RETRACE_AFTER
-
-
-## A headset's trigger held still on something for TRACE_HOLD, with the view on, traces it.
-func _follow_trace_holds(delta: float) -> void:
-	if rig == null:
-		return
-	for controller in rig.interactors:
-		var hand := rig.interactors[controller] as Interactor
-		if hand == null or not is_instance_valid(hand):
-			continue
-		var on: Node = hand.held if hand.held != null else hand.hovered
-		var held: Array = _trace_holds.get(hand, [null, 0.0, false])
-		if hand.is_pressing() and on != null and on == held[0]:
-			held[1] = float(held[1]) + delta
-			if float(held[1]) >= TRACE_HOLD and not held[2]:
-				held[2] = true
-				trace_pointed(hand)
-		else:
-			held = [on if hand.is_pressing() else null, 0.0, false]
-		_trace_holds[hand] = held
+		signal_views.look_solo_release()
 
 
 ## The Rig Roulette panel, setup wall and the roll itself (`RollRoom`).
@@ -6457,3 +3236,292 @@ func _on_send_pressed(source: StringName) -> void:
 ## Delegates to `patch_host._set_on_air`.
 func _set_on_air(peer: int, on: bool, show := true) -> void:
 	patch_host._set_on_air(peer, on, show)
+
+
+## Tablets and track racks: open, build, close, dock and remember (`TabletHost`).
+var tablet_host := TabletHost.new(self)
+
+
+## Delegates to `tablet_host._on_tear_requested`.
+func _on_tear_requested(track: int, fx: int, at: Vector3, from: Node3D = null) -> void:
+	tablet_host._on_tear_requested(track, fx, at, from)
+
+
+## Delegates to `tablet_host.open_tablet`.
+func open_tablet(track: int, fx: int, plugin_name: String, where: Vector2) -> StringName:
+	return tablet_host.open_tablet(track, fx, plugin_name, where)
+
+
+## Delegates to `tablet_host._build_tablet`.
+func _build_tablet(id: StringName, track: int, fx: int, plugin_name: String) -> void:
+	tablet_host._build_tablet(id, track, fx, plugin_name)
+
+
+## Delegates to `tablet_host.close_tablet`.
+func close_tablet(id: StringName) -> void:
+	tablet_host.close_tablet(id)
+
+
+## Delegates to `tablet_host._take_down_tablet`.
+func _take_down_tablet(id: StringName) -> void:
+	tablet_host._take_down_tablet(id)
+
+
+## Delegates to `tablet_host._predicted_tablet`.
+func _predicted_tablet(track: int, fx: int, plugin_name: String, where: Vector2) -> StringName:
+	return tablet_host._predicted_tablet(track, fx, plugin_name, where)
+
+
+## Delegates to `tablet_host.open_track_rack`.
+func open_track_rack(track: int, where: Vector2) -> StringName:
+	return tablet_host.open_track_rack(track, where)
+
+
+## Delegates to `tablet_host.close_track_rack`.
+func close_track_rack(id: StringName) -> void:
+	tablet_host.close_track_rack(id)
+
+
+## Delegates to `tablet_host._fold_orphaned_track_racks`.
+func _fold_orphaned_track_racks() -> void:
+	tablet_host._fold_orphaned_track_racks()
+
+
+## The control room's furniture and live pieces (`FurnitureHost`).
+var furniture_host := FurnitureHost.new(self)
+
+
+## Delegates to `furniture_host._build_furniture`.
+func _build_furniture() -> void:
+	furniture_host._build_furniture()
+
+
+## Delegates to `furniture_host._levels_niche_at`.
+func _levels_niche_at() -> Transform3D:
+	return furniture_host._levels_niche_at()
+
+
+## Delegates to `furniture_host._grip`.
+func _grip(t: Trolley, size: Vector3, at: Vector3) -> CollisionShape3D:
+	return furniture_host._grip(t, size, at)
+
+
+## Delegates to `furniture_host._go_live`.
+func _go_live(t: Trolley) -> void:
+	furniture_host._go_live(t)
+
+
+## Delegates to `furniture_host._live_default`.
+func _live_default(id: StringName) -> Variant:
+	return furniture_host._live_default(id)
+
+
+## Delegates to `furniture_host._carry_live`.
+func _carry_live(id: StringName) -> void:
+	furniture_host._carry_live(id)
+
+
+## The room rows: publishing, applying and answering room verbs (`RoomRows`).
+var room_rows := RoomRows.new(self)
+
+
+## Delegates to `room_rows.room_state`.
+func room_state() -> Dictionary:
+	return room_rows.room_state()
+
+
+## Delegates to `room_rows._publish_room`.
+func _publish_room() -> void:
+	room_rows._publish_room()
+
+
+## Delegates to `room_rows.apply_room`.
+func apply_room(state: Dictionary, glide := false) -> void:
+	room_rows.apply_room(state, glide)
+
+
+## Delegates to `room_rows._follow_room`.
+func _follow_room(t: Trolley, x: float, z: float, heading: float, glide: bool) -> void:
+	room_rows._follow_room(t, x, z, heading, glide)
+
+
+## Delegates to `room_rows._predict`.
+func _predict(verb: StringName, args: Array, id := StringName()) -> int:
+	return room_rows._predict(verb, args, id)
+
+
+## Delegates to `room_rows._on_room_motion`.
+func _on_room_motion(id: StringName, x: float, z: float, heading: float, _from: int) -> void:
+	room_rows._on_room_motion(id, x, z, heading, _from)
+
+
+## Delegates to `room_rows._drive_pushed`.
+func _drive_pushed() -> void:
+	room_rows._drive_pushed()
+
+
+## Delegates to `room_rows._on_room_asked`.
+func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
+	room_rows._on_room_asked(verb, args, from)
+
+
+## Delegates to `room_rows._floor_piece`.
+func _floor_piece(id: StringName) -> Trolley:
+	return room_rows._floor_piece(id)
+
+
+## Anchors, surfaces, lamp stands and looms (`SurfaceHost`).
+var surface_host := SurfaceHost.new(self)
+
+
+## Delegates to `surface_host._reseat`.
+func _reseat(id: StringName, put: Transform3D) -> void:
+	surface_host._reseat(id, put)
+
+
+## Delegates to `surface_host.toggle_chords`.
+func toggle_chords() -> void:
+	surface_host.toggle_chords()
+
+
+## Delegates to `surface_host.toggle_fingertips`.
+func toggle_fingertips() -> void:
+	surface_host.toggle_fingertips()
+
+
+## Delegates to `surface_host._on_tracks_renumbered`.
+func _on_tracks_renumbered(_map: Dictionary) -> void:
+	surface_host._on_tracks_renumbered(_map)
+
+
+## Delegates to `surface_host.refresh_looms`.
+func refresh_looms() -> void:
+	surface_host.refresh_looms()
+
+
+## Delegates to `surface_host.edit_lyrics`.
+func edit_lyrics() -> void:
+	surface_host.edit_lyrics()
+
+
+## Seats, stations, the station board and the desk wing (`StationHost`).
+var station_host := StationHost.new(self)
+
+
+## Delegates to `station_host._sit_down`.
+func _sit_down() -> void:
+	station_host._sit_down()
+
+
+## Delegates to `station_host._walk_to_seat`.
+func _walk_to_seat() -> void:
+	station_host._walk_to_seat()
+
+
+## Delegates to `station_host._toggle_summoning`.
+func _toggle_summoning() -> void:
+	station_host._toggle_summoning()
+
+
+## Delegates to `station_host.station_ids`.
+func station_ids() -> Array[StringName]:
+	return station_host.station_ids()
+
+
+## Delegates to `station_host.cycle_stations`.
+func cycle_stations(direction: int) -> StringName:
+	return station_host.cycle_stations(direction)
+
+
+## Delegates to `station_host.go_to_station`.
+func go_to_station(id: StringName) -> bool:
+	return station_host.go_to_station(id)
+
+
+## Delegates to `station_host.plaque_key`.
+func plaque_key(id: StringName, kind: StringName, key: Node3D) -> void:
+	station_host.plaque_key(id, kind, key)
+
+
+## Delegates to `station_host.travel_refusal`.
+func travel_refusal() -> String:
+	return station_host.travel_refusal()
+
+
+## Delegates to `station_host.co_located`.
+func co_located() -> bool:
+	return station_host.co_located()
+
+
+## Delegates to `station_host.go_home`.
+func go_home() -> void:
+	station_host.go_home()
+
+
+## Delegates to `station_host._station_fits`.
+func _station_fits() -> Callable:
+	return station_host._station_fits()
+
+
+## Delegates to `station_host._wire_miniature`.
+func _wire_miniature() -> void:
+	station_host._wire_miniature()
+
+
+## Signal view, look-solo and trace (`SignalViews`).
+var signal_views := SignalViews.new(self)
+
+
+## Delegates to `signal_views.signal_view_on`.
+func signal_view_on() -> bool:
+	return signal_views.signal_view_on()
+
+
+## Delegates to `signal_views.toggle_signal_view`.
+func toggle_signal_view() -> void:
+	signal_views.toggle_signal_view()
+
+
+## Delegates to `signal_views.signal_sources`.
+func signal_sources() -> Array:
+	return signal_views.signal_sources()
+
+
+## Delegates to `signal_views.signal_place`.
+func signal_place(id: String) -> Variant:
+	return signal_views.signal_place(id)
+
+
+## Delegates to `signal_views._follow_signal`.
+func _follow_signal(delta: float) -> void:
+	signal_views._follow_signal(delta)
+
+
+## Delegates to `signal_views.looked_track`.
+func looked_track() -> int:
+	return signal_views.looked_track()
+
+
+## Delegates to `signal_views._follow_look_solo`.
+func _follow_look_solo(delta: float) -> void:
+	signal_views._follow_look_solo(delta)
+
+
+## Delegates to `signal_views.signal_target_of`.
+func signal_target_of(node: Node, point := Vector3.ZERO) -> Array:
+	return signal_views.signal_target_of(node, point)
+
+
+## Delegates to `signal_views.trace_pointed`.
+func trace_pointed(hand: Interactor) -> bool:
+	return signal_views.trace_pointed(hand)
+
+
+## Delegates to `signal_views.trace_from`.
+func trace_from(from: String, title: String) -> bool:
+	return signal_views.trace_from(from, title)
+
+
+## Delegates to `signal_views.fix_traced`.
+func fix_traced() -> bool:
+	return signal_views.fix_traced()
