@@ -70,6 +70,21 @@ tools are fixed or noted with numbers.
   `tests/run_tests.gd`, or the run aborts. GDScript has no `%g`. `timeout` on every godot command.
   `.claude/`, `tmp_probe/` and `vendor/dawkit` are not ours.
 
+## Decisions
+
+Made by the owner, 2026-11-07. They override anything above that reads otherwise.
+
+1. **Mods are data-only plus pinned vendor DSP.** A user mod is a manifest, a skin/model and a patch
+   that uses DSP already compiled into the game. New native DSP only comes from pinned submodules or
+   versioned binaries shipped with the game. No user-supplied native code (a later, opt-in extension
+   point may be marked in the design, but is not designed).
+2. **The rack patch is saved to disk and loaded** (a patch is a file). A missing mod shows as a visible
+   "unavailable" plate, and its place and connections are preserved, never dropped.
+3. **A guest who lacks a mod the host's room uses** sees an unavailable plate naming the mod and still
+   hears the host's sound. No transfer, no refusal.
+4. **The 800-line limit applies to `studio.gd`, `venue.gd` and every file the refactor touches**, not to
+   the whole repo.
+
 ## Running things
 
 ```
