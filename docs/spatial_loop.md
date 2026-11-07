@@ -1106,7 +1106,7 @@ a real room (60) is last, when every station exists. Every slice leaves the suit
 - **Neighbourhoods, not a strip.** Twenty stations put in whatever gap was left had ended nose to
   tail along the live room's back wall, too close to walk between (2026-10-28, "EVERYTHING is way
   too cramped"). The room is now organised by what you do in each part of it: MIXING (the control
-  room's ring round the seat), RHYTHM, HARMONY & STRINGS, SYNTH & SOUND DESIGN, VOCALS and TAPE &
+  room's ring round the seat), RHYTHM, HARMONY (HARMONY & STRINGS until the string spool was removed 2026-11-06), SYNTH & SOUND DESIGN, VOCALS and TAPE &
   TOYS, each a cluster round a middle its stations face, with a banner over it naming it
   (`Neighbourhoods`, docs/architecture.md "Room layout"). A new station joins a neighbourhood's
   row in `Neighbourhoods.ALL` and stands from its zone in the venue, never in a leftover gap. The
@@ -4850,7 +4850,7 @@ none.
     with no hotspot over the pegs and the pointer parked off every station so no card is up
     (`SHOT_CAM "3.1416,-0.55,0.78,5.72,1.0,6.95"`, `SHOT_ARGS "--no-hud --pegs --hover 40,40"`).
 
-48. [x] **A string across the room.** The proving idea, #34. Strings are room rows (`strings` {id:
+48. [removed 2026-11-06] **A string across the room.** (Removed with the simple toys; this is its history.) The proving idea, #34. Strings are room rows (`strings` {id:
     [a, b, maker]}, at most eight), asked with the room verb `string` [id, a, b] (empty to cut). The
     host checks a length of 0.3 to 12 m and the count, and a guest predicts. A spool (station
     `strings`) gives an end. Press at a point to tie the first end, carry the string to another

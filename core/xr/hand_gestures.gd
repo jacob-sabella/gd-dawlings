@@ -143,7 +143,7 @@ func tips() -> Dictionary:
 
 
 ## Every local tracked hand's strumming tips in `tree`, {[hand, finger]: Vector3}: keyed so one
-## tip is the same key from frame to frame (see RoomString.tips). Only this player's hands are here: a
+## tip is the same key from frame to frame. Only this player's hands are here: a
 ## bandmate's ghost has no joints, and its strums arrive as notes.
 static func local_tips(tree: SceneTree) -> Dictionary:
 	var out := {}

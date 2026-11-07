@@ -238,18 +238,6 @@ const MUSIC_BOX_SONG := 760.0
 const MUSIC_BOX_CELL := Vector2i(3, 5)
 ## How far a placed note may be from the moment the guest heard it, in seconds.
 const TAKE_TOLERANCE := 0.005
-## A string across the room (slice 48): at 62.3 the guest ties STRING_ID from STRING_A to STRING_B
-## (the venue's frame), asking the host (the room's verb `string`), which answers as the studio does
-## (RoomString.answer) and publishes the room's row `strings`; by 62.36 the host's row has it with
-## the guest as its maker, and the guest's mirror of the room has it too. At 62.36 the guest plucks a
-## string of its own at those ends, hearing the song at STRING_SONG, recording onto TAKE_TRACK; it
-## rings to 62.4 and its clock stops at 62.42, sending the take. By 62.5 the host has the pluck on
-## TAKE_TRACK at STRING_SONG, on the string's note in the song's key there, and heard it with the
-## string's source.
-const STRING_ID := &"probe_string"
-const STRING_A := Vector3(-0.6, 1.2, 5.0)
-const STRING_B := Vector3(-0.6, 1.2, 7.0)
-const STRING_SONG := 780.0
 ## The lyrics in the booth (slice 56): at 64.52 the guest's own board (a LyricBoard of its own, not in
 ## a room) writes two untimed lines, which is a set_lyrics intent to the host; at 64.6, hearing the
 ## song from LYRIC_SONG, it TAPs, which is a second intent stamping the first line. By 64.7 the
@@ -563,8 +551,6 @@ func _host(port: int) -> void:
 		if verb == FifthsWheel.VERB:
 			# As the studio answers a guest's SET: written at the bar the guest chose.
 			FifthsWheel.answer(args[0], args[1])
-		if verb == RoomString.VERB:
-			_answer_string(args, from)
 		if verb == &"open_tablet":
 			var room: Dictionary = Session.room.duplicate(true)
 			room["tablets"][&"tablet_2"] = [args[0], args[1], args[2], args[3], args[4], 0.0]
@@ -1021,13 +1007,6 @@ func _host(port: int) -> void:
 	_check_music_box_peg()
 	await _until(62.26)
 	_take_back_the_music_box()
-	# A string across the room (slice 48): the guest's tie at 62.3 is in my room's row by 62.36, and
-	# its pluck at 62.36 a note on TAKE_TRACK by 62.5.
-	await _until(62.36)
-	_check_string_tied()
-	await _until(62.5)
-	_check_string_take()
-
 	# How much of the time before the end the work took: the end has moved twelve times as it grew.
 	if DAW.backend is GodotBackend:
 		print("engine: %s" % ("native lanes" if (DAW.backend as GodotBackend).lanes != null else "players"))
@@ -2734,7 +2713,6 @@ func _guest(port: int) -> void:
 	await _press_the_weather()
 	await _loop_a_layer()
 	await _press_the_music_box()
-	await _tie_and_pluck_a_string()
 	await _tap_the_lyrics()
 	await _until(64.88)
 	print("notices: ", _notices)
@@ -4473,88 +4451,6 @@ func _press_the_music_box() -> void:
 	check("by 62.18 my copy of the host's mix has my peg as the note in its MUSIC BOX item, and my box still shows it",
 			_has_music_box_peg(DAW.state) and box.has_peg(MUSIC_BOX_CELL) and box.peg_count() == 1)
 	box.queue_free()
-
-
-## Host: the guest's string tied (slice 48), answered as the studio answers it (RoomString.answer): the
-## room's row `strings` with it, published, or the refusal told to the guest.
-func _answer_string(args: Array, from: int) -> void:
-	var rows: Dictionary = (Session.room.get(RoomString.ROW, {}) as Dictionary).duplicate()
-	var refusal := RoomString.answer(rows, args[0], args[1], args[2], from)
-	if refusal != "":
-		Session.tell(from, refusal)
-		return
-	var room: Dictionary = Session.room.duplicate(true)
-	room[RoomString.ROW] = rows
-	Session.publish_room(room)
-
-
-## Host: the guest's string (slice 48) is in my room's row, at its ends, with the guest as its maker.
-func _check_string_tied() -> void:
-	var asks := _room_asks.filter(func(a: Array) -> bool: return a[0] == RoomString.VERB)
-	var row: Variant = (Session.room.get(RoomString.ROW, {}) as Dictionary).get(STRING_ID)
-	check("the guest's string reached me as the room's ask (%s)" % [asks],
-			asks.size() == 1 and asks[0][2] == _other_id())
-	check("and is in my room's strings, at its ends, the guest its maker (%s)" % [row],
-			row is Array and (row[0] as Vector3).is_equal_approx(STRING_A) and (row[1] as Vector3).is_equal_approx(STRING_B)
-			and int(row[2]) == _other_id())
-
-
-## Host: the guest's pluck on its string (slice 48) heard here with the string's source, and in the
-## take it sent me: one note on TAKE_TRACK at STRING_SONG, the string's note in my song's key there.
-func _check_string_take() -> void:
-	var want := RoomString.pitch_in(STRING_A.distance_to(STRING_B), Harmony.at(DAW.state, STRING_SONG))
-	var heard := _sourced.filter(func(n: Array) -> bool: return n[3] == RoomString.SOURCE and n[0] == Session.Note.ON)
-	check("the guest's pluck reached me as a note from its string (%s, wanted %d)" % [heard, want],
-			heard.size() == 1 and int(heard[0][1]) == want and int(heard[0][2]) == _other_id())
-	var takes: Array = DAW.state.track(TAKE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
-			return it.start > STRING_SONG - 0.1 and it.start < STRING_SONG + 1.0)
-	check("and its take is an item on track %d (%d)" % [TAKE_TRACK, takes.size()], takes.size() == 1)
-	if takes.size() != 1:
-		return
-	var item: MixState.ItemState = takes[0]
-	var notes := MidiTake.unpack_relative(item.notes, item.start)
-	check("named for the string, with its one note (%s, %s)" % [item.name, notes],
-			item.name.contains("string") and notes.size() == 1 and int(notes[0][2]) == want)
-
-
-## Guest: a string tied (slice 48) at 62.3, asked of the host; by 62.36 my mirror of the room has it,
-## and I pluck a string of my own at its ends onto TAKE_TRACK, my clock at STRING_SONG, sent when the
-## clock stops at 62.42.
-func _tie_and_pluck_a_string() -> void:
-	await _until(62.3)
-	var seq := Session.ask_room(RoomString.VERB, [STRING_ID, STRING_A, STRING_B])
-	check("my string is asked of the host (seq %d)" % seq, seq > 0)
-	await _until(62.36)
-	var row: Variant = (Session.room.get(RoomString.ROW, {}) as Dictionary).get(STRING_ID)
-	check("and by 62.36 the room's strings have it, mine (%s)" % [row],
-			row is Array and int(row[2]) == Session.local_peer_id)
-	var gm := Session.guest_midi
-	gm.reach(RoomString.SOURCE, true)
-	gm.target_track = TAKE_TRACK
-	gm.heard_source = _given_clock(STRING_SONG, true)
-	var string := RoomString.new()
-	string.id = STRING_ID
-	string.a = STRING_A
-	string.b = STRING_B
-	string.tips = func() -> Dictionary: return {}
-	add_child(string)
-	# The keys begin their take as they next hear the clock recording (GuestMidi.follow, a frame on).
-	await get_tree().process_frame
-	await get_tree().process_frame
-	string.pluck(RoomString.PLUCK_VELOCITY)
-	check("my pluck is in a take of my own", gm.is_recording() and gm.held.has(string.pitch()))
-	await _until(62.4)
-	string.silence()
-	await _until(62.42)
-	gm.heard_source = _given_clock(STRING_SONG + 1.0, false)
-	await _until(62.48)
-	check("and the take went to the host, my one note from STRING_SONG (%s)" % [gm.last_take],
-			not gm.is_recording() and int(gm.last_take.get("notes", 0)) == 1
-			and absf(float(gm.last_take.get("start", 0.0)) - STRING_SONG) < 0.1)
-	gm.reach(RoomString.SOURCE, false)
-	gm.heard_source = Callable()
-	gm.target_track = 0
-	string.queue_free()
 
 
 ## Host: the guest's lyrics (slice 56), as my song has them: its two lines, the first stamped by its

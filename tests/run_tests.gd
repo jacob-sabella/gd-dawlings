@@ -696,11 +696,6 @@ func _ready() -> void:
 	await _test_the_music_box_reads_its_pegs_back_from_the_item()
 	await _test_the_music_box_turns_with_the_song()
 	await _test_a_guests_music_box_keys_and_pegs_ask_the_host()
-	_test_a_strings_length_is_its_note()
-	await _test_a_plucked_string_plays_on_the_keys_with_its_source()
-	await _test_a_string_is_tied_from_the_spool_to_anything_the_ray_meets()
-	await _test_a_string_is_cut_by_a_pull_or_its_knot()
-	await _test_a_guests_string_is_predicted_and_a_too_long_one_refused()
 	_test_the_storms_density_and_drops_are_the_weather_sockets_events()
 	_test_a_drip_gates_an_env_in_the_cave()
 	_test_a_rings_level_follows_its_layers_notes_the_same_on_two_machines()
@@ -26846,13 +26841,13 @@ func _test_every_venue_stands_every_station_clear() -> void:
 			var tag := "%s:%d" % [id, v]
 			var here := Stations.ids(venue)
 			# And the venue's own instrument where it has one (slice 42).
-			var stood: Array[StringName] = [&"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"modular", &"lyrics"]
+			var stood: Array[StringName] = [&"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"modular", &"lyrics"]
 			if VENUE_SETS.has(id):
 				stood.append(VenueInstrument.STATION)
 			# And its weather's switch where this arrangement has weather (slice 44).
 			if WEATHERS.any(func(w: Array) -> bool: return w[0] == id and w[1] == v):
 				stood.append(Weather.STATION)
-			check("%s: the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, the hand drums, the looper, the music box, the string spool, the modular wall, the lyric board and any instrument and weather of its own stand here (%s)" % [tag, here],
+			check("%s: the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, the hand drums, the looper, the music box, the modular wall, the lyric board and any instrument and weather of its own stand here (%s)" % [tag, here],
 					here == stood)
 			for station: StringName in here:
 				var r := Stations.row(station)
@@ -26888,10 +26883,9 @@ func _test_every_venue_stands_every_station_clear() -> void:
 	check("in the chalk zone they are only drawn, like everything else there",
 			ChalkVenue.new().solids().size() == ChalkVenue.new().zone_solids().size())
 	var roulette := Venue.make(Venue.ROULETTE_ID)
-	check("and there is no bricks table, so no wheel, no booth, so no sampler and no lyric board, and no zones, so no music box and no string spool: it stands only the bells and the cassette rack (%s)" % [Stations.ids(roulette)],
+	check("and there is no bricks table, so no wheel, no booth, so no sampler and no lyric board, and no zones, so no music box: it stands only the bells and the cassette rack (%s)" % [Stations.ids(roulette)],
 			Stations.ids(roulette) == [&"bells", &"cassette_rack"] and Stations.spot(roulette, &"wheel") == null
 			and Stations.spot(roulette, &"sampler") == null and Stations.spot(roulette, MusicBox.STATION) == null
-			and Stations.spot(roulette, RoomString.STATION) == null
 			and Stations.spot(roulette, LyricBoard.STATION) == null and Stations.seat(roulette, &"wheel") == null)
 	roulette.free()
 
@@ -27238,7 +27232,7 @@ func _check_neighbourhood(hood: StringName) -> void:
 		# Past the bells at the neighbourhood's far end, so its middle moves along the wall.
 		bells.place(Vector2(bells.position.x, bells.position.z + 3.0), bells.rotation.y)
 		studio._carry_live(&"bells")
-		check("wheeling the bells three metres back slides the HARMONY & STRINGS banner along its wall with the neighbourhood's middle",
+		check("wheeling the bells three metres back slides the HARMONY banner along its wall with the neighbourhood's middle",
 				not (studio.venue.get_node("Sign_harmony") as Node3D).position.is_equal_approx(before))
 	await get_tree().process_frame
 	studio.queue_free()
@@ -27374,11 +27368,6 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 			node = studio.music_box
 			if node == null or not node.transform.is_equal_approx(spot) or studio.music_box.drum == null \
 					or studio.music_box.keys.size() != 4:
-				return false
-		&"strings":
-			# The string spool at the lattice's corner (slice 48), its reel on it.
-			node = studio.spool
-			if node == null or not node.transform.is_equal_approx(spot) or studio.spool.reel == null:
 				return false
 		&"modular":
 			# The modular wall over the synth zone's stand (slice 51), a surface in the set at the venue's
@@ -30042,7 +30031,7 @@ func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
 	var live := {"lines": (pages[names.find("PLAY · LIVE ROOM 1/2")]["lines"] as Array)
 			+ (pages[names.find("PLAY · LIVE ROOM 2/2")]["lines"] as Array)}
 	check("each PLAY line of a stood station is its title and its desk line, and goes there, over both pages",
-			live["lines"].map(func(l): return l[2]) == [&"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"modular", &"lyrics"]
+			live["lines"].map(func(l): return l[2]) == [&"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"modular", &"lyrics"]
 			and live["lines"][0][0] == "HANDBELLS" and live["lines"][0][1] == Stations.row(&"bells")["desk"])
 	var sizes: Array = []
 	for i in pages.size():
@@ -30326,7 +30315,7 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 	var arrived := true
 	var facing := true
 	var toasts := true
-	for n in 19:
+	for n in 18:
 		said.clear()
 		studio._unhandled_input(key)
 		visits.append(studio.station)
@@ -30340,8 +30329,8 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 		var r := Stations.row(studio.station)
 		toasts = toasts and said.size() == 1 and said[0].begins_with("%s, %s: " % [r["title"], Stations.where(r)]) \
 				and said[0].contains(r["desk"]) and not said[0].contains("in the this")
-	check("I eighteen times walks to the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the TV, the hand drums, the looper, the music box, the string spool, the modular wall, the lyric board and the studio's tubular bells, and a nineteenth comes back round (%s)" % [visits],
-			visits == [&"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"modular", &"lyrics", &"venue", &"bells"])
+	check("I seventeen times walks to the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the TV, the hand drums, the looper, the music box, the modular wall, the lyric board and the studio's tubular bells, and a nineteenth comes back round (%s)" % [visits],
+			visits == [&"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"modular", &"lyrics", &"venue", &"bells"])
 	check("each time the walker ends at the seat, on walkable floor, facing the station", arrived and facing)
 	check("and a toast says its title, where it is (in the control room, in the live room, in this venue) and its desk line", toasts)
 	key.shift_pressed = true
@@ -30402,7 +30391,7 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	studio.ergonomics.motion_scale = 0.0
 	var board := studio.station_board
 	check("a headset has the station board, by the desk (%s)" % [board.rows() if board != null else null],
-			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"modular", &"lyrics", &"venue"])
+			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"modular", &"lyrics", &"venue"])
 	# Home is the mix position, in front of the desk, not the room's origin inside the console;
 	# and from there the board is out of the way ahead (the desk is what is in view) and a few
 	# steps behind.
@@ -45504,471 +45493,6 @@ func _test_a_guests_music_box_keys_and_pegs_ask_the_host() -> void:
 	studio.queue_free()
 	await get_tree().process_frame
 	Session.start_solo()
-	_offline()
-
-
-# --- a string across the room (docs/spatial_loop.md part two, slice 48) ------------------------
-
-## A hand whose ray and catch are wherever the test says (`at`): its aim, and its place.
-class _AimHand extends Interactor:
-	var at := Transform3D.IDENTITY
-
-	func aim() -> Transform3D:
-		return at
-
-	func catch_point() -> Vector3:
-		return at.origin
-
-
-## Aimed straight down from `at`.
-func _down_from(at: Vector3) -> Transform3D:
-	return Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), at)
-
-
-## docs/spatial_loop.md part two, slice 48: a string's length is its note, by the law 76 - 48 *
-## log2(length / 0.3) / log2(40): E5 at 0.3 m, about middle C at a metre, E1 at 12 m. Played, it is
-## snapped to the song's scale, and no length in any key goes under E1.
-func _test_a_strings_length_is_its_note() -> void:
-	check("0.3 m, 1 m and 12 m are E5, C4 and E1 before snapping (%d, %d, %d)"
-			% [RoomString.plain_pitch(0.3), RoomString.plain_pitch(1.0), RoomString.plain_pitch(12.0)],
-			RoomString.plain_pitch(0.3) == 76 and RoomString.plain_pitch(1.0) == 60 and RoomString.plain_pitch(12.0) == 28
-			and is_equal_approx(RoomString.raw_pitch(0.3), 76.0) and is_equal_approx(RoomString.raw_pitch(12.0), 28.0)
-			and RoomString.pitch_in(1.0, null) == 60)
-	check("the law is log in length: twice as long is the same step down wherever (%.3f, %.3f)"
-			% [RoomString.raw_pitch(0.5) - RoomString.raw_pitch(1.0), RoomString.raw_pitch(3.0) - RoomString.raw_pitch(6.0)],
-			is_equal_approx(RoomString.raw_pitch(0.5) - RoomString.raw_pitch(1.0), RoomString.raw_pitch(3.0) - RoomString.raw_pitch(6.0)))
-	var am := Harmony.parse("[A minor]")
-	check("in A minor, 6 m (C#2 by the law) is snapped to C2, 2 m (D#3) to D3, and 12 m stays E1 (%d, %d, %d)"
-			% [RoomString.pitch_in(6.0, am), RoomString.pitch_in(2.0, am), RoomString.pitch_in(12.0, am)],
-			RoomString.plain_pitch(6.0) == 37 and RoomString.pitch_in(6.0, am) == 36 and am.note_name(36) == "C2"
-			and RoomString.plain_pitch(2.0) == 51 and RoomString.pitch_in(2.0, am) == 50
-			and RoomString.pitch_in(12.0, am) == 28)
-	check("past its ends the law holds at them (%d, %d)" % [RoomString.plain_pitch(0.1), RoomString.plain_pitch(40.0)],
-			RoomString.plain_pitch(0.1) == 76 and RoomString.plain_pitch(40.0) == 28)
-	var lowest := 999
-	var lowest_in := ""
-	var keys := 0
-	for root in ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]:
-		for mode in ["major", "minor"]:
-			var h := Harmony.parse("[%s %s]" % [root, mode])
-			if h == null:
-				continue
-			keys += 1
-			for length in [0.3, 1.0, 3.0, 6.0, 9.0, 11.0, 11.9, 12.0, 40.0]:
-				var p := RoomString.pitch_in(length, h)
-				if p < lowest:
-					lowest = p
-					lowest_in = "%s %s at %.1f m" % [root, mode, length]
-				if not h.scale.has(posmod(p, 12)):
-					lowest = -1
-					lowest_in = "%s %s at %.1f m is off its scale (%d)" % [root, mode, length, p]
-	check("no length in any of the %d keys goes under E1, and each is in its scale (lowest %d, %s)" % [keys, lowest, lowest_in],
-			keys == 24 and lowest >= RoomString.BOTTOM_PITCH)
-	var eb := Harmony.parse("[Eb major]")
-	check("where snapping would go under E1 it takes the key's next tone up: 12 m in Eb major is F1 (%d)"
-			% RoomString.pitch_in(12.0, eb), RoomString.pitch_in(12.0, eb) == 29)
-
-
-## A string plucked (a grab, a fingertip brushing through it) plays on this player's keys with its
-## source, rings RING and is let go, shakes while it does (glows instead at motion 0), and bends
-## on the hand that plucked it; its plucks are one take, named after it. A bandmate's string note
-## is heard out of it, and it shakes.
-func _test_a_plucked_string_plays_on_the_keys_with_its_source() -> void:
-	_offline()
-	_as_session(Session.Role.HOST, 1)
-	Session.local_name = "Ada"
-	var gm := Session.guest_midi
-	var saved_heard := gm.heard_source
-	var saved_sent := gm.takes_sent
-	var saved_roll := gm.roll_every
-	var saved_erg := Ergonomics.current
-	Ergonomics.current = Ergonomics.new()
-	gm.takes_sent = 0
-	gm.roll_every = 0.0
-	gm.target_track = 0
-	gm.record_with_host = true
-	var spy := _spy_on_keys()
-	var s := DAW.state
-	s.markers.clear()
-	s.markers[0.0] = "Intro [A minor: Am F C G]"
-	var armed := gm.take_track()
-	s.track(armed).items.clear()
-	var heard := {"seconds": s.bar_to_seconds(1.25), "playing": true, "recording": true, "valid": true}
-	gm.heard_source = func() -> Dictionary: return heard
-	var string := RoomString.new()
-	string.id = &"s1_1"
-	string.a = Vector3(-3, 1.2, 0)
-	string.b = Vector3(3, 1.2, 0)
-	var tip := {}
-	string.tips = func() -> Dictionary: return tip
-	add_child(string)
-	check("a string plays the player's keys", string.keys == gm)
-	gm.reach(RoomString.SOURCE, true)
-	gm._process(0.02)
-	var downs: Array = []
-	var shown := func(pitch: int, down: bool) -> void:
-		if down:
-			downs.append(pitch)
-	gm.key.connect(shown)
-	string._process(0.016)
-	check("6 m in A minor is C2, and its card says its note, length and key, with no letter floating over it (%s, %s)"
-			% [string.title(), string.readout()],
-			string.note_name() == "C2" and not string._letter.visible and is_equal_approx(string.position.x, 0.0)
-			and string.title() == "STRING  C2" and string.readout() == "C2, 6.0 m (A minor)")
-	var hand := Node.new()
-	string.grab_begin(hand, Vector3(0, 1.2, 0))
-	check("a grab plucks it: C2 on the keys, held by the string's source (%s)" % [downs],
-			downs == [36] and gm._down.holds(36, RoomString.SOURCE) and string.ringing() and string.held_by == hand)
-	check("and the hand that plucked it bends it, the strings' own wobble on their source",
-			RoomString.wobble != null and RoomString.wobble.hand == hand and RoomString.wobble.keys == gm
-			and RoomString.wobble.sources == [RoomString.SOURCE])
-	string.grab_end(hand)
-	check("let go, it still rings", gm.held.has(36) and string.ringing())
-	var most := 0.0
-	for i in 12:
-		string._process(0.011)
-		most = maxf(most, absf(string.shake_now()))
-	check("while it rings it shakes (%.4f m at most)" % most, most > 0.002)
-	Ergonomics.current.motion_scale = 0.0
-	most = 0.0
-	for i in 12:
-		string._process(0.011)
-		most = maxf(most, absf(string.shake_now()))
-	check("at motion 0 it does not shake but is lit (%.4f, %.2f)" % [most, string.glow_now()],
-			most == 0.0 and string.glow_now() > 0.5)
-	Ergonomics.current.motion_scale = 1.0
-	heard["seconds"] = s.bar_to_seconds(1.5)
-	string._physics_process(RoomString.RING + 0.01)
-	gm._process(0.02)
-	check("it rings RING and is let go (%s)" % [gm.held], gm.held.is_empty() and not string.ringing())
-	var brush := func(z: float) -> void:
-		var y := 0.05
-		while y >= -0.05:
-			tip[1] = string.to_global(Vector3(0.4, y, z))
-			string._physics_process(1.0 / 90.0)
-			y -= 0.02
-		tip.erase(1)
-		string._physics_process(1.0 / 90.0)
-	downs.clear()
-	brush.call(0.01)
-	check("a fingertip brushed through it plucks it (%s)" % [downs], downs == [36] and string.ringing())
-	heard["seconds"] = s.bar_to_seconds(1.75)
-	string._physics_process(RoomString.RING + 0.01)
-	downs.clear()
-	brush.call(0.04)
-	check("one passing 4 cm off it does not (%s)" % [downs], downs.is_empty())
-	var poke := PokeInteractor.new()
-	string.grab_begin(poke, Vector3(0, 1.2, 0))
-	check("nor does a fingertip's poke count as a grab as well (%s)" % [downs], downs.is_empty() and string.held_by == null)
-	gm._process(0.02)
-	heard["recording"] = false
-	gm._process(0.02)
-	var items: Array = s.track(armed).items
-	check("its plucks are one take on the armed track (%d)" % items.size(), items.size() == 1)
-	if items.size() == 1:
-		var it: MixState.ItemState = items[0]
-		var notes := MidiTake.unpack_relative(it.notes, it.start)
-		check("named after the string, with both plucks' C2 (%s, %s)" % [it.name, notes.map(func(n: Array) -> int: return int(n[2]))],
-				it.name == "Ada string 1" and notes.size() == 2 and notes.all(func(n: Array) -> bool: return int(n[2]) == 36))
-	var room := _SpySynth.new()
-	string.room = room
-	string.heard(5, Session.Note.ON, 36, 90)
-	string._process(0.02)
-	check("a bandmate's string note is heard out of it, and it shakes", room.on.has(36) and string.sounds_for(5, 36)
-			and string.sounding() and room.speaker == string)
-	string.heard(7, Session.Note.OFF, 36, 0)
-	check("someone else's note-off is not theirs", room.on.has(36))
-	string.heard(5, Session.Note.OFF, 36, 0)
-	check("theirs lets it go", not room.on.has(36) and not string.sounds_for(5, 36))
-	gm.key.disconnect(shown)
-	hand.free()
-	poke.free()
-	string.queue_free()
-	await get_tree().process_frame
-	Ergonomics.current = saved_erg
-	gm.heard_source = saved_heard
-	gm.takes_sent = saved_sent
-	gm.roll_every = saved_roll
-	_put_back_synth(spy)
-	Session.start_solo()
-	_offline()
-
-
-## A string is tied from the spool: its reel gives the hand an end, its next press ties the first
-## where its ray meets anything (`surface_hit`: the gear, the floor, the walls, the ceiling, what
-## stands on the floor), and its let-go somewhere else the second; a press and let-go in one place
-## (a desk's click) waits for a second press. The string drawn between says its note and length, or
-## why not. Esc, or the reel pressed again, puts the end back. Too long a string or a ninth is
-## refused in words.
-func _test_a_string_is_tied_from_the_spool_to_anything_the_ray_meets() -> void:
-	var room := [Rect2(-5, -5, 10, 10)]
-	var hit := func(from: Vector3, toward: Vector3, rooms: Array, solids: Array) -> Vector3:
-		return RoomString.surface_hit(from, toward, null, rooms, solids)
-	var near := func(p: Vector3, q: Vector3) -> bool: return p.is_finite() and p.distance_to(q) < 0.01
-	var box := {"c": Vector2(2, 0), "h": Vector2(0.5, 0.5), "a": 0.0, "top": 1.0}
-	check("a ray meets the floor (%s)" % hit.call(Vector3(0, 1.5, 0), Vector3.DOWN, room, []),
-			near.call(hit.call(Vector3(0, 1.5, 0), Vector3(0.3, -1, 0), room, []), Vector3(0.45, 0, 0)))
-	check("a wall (%s)" % hit.call(Vector3(0, 1, 0), Vector3.RIGHT, room, []),
-			near.call(hit.call(Vector3(0, 1, 0), Vector3.RIGHT, room, []), Vector3(5, 1, 0)))
-	check("the ceiling", near.call(hit.call(Vector3(0, 1, 0), Vector3.UP, room, []), Vector3(0, Venue.LIVE_ROOM_HEIGHT, 0)))
-	check("what stands on the floor, up to its top (%s)" % hit.call(Vector3(0, 0.5, 0), Vector3.RIGHT, room, [box]),
-			near.call(hit.call(Vector3(0, 0.5, 0), Vector3.RIGHT, room, [box]), Vector3(1.5, 0.5, 0))
-			and near.call(hit.call(Vector3(0, 1.5, 0), Vector3.RIGHT, room, [box]), Vector3(5, 1.5, 0)))
-	var two := [Rect2(-5, -5, 10, 10), Rect2(5, -2, 5, 4)]
-	check("through the opening into the next room to its far wall (%s)" % hit.call(Vector3(0, 1, 0), Vector3.RIGHT, two, []),
-			near.call(hit.call(Vector3(0, 1, 0), Vector3.RIGHT, two, []), Vector3(10, 1, 0)))
-	check("nothing from outside every room, level, nor for no direction at all",
-			not hit.call(Vector3(20, 1, 0), Vector3.RIGHT, room, []).is_finite()
-			and not hit.call(Vector3(0, 1, 0), Vector3.ZERO, room, []).is_finite())
-
-	var rig: Array = await _looper_studio(Session.Role.SOLO, 1)
-	var studio: Studio = rig[0]
-	DAW.state.markers.clear()
-	DAW.state.markers[0.0] = "[A minor]"
-	DAW.state.position_seconds = 0.0
-	var spool := studio.spool
-	check("the studio stands the string spool on its trolley", spool != null and spool.get_parent() == studio.venue
-			and studio.live_pieces.has(RoomString.STATION) and (studio.live_pieces[RoomString.STATION] as Trolley).visible)
-	if spool == null:
-		studio.queue_free()
-		await get_tree().process_frame
-		Session.start_solo()
-		_offline()
-		return
-	var notices: Array[String] = []
-	var listen := func(t: String) -> void: notices.append(t)
-	Session.notice.connect(listen)
-	var hand := _AimHand.new()
-	add_child(hand)
-	hand.set_physics_process(false)
-	hand.at = _down_from(Vector3(-0.6, 1.5, 5.0))
-	check("the reel's card counts the room's strings (%s)" % spool.reel.readout(), spool.reel.readout() == "0 of 8 strings in the room")
-	spool.reel.grab_begin(hand, spool.reel.global_position)
-	check("pressed, the reel gives the hand an end, and says what to do with it (%s)" % [notices],
-			spool.carrying() and spool.hand == hand and hand.tool.is_valid() and not notices.is_empty()
-			and notices[-1].begins_with("STRING: press where its first end goes")
-			and spool.reel.readout() == "an end in hand · 0 of 8 strings in the room")
-	studio._follow_strings()
-	check("an end in hand has the strings in reach", Session.guest_midi.instruments.has(RoomString.SOURCE))
-	spool.reel.grab_end(hand)
-	# The press that took it comes up: not the end's.
-	hand._was_pressed = true
-	hand._use_tool(false)
-	check("the press that took the end ties nothing", not spool.first.is_finite() and spool.carrying())
-	spool._process(0.016)
-	check("its ray shows where the first end would go (%s)" % spool.preview_text(), spool.preview_text() == "FIRST END")
-	hand._use_tool(true)
-	check("pressed, the first end is tied where the ray meets the floor (%s)" % spool.first,
-			near.call(spool.first, Vector3(-0.6, 0, 5.0)))
-	hand.at = _down_from(Vector3(-0.6, 1.5, 3.0))
-	spool._process(0.016)
-	check("carried, the string is drawn from it, and the reel's card says the note and length it would be (%s)" % spool.reel.readout(),
-			spool.preview_text() == "D3  2.0 m" and spool._preview.visible and spool.reel.readout().contains("D3  2.0 m")
-			and not spool._preview_letter.visible)
-	hand._use_tool(false)
-	var row: Array = studio.strings_row.values()[0] if studio.strings_row.size() == 1 else []
-	check("let go, the second end is tied there: the room's row (%s)" % [studio.strings_row],
-			row.size() == 3 and near.call(row[0], Vector3(-0.6, 0, 5.0)) and near.call(row[1], Vector3(-0.6, 0, 3.0))
-			and int(row[2]) == 1 and not spool.carrying() and not hand.tool.is_valid() and spool.preview_text() == "")
-	var tied: RoomString = studio.room_strings.values()[0] if studio.room_strings.size() == 1 else null
-	check("and it stands in the room, lettered with its note (%s)" % (tied.note_name() if tied != null else "none"),
-			tied != null and tied.get_parent() == studio.venue and tied.note_name() == "D3"
-			and spool.reel.readout() == "1 of 8 strings in the room")
-
-	# A desk's click: down and up in one place, then another click.
-	notices.clear()
-	spool.take_end(hand)
-	hand._was_pressed = false
-	hand.at = _down_from(Vector3(-0.6, 1.5, 5.2))
-	hand._use_tool(true)
-	hand._use_tool(false)
-	check("a press and let-go in one place waits for the second end (%s)" % [notices],
-			spool.carrying() and spool.first.is_finite() and notices[-1].begins_with("STRING: carry it further than 30 cm"))
-	hand.at = _down_from(Vector3(-0.6, 1.5, 5.8))
-	hand._use_tool(true)
-	check("and the next press ties it (%d strings)" % studio.strings_row.size(), studio.strings_row.size() == 2 and not spool.carrying())
-	hand._use_tool(false)
-	check("whose let-go ties nothing more", studio.strings_row.size() == 2 and not spool.carrying())
-
-	spool.take_end(hand)
-	hand._was_pressed = false
-	hand._use_tool(true)
-	notices.clear()
-	studio._on_escape()
-	check("Esc puts the end back on the spool, and says so (%s)" % [notices],
-			not spool.carrying() and not hand.tool.is_valid() and notices == ["The end is back on the spool."]
-			and studio.strings_row.size() == 2)
-	spool.take_end(hand)
-	notices.clear()
-	spool.take_end(hand)
-	check("as does the reel pressed again with the end in hand (%s)" % [notices],
-			not spool.carrying() and not hand.tool.is_valid() and notices == ["The end is back on the spool."])
-	spool.take_end(hand)
-	hand._was_pressed = false
-	hand.hovered = spool.reel
-	hand._use_tool(true)
-	check("or the end's own press on the reel", not spool.carrying() and not hand.tool.is_valid())
-	hand.hovered = null
-	hand._was_pressed = false
-
-	check("too long a string is drawn as too long", spool.preview_words(12.46) == "TOO LONG  12.5 m (12 m most)"
-			and spool.preview_words(0.2) == "TOO SHORT  20 cm (30 cm least)")
-	notices.clear()
-	spool.string_asked.emit(Vector3(-6, 0, 3.3), Vector3(6.5, 0, 3.3))
-	check("and refused, in words (%s)" % [notices], studio.strings_row.size() == 2
-			and notices == ["A string is 12 m at the longest: that one would be 12.5 m."])
-	for i in 6:
-		spool.string_asked.emit(Vector3(-0.6, 0, 5.0 + i * 0.1), Vector3(-0.6, 2.0, 5.0 + i * 0.1))
-	check("the room takes eight (%d)" % studio.strings_row.size(), studio.strings_row.size() == 8 and studio.room_strings.size() == 8)
-	notices.clear()
-	spool.string_asked.emit(Vector3(-0.6, 0, 6.0), Vector3(-0.6, 2.0, 6.0))
-	check("and refuses a ninth, saying how to make room (%s)" % [notices], studio.strings_row.size() == 8
-			and notices == ["The room has 8 strings, the most it takes: cut one first (pull it hard, or press a knot)."])
-	Session.notice.disconnect(listen)
-	hand.queue_free()
-	studio.queue_free()
-	await get_tree().process_frame
-	Session.start_solo()
-	_offline()
-
-
-## A string is cut by pressing either knot, or by grabbing it and pulling it hard: a hand's pull of
-## CUT_PULL off its line, a mouse's drag as far; a smaller pull bows it and leaves it tied.
-func _test_a_string_is_cut_by_a_pull_or_its_knot() -> void:
-	var rig: Array = await _looper_studio(Session.Role.SOLO, 1)
-	var studio: Studio = rig[0]
-	var notices: Array[String] = []
-	var listen := func(t: String) -> void: notices.append(t)
-	Session.notice.connect(listen)
-	var a := Vector3(-0.6, 1.2, 5.0)
-	var b := Vector3(-0.6, 1.2, 7.0)
-	studio.ask_string(&"k", a, b)
-	var s: RoomString = studio.room_strings.get(&"k")
-	check("a string tied stands in the room", s != null and studio.strings_row.has(&"k"))
-	if s == null:
-		Session.notice.disconnect(listen)
-		studio.queue_free()
-		await get_tree().process_frame
-		Session.start_solo()
-		_offline()
-		return
-	var knot: ControlAffordance = s._knots[1]
-	check("each end has a knot to press, its card saying so, with no X floating over it (%s)" % knot.title(),
-			s._knots.size() == 2 and not (knot.get_node("X") as Label3D).visible and knot.title().ends_with("KNOT")
-			and knot.readout() == "press to cut it" and knot.personal())
-	knot.call("_on_grab_begin", Vector3.ZERO)
-	check("its knot pressed, the string is cut, and says so (%s)" % [notices],
-			not studio.strings_row.has(&"k") and not studio.room_strings.has(&"k") and notices == ["The string is cut."])
-	studio.ask_string(&"p", a, b)
-	s = studio.room_strings.get(&"p")
-	var hand := _AimHand.new()
-	var middle := s.global_position
-	hand.at = Transform3D(Basis.IDENTITY, middle)
-	s.grab_begin(hand, middle)
-	hand.at.origin = middle + Vector3(0, 0.2, 0)
-	s.grab_move(hand, middle)
-	check("pulled 20 cm, it bows toward the hand and holds (%s)" % s._pull,
-			studio.strings_row.has(&"p") and s.held_by == hand and s._pull.length() > 0.15)
-	hand.at.origin = middle + Vector3(0, 0.45, 0)
-	s.grab_move(hand, middle)
-	check("pulled 45 cm, it is cut", not studio.strings_row.has(&"p") and not studio.room_strings.has(&"p"))
-	studio.ask_string(&"m", a, b)
-	s = studio.room_strings.get(&"m")
-	var mouse := MouseInteractor.new()
-	s.grab_begin(mouse, s.global_position)
-	s.grab_move(mouse, s.global_position + Vector3(0, 0.3, 0))
-	check("a mouse dragging it along its plane a little holds it", studio.strings_row.has(&"m"))
-	s.grab_move(mouse, s.global_position + Vector3(0, 0.5, 0))
-	check("dragged half a metre off its line, it is cut", not studio.strings_row.has(&"m"))
-	Session.notice.disconnect(listen)
-	hand.free()
-	mouse.free()
-	studio.queue_free()
-	await get_tree().process_frame
-	Session.start_solo()
-	_offline()
-
-
-## The strings are the room's: a guest's tie is asked of the host, which keeps it with its maker and
-## refuses one too long; the row is kept across a publish of anything else and a change of venue,
-## and a guest's room shows it. A guest's own tie shows at once and is rolled back if the host's
-## answer leaves it out; one it knows is too long is refused there and never asked. A bandmate's
-## string note is heard from the string playing it.
-func _test_a_guests_string_is_predicted_and_a_too_long_one_refused() -> void:
-	var rig: Array = await _looper_studio(Session.Role.HOST, 1)
-	var studio: Studio = rig[0]
-	DAW.state.markers.clear()
-	DAW.state.markers[0.0] = "[A minor]"
-	var a := Vector3(-0.6, 1.2, 5.0)
-	var b := Vector3(-0.6, 1.2, 7.0)
-	check("a string is a room verb", Session.room_ask_is_valid(RoomString.VERB, [&"s2_1", a, b])
-			and not Session.room_ask_is_valid(RoomString.VERB, ["s2_1", a, b])
-			and not Session.room_ask_is_valid(RoomString.VERB, [&"s2_1", a]))
-	studio._on_room_asked(RoomString.VERB, [&"s2_1", a, b], 2)
-	check("the host keeps a guest's string with its maker, and its room says so (%s)" % [studio.room_state()[RoomString.ROW]],
-			studio.strings_row.get(&"s2_1") == [a, b, 2] and studio.room_state()[RoomString.ROW].has(&"s2_1")
-			and studio.room_strings.has(&"s2_1"))
-	studio._on_room_asked(RoomString.VERB, [&"s2_2", a, a + Vector3(12.5, 0, 0)], 2)
-	check("and refuses one 12.5 m long", not studio.strings_row.has(&"s2_2") and studio.strings_row.size() == 1)
-	studio._publish_room()
-	studio._on_room_asked(MusicBox.VERB, [0, 2, 0, false], 2)
-	studio._publish_room()
-	check("a publish of something else keeps the strings (%s)" % [Session.room.get(RoomString.ROW)],
-			(Session.room.get(RoomString.ROW, {}) as Dictionary).has(&"s2_1") and Session.room["music_box"] == [0, 2, 0, false])
-	var published: Dictionary = Session.room.duplicate(true)
-	studio._show_strings({})
-	check("(gone here)", studio.room_strings.is_empty())
-	studio.apply_room(published)
-	check("and a room applied shows them again", studio.room_strings.has(&"s2_1") and studio.strings_row.has(&"s2_1"))
-	studio.set_venue(&"loft", false, 0)
-	var moved: RoomString = studio.room_strings.get(&"s2_1")
-	check("a change of venue keeps the room's strings, stood in the new venue",
-			studio.strings_row.has(&"s2_1") and moved != null and moved.get_parent() == studio.venue
-			and studio.spool != null and studio.spool.get_parent() == studio.venue)
-	studio.set_venue(&"studio", false, 0)
-	var string: RoomString = studio.room_strings.get(&"s2_1")
-	var room := _SpySynth.new()
-	if string != null:
-		string.room = room
-	var p := string.pitch() if string != null else -1
-	Session.note_played.emit(Session.Note.ON, p, 90, 2, -1.0, RoomString.SOURCE)
-	check("a bandmate's string note is heard from the string playing it (%d)" % p,
-			string != null and p == 50 and string.sounds_for(2, p) and room.on.has(p))
-	Session.note_played.emit(Session.Note.OFF, p, 0, 2, -1.0, RoomString.SOURCE)
-	check("and let go", string != null and not string.sounds_for(2, p) and not room.on.has(p))
-
-	_as_session(Session.Role.GUEST, 2)
-	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-	Session._register(1, "Ada", 0)
-	Session._register(2, "Grace", 1)
-	Session.room_seq = 0
-	studio._predictions.clear()
-	studio.ask_string(&"s2_9", a + Vector3(0, 0.3, 0), b + Vector3(0, 0.3, 0))
-	check("a guest's string stands at once and is asked of the host",
-			studio.room_strings.has(&"s2_9") and studio._predictions.size() == 1
-			and studio._predictions[0]["verb"] == RoomString.VERB and Session.room_seq == 1)
-	var host_rows := {&"s2_1": [a, b, 2]}
-	studio.apply_room({RoomString.ROW: host_rows.duplicate(), "acks": {2: 0}})
-	check("a room from before the host heard it keeps it, beside the host's",
-			studio.room_strings.has(&"s2_9") and studio.room_strings.has(&"s2_1"))
-	studio.apply_room({RoomString.ROW: host_rows.duplicate(), "acks": {2: Session.room_seq}})
-	check("the host's answer without it takes it down: refused", not studio.room_strings.has(&"s2_9")
-			and studio.room_strings.has(&"s2_1") and studio._predictions.is_empty())
-	var notices: Array[String] = []
-	var listen := func(t: String) -> void: notices.append(t)
-	Session.notice.connect(listen)
-	var seq := Session.room_seq
-	studio.ask_string(&"s2_10", a, a + Vector3(0, 0, 12.5))
-	Session.notice.disconnect(listen)
-	check("a guest's too-long string is refused there, in words, and never asked (%s)" % [notices],
-			Session.room_seq == seq and not studio.room_strings.has(&"s2_10")
-			and notices == ["A string is 12 m at the longest: that one would be 12.5 m."])
-	Session.room_seq = 0
-	studio._predictions.clear()
-	Session.start_solo()
-	studio.queue_free()
-	await get_tree().process_frame
-	_as_session(Session.Role.SOLO, 1)
 	_offline()
 
 

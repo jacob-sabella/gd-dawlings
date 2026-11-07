@@ -265,21 +265,6 @@ func _ready() -> void:
 			var rows := MusicBox.rows_of(MusicBox.key_of(DAW.state, box.span), box.row)
 			var on := MusicBox.step_time(DAW.state, box.span, 5) - it.start
 			DAW.insert_note(track, item, on, on + 0.1, rows[2] + 1 if not rows.has(rows[2] + 1) else rows[2] - 1)
-	# `--strings`: strings across the room (docs/spatial_loop.md part two, slice 48), for a shot of them:
-	# a long bass string from the live room's left wall to the bricks table's near corner, across the
-	# whole room, and three short ones fanning up from the spool's reel into the aisle, each tied as
-	# the spool ties them, and the bass one plucked so it rings and shakes.
-	if args["strings"] and studio.spool != null:
-		var half := studio.venue.live_room_half() - 0.05
-		var reel: Vector3 = studio.spool.transform * RoomString.SPOOL_AXLE
-		for ends in [[Vector3(-half, 1.5, 3.35), Vector3(4.45, 0.92, 3.85)],
-				[reel + Vector3(0, 0.09, 0), reel + Vector3(-0.35, 0.55, 0.62)],
-				[reel + Vector3(0, 0.09, 0), reel + Vector3(-0.25, 0.4, 0.45)],
-				[reel + Vector3(0, 0.09, 0), reel + Vector3(-0.15, 0.25, 0.3)]]:
-			studio.spool.string_asked.emit(ends[0], ends[1])
-		var bass: RoomString = studio.room_strings.values()[0] if not studio.room_strings.is_empty() else null
-		if bass != null:
-			bass.pluck(96)
 	# `--lyrics`: the song's lyrics on the vocal booth's lyric board (docs/spatial_loop.md part two, slice
 	# 56), for a shot of it: four lines timed and two left to TAP, the board held at 7 s, half way
 	# through the second line, as the song would put it there.
@@ -370,7 +355,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "public": false, "join": "", "online": false, "join_code": "", "noray_server": "", "relay": false, "xr": OS.has_feature("android"), "xr_sim": false, "ar": OS.has_feature("android"),
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
-		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "perf": false, "play": false, "slap": false, "rings": 0, "pegs": false, "strings": false, "lyrics": false, "modular": false, "rack_preset": "acid_line", "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
+		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "perf": false, "play": false, "slap": false, "rings": 0, "pegs": false, "lyrics": false, "modular": false, "rack_preset": "acid_line", "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 		"ghost": {}, "tablets": [], "plugins": [], "welcome": false,
@@ -523,8 +508,6 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 			"--slap": out["slap"] = true
 			# `--pegs`: a pattern on the music box, for a shot of it (slice 47).
 			"--pegs": out["pegs"] = true
-			# `--strings`: strings across the room, a bass one ringing, for a shot of them (slice 48).
-			"--strings": out["strings"] = true
 			# `--lyrics`: lyrics on the booth's lyric board, held mid-song, for a shot of it (slice 56).
 			"--lyrics": out["lyrics"] = true
 			# `--modular`: the modular wall re-patched, an A held on its keys, for a shot of it (slice 51).

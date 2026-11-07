@@ -54,7 +54,7 @@ var finger_chord := ""
 ## ghosts draw the ray. It presses nothing differently: pointing is shown, not done.
 var pointing := false
 ## A tool this hand is using in place of pressing what it points at (docs/spatial_loop.md part two,
-## slice 48: an end of string off the spool, RoomString.Spool): (hand, down) -> void, called on
+## slice 48: an end of string off the spool, since removed): (hand, down) -> void, called on
 ## each press and let-go of this hand's button, and while it is set the button grabs, uses and
 ## catches nothing (a held control is let go). Unset (an invalid Callable), the hand presses as ever.
 var tool: Callable = Callable()

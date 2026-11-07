@@ -9,7 +9,7 @@ extends RefCounted
 ## half of them (2026-10-28: "now EVERYTHING is way too cramped. All environments need an increase
 ## in size and better organization"). So the room is organised the way a real one is, by what you
 ## do in each part of it, and says so in words: a desktop player turned round from the desk reads
-## RHYTHM and HARMONY & STRINGS over the floor rather than working out from the furniture where
+## RHYTHM and HARMONY over the floor rather than working out from the furniture where
 ## things are. Where each station stands is still the venue's (Venue's `default_*_spot`, from its
 ## zones); this is only which belong together, where their middle is, and the banner.
 ##
@@ -27,8 +27,8 @@ const ALL := [
 			"stations": [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv"], "pieces": []},
 	{"id": &"rhythm", "title": "RHYTHM", "colour": Color(1.0, 0.62, 0.42),
 			"stations": [&"drums", &"looper"], "pieces": []},
-	{"id": &"harmony", "title": "HARMONY & STRINGS", "colour": Color(0.62, 0.86, 1.0),
-			"stations": [&"bells", &"wheel", &"sections", &"ledge", &"strings", &"music_box"], "pieces": [],
+	{"id": &"harmony", "title": "HARMONY", "colour": Color(0.62, 0.86, 1.0),
+			"stations": [&"bells", &"wheel", &"sections", &"ledge", &"music_box"], "pieces": [],
 			"lift": -0.4},
 	{"id": &"synth", "title": "SYNTH & SOUND DESIGN", "colour": Color(0.78, 0.66, 1.0),
 			"stations": [&"sampler"], "pieces": [], "lift": 0.25},

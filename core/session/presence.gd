@@ -59,10 +59,6 @@ var _carry_claims: Dictionary = {}
 var _item_holders: Dictionary = {}
 ## {peer: Transform3D}: where the item in their hand is, relative to their head, as last heard.
 var _carry_at: Dictionary = {}
-## (peer, kind, pitch, velocity) -> void: a bandmate's note from a string across the room
-## (RoomString, docs/spatial_loop.md part two, slice 48), for the studio to sound from the string
-## that plays it here. Routed by source alone.
-var strings_heard: Callable = Callable()
 ## (peer, kind, pitch, velocity) -> void and (peer, kind, value) -> void: a bandmate's note and
 ## control through the modular wall (docs/spatial_loop.md part two, slice 52), for the studio to
 ## play through the room's patch on a voice of theirs at the wall. Routed by source alone:
@@ -693,14 +689,9 @@ func _on_item_used(id: StringName, down: bool, from: int, take := -1) -> void:
 
 ## Somebody's keys: if the keytar is in their hands, it plays them, out of the keytar. Only
 ## what their keys play as keys (`source` `&"keytar"`, or plain keys): a note from another
-## instrument of theirs is heard from that instrument. A room string's
-## and the modular's are routed by their source alone, never by who holds anything.
+## instrument of theirs is heard from that instrument. The modular's is routed by its source alone, never by who holds anything.
 func _on_note_played(kind: int, pitch: int, velocity: int, from: int, _song: float,
 		source := &"") -> void:
-	if source == RoomString.SOURCE:
-		if strings_heard.is_valid() and from != Session.local_peer_id:
-			strings_heard.call(from, kind, pitch, velocity)
-		return
 	if source == Modular.SOURCE:
 		if modular_heard.is_valid() and from != Session.local_peer_id:
 			modular_heard.call(from, kind, pitch, velocity)

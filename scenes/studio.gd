@@ -36,8 +36,6 @@ const WALL_HEIGHT := 3.6
 const ROOM_BACK := 4.0
 const ROOM_FRONT := ROOM_BACK - ROOM_DEPTH
 const ROOM_MID := (ROOM_FRONT + ROOM_BACK) * 0.5
-## How near the string spool a player stands for their keys to be the strings' (m).
-const STRINGS_NEAR := 1.6
 ## The stand that carries the timeline. Its top sits just under the panel's lower edge, which
 ## is why it is a constant rather than a number in two places: move the timeline and this has
 ## to follow or the panel floats again, one centimetre higher.
@@ -272,19 +270,6 @@ var music_box: MusicBox
 ## The room's row `music_box`: [track, length, root, chromatic] (MusicBox.row). The room's, not the
 ## venue's, so it is kept across a change of venue.
 var music_box_row: Array = MusicBox.DEFAULT_ROW.duplicate()
-## The string spool in the aisle between the drum riser and the lattice, at the lattice's front corner
-## in the loft (RoomString.Spool, docs/spatial_loop.md part two, slice 48; Venue.default_string_spool_spot),
-## stood again with each venue at its `string_spool_spot`, on its trolley. Null where there are no zones
-## and in AR.
-var spool: RoomString.Spool
-## The room's row `strings`: {id: [a, b, maker]}, each string's ends in the venue's frame and who tied
-## it (RoomString.answer). The room's, not the venue's, so it is kept across a change of venue and
-## stood again in the next.
-var strings_row := {}
-## The strings standing in the room, by id (RoomString), stood from `strings_row` (`_show_strings`).
-var room_strings := {}
-## How many strings this player has tied, for the next one's id.
-var _strings_tied := 0
 ## The modular room's rack over the synth zone's keyboard stand (RackWall, docs/architecture.md), a
 ## surface hung again with each venue at its `modular_spot`; null in AR. Its voice (RackVoice, the
 ## engine), the room's row `rack` {patch, track} (RackPatch), and the computer keys as its keys.
@@ -692,7 +677,6 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_stand_the_drum_circle()
 	_stand_the_looper()
 	_stand_the_music_box()
-	_stand_the_spool()
 	_stand_the_lyrics()
 	_stand_the_venue_instrument()
 	_stand_the_modular()
@@ -1907,9 +1891,6 @@ const LIVE_TROLLEYS := {
 	# The plinth under the case: above it a click is a cell, a key or the plaque.
 	&"music_box": ["MusicBoxTrolley", Vector2(0, MusicBox.FOOT_Z), MusicBox.FOOT, 9.0,
 			[[Vector3(MusicBox.FOOT.x * 2.0, 0.3, MusicBox.FOOT.y * 2.0), Vector3(0, 0.15, MusicBox.FOOT_Z)]]],
-	# The spool's round foot: above it a click is the reel or its plaque.
-	&"strings": ["StringSpoolTrolley", Vector2(0, RoomString.SPOOL_FOOT_Z), RoomString.SPOOL_FOOT, 9.0,
-			[[Vector3(RoomString.SPOOL_FOOT.x * 2.0, 0.12, RoomString.SPOOL_FOOT.y * 2.0), Vector3(0, 0.06, RoomString.SPOOL_FOOT_Z)]]],
 	# The case's bottom edge, a little proud of it: above that a click on the case knocks on it.
 	&"tour_case": ["TourCaseTrolley", Vector2.ZERO, Vector2(TourCase.CASE_WIDTH, TourCase.CASE_DEPTH) * 0.5, 7.5,
 			[[Vector3(TourCase.CASE_WIDTH + 0.08, 0.1, TourCase.CASE_DEPTH + 0.08), Vector3(0, 0.05, 0)]]],
@@ -2077,10 +2058,6 @@ func _carry_live(id: StringName) -> void:
 			var at: Variant = venue.music_box_spot()
 			if music_box != null and is_instance_valid(music_box) and at != null:
 				music_box.transform = at
-		&"strings":
-			var at: Variant = venue.string_spool_spot()
-			if spool != null and is_instance_valid(spool) and at != null:
-				spool.transform = at
 		&"tour_case":
 			if tour_case != null:
 				tour_case.transform = _venue_to_set(venue.tour_case_spot())
@@ -2606,7 +2583,7 @@ func room_state() -> Dictionary:
 			"ropes": stage.ropes.duplicate() if stage != null else {},
 			"sampler": sampler.armed_by if sampler != null and is_instance_valid(sampler) else 0,
 			"weather": weather_listening, "bricks": _bricks_row(), "looper": looper_row.duplicate(),
-			"music_box": music_box_row.duplicate(), RoomString.ROW: strings_row.duplicate(),
+			"music_box": music_box_row.duplicate(),
 			RackPatch.ROW: rack_row.duplicate(true),
 			"tv": tv.row() if tv != null and is_instance_valid(tv) else {}, "pads": pads_row.duplicate(true)}
 
@@ -2728,7 +2705,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			&"put_item", &"home_item", &"throw_item", &"wear_item", &"pocket_item", &"slot_item", &"give":
 				pending_items[p["args"][0]] = true
 			&"patch", &"on_air", &"plug", &"rope", &"make", &"paste", &"sampler", &"weather", &"bricks", \
-					&"looper", &"looper_layer", &"music_box", &"string", \
+					&"looper", &"looper_layer", &"music_box", \
 					&"rack", &"tv": pass
 			&"open_tablet", &"open_track_rack": pending_open[p["id"]] = true
 			&"close_tablet", &"close_track_rack": pending_close[p["args"][0]] = true
@@ -2849,13 +2826,6 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	if state.has("music_box") and not _predictions.any(func(p): return p["verb"] == MusicBox.VERB):
 		# Once its keys are answered, the host's word: TRACK, LENGTH, ROOT and SCALE.
 		_show_music_box(state["music_box"])
-	if state.has(RoomString.ROW):
-		# The host's strings, with this guest's own ties and cuts it has not heard back about on top.
-		var rows: Dictionary = (state[RoomString.ROW] as Dictionary).duplicate()
-		for p in _predictions:
-			if p["verb"] == RoomString.VERB:
-				RoomString.answer(rows, p["args"][0], p["args"][1], p["args"][2], Session.local_peer_id)
-		_show_strings(rows)
 	if state.has(RackPatch.ROW):
 		# The host's rack, with this guest's own edits it has not heard back about on top.
 		var row: Dictionary = (state[RackPatch.ROW] as Dictionary).duplicate(true)
@@ -3091,9 +3061,6 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"music_box":
 			# A guest's key on the music box: the room's row, if it is one.
 			_set_music_box(args)
-		&"string":
-			# A guest's string tied or cut: the room's row, or told why not.
-			_answer_string(args[0], args[1], args[2], from)
 		&"rack":
 			# A guest's edit of the rack, or its track: the room's row, or told why not.
 			_answer_rack(String(args[0]), args[1], from)
@@ -3673,7 +3640,6 @@ func _build_anchors() -> void:
 	presence.head_node = head
 	presence.frame = room_anchor
 	add_child(presence)
-	presence.strings_heard = _on_string_heard
 	_lend_fingertips()
 	_lend_chord_hand()
 
@@ -4970,152 +4936,6 @@ func _show_music_box(row: Array) -> void:
 	music_box_row = row.duplicate()
 	if music_box != null and is_instance_valid(music_box):
 		music_box.row = music_box_row
-
-
-# --- strings across the room (docs/spatial_loop.md part two, slice 48) ----------------------
-#
-# The strings are the room's row `strings` {id: [a, b, maker]}: a guest's tie or cut is the room's ask
-# `string` [id, a, b] (a and b the same point to cut), shown at once here; the host's is done. Each
-# string is stood from the row on every machine; its plucks are this player's keys, and a bandmate's
-# arrive as notes, heard from the string that plays them (`_on_string_heard`).
-
-## The spool (RoomString.Spool), in the venue's own frame at its spot: a child of the venue, so it
-## goes with it, its trolley the studio's. Then the room's strings stood again in this venue.
-func _stand_the_spool() -> void:
-	spool = null
-	var spot: Variant = Stations.spot(venue, RoomString.STATION)
-	if spot != null:
-		spool = RoomString.Spool.new()
-		spool.transform = spot
-		spool.bounds = _string_bounds
-		spool.count = func() -> int: return strings_row.size()
-		spool.string_asked.connect(_on_string_asked)
-		spool.told.connect(func(text: String) -> void: Session.notice.emit(text))
-		venue.add_child(spool)
-	# The old venue's strings went with it.
-	room_strings.clear()
-	_show_strings(strings_row.duplicate())
-
-
-## What a string's end can meet in this venue, in its frame: the floors a person walks (the rooms
-## past the desk and the control room's own), and what stands on them.
-func _string_bounds() -> Array:
-	if venue == null:
-		return [[], []]
-	var rooms: Array = venue.rooms().duplicate()
-	rooms.append(_room_bounds().grow(0.05))
-	return [rooms, venue.solids()]
-
-
-## The spool's two ends tied by a hand here: a new string, asked of the room.
-func _on_string_asked(from_a: Vector3, to_b: Vector3) -> void:
-	_strings_tied += 1
-	var id := StringName("s%d_%d" % [Session.local_peer_id, _strings_tied])
-	while strings_row.has(id):
-		_strings_tied += 1
-		id = StringName("s%d_%d" % [Session.local_peer_id, _strings_tied])
-	ask_string(id, from_a, to_b)
-
-
-## String `id` tied from `from_a` to `to_b` (the venue's frame), or cut where they are the same point:
-## done on the host, asked by a guest and shown at once, or refused here in words where the host
-## would refuse it.
-func ask_string(id: StringName, from_a: Vector3, to_b: Vector3) -> void:
-	if Session.is_authority():
-		_answer_string(id, from_a, to_b, Session.local_peer_id)
-		return
-	var rows := strings_row.duplicate()
-	var refusal := RoomString.answer(rows, id, from_a, to_b, Session.local_peer_id)
-	if refusal != "":
-		Session.notice.emit(refusal)
-		return
-	if _predict(RoomString.VERB, [id, from_a, to_b]) > 0:
-		_show_strings(rows)
-
-
-## String `id` cut, for everyone.
-func cut_string(id: StringName) -> void:
-	if strings_row.has(id):
-		ask_string(id, Vector3.ZERO, Vector3.ZERO)
-
-
-## The room's word on a string tied or cut by `from`: the row, told to the room, or why not, to them.
-func _answer_string(id: StringName, from_a: Vector3, to_b: Vector3, from: int) -> void:
-	var rows := strings_row.duplicate()
-	var refusal := RoomString.answer(rows, id, from_a, to_b, from)
-	if refusal != "":
-		Session.tell(from, refusal)
-		return
-	var cut := not rows.has(id) and strings_row.has(id)
-	_show_strings(rows)
-	if cut:
-		Session.tell(from, "The string is cut.")
-	_publish_room_soon()
-
-
-## The room's strings as `rows` has them, here: each stood at its ends, the ones gone taken down.
-func _show_strings(rows: Dictionary) -> void:
-	strings_row = rows.duplicate()
-	for id in room_strings.keys():
-		var s: RoomString = room_strings[id]
-		if not rows.has(id) or s == null or not is_instance_valid(s) or not s.is_inside_tree():
-			room_strings.erase(id)
-			if s != null and is_instance_valid(s):
-				# Out of the room now, so what it rang is let go before anything stands in its place.
-				if s.get_parent() != null:
-					s.get_parent().remove_child(s)
-				s.queue_free()
-	if venue == null:
-		return
-	for id: StringName in rows:
-		var row: Array = rows[id]
-		var s: RoomString = room_strings.get(id)
-		if s == null:
-			s = RoomString.new()
-			s.id = id
-			s.name = "String_%s" % id
-			s.a = row[0]
-			s.b = row[1]
-			s.maker = int(row[2])
-			s.cut_asked.connect(cut_string)
-			venue.add_child(s)
-			room_strings[id] = s
-		else:
-			s.tie(row[0], row[1], int(row[2]))
-
-
-## A bandmate's string note (Presence.strings_heard): heard from the string that plays its pitch
-## here, or the first one ringing it, if any does.
-func _on_string_heard(peer: int, kind: int, pitch: int, velocity: int) -> void:
-	var playing: RoomString = null
-	for id in room_strings:
-		var s: RoomString = room_strings[id]
-		if s == null or not is_instance_valid(s):
-			continue
-		if kind == Session.Note.OFF and s.sounds_for(peer, pitch):
-			playing = s
-			break
-		if playing == null and s.pitch() == pitch:
-			playing = s
-	if playing != null:
-		playing.heard(peer, kind, pitch, velocity)
-
-
-## The strings in this player's reach (`&"string"` in GuestMidi.instruments) while a hand of theirs
-## is on one or carries an end, one they plucked still rings, or they stand at the spool: so the
-## synth is up before the first pluck, and a run of plucks is one take.
-func _follow_strings() -> void:
-	if Session.guest_midi == null:
-		return
-	var near := spool != null and is_instance_valid(spool) and spool.is_inside_tree() \
-			and (spool.carrying() or spool.reel.is_hovered() \
-			or Vector2(_standing_at().x - spool.global_position.x, _standing_at().z - spool.global_position.z).length() < STRINGS_NEAR)
-	for id in room_strings:
-		var s: RoomString = room_strings[id]
-		if s != null and is_instance_valid(s) and (s.touched() or s.ringing()):
-			near = true
-			break
-	Session.guest_midi.reach(RoomString.SOURCE, near)
 
 
 ## The lyric board (LyricBoard), in the venue's own frame at its spot in the booth: a child of the venue,
@@ -7631,7 +7451,6 @@ func _process(delta: float) -> void:
 	_follow_ear()
 	_follow_keytar()
 	_follow_wheel()
-	_follow_strings()
 	_modular_owed += get_process_delta_time()
 	if _modular_owed >= 1.0 / 30.0 - 0.001:
 		_modular_owed = 0.0
@@ -7752,10 +7571,6 @@ func _follow_viewport_shape() -> void:
 ## Escape on a keyboard, the menu button or two fists in a headset: let go of what has focus, send
 ## anything pinned to the face back where it belongs, and sit back down at the desk.
 func _on_escape() -> void:
-	# An end of string in the mouse's hand goes back on the spool, and that is all Esc does.
-	if spool != null and is_instance_valid(spool) and spool.carrying():
-		spool.drop("The end is back on the spool.")
-		return
 	if focus != null:
 		focus.release()
 	_release_stray_screens()

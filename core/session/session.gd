@@ -1690,9 +1690,6 @@ const ROOM_VERBS := {&"tv": [TYPE_STRING, TYPE_BOOL, TYPE_FLOAT], &"open_tablet"
 		# The music box's keys (slice 47): the room's `music_box` row whole, [track (0 the MUSIC BOX
 		# track), bars a turn, root (semitones from the key's tonic), chromatic] (MusicBox.clean).
 		&"music_box": [TYPE_INT, TYPE_INT, TYPE_INT, TYPE_BOOL],
-		# A string across the room tied or cut (slice 48): the room's `strings` row {id: [a, b,
-		# maker]}, its ends in the venue's frame; a and b the same point to cut it (RoomString.answer).
-		&"string": [TYPE_STRING_NAME, TYPE_VECTOR3, TYPE_VECTOR3],
 		# The modular room's rack (RackPatch.answer): its patch, edited. The room's `rack` row.
 		&"rack": [TYPE_STRING_NAME, TYPE_ARRAY],
 		# Look to solo (LookSolo, docs/spatial_loop.md part three, G): the track looked at, held or

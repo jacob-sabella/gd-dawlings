@@ -204,18 +204,6 @@ const ALL := [
 		"hands": "a fingertip on a cell for a peg, on a peg to take it out · along a row for a run · roll the wheel at its right end, or the stick, to turn it round · a key steps on",
 	},
 	{
-		# The string spool (RoomString.Spool, slice 48): a bobbin of string on a stand of its own, standing
-		# on the floor by itself in the aisle between the drum riser and the lattice (at the lattice's
-		# front corner in the loft; Venue.default_string_spool_spot), so a trolley in a studio. Its
-		# frame's top is the reel's top, its foot its plaque's on the post, opened.
-		"id": &"strings", "title": "STRING SPOOL", "area": LIVE, "zone": &"", "air": 0.5,
-		"spot": &"string_spool_spot", "at": RoomString.SPOOL_AXLE + Vector3(0, -0.15, 0),
-		"frame": [RoomString.SPOOL_FRAME_TOP, RoomString.SPOOL_FRAME_FOOT],
-		"foot": RoomString.SPOOL_FOOT, "foot_z": RoomString.SPOOL_FOOT_Z, "top": RoomString.SPOOL_TOP,
-		"desk": "click the spool for an end · click where it goes, then where it ends: anything the cursor meets, across the room for a bass, a hand's width for a high note · click a string to pluck · wiggle to wobble · Alt + mouse up or down bends · drag it hard off its line, or click a knot, to cut",
-		"hands": "press the spool for an end · press where it goes, carry it, let go where it ends · its length is its note · brush it to pluck · tilt to bend · pull it hard to cut",
-	},
-	{
 		# The modular room (RackWall, slice 51): its help lines say where the world's sockets are
 		# (WorldSocket, slice 53), since they are out in the room and not on it. A surface hung on the synth zone's module rack over
 		# the keyboard stand, its touch keys on the stand's upper deck under it and its plaque beside

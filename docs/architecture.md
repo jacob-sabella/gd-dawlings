@@ -495,7 +495,7 @@ not colour, says which is which). Where each station stands is still the venue's
 | --- | --- | --- |
 | MIXING | the control room, a ring round the seat | desk, timeline, rack, deck and platter, patch stand, patch wall, EQ wall, stage table, station board |
 | RHYTHM | straight ahead turned round from the desk | drum riser with the hand drums and the looper; the open lattice floor; the venue's instrument on the back wall behind the riser |
-| HARMONY & STRINGS | front right | the bricks table (fifths wheel, chord ledge, section blocks); music box and string spool in a row facing it; handbells across its far end |
+| HARMONY | front right | the bricks table (fifths wheel, chord ledge, section blocks); music box in a row facing it; handbells across its far end |
 | SYNTH & SOUND DESIGN | back right | the keyboard stand and modular rack; the sampler round a middle in front of it |
 | VOCALS | back left | the booth (3.4 x 3.1 m, a 1.2 m door), the lyric board, room for a talk box |
 | TAPE & TOYS | front left | prop shelf and cassette rack on the wall, hoop and Tour case across the middle from them; the items' homes |
@@ -2241,39 +2241,9 @@ from the bells, or up the loft's aisle).
   reaching it flicks its row's tooth. At `Ergonomics` motion 0 it steps a step at a time and the
   teeth stand. It sounds only as the track plays.
 
-A string across the room (slice 48). `RoomString` (`core/music/room_string.gd`) is one string
-between two points the room chose, and `RoomString.Spool` the bobbin on a stand that makes them
-(tools/blender/string_spool.py), station `strings` (LIVE, free-standing, a `Venue.WHEELED` trolley
-at `Venue.string_spool_spot`: in the aisle between the drum riser and the lattice, or at the loft
-lattice's front corner).
-
-- **The strings are a room row.** `strings` {id: [a, b, maker]} (the ends in the venue's frame),
-  asked with `string` [id, a, b] (`Session.ROOM_VERBS`), a and b the same point to cut.
-  `RoomString.answer` is the rule (0.3 to 12 m, ends inside BOUND, at most 8, any id may be cut):
-  the host keeps it (`Studio._answer_string`, the refusal told to whoever asked), and a guest
-  refuses it in words at once where the host would, else predicts it (`ask_string`, `_predict`,
-  `apply_room` folding unanswered asks back on top). The row is the studio's, not the venue's, so
-  a venue change stands the same strings again in the new one (`_show_strings`).
-- **Its length is its note.** `raw_pitch` is 76 - 48 log(l / 0.3) / log(40) (E5 to E1 over the
-  allowed lengths), `pitch_in` snaps it to the key (`Harmony.snap`), never under E1. It is
-  lettered at its middle and retuned as the key changes.
-- **Played as a plucked string is.** A fingertip whose path goes past the line within TOUCH (`tips`, by
-  default `HandGestures.local_tips`) or a grab (a click, a pinch's ray, a trigger) plucks it on
-  this player's keys with source `&"string"`, ringing RING (2.5 s). It shakes in its shader (a glow
-  instead at motion 0), and one `Wobble` for all strings bends what rings by the plucking hand's
-  tilt. A bandmate's string notes come through `Presence.strings_heard` to the string that plays
-  that pitch here (`Studio._on_string_heard`, `RoomString.heard`, a MonitorSynth of its own).
-  Grabbed and pulled CUT_PULL (0.4 m) off its line, or a knot (`RoomString.Knot`) pressed, it asks
-  to be cut (`cut_asked`).
-- **An end is a tool in the hand.** `Interactor.tool` is a Callable that, while it is set, takes
-  the hand's button in place of pressing what it points at (`_use_tool`). The spool's reel sets it
-  (`Spool.take_end`; a poke's end goes to the same hand's ray, `tying_hand`). The next press ties
-  the first end, and the let-go somewhere else (or, after a press and let-go in one place, the
-  next press) ties the second. Where is the first thing the ray meets (`surface_hit`): any body
-  but the walker's layer, the floor, the ceiling at `Venue.LIVE_ROOM_HEIGHT`, the walker's solids
-  as boxes up to their tops, and the walls round the rooms a person walks in. Between the two ends
-  the string is drawn with its note and length, or TOO LONG or TOO SHORT. Esc, or the reel pressed
-  again, drops the end.
+The string spool (slice 48) was removed on 2026-11-06, with the other simple toys: only expressive
+instruments stay. Its history is in docs/spatial_loop.md. `Interactor.tool` (a hand's button taken in
+place of pressing what it points at) stays, with nothing setting it.
 
 The marble run (slice 49) was removed on 2026-11-06, with the other simple toys: only expressive
 instruments stay. Its history is in docs/spatial_loop.md. The lattice zone is open floor again, and the

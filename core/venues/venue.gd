@@ -55,7 +55,7 @@ const ZONE_IDS: Array[StringName] = [&"bricks", &"matrix", &"drums", &"vocals", 
 ## round a middle of its own: turn round from the desk and the rhythm section is straight ahead
 ## (the riser on the left of the middle, the lattice behind on the right, the venue's own
 ## instrument on the back wall between), tape and toys on the left with the vocal booth behind
-## them, harmony and strings round the bricks table on the right with synth and sound design
+## them, harmony round the bricks table on the right with synth and sound design
 ## behind. Each box is the activity's whole space -- clearance to walk round it included -- from
 ## the floor up to the height it needs.
 ##
@@ -562,13 +562,13 @@ func default_tour_case_spot() -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(x, 0, shelf.origin.z + TOUR_CASE_ALONG))
 
 
-## The harmony and strings neighbourhood (Neighbourhoods) round the bricks table: the music box
-## and the string spool in a row along the table's long side toward the middle of the
+## The harmony neighbourhood (Neighbourhoods) round the bricks table: the music box
+## in a row along the table's long side toward the middle of the
 ## room, HARMONY_AISLE out from its edge, each facing the table across the aisle their players stand
 ## in; the handbells' stand across the table's far end, facing back along it. So the table is the
 ## middle, and whoever stands at any of them has the rest round them. The row's pieces stand
 ## HARMONY_GAP from the row's middle (where a chord harp stood, until 2026-11-06), the music box
-## toward the control room and the spool away from it.
+## toward the control room.
 const HARMONY_AISLE := 1.75
 const HARMONY_GAP := 0.65
 ## The footprint the row's middle keeps from the removed chord harp (half its size, and how far along
@@ -655,22 +655,6 @@ func default_music_box_spot() -> Variant:
 	if not zones().has(&"bricks"):
 		return null
 	return _harmony_row(-(HARMONY_FOOT.x + HARMONY_GAP + MusicBox.FOOT.x))
-
-
-## Where the string spool stands (RoomString.Spool, docs/spatial_loop.md part two, slice 48), in studio
-## space: on its trolley (WHEELED) wherever that has been pushed, else in the harmony row on the middle's
-## side away from the control room, HARMONY_GAP clear of it, facing the table: the whole of the middle
-## of the live room in front of it to stretch a string across. Null where there are no zones (the Rig
-## Roulette room).
-func string_spool_spot() -> Variant:
-	return _spot_of(RoomString.STATION)
-
-
-## Where the venue stands the spool until it is pushed somewhere else; null where it has no table.
-func default_string_spool_spot() -> Variant:
-	if not zones().has(&"bricks"):
-		return null
-	return _harmony_row(HARMONY_FOOT.x + HARMONY_GAP + RoomString.SPOOL_FOOT.x)
 
 
 ## The synth and sound design neighbourhood (Neighbourhoods) round the synth zone's keyboard stand
@@ -1016,7 +1000,7 @@ func floor_at(p: Vector2) -> float:
 ## for it at all. The fifths wheel is not here: it is mounted on the bricks table, which is the
 ## venue's and does not move.
 const WHEELED: Array[StringName] = [&"bells", &"cassette_rack", &"sampler", &"tour_case",
-		&"prop_shelf", &"hoop", &"music_box", &"strings"]
+		&"prop_shelf", &"hoop", &"music_box"]
 
 
 ## Where the venue stands wheeled piece `id` (WHEELED) until it is pushed somewhere else, in
@@ -1037,8 +1021,6 @@ func default_spot(id: StringName) -> Variant:
 			return default_hoop_spot()
 		&"music_box":
 			return default_music_box_spot()
-		&"strings":
-			return default_string_spool_spot()
 	return null
 
 
@@ -1338,9 +1320,6 @@ func wheeled_solids() -> Array:
 	var box_at: Variant = music_box_spot()
 	if box_at != null:
 		out.append(MusicBox.solid(box_at))
-	var spool_at: Variant = string_spool_spot()
-	if spool_at != null:
-		out.append(RoomString.spool_solid(spool_at))
 	return out
 
 
