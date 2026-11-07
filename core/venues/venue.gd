@@ -86,6 +86,13 @@ var variant := 0
 ## running. A venue must look right without it -- a headset runs the mobile renderer.
 var rich := false
 
+## The helpers that carry the bodies moved out of this file; each reads the venue it was made for.
+var reacting := VenueReact.new(self)
+var shelf_spots := VenueShelf.new(self)
+var station_spots := VenueStations.new(self)
+var zone_spots := VenueZoneSpots.new(self)
+var shell_floor := VenueShell.new(self)
+
 
 ## A new venue of `id` in arrangement `which`: the shell class its layout file names
 ## (`ShellBuilders`), the studio's for an id nobody ships.
@@ -172,18 +179,8 @@ var heard_hit := 0.0
 var _heard_slow := 0.0
 
 
-## What a venue's `pulse` calls first: smooths `level` into `heard` and finds the hits in it into
-## `heard_hit`. Nothing here allocates, and a mix at rest (or `reactive` off) settles both at 0.
-func hear(level: float) -> void:
-	var l := clampf(level, 0.0, 1.0) if reactive else 0.0
-	heard = lerpf(heard, l, 0.45 if l > heard else 0.08)
-	# A hit is the level jumping above where it has been lately.
-	_heard_slow = lerpf(_heard_slow, l, 0.05)
-	heard_hit = maxf(heard_hit * 0.82, clampf((l - _heard_slow) * 3.0, 0.0, 1.0))
-	if heard < 0.002:
-		heard = 0.0
-	if heard_hit < 0.002:
-		heard_hit = 0.0
+## What a venue's `pulse` calls first: smooths the level into `heard` and its hits into `heard_hit`.
+func hear(level: float) -> void: reacting.hear(level)
 
 
 ## The room hears a clip (docs/spatial_loop.md part two, slice 21, idea #5): the master or any
@@ -203,88 +200,18 @@ var _lift_left := 0.0
 var _since_lift := INF
 
 
-## One frame of the room hearing whether anything is over (`over`), `delta` seconds on: a clip
-## after FLASH_GAP of none starts a lift; the lift falls away over LIFT_SECONDS.
-func hear_clip(over: bool, delta: float) -> void:
-	_since_lift += delta
-	_lift_left = maxf(_lift_left - delta, 0.0)
-	if over and reactive and lift_on_clip and _since_lift >= FLASH_GAP:
-		_since_lift = 0.0
-		_lift_left = LIFT_SECONDS
-		lifts += 1
-	if not reactive or not lift_on_clip:
-		_lift_left = 0.0
-	lift = LIFT * _lift_left / LIFT_SECONDS
+## One frame of the room hearing whether anything is over: a clip starts a lift (`VenueReact.hear_clip`).
+func hear_clip(over: bool, delta: float) -> void: reacting.hear_clip(over, delta)
 
 
-## A box of soft additive sparks, off until `drive_sparks` turns them on. `colours` is picked per
-## spark from its left to its right; `rise` sends them up instead of down.
+## A box of soft additive sparks, off until `drive_sparks` turns them on (`VenueReact.make_sparks`).
 func make_sparks(label: String, at: Vector3, extents: Vector3, seen: AABB, colours: Gradient,
 		amount: int, rise := false) -> GPUParticles3D:
-	var soft := GradientTexture2D.new()
-	soft.fill = GradientTexture2D.FILL_RADIAL
-	soft.fill_from = Vector2(0.5, 0.5)
-	soft.fill_to = Vector2(1.0, 0.5)
-	var g := Gradient.new()
-	g.set_color(0, Color(1, 1, 1, 1))
-	g.set_color(1, Color(1, 1, 1, 0))
-	soft.gradient = g
-	soft.width = 32
-	soft.height = 32
-	var dot := StandardMaterial3D.new()
-	dot.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	dot.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	dot.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	dot.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	dot.vertex_color_use_as_albedo = true
-	dot.albedo_texture = soft
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.05, 0.05)
-	quad.material = dot
-	var m := ParticleProcessMaterial.new()
-	m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	m.emission_box_extents = extents
-	m.direction = Vector3(0, 1 if rise else -1, 0)
-	m.spread = 25.0
-	m.initial_velocity_min = 0.1
-	m.initial_velocity_max = 0.5
-	m.gravity = Vector3(0, 0.12 if rise else -0.25, 0)
-	m.turbulence_enabled = true
-	m.turbulence_noise_strength = 0.35
-	m.turbulence_noise_scale = 2.0
-	m.scale_min = 0.5
-	m.scale_max = 1.6
-	var pick := GradientTexture1D.new()
-	pick.gradient = colours
-	m.color_initial_ramp = pick
-	var fade := Gradient.new()
-	fade.set_color(0, Color(1, 1, 1, 1))
-	fade.set_color(1, Color(1, 1, 1, 0))
-	var ramp := GradientTexture1D.new()
-	ramp.gradient = fade
-	m.color_ramp = ramp
-	var p := GPUParticles3D.new()
-	p.name = label
-	p.position = at
-	p.amount = amount
-	p.lifetime = 3.0
-	p.local_coords = false
-	p.emitting = false
-	p.draw_pass_1 = quad
-	p.process_material = m
-	p.visibility_aabb = seen
-	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(p)
-	return p
+	return reacting.make_sparks(label, at, extents, seen, colours, amount, rise)
 
 
-## How many of `p`'s sparks are out, from what the mix is doing: none at rest.
-func drive_sparks(p: GPUParticles3D, gain := 1.0) -> void:
-	if p == null:
-		return
-	var rate := clampf((heard * 1.4 + heard_hit) * gain, 0.0, 1.0)
-	p.amount_ratio = maxf(rate, 0.01)
-	p.emitting = rate > 0.04
+## How many of `p`'s sparks are out, from what the mix is doing.
+func drive_sparks(p: GPUParticles3D, gain := 1.0) -> void: reacting.drive_sparks(p, gain)
 
 
 ## The activity zones, id -> AABB in studio space. The room widens with the desk, and the zones
@@ -309,7 +236,7 @@ func zone_solids() -> Array:
 ## into the room. On its trolley (WHEELED), wherever that has been pushed; else where the venue
 ## stands it.
 func prop_shelf_spot() -> Transform3D:
-	return _spot_of(&"prop_shelf")
+	return station_spots.spot_of(&"prop_shelf")
 
 
 ## Where the venue stands the prop shelf until it is pushed somewhere else: the layout's
@@ -326,94 +253,38 @@ func default_prop_shelf_spot() -> Transform3D:
 const TOYS_ACROSS := 3.5
 
 
-## Where the items live, in studio space, one per item (ItemRoom.KINDS) and a few spare: in a
-## row along the shelf's top, facing out into the room.
-func item_spots() -> Array[Transform3D]:
-	var shelf := prop_shelf_spot()
-	var out: Array[Transform3D] = []
-	# From the middle out, so one item is not left at the end of an empty shelf; the lamp is at
-	# the +X end, so that side fills last.
-	for i in [1, 0, 2, 3].slice(0, ZoneKit.SHELF_SPOTS):
-		var along := (float(i) - (ZoneKit.SHELF_SPOTS - 1) * 0.5) * ZoneKit.SHELF.x / ZoneKit.SHELF_SPOTS
-		var at := shelf * Vector3(along, ZoneKit.SHELF.y, 0.04)
-		# Facing out of the shelf's front, as an item faces -Z.
-		out.append(Transform3D(shelf.basis * Basis(Vector3.UP, PI), at))
-	return out
+## Where the items live along the prop shelf's top (`VenueShelf.item_spots`).
+func item_spots() -> Array[Transform3D]: return shelf_spots.item_spots()
 
 
-## Where the headphones hang, in studio space: on the hook under the front of the prop shelf
-## (ZoneKit.HEADPHONE_HOOK), band over the peg, facing out.
-func headphones_spot() -> Transform3D:
-	var hang := ZoneKit.HEADPHONE_HOOK + Vector3(0, -HeadphonesItem.HANG, ZoneKit.HOOK_REACH * 0.55)
-	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI), hang)
+## Where the headphones hang, under the prop shelf (`VenueShelf`).
+func headphones_spot() -> Transform3D: return shelf_spots.headphones_spot()
 
 
-## Where the signal glasses lie, in studio space (docs/spatial_loop.md part three): folded flat on
-## the prop shelf's top at its front edge, between the middle two of its spots, lenses out.
-func glasses_spot() -> Transform3D:
-	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI), Vector3(0.0, ZoneKit.SHELF.y + SignalGlassesItem.RIM_RADIUS,
-			ZoneKit.SHELF.z * 0.5 - 0.07))
+## Where the signal glasses lie on the prop shelf (`VenueShelf`).
+func glasses_spot() -> Transform3D: return shelf_spots.glasses_spot()
 
 
-## Where the tablet lies, in studio space: face up on the prop shelf's lower tier, toward the
-## lamp's end and out of the headphones' way, its tray toward the back.
-func tablet_spot() -> Transform3D:
-	return prop_shelf_spot() * Transform3D(Basis.IDENTITY, Vector3(0.17, ZoneKit.SHELF_LOWER_TOP, 0.03))
+## Where the tablet lies on the prop shelf's lower tier (`VenueShelf`).
+func tablet_spot() -> Transform3D: return shelf_spots.tablet_spot()
 
 
-## Where the chips and the cards lie, in studio space: along the front edge of the prop shelf's
-## top, at its two ends, as they would be left on a table: the stack at the ball's end, the deck a
-## little askew at the lamp's. Not in front of a toy: from the seat a toy behind one would be a
-## click on the chips.
-func chips_spot() -> Transform3D:
-	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI), Vector3(-0.4, ZoneKit.SHELF.y, 0.15))
+## Where the dartboard's face is (`VenueShelf`).
+func dartboard_spot() -> Transform3D: return shelf_spots.dartboard_spot()
 
 
-func cards_spot() -> Transform3D:
-	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI - 0.25), Vector3(0.38, ZoneKit.SHELF.y, 0.13))
+## What a dart sticks in: the board and its cork panel (`VenueShelf`).
+func dart_boards() -> Array: return shelf_spots.dart_boards()
 
 
-## Where the Newton's cradle stands, in studio space: at the back of the prop shelf's top, in the
-## middle, its row of balls along the shelf -- behind the duck and the plane and taller than them,
-## under the shelf lamp, not hidden behind the ball in the dark corner.
-func cradle_spot() -> Transform3D:
-	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI), Vector3(-0.04, ZoneKit.SHELF.y, -0.135))
-
-
-## Where the yo-yo lies, in studio space: on its side at the front of the prop shelf's top,
-## between the plane and the cards.
-func yoyo_spot() -> Transform3D:
-	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI), Vector3(0.2, ZoneKit.SHELF.y, 0.15))
-
-
-## Where the dartboard's face is, in studio space: its middle, facing out into the room (+Z).
-func dartboard_spot() -> Transform3D:
-	return prop_shelf_spot() * Transform3D(Basis.IDENTITY, Vector3(0, ZoneKit.DARTBOARD_Y, ZoneKit.DARTBOARD_FACE_Z))
-
-
-## What a dart sticks in, in studio space (Flight.fly's `boards`): the board, and the cork panel
-## round it.
-func dart_boards() -> Array:
-	var panel := prop_shelf_spot() * Transform3D(Basis.IDENTITY, Vector3(0, ZoneKit.DARTBOARD_Y,
-			ZoneKit.DART_PANEL_BACK + ZoneKit.DART_PANEL_THICK))
-	return [{"at": dartboard_spot(), "radius": ZoneKit.DARTBOARD_RADIUS},
-			{"at": panel, "half": ZoneKit.DART_PANEL * 0.5}]
-
-
-## Where dart `n` lives, in studio space: left in the board, along the top of it, point in and
-## its tail a little down, as darts hang in a board between games.
-const DART_HOMES := [Vector2(-0.11, 0.1), Vector2(0.0, 0.135), Vector2(0.11, 0.1)]
-
-
-func dart_spot(n: int) -> Transform3D:
-	var on: Vector2 = DART_HOMES[n % DART_HOMES.size()]
-	return dartboard_spot() * Transform3D(Basis(Vector3.RIGHT, 0.15), Vector3(on.x, on.y, -DartItem.POINT_IN))
+## Where dart `n` lives, left in the board (`VenueShelf`).
+func dart_spot(n: int) -> Transform3D: return shelf_spots.dart_spot(n)
 
 
 ## Where the mini hoop stands, in studio space: its foot, its board facing into the room. On its
 ## trolley (WHEELED), wherever that has been pushed; else where the venue stands it.
 func hoop_spot() -> Transform3D:
-	return _spot_or_home(&"hoop")
+	return station_spots.spot_or_home(&"hoop")
 
 
 ## Where the venue stands the hoop until it is pushed somewhere else: the layout's, across the
@@ -423,26 +294,18 @@ func default_hoop_spot() -> Transform3D:
 	return spot
 
 
-## Where the venue's own toy (ToyItem) lies, in studio space: on the floor a little in front of
-## the hoop and to its right, where you would leave a ball after shooting -- room enough round it
-## for the rooftop's beach ball, clear of the hoop's base.
-func toy_spot() -> Transform3D:
-	return hoop_spot() * Transform3D(Basis(Vector3.UP, 0.6), Vector3(0.42, 0, 0.5))
+## Where the venue's own toy lies, in front of the hoop (`VenueShelf`).
+func toy_spot() -> Transform3D: return shelf_spots.toy_spot()
 
 
-## Where the radio plane (RcPlaneItem) waits, in studio space: on the floor further out from the
-## hoop than the toy, in the tape and toys neighbourhood's middle, its nose (-Z) pointed back along
-## it away from the control room, so a take-off runs down the open floor between the shelf's wall
-## and the hoop's side, not into either.
-func rcplane_spot() -> Transform3D:
-	var at := hoop_spot() * Vector3(0.55, 0, 1.25)
-	return Transform3D(Basis(Vector3.UP, PI if _away(at) > 0.0 else 0.0), at)
+## Where the radio plane waits, out from the hoop (`VenueShelf`).
+func rcplane_spot() -> Transform3D: return shelf_spots.rcplane_spot()
 
 
 ## Where the Tour case stands, in studio space. On its trolley (WHEELED), wherever that has been
 ## pushed; else where the venue stands it.
 func tour_case_spot() -> Transform3D:
-	return _spot_or_home(&"tour_case")
+	return station_spots.spot_or_home(&"tour_case")
 
 
 ## Where the venue stands the Tour case until it is pushed somewhere else: the layout's, beside
@@ -458,37 +321,18 @@ func default_tour_case_spot() -> Transform3D:
 const HARMONY_AISLE := 1.75
 
 
-## Which way along the table is away from the control room: +1 back (+Z).
-static func _away(c: Vector3) -> float:
-	return 1.0 if c.z >= Studio.MIX_POSITION_Z else -1.0
-
-
 ## The synth and sound design neighbourhood (Neighbourhoods) round the synth zone's keyboard stand
 ## and the modular wall over it: its middle SYNTH_MIDDLE out from the zone's middle into the room;
 ## the sampler (the layout's) on the side away from the control room, facing it.
 const SYNTH_MIDDLE := 1.7
 
 
-## The synth neighbourhood's middle, on the floor, and which way across the room the stand is from
-## it (+1 the stand on the right); null where there is no synth zone.
-func synth_middle() -> Variant:
-	var at := zones()
-	if not at.has(&"synth"):
-		return null
-	var c := (at[&"synth"] as AABB).get_center()
-	var side := 1.0 if c.x >= 0.0 else -1.0
-	return [Vector3(c.x - side * SYNTH_MIDDLE, 0, c.z), side]
+## The synth neighbourhood's middle and which side the stand is on; null without a synth zone (`VenueZoneSpots`).
+func synth_middle() -> Variant: return zone_spots.synth_middle()
 
 
-## Where the modular room's wall hangs (RackWall, docs/spatial_loop.md part two, slice 51), in studio
-## space: the synth zone's module rack over the keyboard stand (ZoneKit.keyboard_stand), its panel's
-## face MODULAR_BACK in from the zone's middle toward the wall behind the stand and its foot
-## MODULAR_BOTTOM up, over the stand's upper deck, its front (+Z) out over the decks toward whoever
-## plays, so its touch keys lie on the upper deck under it; along the stand by RackWall.OFF_MIDDLE,
-## so the panel and the plaque beside it stand over the stand together. Mounted in the zone, not a
-## trolley: the stand is the venue's, and the rack's own dressing gives way to it (ZoneKit.yield_rack).
-## Null where there is no synth zone (the Rig Roulette room).
-const MODULAR_BACK := 0.27
+## How high the modular room's rack foot is, over the synth zone's keyboard stand's upper deck, so its
+## touch keys lie on the deck under it (RackWall).
 const MODULAR_BOTTOM := 1.26
 
 
@@ -498,43 +342,16 @@ func has_annex() -> bool:
 	return venue_id() != ROULETTE_ID
 
 
-func modular_spot() -> Variant:
-	if not has_annex():
-		return null
-	return ModularAnnex.rack_spot(annex_edge())
+## Where the modular room's wall hangs, over the synth zone's keyboard stand; null without an annex (`VenueZoneSpots`).
+func modular_spot() -> Variant: return zone_spots.modular_spot()
 
 
-## Everywhere on foot: the venue's rooms, and the modular room built onto the live room's side with
-## its doorway.
-func walk_rooms() -> Array[Rect2]:
-	var out := rooms()
-	if has_annex():
-		out.append_array(ModularAnnex.floors(annex_edge(), live_room_half()))
-	return out
+## Everywhere on foot: the venue's rooms and the modular room built onto the live room.
+func walk_rooms() -> Array[Rect2]: return zone_spots.walk_rooms()
 
 
-## Where the lyric board stands (LyricBoard, docs/spatial_loop.md part two, slice 56), in studio space:
-## in the vocal booth, LyricBoard.IN_BOOTH from its floor's middle, across the mic stand's foot from
-## where the singer stands and in line with it, its face (+Z) back toward the singer. Mounted in the
-## zone, not a trolley: the booth is the venue's. Null where there is no booth (the Rig Roulette room).
-## It stands on what the mic stand stands on (the studio's felt, a millimetre over the floor
-## elsewhere), so its foot is not in the floor's plane.
-func lyrics_spot() -> Variant:
-	var at := zones()
-	if not at.has(&"vocals"):
-		return null
-	var c := (at[&"vocals"] as AABB).get_center()
-	var floor_y := 0.001
-	var stand := find_child("MicStand", true, false) as Node3D
-	if stand != null:
-		var y := stand.position.y
-		var up := stand.get_parent()
-		while up != null and up != self:
-			if up is Node3D:
-				y += (up as Node3D).position.y
-			up = up.get_parent()
-		floor_y = y
-	return Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(c.x, floor_y, c.z) + LyricBoard.IN_BOOTH)
+## Where the lyric board stands in the vocal booth; null without a booth (`VenueZoneSpots`).
+func lyrics_spot() -> Variant: return zone_spots.lyrics_spot()
 
 
 ## Where the cassette rack stands (CassetteRack, docs/spatial_loop.md part two, slice 23), in
@@ -543,7 +360,7 @@ func lyrics_spot() -> Variant:
 ## shelf's against the same wall and facing into the room the same way. So the clips the band pulls
 ## out of the timeline stand beside the toys, where everyone walks past.
 func cassette_rack_spot() -> Transform3D:
-	return _spot_or_home(&"cassette_rack")
+	return station_spots.spot_or_home(&"cassette_rack")
 
 
 ## Where the venue stands the cassette rack until it is pushed somewhere else: the layout's,
@@ -559,13 +376,7 @@ func default_cassette_rack_spot() -> Transform3D:
 ## the modular one turn apart. Null where there is no synth zone (the Rig Roulette
 ## room has no zones).
 func sampler_spot() -> Variant:
-	return _spot_of(&"sampler")
-
-
-## Where the venue stands the sampler until it is pushed somewhere else: the layout's; null where
-## it has no synth zone.
-func default_sampler_spot() -> Variant:
-	return default_spot(&"sampler")
+	return station_spots.spot_of(&"sampler")
 
 
 ## Where the fifths wheel stands (FifthsWheel.on_stand), in studio space: on the bricks table,
@@ -594,14 +405,8 @@ const TABLE_BANDS := {
 const BAND_GAP := 0.04
 
 
-## The bricks table's top, in studio space: the middle of its top, square to the room (x across
-## it, z along it, as TABLE_BANDS has them). Null where there is no bricks table.
-func bricks_table() -> Variant:
-	var at := zones()
-	if not at.has(&"bricks"):
-		return null
-	var c := (at[&"bricks"] as AABB).get_center()
-	return Transform3D(Basis.IDENTITY, Vector3(c.x, ZoneKit.TABLE_HEIGHT, c.z))
+## The bricks table's top, square to the room; null without one (`VenueZoneSpots`).
+func bricks_table() -> Variant: return zone_spots.bricks_table()
 
 
 ## Where the section blocks stand (SectionBlocks, slice 30), in studio space: their band's middle
@@ -619,46 +424,17 @@ const DRUM_RING := 0.72
 const DRUM_FOOT := 0.19
 
 
-## Where the ring of hand drums stands in a drums zone `box` (studio space): `n` -1 is the ring's
-## middle `floor` up (the riser's top, or the floor where the riser is only drawn: `drum_floor`), its
-## front (+Z) toward the mix position (square to the room, the nearest of the four ways), where the
-## station's seat is; `n` 0 to 3 is HandDrum.KINDS[n]'s place round it, each DRUM_RING out on a
-## diagonal, the djembe and the cajón in front, the two congas, the tallest, behind, every drum's
-## front (an item's -Z) toward the ring's front, so its jack and the cajón's face are seen from the
-## seat.
+## Where the ring of hand drums stands in a drums zone `box` (`VenueZoneSpots.drum_ring`).
 static func drum_ring(box: AABB, n := -1, floor := ZoneKit.RISER_HEIGHT) -> Transform3D:
-	var c := box.get_center()
-	var toward := Vector2(0.0, Studio.MIX_POSITION_Z) - Vector2(c.x, c.z)
-	var yaw := snappedf(atan2(toward.x, toward.y), PI * 0.5)
-	var middle := Transform3D(Basis(Vector3.UP, yaw), Vector3(c.x, floor, c.z))
-	if n < 0 or n >= 4:
-		return middle
-	var corner: Vector2 = [Vector2(-1, 1), Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1)][n]
-	var along := corner.normalized() * DRUM_RING
-	return middle * Transform3D(Basis(Vector3.UP, PI), Vector3(along.x, 0, along.y))
+	return VenueZoneSpots.drum_ring(box, n, floor)
 
 
-## Where the ring of hand drums stands here (`drum_ring`), in studio space: its middle (`n` -1, the
-## station `drums`) or drum `n`'s place. Null where the venue has no drum riser (the Rig Roulette room
-## has no zones).
-func drum_circle_spot(n := -1) -> Variant:
-	if n < 0:
-		return default_spot(&"drums")
-	var at := zones()
-	if not at.has(&"drums"):
-		return null
-	return drum_ring(at[&"drums"], n, drum_floor())
+## Where the ring of hand drums stands (`n` -1) or drum `n`'s place; null without a riser.
+func drum_circle_spot(n := -1) -> Variant: return zone_spots.drum_circle_spot(n)
 
 
-## How high the ring of hand drums stands: the riser's top where the riser is a step the walker
-## climbs (`zone_solids`), and the floor where it is only drawn (the chalk zone), so a drum stands
-## on what a person stands on beside it. 0 where there is no drums zone.
-func drum_floor() -> float:
-	var at := zones()
-	if not at.has(&"drums"):
-		return 0.0
-	var c: Vector3 = (at[&"drums"] as AABB).get_center()
-	return Walker.ground_of(zone_solids(), Vector2(c.x, c.z))
+## How high the ring of hand drums stands: the riser's top, or the floor where it is only drawn.
+func drum_floor() -> float: return zone_spots.drum_floor()
 
 
 ## The looper (Looper, docs/spatial_loop.md part two, slice 45) on its stand at the drum riser's front
@@ -666,11 +442,8 @@ func drum_floor() -> float:
 const LOOPER_CORNER := 0.98
 
 
-## Where the looper stands in a drums zone `box` (studio space), on `floor` (`drum_ring`'s): at the
-## riser's front corner on the ring's left as you face its front, toward the room's middle in the
-## studio, its front (+Z) the ring's, so it is played from the floor in front of the riser.
-static func looper_at(box: AABB, floor := ZoneKit.RISER_HEIGHT) -> Transform3D:
-	return drum_ring(box, -1, floor) * Transform3D(Basis.IDENTITY, Vector3(-LOOPER_CORNER, 0, LOOPER_CORNER))
+## Where the looper stands in a drums zone `box` (`VenueZoneSpots.looper_at`).
+static func looper_at(box: AABB, floor := ZoneKit.RISER_HEIGHT) -> Transform3D: return VenueZoneSpots.looper_at(box, floor)
 
 
 ## Where the looper stands here (`looper_at`), in studio space: the station `looper`. Null where the
@@ -689,49 +462,25 @@ func instrument() -> Dictionary:
 	return {}
 
 
-## Where the venue's instrument stands (the station `venue`), in studio space: its `spot`, or null
-## where it has none.
-func instrument_spot() -> Variant:
-	var spec := instrument()
-	return spec["spot"] if spec.get("spot") is Transform3D else null
+## Where the venue's instrument stands (the station `venue`), or null.
+func instrument_spot() -> Variant: return zone_spots.instrument_spot()
 
 
 ## How far the instruments set against a wall stand off it, bars to its face (m).
 const INSTRUMENT_OFF_WALL := 0.12
-## How far the back wall's instrument stands to the kit's side of the lattice (m), where a venue
-## measures it from the lattice: behind the riser, the rhythm neighbourhood's back wall.
-const INSTRUMENT_BESIDE_LATTICE := 2.1
 
 
-## A spot for an instrument against the live room's back wall, behind the drum riser beside the
-## lattice (the rhythm neighbourhood's back wall), its front toward the desk, its bars `depth` deep: where the studio's tubular bells, the
-## cave's crystals, the grid's neon bars, the chalk zone's xylophone, the station's hull panels, the
-## greenhouse's pots, the stage's cymbals and gong and the desert's ringing stones stand (the
-## speakeasy's piano stands in the same place, by ClubVenue.piano_case's own reckoning). Clear of
-## both zones' boxes and of the walk between.
-func back_wall_instrument(depth: float) -> Transform3D:
-	var at := zones()
-	var x := (ZONES[&"drums"] as AABB).get_center().x
-	if at.has(&"drums"):
-		x = (at[&"drums"] as AABB).get_center().x
-	return Transform3D(Basis(Vector3.UP, PI), Vector3(x, 0, LIVE_ROOM_BACK - 0.05 - INSTRUMENT_OFF_WALL - depth))
+## A spot for an instrument against the live room's back wall, `depth` deep (`VenueZoneSpots`).
+func back_wall_instrument(depth: float) -> Transform3D: return zone_spots.back_wall_instrument(depth)
 
 
-## A spot for an instrument against a side wall of the floor beside the desk (`side` -1 the left, 1
-## the right), `along` its middle's z, its bars `depth` deep, its front into the room: where the
-## garden's chimes, the cabin's icicles and the loft's steam pipes hang and the dome's glass stands.
+## A spot for an instrument against a side wall of the floor beside the desk (`VenueZoneSpots`).
 func side_wall_instrument(side: float, along: float, depth: float) -> Transform3D:
-	var x := signf(side) * (live_room_half() - 0.05 - INSTRUMENT_OFF_WALL - depth)
-	return Transform3D(Basis(Vector3.UP, -signf(side) * PI * 0.5), Vector3(x, 0, along))
+	return zone_spots.side_wall_instrument(side, along, depth)
 
 
-## The venue's instrument as a walker solid, where it is solid (`prop_shelf_solid`): a person walks up
-## to it rather than through it, and a throw bounces off it.
-func instrument_solids() -> Array:
-	var spec := VenueInstrument.spec_of(self)
-	if spec.is_empty() or not prop_shelf_solid():
-		return []
-	return [VenueInstrument.solid(spec)]
+## The venue's instrument as a walker solid, where it is solid.
+func instrument_solids() -> Array: return zone_spots.instrument_solids()
 
 
 ## The venue's weather (Weather, docs/spatial_loop.md part two, slice 44, idea #20), in an arrangement
@@ -747,19 +496,12 @@ func weather() -> Dictionary:
 	return {}
 
 
-## Where the venue's weather's switch stands (the station `weather`), in studio space: its `spot`, or
-## null where it has none.
-func weather_spot() -> Variant:
-	var spec := weather()
-	return spec["spot"] if spec.get("spot") is Transform3D else null
+## Where the venue's weather switch stands (the station `weather`), or null.
+func weather_spot() -> Variant: return zone_spots.weather_spot()
 
 
-## The weather's switch's post as a walker solid, where it stands on one and the room is solid.
-func weather_solids() -> Array:
-	var post := Weather.solid(Weather.spec_of(self))
-	if post.is_empty() or not prop_shelf_solid():
-		return []
-	return [post]
+## The weather switch's post as a walker solid, where it stands on one.
+func weather_solids() -> Array: return zone_spots.weather_solids()
 
 
 ## The floor's height at `p` (studio space): the top of whatever the venue stands there that a person
@@ -778,198 +520,60 @@ func floor_at(p: Vector2) -> float:
 ## venue's and does not move.
 static var WHEELED: Array[StringName] = LiveRoom.wheeled_ids()
 
-## The layout's spots for this venue (id -> Transform3D) and the arrangement and width they were
-## resolved for, kept until either changes.
-var _spots: Dictionary = {}
-var _spots_for: Array = []
+## Where the venue stands wheeled piece `id` until it is pushed (`VenueStations.default_spot`); null without room.
+func default_spot(id: StringName) -> Variant: return station_spots.default_spot(id)
 
 
-## Where the venue stands wheeled piece `id` (WHEELED) until it is pushed somewhere else, in
-## studio space; null where the venue has no room for it. Read from the layout (LiveRoom) against
-## this venue's anchors; kept while its arrangement and width stay as they are.
-func default_spot(id: StringName) -> Variant:
-	var key := [variant, room_width]
-	if _spots_for != key:
-		_spots = LiveRoom.spots(ShellFacts.anchors_of(self))
-		_spots_for = key
-	return _spots.get(id)
+## Where wheeled piece `id` stands now: its trolley's place while out here, else `default_spot`.
+func _spot_of(id: StringName) -> Variant: return station_spots.spot_of(id)
 
 
-## The trolley that wheeled piece `id` stands on, in the studio this venue stands in; null in no
-## studio (a venue made to be measured) or one that has not built it (AR).
-func _trolley_of(id: StringName) -> Trolley:
-	var studio := get_parent() as Studio
-	if studio == null or studio.studio_set == null:
-		return null
-	var t: Trolley = studio.live_pieces.get(id)
-	return t if t != null and is_instance_valid(t) else null
+## Where the stage table stands, read off the studio; null in no studio (`VenueStations`).
+func stage_table_spot() -> Variant: return station_spots.stage_table_spot()
 
 
-func _spot_or_home(id: StringName) -> Transform3D:
-	var at: Variant = _spot_of(id)
-	if at != null:
-		return at
-	# A made room that does without the piece: the venue's own pieces (the hoop on the wall) that still read
-	# a spot take the shared live room's.
-	var home := LayoutResolver.all(LiveRoom.layout(&"", 0), ShellFacts.anchors_of(self))
-	return home.get(id, Transform3D.IDENTITY)
+## Where the EQ wall stands, read off the studio; null in no studio (`VenueStations`).
+func eq_wall_spot() -> Variant: return station_spots.eq_wall_spot()
 
 
-## Where wheeled piece `id` stands, in studio space: where its trolley has been wheeled while it
-## is out in this venue, else the venue's own `default_spot` for it.
-func _spot_of(id: StringName) -> Variant:
-	var t := _trolley_of(id)
-	if t != null and t.visible:
-		return transform.affine_inverse() * get_parent().studio_set.transform * t.transform
-	return default_spot(id)
+## Where the LEVELS wall stands in its niche; null in no studio (`VenueStations`).
+func levels_spot() -> Variant: return station_spots.levels_spot()
 
 
-## Where the stage table stands (StageTable, docs/spatial_loop.md slice 18), in studio space: on
-## its trolley in the control room, which is the studio's furniture and not the venue's, so read
-## from the studio this venue stands in, wherever the trolley has since been wheeled. Its front
-## (+Z) faces the mix position. Null for a venue in no studio, or one with no table (AR).
-func stage_table_spot() -> Variant:
-	var studio := get_parent() as Studio
-	if studio == null or studio.stage_trolley == null or not is_instance_valid(studio.stage_trolley):
-		return null
-	return transform.affine_inverse() * studio.studio_set.transform * studio.stage_trolley.transform
+## Where the DJ platter stands on the deck's cart; null in no studio (`VenueStations`).
+func platter_spot() -> Variant: return station_spots.platter_spot()
 
 
-## Where the EQ wall stands (EqWall, docs/spatial_loop.md part two, slice 36), in studio space: on
-## its trolley at the control room's side wall, which is the studio's furniture and not the venue's,
-## so read from the studio this venue stands in, wherever the trolley has since been wheeled. Its
-## front (+Z) faces into the room. Null for a venue in no studio, or one with no wall (AR).
-func eq_wall_spot() -> Variant:
-	var studio := get_parent() as Studio
-	if studio == null or studio.eq_wall_trolley == null or not is_instance_valid(studio.eq_wall_trolley):
-		return null
-	return transform.affine_inverse() * studio.studio_set.transform * studio.eq_wall_trolley.transform
+## Where the session in miniature lies at home, on the side table; null in no studio.
+func miniature_spot() -> Variant: return station_spots.miniature_spot()
 
 
-## Where the LEVELS wall stands (LevelsWall, docs/spatial_loop.md part three, slice 66), in studio
-## space: in its niche (`levels_niche_spot`), read from the studio this venue stands in. Its front
-## (+Z) faces the room. Null for a venue in no studio, or one with no wall (AR).
-func levels_spot() -> Variant:
-	var studio := get_parent() as Studio
-	if studio == null or studio.levels_niche == null or not is_instance_valid(studio.levels_niche):
-		return null
-	return transform.affine_inverse() * studio.studio_set.transform * studio.levels_niche.transform
+## Where the Rig Roulette station hangs on the control room's back wall (`VenueStations`).
+func rig_roulette_spot() -> Transform3D: return station_spots.rig_roulette_spot()
 
 
-## Where the DJ platter stands (Platter, docs/spatial_loop.md part two, slice 27), in studio space:
-## on the leaf of the tape deck's cart, beside the deck, which is the studio's furniture and not the
-## venue's, so read from the studio this venue stands in, wherever the cart has since been wheeled.
-## Its front (+Z) is the cart's. Null for a venue in no studio, or one with no cart (AR).
-func platter_spot() -> Variant:
-	var studio := get_parent() as Studio
-	if studio == null or studio.platter == null or not is_instance_valid(studio.platter) \
-			or studio.deck_trolley == null or not is_instance_valid(studio.deck_trolley):
-		return null
-	return transform.affine_inverse() * studio.studio_set.transform * studio.deck_trolley.transform * Platter.ON_CART
+## Where the door to the Rig Roulette room stands (`VenueStations`).
+func rig_roulette_door() -> Transform3D: return station_spots.rig_roulette_door()
 
 
-## Where the session in miniature lies at home (MiniatureItem, docs/spatial_loop.md part two, slice
-## 34), in studio space: on the side table by the seat (Studio.desk_wing), which is the studio's
-## furniture and not the venue's, so read from the studio this venue stands in, wherever the table
-## has been pushed to. Its reader's edge (an item's -Z) toward the table's front. Null for a venue
-## in no studio, or one with no table (AR).
-func miniature_spot() -> Variant:
-	var studio := get_parent() as Studio
-	if studio == null or studio.desk_wing == null or not is_instance_valid(studio.desk_wing):
-		return null
-	return transform.affine_inverse() * studio.studio_set.transform * studio.desk_wing.transform \
-			* Transform3D(Basis(Vector3.UP, PI), Vector3(0, Studio.WING_TOP, 0))
+## The Rig Roulette door as the walker's footprint, solid to its lintel.
+func door_solid() -> Dictionary: return station_spots.door_solid()
 
 
-## Where the Rig Roulette station hangs, in studio space: on the control room's own back wall,
-## within reach of the console rather than tucked away in the back of house like the Tour case --
-## this is a thing the whole band gathers around between takes, not a run's own opening move.
-## Mounted at console-knob height, facing into the room.
-##
-## The back wall, not a side wall: both side walls sit behind furniture that grows with every
-## track's own FX -- the mixing rack (`Studio.rack`, leant out at 38 degrees off the left wall)
-## and the patchbay (leant off the right) both lengthen as tracks are added, and a long enough
-## one stands squarely between the seat and anything mounted on the wall behind it
-## (`tests/run_tests.gd`'s own seat-click audit, run at 40 tracks, catches exactly this). The
-## back wall carries nothing of the kind -- only the fixed first-reflection panels this clears
-## by mounting past their x -1.95..1.95 spread, toward the corner.
-func rig_roulette_spot() -> Transform3D:
-	var x := -room_width * 0.5 + 1.0
-	# The wall is a box 0.1 thick centred on ROOM_FRONT, its face 5cm out; the plate stands 1cm
-	# deep behind the origin, so a spot any nearer than this buries the panel in the plaster.
-	var z := Studio.ROOM_FRONT + 0.07
-	return Transform3D(Basis.IDENTITY, Vector3(x, 1.05, z))
+## Where the board that writes up a Rig Roulette roll hangs (`VenueStations`).
+func roll_board_spot() -> Transform3D: return station_spots.roll_board_spot()
 
 
-## Where the door to the Rig Roulette room stands, in studio space (its origin the floor in the
-## middle of the opening, facing into the room, 7cm off the wall): at the right-hand end of the
-## front wall, in the corner -- clear of the roulette panel's end, the first-reflection panels, the
-## roll board and the acoustic treatment. Where the room has no wall it is a gate on its own legs.
-## Every venue has one; a venue whose front wall is taken says where else.
-func rig_roulette_door() -> Transform3D:
-	return Transform3D(Basis.IDENTITY, Vector3(room_width * 0.5 - 1.0, 0.0, Studio.ROOM_FRONT + 0.07))
+## Where the LEVELS niche is, in the front wall left of the timeline (`VenueStations`).
+func levels_niche_spot() -> Transform3D: return station_spots.levels_niche_spot()
 
 
-## The door as the walker's footprint: solid to its lintel.
-func door_solid() -> Dictionary:
-	var at := rig_roulette_door()
-	# Its frame stands in the wall's face; what a person walks into is the part on the floor.
-	var c := Vector2(at.origin.x, at.origin.z)
-	if absf(at.basis.get_euler().y) < 0.01:
-		c.y = maxf(c.y, Studio.ROOM_FRONT + 0.05 + RouletteDoor.HALF.y + 0.005)
-	return {"c": c, "h": RouletteDoor.HALF, "a": at.basis.get_euler().y,
-			"top": RouletteDoor.OPENING.y + RouletteDoor.LINTEL}
+## Where the sampling station's TV is, read off the studio; null in no studio.
+func tv_spot() -> Variant: return station_spots.tv_spot()
 
 
-## Where the board that writes up a Rig Roulette roll hangs, in studio space (its origin the
-## middle of its bottom edge): high on the right-hand wall, facing in, its lower edge just above
-## the acoustic panels (which stand to 2.1m) and its top just under the ceiling, so the whole
-## room can read it with a turn of the head. Not on the front wall, where it was: there it hung
-## straight behind the timeline and was the backdrop to the whole set ("the big screen for rig
-## randomizer needs to move somewhere else that isnt the backdrop for the main set"). Not the
-## left wall either, which has the mirror and, in the studio, a window into the live room.
-##
-## Where there is no wall and the board stands on its own legs, it stands in from the edge: the
-## edge is where a venue puts its own uprights (the rooftop's light poles went through it).
-func roll_board_spot() -> Transform3D:
-	# The wall is a box 0.1 thick centred on the room's edge, its face 5cm in.
-	var inset := 0.45 if back_wall_gear_stands() else 0.11
-	return Transform3D(Basis(Vector3.UP, -PI * 0.5),
-			Vector3(room_width * 0.5 - inset, 2.14, Studio.ROOM_MID))
-
-
-## Where the LEVELS niche is, in studio space (its origin the floor under the board's middle, its
-## front +Z into the room): in the front wall left of the timeline, the board set back in it
-## (2026-10-30: "its own like divet in the wall so it can be an entire wall in each of the
-## venues"). Left of the timeline as the seat sees it, so not behind it, and short of the left
-## wall, where the patch wall, the mirror and the window are; its right edge stays clear of the
-## timeline's shoulder from the seat. Its x follows the wall out as the room widens.
-##
-## Where the wall is not one to build into (`back_wall_gear_stands`: open ground, rock, glass, a
-## curve) the niche is a cabinet of its own, stood in from the edge as the roll board is.
-func levels_niche_spot() -> Transform3D:
-	var inset := LEVELS_NICHE_STANDS_IN if back_wall_gear_stands() else LEVELS_NICHE_IN
-	return Transform3D(Basis.IDENTITY,
-			Vector3(-room_width * 0.5 + LEVELS_NICHE_FROM_LEFT, 0.0, Studio.ROOM_FRONT + inset))
-
-
-## Where the sampling station's TV is (TvSurface, docs/sampling_station.md), in studio space: on
-## its bracket or its stand, read off the studio's.
-func tv_spot() -> Variant:
-	var studio := get_parent() as Studio
-	if studio == null or studio.tv_mount == null or not is_instance_valid(studio.tv_mount):
-		return null
-	return transform.affine_inverse() * studio.studio_set.transform * studio.tv_mount.transform
-
-
-## Where the TV hangs (its origin the floor under the screen's middle, its face +Z into the room):
-## on the front wall right of the timeline, as LEVELS is left of it, short of the door in the
-## right-hand corner. Where the wall is not one to hang it on (`back_wall_gear_stands`), on a
-## stand of its own, in from the edge.
-func tv_mount_spot() -> Transform3D:
-	var inset := TV_STANDS_IN if back_wall_gear_stands() else TV_IN
-	return Transform3D(Basis.IDENTITY,
-			Vector3(room_width * 0.5 - TV_FROM_RIGHT, 0.0, Studio.ROOM_FRONT + inset))
+## Where the TV hangs on the front wall right of the timeline (`VenueStations`).
+func tv_mount_spot() -> Transform3D: return station_spots.tv_mount_spot()
 
 
 ## The TV's middle this far in from the right-hand wall; its face this far out from the front
@@ -988,24 +592,10 @@ const LEVELS_NICHE_IN := 0.14
 const LEVELS_NICHE_STANDS_IN := 0.33
 
 
-## Where the Workshop's panel hangs (WorkshopPanel, docs/workshop.md), in studio space (its origin
-## the floor under the middle of its face, its front +Z into the room): on the control room's right
-## wall near the live room's end, behind the patchbay's stand and the station board, at eye
-## height, on stand-offs (WorkshopPanel.ON_WALL) in front of what hangs there (the studio's acoustic
-## panel), clear of the roll board (high, at the room's middle) and the door (the front corner);
-## stood WorkshopPanel.OFF_WALL in where the venue has no wall and it stands on a post. Null unless
-## the Workshop is on in this process (Workshop.enabled: a dev flag, this machine, never a guest),
-## so for everybody else there is no such station at all; and in the Rig Roulette room.
-func workshop_spot() -> Variant:
-	if not Workshop.enabled() or venue_id() == ROULETTE_ID:
-		return null
-	var inset := WorkshopPanel.OFF_WALL if back_wall_gear_stands() else WorkshopPanel.ON_WALL + 0.05
-	return Transform3D(Basis(Vector3.UP, -PI * 0.5),
-			Vector3(room_width * 0.5 - inset, 0.0, Studio.ROOM_BACK - WorkshopPanel.FROM_LIVE_ROOM))
+## Where the Workshop's panel hangs; null unless the Workshop is on (`VenueStations`).
+func workshop_spot() -> Variant: return station_spots.workshop_spot()
 
 
-## What the gear is made of here (see GearStyle). The studio's own: no change from the
-## defaults but a steel edge.
 ## The twelve colours tracks are shown in here, in TrackColours.STANDARD's order (red, orange,
 ## yellow, lime, green, teal, sky, blue, violet, magenta, pink, neutral); empty for STANDARD's
 ## own, which is the studio's.
@@ -1013,6 +603,8 @@ func track_palette() -> Array:
 	return []
 
 
+## What the gear is made of here (see GearStyle). The studio's own: no change from the defaults but a
+## steel edge.
 func gear_style() -> GearStyle:
 	return GearStyle.new()
 
@@ -1036,37 +628,20 @@ func hoops() -> Array:
 	return [shape]
 
 
-## Where the mic lives, in studio space: in the clip at the end of the booth's mic stand's boom,
-## along it, grille out. Null where there is no stand (the chalk zone only draws one), and the
-## mic takes a place on the shelf instead.
-func mic_spot() -> Variant:
-	var stand := find_child("MicStand", true, false) as Node3D
-	if stand == null:
-		return null
-	var at := stand.transform
-	var up := stand.get_parent()
-	while up != null and up != self:
-		if up is Node3D:
-			at = (up as Node3D).transform * at
-		up = up.get_parent()
-	# Along the boom: out along the stand's -Z and up by its tilt, and the mic's axis (which is
-	# its own centre height above its origin) through the clip.
-	var along := Basis(Vector3.RIGHT, ZoneKit.MIC_TILT)
-	return at * Transform3D(along, ZoneKit.mic_clip() - along * Vector3(0, MicItem.AXIS_HEIGHT, 0))
+## Where the mic lives, in the clip of the booth's mic stand; null where there is no stand.
+func mic_spot() -> Variant: return zone_spots.mic_spot()
 
 
-## Everything the venue puts on the floor that stops a person: the zones' dressing, the prop
-## shelf and what stands about the room with it (the door, the hoop, the Tour case
-## and the cassette rack).
-## What the walker is given.
-##
-## In a studio the free-standing ones (WHEELED) are left out: they stand on trolleys there, and the
-## walker already stops at every trolley in the floor plan, wherever it has been pushed.
 ## How high the room's ceiling is, for the walker: no one flies out through the roof.
 func ceiling_height() -> float:
 	return LIVE_ROOM_HEIGHT
 
 
+## Everything the venue puts on the floor that stops a person, as the walker is given it: the zones'
+## dressing, the instrument and weather posts, the door, and -- outside a studio, where there are no
+## trolleys -- the prop shelf and the free-standing pieces with it (the hoop, the Tour case, the
+## cassette rack, the sampler). In a studio those (WHEELED) are left out: the walker already stops at
+## every trolley in the floor plan, wherever it has been pushed.
 func solids() -> Array:
 	var out := zone_solids()
 	out.append_array(instrument_solids())
@@ -1075,33 +650,13 @@ func solids() -> Array:
 		# The door is as solid as the shelf: a venue that only draws its furniture (the chalk
 		# zone) is walked through, door and all.
 		out.append(door_solid())
-		if _trolley_of(&"prop_shelf") == null:
+		if station_spots.trolley_of(&"prop_shelf") == null:
 			out.append_array(wheeled_solids())
 	return out
 
 
-## The free-standing pieces (WHEELED) where they stand now, as walker footprints with how tall each
-## is: what a thrown thing lands on top of or bounces off the side of (Flight.fly), which a
-## trolley's footprint alone does not say. None where they are only drawn (`prop_shelf_solid`).
-func wheeled_solids() -> Array:
-	var out: Array = []
-	if not prop_shelf_solid():
-		return out
-	var spot := prop_shelf_spot()
-	out.append({"c": Vector2(spot.origin.x, spot.origin.z),
-			"h": Vector2(ZoneKit.SHELF.x, ZoneKit.SHELF.z) * 0.5,
-			"a": spot.basis.get_euler().y, "top": ZoneKit.SHELF.y})
-	# What a made room does without (its layout switched the piece off) has no solid.
-	if default_spot(&"hoop") != null:
-		out.append_array(Hoop.solids(hoop_spot()))
-	if default_spot(&"tour_case") != null:
-		out.append_array(TourCase.solids(tour_case_spot()))
-	if default_spot(&"cassette_rack") != null:
-		out.append(CassetteRack.solid(cassette_rack_spot()))
-	var sampler_at: Variant = sampler_spot()
-	if sampler_at != null:
-		out.append(Sampler.solid(sampler_at))
-	return out
+## The free-standing pieces where they stand now, as walker footprints with their heights.
+func wheeled_solids() -> Array: return shell_floor.wheeled_solids()
 
 
 ## Whether the shelf is a thing you bump into. A venue that only draws it (the chalk zone) says
@@ -1110,30 +665,13 @@ func prop_shelf_solid() -> bool:
 	return true
 
 
-## Build the prop shelf at its spot in the venue's own materials: called by each venue as it
-## dresses its zones, with the bricks table's top and legs so the two read as one set, and a lamp
-## the colour of the venue's own light.
+## Build the prop shelf and its hoop in the venue's own materials; each venue calls it as it dresses its zones.
 func _dress_prop_shelf(top: Material, frame: Material, lamp := Color(1.0, 0.76, 0.48)) -> Node3D:
-	var holder := Node3D.new()
-	holder.name = "PropShelf"
-	holder.transform = prop_shelf_spot()
-	add_child(holder)
-	ZoneKit.prop_shelf(holder, top, frame, lamp)
-	# The hoop across the room is the shelf's: its stand in the shelf's frame.
-	var hoop := Hoop.new(frame, null, false, lamp)
-	hoop.transform = hoop_spot()
-	add_child(hoop)
-	return holder
+	return shell_floor.dress_prop_shelf(top, frame, lamp)
 
 
-## The floor behind the working footprint that a person can walk on to reach the zones: the
-## footprint's far edge back to the live room's back, wall to wall. Furniture stays out of it;
-## it is for people. In the studio it is the live room; in an open venue, where nothing else
-## would stop you, it is where the floor ends being somewhere.
-func back_of_house() -> Rect2:
-	var front := Studio.ROOM_BACK
-	var half := live_room_half() - 0.05
-	return Rect2(-half, front, half * 2.0, LIVE_ROOM_BACK - 0.05 - front)
+## The floor behind the working footprint that a person can walk on to reach the zones.
+func back_of_house() -> Rect2: return shell_floor.back_of_house()
 
 
 ## Whether the venue's floor ends at walls: false for one in the open (a plaza, a roof, a stage),
@@ -1150,26 +688,12 @@ func rooms() -> Array[Rect2]:
 	return [back_of_house()]
 
 
-## The floor either side of the working footprint, out to the live room's width, from the
-## footprint's front edge to where the back of house begins: for a venue with nothing beside the
-## desk but more of itself (a deck, a roof, a plaza), so you can walk round the gear rather
-## than only between it.
-func beside_the_desk() -> Array[Rect2]:
-	var half := live_room_half()
-	var cr := room_width * 0.5
-	var z := Studio.ROOM_FRONT + 0.05
-	var depth := Studio.ROOM_DEPTH - 0.05
-	return [Rect2(-half + 0.05, z, half - cr, depth), Rect2(cr - 0.05, z, half - cr, depth)]
+## The floor either side of the working footprint, out to the live room's width.
+func beside_the_desk() -> Array[Rect2]: return shell_floor.beside_the_desk()
 
 
-## One floor round everything -- the desk, the zones, the live room -- `margin` past them on
-## every side: for a venue with nothing round the room but more open ground, so the zones can be
-## walked round and the desk approached from in front. It overlaps the footprint rather than
-## meeting it, which Walker.outline takes as floor on both sides.
-func open_floor(margin: float) -> Rect2:
-	var half := live_room_half() + margin
-	var front := Studio.ROOM_FRONT + 0.05 - margin
-	return Rect2(-half, front, half * 2.0, LIVE_ROOM_BACK + margin - front)
+## One floor round everything, `margin` past it on every side, for a venue in the open.
+func open_floor(margin: float) -> Rect2: return shell_floor.open_floor(margin)
 
 
 ## Where the modular room's near wall begins, along x: the live room's wall, or a house's outer wall
@@ -1198,38 +722,8 @@ func sign_height() -> float:
 	return Neighbourhoods.SIGN_HEIGHT
 
 
-## A lit or drawn outline of the working footprint, at floor level, as a set of corners.
-func footprint_corners() -> PackedVector2Array:
-	var hw := room_width * 0.5 - 0.05
-	var front := Studio.ROOM_BACK - 0.05
-	var back := Studio.ROOM_FRONT + 0.05
-	return PackedVector2Array([Vector2(-hw, back), Vector2(hw, back), Vector2(hw, front),
-			Vector2(-hw, front)])
-
-
-## A mirror in this venue's style, where this venue keeps it. See core/venues/mirror.gd.
-func make_mirror(env: Environment) -> Mirror:
-	var m := Mirror.new()
-	m.name = "Mirror"
-	m.rich = rich
-	m.environment_from = env
-	m.transform = mirror_spot(m.glass_size)
-	_frame_mirror(m)
-	var board := Wardrobe.new()
-	board.name = "Wardrobe"
-	_dress_wardrobe(board)
-	board.transform = wardrobe_spot(m)
-	m.add_child(board)
-	m.wardrobe = board
-	return m
-
-
-## Where the wardrobe board hangs, in the mirror's frame: beside the glass on its +X side, at
-## hand height, turned a little toward whoever is standing in front of the glass.
-func wardrobe_spot(mirror: Mirror) -> Transform3D:
-	var beside := mirror.glass_size.x * 0.5 + 0.34
-	var hand := 1.25 - mirror.position.y
-	return Transform3D(Basis(Vector3.UP, -0.4), Vector3(beside, hand, 0.06))
+## A lit or drawn outline of the working footprint, at floor level, as corners.
+func footprint_corners() -> PackedVector2Array: return shell_floor.footprint_corners()
 
 
 ## The board's materials and ink, in the venue's own style. Left plain by default.
@@ -1251,20 +745,8 @@ func _frame_mirror(_mirror: Mirror) -> void:
 	pass
 
 
-## Four bars round the glass, `bar` wide and `depth` deep, set back so their faces sit `proud`
-## in front of the glass, and `inset` over its edge. Shared by the venues whose frames are solid.
+## Four bars round the glass, shared by the venues whose frames are solid (`VenueShell.frame_bars`).
 static func frame_bars(mirror: Mirror, bar: float, depth: float, proud: float,
 		material: Material, inset := 0.0) -> void:
-	var w := mirror.glass_size.x - inset * 2.0
-	var h := mirror.glass_size.y - inset * 2.0
-	for spec in [[Vector3(0, (h + bar) * 0.5, 0), Vector3(w + bar * 2.0, bar, depth)],
-			[Vector3(0, -(h + bar) * 0.5, 0), Vector3(w + bar * 2.0, bar, depth)],
-			[Vector3((w + bar) * 0.5, 0, 0), Vector3(bar, h, depth)],
-			[Vector3(-(w + bar) * 0.5, 0, 0), Vector3(bar, h, depth)]]:
-		var piece := MeshInstance3D.new()
-		var box := BoxMesh.new()
-		box.size = spec[1]
-		piece.mesh = box
-		piece.material_override = material
-		piece.position = spec[0] + Vector3(0, 0, proud - depth * 0.5)
-		mirror.add_child(piece)
+	VenueShell.frame_bars(mirror, bar, depth, proud, material, inset)
+

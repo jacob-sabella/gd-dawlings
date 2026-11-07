@@ -61,7 +61,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	studio.rack_host._stand_the_modular()
 	studio.pieces.stand(&"weather")
 	studio.furniture_host._hang_hood_signs()
-	var mirror := studio.venue.make_mirror(env)
+	var mirror := studio.venue.shell_floor.make_mirror(env)
 	studio.venue.add_child(mirror)
 	_stand_a_patch_wall()
 	studio.furniture_host._set_levels_niche()

@@ -23,8 +23,8 @@ func _item_homes() -> Dictionary:
 	if studio.venue == null:
 		return _kit_homes({})
 	var out := {&"headphones": studio.venue.headphones_spot(), &"glasses": studio.venue.glasses_spot(), &"tablet": studio.venue.tablet_spot(),
-			&"chips": studio.venue.chips_spot(), &"cards": studio.venue.cards_spot(),
-			&"cradle": studio.venue.cradle_spot(), &"yoyo": studio.venue.yoyo_spot(), &"toy": studio.venue.toy_spot(),
+			&"chips": studio.venue.shelf_spots.chips_spot(), &"cards": studio.venue.shelf_spots.cards_spot(),
+			&"cradle": studio.venue.shelf_spots.cradle_spot(), &"yoyo": studio.venue.shelf_spots.yoyo_spot(), &"toy": studio.venue.toy_spot(),
 			&"rcplane": studio.venue.rcplane_spot()}
 	for n in 3:
 		out[StringName("dart%d" % (n + 1))] = studio.venue.dart_spot(n)

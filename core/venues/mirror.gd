@@ -15,7 +15,7 @@ extends Node3D
 ## it. Panels that ride in front of your face in screen mode go the other way (NOT_REFLECTED):
 ## seen directly, never in the glass, where they would be their own backs over your face.
 ##
-## The glass is the same in every venue; the frame is the venue's (Venue.make_mirror).
+## The glass is the same in every venue; the frame is the venue's (VenueShell.make_mirror).
 
 ## Layer 20: drawn in mirrors only -- your own ghost.
 const SELF_ONLY := 1 << 19
