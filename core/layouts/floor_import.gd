@@ -11,6 +11,10 @@ extends RefCounted
 ## (`LayoutProfile.floor_import`) so it never looks again. A piece somebody did move keeps its place,
 ## and one they push back to an old default later is theirs.
 ##
+## Then `into_room` (docs/layouts.md 7): the spots that remain are somebody's choices, and positions are
+## per room now, so they become the `moved` entries of the room the player is in, and the profile
+## forgets them.
+##
 ## The tables are data, `res://layouts/import/floor_v1.json`, frozen: the answer for 4536 probes is
 ## pinned in tests/fixtures/layouts/control_room_legacy.json.
 
@@ -38,6 +42,34 @@ static func run(profile: LayoutProfile) -> int:
 	if forgotten > 0:
 		profile.save()
 	return forgotten
+
+
+## The saved studio floor spots of `profile` that are left (`run` has taken the old defaults) become
+## `moved` entries of the room `deltas` is in, once; the profile forgets them. A player's own plugin
+## stands and track racks stay where they are, and the LEVELS niche and the TV bracket (built into the
+## wall, they have no pushed spot) are forgotten. A spot the room's delta already has is not overwritten.
+## Returns how many were moved. Does nothing, and does not mark the profile, for a guest (it is not the
+## host of any room to keep a delta for).
+static func into_room(profile: LayoutProfile, deltas: RoomDeltas) -> int:
+	if profile == null or deltas == null or profile.floor_moved >= 1 or not Session.is_authority():
+		return 0
+	var moved := 0
+	for key in profile.local_transforms.keys():
+		var parts := String(key).split("/")
+		if parts.size() != 3 or parts[0] != "floor" or int(parts[2]) != Presentation.Mode.STUDIO:
+			continue
+		var id := StringName(parts[1])
+		if RoomDelta.owned_by_player(id):
+			continue
+		var at: Transform3D = profile.local_transforms[key]
+		profile.local_transforms.erase(key)
+		if id in [&"levels", &"tv"] or deltas.delta.moved.has(String(id)):
+			continue
+		deltas.settle(id, at, false, null)
+		moved += 1
+	profile.floor_moved = 1
+	profile.save()
+	return moved
 
 
 ## Whether a saved floor spot `saved` for piece `id` is one of the defaults an older room stood it at

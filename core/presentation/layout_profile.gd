@@ -60,6 +60,9 @@ var timeline_width_scale := 1.0
 var timeline_lane_height := TimelineSurface.LANE_HEIGHT
 ## Which `FloorImport` has been done on this profile's saved floor spots (0: none yet).
 var floor_import := 0
+## Which `FloorImport.into_room` has been done: the saved floor spots that are not old defaults are
+## the studio room's moved pieces now (0: not yet).
+var floor_moved := 0
 
 
 func mode_for(surface_id: StringName, surface_kind: StringName) -> int:
@@ -106,6 +109,8 @@ func save() -> void:
 	cfg.set_value("profile", "timeline_lane_height", timeline_lane_height)
 	if floor_import > 0:
 		cfg.set_value("profile", "floor_import", floor_import)
+	if floor_moved > 0:
+		cfg.set_value("profile", "floor_moved", floor_moved)
 	for id in modes:
 		cfg.set_value("modes", String(id), modes[id])
 	for id in local_transforms:
@@ -146,6 +151,7 @@ func load_saved() -> void:
 	timeline_width_scale = float(cfg.get_value("profile", "timeline_width_scale", timeline_width_scale))
 	timeline_lane_height = float(cfg.get_value("profile", "timeline_lane_height", timeline_lane_height))
 	floor_import = int(cfg.get_value("profile", "floor_import", floor_import))
+	floor_moved = int(cfg.get_value("profile", "floor_moved", floor_moved))
 	if cfg.has_section("modes"):
 		for key in cfg.get_section_keys("modes"):
 			modes[StringName(key)] = cfg.get_value("modes", key)

@@ -22,6 +22,8 @@ func _ready() -> void:
 	OfflineBackend.autosave_every = 0.0
 	# A studio under test neither reads nor writes the player's saved rack.
 	RackAutosave.disabled = true
+	# Nor the player's saved rooms (RoomDeltas).
+	RoomDeltas.disabled = true
 	# Rig Roulette is off in the game for now; its tests run with it on.
 	check("Rig Roulette is off unless asked for", not Studio.roulette_enabled)
 	Studio.roulette_enabled = true
@@ -778,6 +780,12 @@ func _ready() -> void:
 	_test_the_control_room_fragment_stands_the_furniture_where_the_old_code_did()
 	_test_the_groups_are_the_old_neighbourhoods()
 	_test_the_floor_import_forgets_old_defaults_once()
+	_test_a_room_delta_applies_over_the_defaults_and_flags_what_it_cannot_place()
+	_test_a_room_delta_file_is_atomic_and_refuses_the_bad_and_the_big()
+	await _test_pushed_furniture_is_saved_per_room_and_reloaded_by_a_fresh_studio()
+	_test_a_bad_room_file_degrades_to_the_defaults()
+	_test_a_guest_applies_the_hosts_layout_row_and_writes_nothing()
+	_test_the_floor_import_moves_saved_spots_into_the_studio_room()
 	await _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates()
 	_test_a_rack_catalogue_is_the_engines_own_description()
 	_test_a_rack_patch_checks_every_verb()
@@ -3802,8 +3810,8 @@ func _test_the_room_is_the_hosts() -> void:
 	studio._on_room_asked(&"move_piece", [&"rack", rack_home.x - 0.2, rack_home.y + 0.1, 0.4], 7)
 	check("a guest rolling the rack rolls it on the host", Vector2(studio.rack_trolley.position.x,
 			studio.rack_trolley.position.z).is_equal_approx(rack_home + Vector2(-0.2, 0.1)))
-	check("and the room says where it is", Vector2(studio.room_state()["floor"][&"rack"][0],
-			studio.room_state()["floor"][&"rack"][1]).is_equal_approx(rack_home + Vector2(-0.2, 0.1)))
+	check("and the room says where it is", Vector2(studio.room_state()["layout"]["moved"]["rack"][0],
+			studio.room_state()["layout"]["moved"]["rack"][1]).is_equal_approx(rack_home + Vector2(-0.2, 0.1)))
 	var desk_at := studio.mount.studio_home(&"console").translated(Vector3(0.05, 0, 0))
 	studio._on_room_asked(&"place_surface", [&"console", desk_at], 7)
 	check("a guest putting the desk down puts it down on the host",
@@ -3841,7 +3849,7 @@ func _test_the_room_is_the_hosts() -> void:
 
 	var host_desk := studio.mount.studio_home(&"console").translated(Vector3(0, 0, 0.04))
 	studio.apply_room({"venue": &"grid", "tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]},
-			"floor": {&"rack": [rack_home.x - 0.25, rack_home.y + 0.05, 0.3]}, "placed": {&"console": host_desk}})
+			"layout": {"moved": {"rack": [rack_home.x - 0.25, rack_home.y + 0.05, 0.3]}}, "placed": {&"console": host_desk}})
 	check("the host's rack is where the host rolled it", Vector2(studio.rack_trolley.position.x,
 			studio.rack_trolley.position.z).is_equal_approx(rack_home + Vector2(-0.25, 0.05)))
 	check("and the host's desk where the host put it", studio.console.transform.is_equal_approx(host_desk))
@@ -3890,7 +3898,7 @@ func _test_the_room_is_the_hosts() -> void:
 func _check_a_guest_predicts_and_rolls_back(studio: Studio, order: Array, plugin: String, rack_home: Vector2) -> void:
 	var me := Session.local_peer_id
 	var room := func(acked: int, tablets: Dictionary, rack: Vector2) -> Dictionary:
-		return {"venue": &"chalk", "tablets": tablets, "floor": {&"rack": [rack.x, rack.y, 0.3]},
+		return {"venue": &"chalk", "tablets": tablets, "layout": {"moved": {"rack": [rack.x, rack.y, 0.3]}},
 				"placed": {}, "acks": {me: acked}}
 	studio.apply_room(room.call(0, {}, rack_home), false)
 	check("the room is empty to start with", studio.tablets.is_empty())
@@ -6823,7 +6831,7 @@ func _test_a_track_pulls_out_of_the_rack_on_a_rack_of_its_own() -> void:
 	var away := Vector2(stand.position.x, stand.position.z).distance_to(Vector2(rack.global_position.x, rack.global_position.z))
 	check("standing out in front of the rack, not inside it (%.2f m)" % away, away > 0.5)
 	check("the room has it", (studio.room_state()["track_racks"] as Dictionary).has(id)
-			and not (studio.room_state()["floor"] as Dictionary).has(id))
+			and not (studio.room_state()["layout"]["moved"] as Dictionary).has(String(id)))
 
 	DAW.state.track(2).selected = true
 	pulled._on_track_changed(2, &"selected")
@@ -8428,8 +8436,7 @@ func _test_furniture_rolls_where_it_is_pushed() -> void:
 	check("the casters swung round to trail the push (%d of 4)" % turned, turned == 4)
 	check("and the wheels turned", not wheel.transform.basis.is_equal_approx(spin_from))
 
-	check("where it went is remembered",
-			Session.layout.has_transform(&"floor/rack", Presentation.Mode.STUDIO))
+	check("where it went is remembered", studio.room_deltas.delta.moved.has("rack"))
 	# Not saved separately: the rack's place is its plinth's, so remembering the plinth is
 	# remembering the rack.
 	check("and so is where the rack went with it",
@@ -8573,9 +8580,9 @@ func _test_what_stands_on_its_own_is_pushed_about_too() -> void:
 	check("and where a player stands to use it went with it (%.2f m)" % seat_now.origin.distance_to(seat_was.origin),
 			seat_now.origin.distance_to(seat_was.origin) > 0.3)
 	check("and the station board's row for it is still there", studio.station_board.rows().has(&"cassette_rack"))
-	check("and it is saved where it was left", Session.layout.has_transform(&"floor/cassette_rack", Presentation.Mode.STUDIO)
-			and Session.layout.transform_for(&"floor/cassette_rack", Presentation.Mode.STUDIO, Transform3D()).is_equal_approx(rack_t.transform))
-	check("and the room says where it is", (studio.room_state()["floor"] as Dictionary).has(&"cassette_rack"))
+	check("and it is saved where it was left", studio.room_deltas.delta.moved.has("cassette_rack")
+			and (studio.room_deltas.saved(&"cassette_rack", null) as Transform3D).origin.is_equal_approx(rack_t.transform.origin))
+	check("and the room says where it is", (studio.room_state()["layout"]["moved"] as Dictionary).has("cassette_rack"))
 	var slots: Array = studio.items.holders.get(CassetteRack.RACK, [])
 	check("a pushed cassette rack takes its slots with it", studio.cassette_rack.transform.is_equal_approx(
 			venue.cassette_rack_spot()) and slots.size() == CassetteRack.SLOTS
@@ -8640,6 +8647,8 @@ func _test_what_stands_on_its_own_is_pushed_about_too() -> void:
 	var layout := Session.layout
 	var saved_layout: LayoutProfile = rig["saved_layout"]
 	(rig["hand"] as Node).free()
+	# The room's file, in a folder of the test's own: the studio writes it as it leaves.
+	RoomDeltaTests.new(self)._live()
 	remove_child(studio)
 	studio.free()
 	var again := Studio.new()
@@ -8652,6 +8661,7 @@ func _test_what_stands_on_its_own_is_pushed_about_too() -> void:
 			and again.cassette_rack.transform.is_equal_approx(again.venue.cassette_rack_spot()))
 	remove_child(again)
 	again.free()
+	RoomDeltaTests.new(self)._off()
 	Session.layout = saved_layout
 	if layout != null and FileAccess.file_exists(layout.save_path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(layout.save_path))
@@ -27195,9 +27205,9 @@ func _test_an_old_rooms_saved_defaults_give_way_to_the_new_room() -> void:
 			% [rack.position, studio.deck_trolley.position],
 			rack.position.x <= ControlRoom.fit_of(&"rack")["at"].x + 0.05 and studio.deck_trolley.position.x >= ControlRoom.fit_of(&"deck_trolley")["at"].x - 0.05)
 	check("and their old spots are not kept as anyone's choice",
-			not FloorImport.was_old_default(&"rack", Session.layout.transform_for(&"floor/rack", Presentation.Mode.STUDIO, rack.transform))
+			not FloorImport.was_old_default(&"rack", studio.room_deltas.delta.transform_of(&"rack") if studio.room_deltas.delta.moved.has("rack") else rack.transform)
 			and not FloorImport.was_old_default(&"deck_trolley",
-					Session.layout.transform_for(&"floor/deck_trolley", Presentation.Mode.STUDIO, studio.deck_trolley.transform)))
+					studio.room_deltas.delta.transform_of(&"deck_trolley") if studio.room_deltas.delta.moved.has("deck_trolley") else studio.deck_trolley.transform))
 	studio.queue_free()
 	await get_tree().process_frame
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_old_room_layout.cfg"))
@@ -45913,6 +45923,39 @@ func _test_a_placement_is_anchors_plus_an_offset_or_a_frame() -> void:
 ## Section 11 step 4: the placement guarantees of the 42 combinations, from facts and no Studio.
 func _test_every_layout_is_valid() -> void:
 	LayoutValidatorTests.new(self).every_layout_is_valid()
+
+
+const RoomDeltaTests := preload("res://tests/room_delta_tests.gd")
+
+
+## Section 11 step 8: a room's delta applies over the defaults, round-trips, is flagged and limited.
+func _test_a_room_delta_applies_over_the_defaults_and_flags_what_it_cannot_place() -> void:
+	RoomDeltaTests.new(self).data()
+
+
+## The delta file writes atomically with a .bak and refuses what is bad or too big.
+func _test_a_room_delta_file_is_atomic_and_refuses_the_bad_and_the_big() -> void:
+	RoomDeltaTests.new(self).files()
+
+
+## A piece pushed in the studio is written after a pause, per room, and a fresh studio finds it.
+func _test_pushed_furniture_is_saved_per_room_and_reloaded_by_a_fresh_studio() -> void:
+	await RoomDeltaTests.new(self).persistence()
+
+
+## A corrupt, oversized or newer file leaves the room at its defaults without crashing.
+func _test_a_bad_room_file_degrades_to_the_defaults() -> void:
+	RoomDeltaTests.new(self).a_bad_file_degrades()
+
+
+## A guest applies the host's `layout` row, writes no file, and follows a piece put back.
+func _test_a_guest_applies_the_hosts_layout_row_and_writes_nothing() -> void:
+	RoomDeltaTests.new(self).a_guest_adopts_the_hosts_row()
+
+
+## The saved `floor/*` spots become the studio room's moved pieces once.
+func _test_the_floor_import_moves_saved_spots_into_the_studio_room() -> void:
+	RoomDeltaTests.new(self).the_floor_import_moves_into_the_room()
 
 
 const VenueFilesTests := preload("res://tests/venue_files_tests.gd")

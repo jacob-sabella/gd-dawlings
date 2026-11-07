@@ -258,6 +258,8 @@ var rack_wall: RackWall
 var rack_voice: RackVoice
 ## Loads the host's saved rack when the wall is built and saves it a moment after each change.
 var rack_files := RackAutosave.new()
+## The delta of the room this studio is in: where its furniture was left (`RoomDeltas`).
+var room_deltas := RoomDeltas.new()
 ## What the weather, the rings and the venue's instrument play into the rack's WORLD module.
 var modular_world: ModularWorld
 var modular_annex: ModularAnnex
@@ -434,6 +436,7 @@ var _orbit_target := Vector3(0, 0.92, 0)
 func _ready() -> void:
 	# A rack unit's words (✕ REMOVE's) are the room's notices.
 	RackUnit.say = func(words: String) -> void: Session.notice.emit(words)
+	add_child(room_deltas)
 	_build_environment()
 	# In AR the room is already there -- it is the one the participant is standing in. Drawing a
 	# virtual floor over a real one is not a smaller version of the VR experience, it is a worse
@@ -628,6 +631,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 		venue.queue_free()
 	venue = Venue.make(id, variant)
 	venue.name = "Venue"
+	room_deltas.enter(venue.venue_id(), venue.variant)
 	# The rows that are the venue's own (its instrument's) say this one's from now on.
 	Stations.here = venue
 	venue.rich = rich_rendering()
@@ -1043,6 +1047,7 @@ func _assembly(of_name: String) -> Node3D:
 func _build_furniture() -> void:
 	# Saved spots that are an older room's defaults go, once, before anything reads them.
 	FloorImport.run(Session.layout)
+	FloorImport.into_room(Session.layout, room_deltas)
 	floor_plan = FloorPlan.new()
 	floor_plan.name = "FloorPlan"
 	floor_plan.bounds = _room_bounds()
@@ -1580,7 +1585,7 @@ func _build_patch_stand() -> void:
 #
 # The cassette rack, the sampler, the Tour case, the prop shelf and
 # the hoop stand on the floor by themselves, the way the rack and the deck's cart do, so they are
-# pushed about the same way: a trolley each, saved where it was left (`floor/<id>`) and shared
+# pushed about the same way: a trolley each, saved where it was left (the room's delta, `RoomDeltas`) and shared
 # with the room like the rest. What is built into a venue -- its walls and doors, the riser, the
 # booth, the bricks table and the wheel on it, the lattice's frame, the screens on the walls --
 # stays where the venue put it, and is what a pushed piece stops at (FloorPlan.stops).
@@ -1678,10 +1683,9 @@ func _wheel_in_live_pieces() -> void:
 		if spot == null or t.held_by != null:
 			continue
 		var at: Transform3D = spot
-		var key := StringName("floor/%s" % id)
-		if not _showing_hosts_room and Session.layout != null \
-				and Session.layout.has_transform(key, Presentation.Mode.STUDIO):
-			at = Session.layout.transform_for(key, Presentation.Mode.STUDIO, at)
+		var left: Variant = room_deltas.saved(id, null)
+		if left != null:
+			at = left
 		t.position = Vector3(at.origin.x, 0, at.origin.z)
 		t.rotation = Vector3(0, at.basis.get_euler().y, 0)
 		placing.append(t)
@@ -2167,13 +2171,6 @@ func room_state() -> Dictionary:
 		var t: PluginTablet = tablets[id][1]
 		out[id] = [t.track_index, t.fx_index, t.fx_name, stand.position.x, stand.position.z,
 				stand.rotation.y]
-	var floor := {}
-	if floor_plan != null:
-		for piece in floor_plan.pieces:
-			var t := piece as Trolley
-			if t != null and is_instance_valid(t) and not tablets.has(t.piece_id) \
-					and not track_racks.has(t.piece_id):
-				floor[t.piece_id] = [t.position.x, t.position.z, t.rotation.y]
 	var pulled := {}
 	for id in track_racks:
 		var stand: Trolley = track_racks[id][0]
@@ -2186,7 +2183,7 @@ func room_state() -> Dictionary:
 				placed[surface_id] = mount.studio_home(surface_id)
 	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0],
 			"variant": venue.variant if venue != null else 0, "tablets": out,
-			"floor": floor, "placed": placed, "items": items.state() if items != null else {},
+			"layout": RoomFloor.row(self), "placed": placed, "items": items.state() if items != null else {},
 			"made": items.made_ids() if items != null else [],
 			"patches": patches.duplicate(true), "on_air": on_air.duplicate(), "board": board_source,
 			"track_racks": pulled, "jacks": jacks.state() if jacks != null else {},
@@ -2321,6 +2318,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
 			&"place_surface": pending_place[p["args"][0]] = p["args"][1]
 
+	room_deltas.adopt(state.get("layout"))
 	var id_wanted := StringName(state.get("venue", &""))
 	var variant_wanted := Venue.known_variant(id_wanted, int(state.get("variant", 0)))
 	if venue != null and Venue.is_known(id_wanted) \
@@ -2353,13 +2351,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 				(tablets[id][0] as Trolley).place(Vector2(float(entry[3]), float(entry[4])), float(entry[5]))
 			elif not pending_move.has(id):
 				_follow_room(tablets[id][0], float(entry[3]), float(entry[4]), float(entry[5]), glide)
-		var floor: Dictionary = state.get("floor", {})
-		for piece in floor_plan.pieces:
-			var t := piece as Trolley
-			if t == null or not is_instance_valid(t) or not floor.has(t.piece_id) or pending_move.has(t.piece_id):
-				continue
-			var spot: Array = floor[t.piece_id]
-			_follow_room(t, float(spot[0]), float(spot[1]), float(spot[2]), glide)
+		RoomFloor.follow(self, pending_move, glide)
 
 	if floor_plan != null and state.has("track_racks"):
 		var racks_wanted: Dictionary = state["track_racks"]
@@ -2731,6 +2723,7 @@ func _put_back_own_room() -> void:
 	_predictions.clear()
 	if Session.layout == null:
 		return
+	room_deltas.enter_own(Session.layout)
 	for id in tablets.keys():
 		_take_down_tablet(id)
 	for id in track_racks.keys():
@@ -2747,8 +2740,8 @@ func _put_back_own_room() -> void:
 			# the venue's wall.
 			if live_pieces.has(t.piece_id) or t.built_in:
 				continue
-			var own: Transform3D = Session.layout.transform_for(StringName("floor/%s" % t.piece_id),
-					Presentation.Mode.STUDIO, _authored_floor[t.piece_id])
+			var left: Variant = room_deltas.saved(t.piece_id, Session.layout)
+			var own: Transform3D = left if left != null else _authored_floor[t.piece_id]
 			t.place(Vector2(own.origin.x, own.origin.z), own.basis.get_euler().y)
 		_wheel_in_live_pieces()
 		_carry_all_live()
@@ -2846,8 +2839,7 @@ func _fit_room_to_session() -> void:
 			var home: Transform3D = _authored_floor[t.piece_id]
 			want = [SessionLayout.widen(Vector2(home.origin.x, home.origin.z), room_width),
 					home.basis.get_euler().y]
-		var saved := Session.layout != null and Session.layout.has_transform(
-				StringName("floor/%s" % id), Presentation.Mode.STUDIO)
+		var saved := room_deltas.saved(t.piece_id, Session.layout) != null
 		var here := Vector2(t.position.x, t.position.z)
 		if want != null and not saved:
 			if not (want[0] as Vector2).is_equal_approx(here) or not floor_plan.is_clear(t, here, t.rotation.y):
@@ -2909,13 +2901,8 @@ func _trolley(of_name: String, id: StringName, at: Vector3, heading_degrees: flo
 	piece.position = at
 	piece.rotation_degrees = Vector3(0, heading_degrees, 0)
 	_authored_floor[id] = piece.transform
-	var key := StringName("floor/%s" % id)
-	if Session.layout != null and Session.layout.has_transform(key, Presentation.Mode.STUDIO) \
-			and (id == &"levels" or id == &"tv"):
-		# Where LEVELS stood on its trolley before it was built into the wall.
-		Session.layout.clear_transform(key, Presentation.Mode.STUDIO)
-	elif Session.layout != null and Session.layout.has_transform(key, Presentation.Mode.STUDIO):
-		var saved := Session.layout.transform_for(key, Presentation.Mode.STUDIO, piece.transform)
+	var saved: Variant = room_deltas.saved(id, Session.layout)
+	if saved != null and not (id == &"levels" or id == &"tv"):
 		piece.transform = saved
 	piece.settled.connect(_on_trolley_settled.bind(piece))
 	piece.moved.connect(_on_trolley_moved.bind(piece))
@@ -2931,47 +2918,21 @@ func _authored(of_name: String, id: StringName) -> Trolley:
 	return _trolley(of_name, id, args[0], args[1])
 
 
-## Whether a piece of `live_pieces` is where this venue stands it (`_live_default`), as near as
-## the floor plan lets it be. Every piece settling is saved, moved or not; one of these saved where
-## the venue happens to stand it would stay there in a venue that stands it somewhere else.
-func _where_the_venue_stands_it(piece: Trolley) -> bool:
-	if not live_pieces.has(piece.piece_id):
-		return false
-	var spot: Variant = _live_default(piece.piece_id)
-	if spot == null:
-		return false
-	var at := Vector2((spot as Transform3D).origin.x, (spot as Transform3D).origin.z)
-	var heading := (spot as Transform3D).basis.get_euler().y
-	if absf(wrapf(piece.rotation.y - heading, -PI, PI)) > 0.002:
-		return false
-	var here := Vector2(piece.position.x, piece.position.z)
-	if here.distance_to(at) < 0.005:
-		return true
-	return floor_plan != null and here.distance_to(floor_plan.resolve(piece, at, heading)["at"]) < 0.005
-
-
 func _on_trolley_settled(piece: Trolley) -> void:
 	var steered := piece.steered
 	piece.steered = false
-	if not _fitting and not _applying_room and not (steered and not Session.is_authority()):
-		if not Session.is_authority():
-			# Wheeled here: it stays here, and the host is told; see apply_room.
-			var verb := &"move_tablet" if tablets.has(piece.piece_id) else &"move_piece"
-			_predict(verb, [piece.piece_id, piece.position.x, piece.position.z, piece.rotation.y])
-			_looms_dirty = true
-			return
-		_publish_room()
-	# Where the host's room has things is not where this guest keeps its own.
-	if Session.layout == null or _fitting or _showing_hosts_room:
-		_looms_dirty = true
-		return
-	var key := StringName("floor/%s" % piece.piece_id)
-	if _where_the_venue_stands_it(piece):
-		# Not a place anyone chose: in the next venue, or a wider room, it goes where that stands it.
-		Session.layout.clear_transform(key, Presentation.Mode.STUDIO)
+	var told := not _fitting and not _applying_room and not (steered and not Session.is_authority())
+	if told and not Session.is_authority():
+		# Wheeled here: it stays here, and the host is told; see apply_room.
+		var verb := &"move_tablet" if tablets.has(piece.piece_id) else &"move_piece"
+		_predict(verb, [piece.piece_id, piece.position.x, piece.position.z, piece.rotation.y])
 	else:
-		Session.layout.set_transform(key, Presentation.Mode.STUDIO, piece.transform)
-	Session.layout.save()
+		# Where the host's room has things is not where this guest keeps its own. A spot that is where the
+		# room stands the piece is not a place anyone chose: in the next venue, or a wider room, it goes there.
+		if not (_fitting or _showing_hosts_room or piece.built_in):
+			room_deltas.settle(piece.piece_id, piece.transform, RoomFloor.at_default(self, piece), Session.layout)
+		if told:
+			_publish_room()
 	_looms_dirty = true
 
 
