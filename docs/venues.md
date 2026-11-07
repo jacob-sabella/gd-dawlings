@@ -121,8 +121,8 @@ Rooms differ in shape, so a venue changed under your feet could leave you out pa
 inside something it has put there. `Walker.unstick()` runs after every change and moves you to
 the nearest spot where you fit (`Walker.free_spot`, `Walker.fits`), standing on anything there
 you can step onto. At the desk you always fit, so you are left where you are.
-`tools/probe/walk_map.tscn` draws every venue's floor, walls and solids as SVGs in
-`~/.cache/dawlings/tmp/walkmap`.
+`tools/layout_dump.tscn` and `tools/layout_map.py` draw every venue's floor, walls and zones as SVG
+and PNG maps (`docs/tools.md`).
 
 What stands in a zone is solid where it looks it. `Venue.zone_solids()` hands the walker
 footprints with a height (`Walker.fixed`). The studio's riser, table, keyboard stand and booth
@@ -179,7 +179,7 @@ The tests then cover it automatically: `_test_venues_change_the_world_and_not_th
 else added or lost, there is a floor, the choice persists), `_test_every_venue_leaves_room_for_the_activities`
 (every zone is there, big enough, clear of the footprint and each other, dressed, at the base width and a widened
 one), `_test_every_layout_is_valid`, `tests/venue_files_tests.gd`, and the z-fight scan. `tools/light_check.sh`
-holds the light budget and `tools/probe/walk_map.tscn` draws the floor.
+holds the light budget and `tools/layout_map.py` draws the floor.
 
 ## Chalk
 

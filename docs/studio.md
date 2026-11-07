@@ -81,4 +81,4 @@ Add behaviour to the studio:
 
 `tests/run_tests.gd` builds real `Studio` instances (`Studio.new()`, `_floor_studio()`), so a targeted run such as
 `DAWLINGS_TESTS=_test_you_walk_into_the_room_and_not_through_it` is the check for most helpers. See
-`docs/testing.md`. Probes: `tools/probe/walk_map.tscn` (floor and walls of every venue), `tools/layout_dump.tscn`.
+`docs/testing.md`. Probes: `tools/layout_dump.tscn` + `tools/layout_map.py` (floor, walls and zones of every venue as JSON and SVG).
