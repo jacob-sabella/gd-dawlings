@@ -137,9 +137,9 @@ Do the first unchecked item. Break it down in the log if it is too big for one p
       them before any code (stop the loop and ask).
 - [x] 3. Registry and manifest loader beside the old path, with bad-mod degradation; move one rack
       module (Plaits) onto it.
-- [ ] 4. Move the rest of the rack modules, then the DAW plugins. (Rack modules, presets and the
-      `builtin.<name>` rename done; plugin catalogue names done; what remains of the plugins is in the log
-      line of slice 4b.)
+- [x] 4. Move the rest of the rack modules, then the DAW plugins. (Rack modules, presets and the
+      `builtin.<name>` rename done; plugin catalogue names done; plugin skins, the unavailable plugin slot
+      and Reaper's list move into items 5 and 10.)
 - [ ] 5. Sample mod as a folder: appears, plays, saves, reloads, replicates (the proof test).
 - [ ] 6. Layouts as data: one venue first, then all of them, keeping the placement guarantees.
 - [ ] 7. In-game editing (move, add, remove, save, reset) and sharing the layout with the room.
