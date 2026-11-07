@@ -422,25 +422,6 @@ static func keyboard_stand(parent: Node3D, width: float, metal: Material, deck: 
 	block(parent, Vector3(0.28, 0.025, width * 0.9), Vector3(0.14, 1.02, 0), deck, "UpperDeck")
 
 
-## The synth zone's module rack, given way to the modular room (RackWall,
-## Venue.modular_spot, docs/spatial_loop.md part two, slice 51): a venue's own case, lights or panel
-## over the stand (named "Module..."), and whatever outlines one where it stands, hidden; or shown
-## again, where the wall does not hang.
-static func yield_rack(venue: Node3D, yielded := true) -> void:
-	var zone := venue.get_node_or_null("Zone_synth") as Node3D
-	if zone == null:
-		return
-	var at: Array[Vector3] = []
-	for child in zone.get_children():
-		if child is Node3D and String(child.name).begins_with("Module"):
-			(child as Node3D).visible = not yielded
-			at.append((child as Node3D).position)
-	for child in zone.get_children():
-		if child is Node3D and not String(child.name).begins_with("Module") \
-				and at.any(func(p: Vector3) -> bool: return p.is_equal_approx((child as Node3D).position)):
-			(child as Node3D).visible = not yielded
-
-
 ## Where the booth's mic stand stands, in the booth's frame, and which way its boom reaches: by
 ## the glass on the door side, at the closed end, boom back toward the middle where the singer
 ## stands facing out through the glass into the room. In the middle it crossed the singer's eyes.

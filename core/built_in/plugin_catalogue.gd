@@ -73,10 +73,6 @@ func find(format: String, id: String) -> Dictionary:
 	return {}
 
 
-func is_scanning() -> bool:
-	return _scanning
-
-
 ## Looks for new, changed and removed plugin files, in the background; `changed` when done.
 func rescan() -> void:
 	if _scanning or not available():

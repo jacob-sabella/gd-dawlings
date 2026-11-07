@@ -2577,12 +2577,6 @@ func publish_presence(head_in_session_space: Transform3D, pointing_at: String,
 		_receive_presence.rpc_id(1, head_in_session_space, pointing_at, pointing_local)
 
 
-func publish_head(head_in_session_space: Transform3D) -> void:
-	var me: Participant = participants.get(local_peer_id)
-	publish_presence(head_in_session_space,
-			me.pointing_at if me != null else "", me.pointing_local if me != null else Vector3.ZERO)
-
-
 ## A guest's pose, to the host, which keeps it and passes it on to everyone else in the room.
 ## Relayed by hand rather than by ENet's server relay so the host decides who hears it -- see
 ## `host()`.

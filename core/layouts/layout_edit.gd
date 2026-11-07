@@ -18,8 +18,6 @@ extends RefCounted
 
 ## What a guest is told.
 const HOST_ONLY := "Only the host arranges the room."
-## The ops, as asked.
-const OPS: Array[String] = ["move", "rotate", "add", "remove", "reset"]
 ## Room-scale and not in a layout file yet: stood by the studio in every venue but the roulette room, so the
 ## checks that look for its site and its door still have it.
 const ANNEX := {"id": "modular_annex", "piece": "modular_annex", "at": {"anchor": {"x": "annex_edge"}, "pos": [0.0, 0.0], "yaw": 0.0}}

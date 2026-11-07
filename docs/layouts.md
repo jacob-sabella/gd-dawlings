@@ -100,7 +100,7 @@ this by comparing `ShellFacts` from an un-readied venue with one from a built ve
 **What needs `_ready`: nothing a fact reads.** The state map left this unverified; it was checked two ways. By reading: the only
 venue code that reads child nodes and is reachable from a placement question is `lyrics_spot` and `mic_spot` (`find_child("MicStand")`,
 for the felt's height under the stand: a piece's spot, not a shell fact), `hoops()` (`get_node_or_null("Hoop")`, the node beside a
-computed shape) and `ZoneKit.yield_rack` (visibility). `rooms`, `zones`, `zone_solids`, the instrument's and weather's specs,
+computed shape). `rooms`, `zones`, `zone_solids`, the instrument's and weather's specs,
 `live_room_half`, `annex_edge`, `has_walls`, `ceiling_height`, `footprint_corners` and `door_solid` are constants, `variant` and
 `room_width`. By test: `_test_shell_facts_from_an_unreadied_venue_match_the_built_one` compares facts from a venue made and never
 entered into a tree with the same venue after `_ready`, for the 42 combinations and the roulette room, each at the base width and 3.2 m

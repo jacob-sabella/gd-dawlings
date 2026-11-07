@@ -97,16 +97,6 @@ func loading_keys() -> Array:
 	return _all.keys().filter(func(k): return _all[k]["loading"])
 
 
-## Waits for every plugin loading to finish, on the main thread. What `poll` would have said.
-func finish_loads() -> Array:
-	var out := []
-	for key in _all.keys():
-		if _all[key]["loading"]:
-			_all[key]["plugin"].wait_loaded()
-			out.append(_finish(key))
-	return out
-
-
 ## A plugin dawkit has finished with, taken in: its parameters and its effect, or, one that would
 ## not load, let go of.
 func _finish(key: String) -> Dictionary:

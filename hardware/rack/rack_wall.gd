@@ -53,9 +53,6 @@ const PLAQUE_WIDE := 0.42
 const PLAQUE_GAP := 0.03
 const PLAQUE_X := WIDE * 0.5 + BORDER + PLAQUE_GAP + PLAQUE_WIDE * 0.5
 const PLAQUE_Z := 0.01
-## How far the whole of it is off its middle toward the plaque: the venue hangs it this far the other
-## way (Venue.modular_spot).
-const OFF_MIDDLE := (PLAQUE_X + PLAQUE_WIDE * 0.5 - WIDE * 0.5 - BORDER) * 0.5
 const POST := 0.04
 const LOOK := Vector3(0, 0.3, 0.1)
 const FRAME_TOP := Vector3(0, TALL + BORDER, 0)
@@ -65,9 +62,6 @@ const STREAM_GAP_MSEC := 34
 const CABLE_SAG := 0.16
 const GROUP_PRESETS := "PRESETS"
 
-const CABLE_COLOURS := [Color(0.95, 0.78, 0.25), Color(0.4, 0.8, 1.0), Color(0.75, 0.75, 0.75),
-		Color(1.0, 0.45, 0.3), Color(0.95, 0.4, 0.65), Color(0.55, 0.9, 0.5), Color(0.7, 0.55, 1.0),
-		Color(0.3, 0.95, 0.85), Color(1.0, 0.6, 0.2), Color(0.85, 0.85, 0.4), Color(1, 1, 1)]
 
 var within_reach := true:
 	set(v):

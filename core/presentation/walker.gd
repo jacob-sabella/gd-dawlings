@@ -29,7 +29,6 @@ const SPRINT_SPEED := 3.2
 ## Metres per second per second. Enough that a tap moves you, little enough that you feel it.
 const ACCELERATION := 9.0
 const FRICTION := 16.0
-const AIR_CONTROL := 0.25
 ## We are ghosts: no gravity, no jump. Space rises, Ctrl sinks, and you hang where you let go.
 const FLY_SPEED := 1.8
 ## How far the head is above the feet: the highest the feet go is the ceiling less this.

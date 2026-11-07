@@ -62,7 +62,6 @@ const HOOK_MATRIX := 11
 const LANTERN_RING := 0.52
 
 const MODELS := "res://assets/models/"
-const SHADERS := "res://core/venues/shaders/"
 
 ## Per arrangement: the sky (zenith, upper, horizon; the glow's colour and strength; the sun's
 ## direction and disc; the moon's direction, size and phase; stars; the Milky Way; how bright the

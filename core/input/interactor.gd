@@ -348,17 +348,6 @@ func stow(slot: int) -> void:
 		_glove.poke(0.3)
 
 
-## Pocket `slot`'s into this hand, if the hand is free. False if it was not, or the pocket empty.
-func take_from_pocket(slot: int) -> bool:
-	if pockets == null or is_instance_valid(carrying):
-		return false
-	var item := pockets.at(slot)
-	if item == null:
-		return false
-	_out_of_pocket(item)
-	return true
-
-
 func _out_of_pocket(item: Item) -> void:
 	if pockets.at(item.pocket) == item:
 		pockets.put(item.pocket, null)

@@ -115,11 +115,6 @@ static func value_of(st: float) -> int:
 	return clampi(roundi(st / BEND_MOST * 8192.0), -8192, 8191)
 
 
-## A bend as the wheel's value, back in semitones.
-static func semitones_of(value: int) -> float:
-	return value / 8192.0 * BEND_MOST
-
-
 ## The bend in words, for what shows it (the glove's letters): `+1.3`, or ""
 ## for one too small to see.
 static func words(st: float) -> String:

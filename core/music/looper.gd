@@ -241,11 +241,6 @@ static func panel_frame(x: float, size: Vector2) -> Transform3D:
 	return deck_frame() * Transform3D(lean, Vector3(x, 0, HINGE_Z) + up * size.y * 0.5 + out * 0.003)
 
 
-## Where a headset player's hand meets the pad, in the looper's frame: its face's middle.
-static func pad_point() -> Vector3:
-	return deck_frame() * Vector3(0, PAD_TALL, PAD_Z)
-
-
 # --- the row: what a slap asks for, and the host's answer --------------------------------------
 
 ## Whether `state` has a loop to stack on: looping, round a range.

@@ -238,12 +238,6 @@ func open_midi() -> void:
 	_route_midi()
 
 
-func close_midi() -> void:
-	midi_open = false
-	_midi_declined = true
-	_route_midi()
-
-
 ## MIDI from wherever it is quickest: the helper's sequencer port while it runs, Godot's own
 ## input while it does not. Never both -- the same device opened twice is refused, or doubled.
 func _route_midi() -> void:

@@ -75,21 +75,6 @@ static func removable(id: StringName) -> bool:
 	return id in REMOVABLE
 
 
-## Whether `id` names a copy a room added, not a piece of the layout: `<kind>_<n>` of a kind in ADDABLE.
-static func is_copy(id: StringName) -> bool:
-	return kind_of_copy(id) != &""
-
-
-## The kind of copy `id` is (`hoop_2` -> `hoop`), or &"" for an id that is not a copy's.
-static func kind_of_copy(id: StringName) -> StringName:
-	var text := String(id)
-	var cut := text.rfind("_")
-	if cut < 0 or not text.substr(cut + 1).is_valid_int():
-		return &""
-	var kind := StringName(text.substr(0, cut))
-	return kind if ADDABLE.has(kind) else &""
-
-
 ## The next unused id for a copy of `kind` among `taken` (ids already in the room): `hoop_2`, `hoop_3`, ...
 static func next_id(kind: StringName, taken: Array) -> StringName:
 	var n := 2
