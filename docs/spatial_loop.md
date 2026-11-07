@@ -179,7 +179,7 @@ What is built is the NOTE path a chord hand would use.
    next flag when the section is narrow (`TimelineSurface.flag_lines`, `flag_width`). `--at 6
    --view 0:24` frames the shot. 74 checks in five tests (`_test_harmony_*`,
    `_test_the_demo_song_is_in_its_own_key`, `_test_brackets_are_kept_off_every_section`).
-2. [x] **One player's keys, many instruments.** GuestMidi's `instruments` set, `reach(name, on)`,
+2. [x] **One player's keys, many instruments.** (The keytar, and `GuestMidi.keytar`, are [removed 2026-11-06]; the set stays for the fingertips, a cable and the wheel.) GuestMidi's `instruments` set, `reach(name, on)`,
    `has_instruments()`, the `keytar` view, the synth started on the first entry and stopped on the
    last, `plays()`/`take_track()`/`_track_plugin()`/`_hear_host_keys()`/`_on_role_changed()`
    reading the set, `held` counted by source, and the take named after what played. `note_on` and
@@ -1498,7 +1498,7 @@ none.
     8 --no-hud --hover 640,465" SHOT_CAM="0,-0.05,1.0,0.15,1.45,-1.0"`): its thinned bend and wobble stand on the selected
     take as the timeline's amber posts.
 
-15. [x] **Bend and wobble by tilting.** The proving idea, #37. `Wobble` (core/music/wobble.gd, one
+15. [x] **Bend and wobble by tilting.** (The keytar's neck tag and wobble are [removed 2026-11-06]; the fingertips and the mouse still bend.) The proving idea, #37. `Wobble` (core/music/wobble.gd, one
     per playing hand) takes the hand's `tilt_angles()` each physics frame. `bend` is the decision's
     formula over the roll since the note's press. `vibrato` is the high-passed roll (3 to 8 Hz, the
     hand's own shake filtered, not an LFO), up to VIBRATO_MOST (0.4 semitones). Their sum goes out
@@ -1593,7 +1593,7 @@ none.
     --harp-bend 35 --hover 1580,880" tools/shot.sh shots/spatial15.png 38 42`; `--harp-bend` plucks at
     the shot harness's HARP_PLUCK_FRAME and its readings add the bend).
 
-16. [x] **Hits that play back as hits.** No new idea; the hand percussion's takes, the drums', the
+16. [x] **Hits that play back as hits.** (The shaker and tambourine voices are [removed 2026-11-06]; the cowbell, woodblock and the rest stay.) No new idea; the hand percussion's takes, the drums', the
     pads' and the looper's need it. The built-in engine plays every MIDI item through DawKitTine
     (`render_notes`) and ignores the channel, so a recorded shaker or drum plays back as a tine.
     `ItemVoices` (core/built_in/item_voices.gd) renders a MIDI item's channel 9 notes as GM drums
@@ -1630,7 +1630,7 @@ none.
     other channels not rung, and the same render after Foley's cache is emptied; the demo song is
     pinned by its kick, snare and hat hashes at DemoSong.VERSION 7).
 
-17. [x] **Shakers and a tambourine, in a bare hand, snapped gently.** The proving idea, #38,
+17. [x] **Shakers and a tambourine, in a bare hand, snapped gently.** (The shaker and the tambourine are [removed 2026-11-06] with the simple toys; no item asks for the fist hold today, so it is dormant. This is their history.) The proving idea, #38,
     finished. A tracked bare hand takes hold of hand percussion by closing round it: three fingers
     past HOLD_CURL (0.6) with the palm within 6 cm of its grip, not a pinch. It keeps it while
     closed, and lets go only when the hand has been open past OPEN_CURL for 0.1 s with confident

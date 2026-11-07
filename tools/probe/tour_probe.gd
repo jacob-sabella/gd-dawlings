@@ -349,7 +349,7 @@ func _play_part_through_recorder(i: int) -> void:
 	var gm := Session.guest_midi
 	var am_guest := not Session.is_authority()
 	if am_guest:
-		gm.keytar = true
+		gm.reach(&"fingertips", true)
 	gm.monitor = false
 	gm._commit()
 	gm.heard_source = func(): return _fake
@@ -385,7 +385,7 @@ func _play_part_through_recorder(i: int) -> void:
 			int(gm.last_take.get("track", -1)) == Tour.STAGE_TRACK and gm.takes_sent >= 2)
 	gm.heard_source = Callable()
 	if am_guest:
-		gm.keytar = false
+		gm.reach(&"fingertips", false)
 	gm.monitor = true
 
 

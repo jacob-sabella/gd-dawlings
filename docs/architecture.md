@@ -1699,7 +1699,7 @@ open everything on that card runs at 128 frames -- more wakeups for every progra
 
 ### Strikes on the fast path
 
-Everything struck by this player's own hand (a shaker, a bell, a drum's head: every
+Everything struck by this player's own hand (a cowbell, a woodblock, a drum's head: every
 `InstrumentItem`) answers a hand as the keys do, so it takes the same road (docs/spatial_loop.md
 part two, slice 39). `native/keys.c` also holds one-shot sample voices: `load SLOT PATH` reads a
 48 kHz 16-bit mono WAV into one of 256 slots (`SLOTS`, mirrored as `Foley.HIT_SLOTS`; 128 until slice 42's seven sounds took Foley's struck sounds past it; slice 43's eight bring them to 44 kinds, 176 slots), on the helper's main loop, and answers `loaded SLOT
@@ -1844,7 +1844,7 @@ for keys its `takeable` says are items, so a fader somebody has is still theirs 
 it was taken from hears the new table and lets go (`Presence._apply_items`), with a notice of who
 took it. Hovered, it says whose hand it is in and that it can be taken.
 
-Four kinds are not shared: the mic, the headphones, the tablet and the keytar
+Four kinds are not shared: the mic, the headphones, the glasses and the tablet
 (`ItemRoom.PERSONAL_KINDS`) are each one player's own, so the shelf's instance of one is a
 dispenser, never itself held. `Item._on_grab_begin` hands a grab of one of these to
 `ItemRoom.take_personal(kind, peer)` instead of `Interactor.pick_up`, which spawns (or finds) a
@@ -1924,7 +1924,6 @@ names, `&""` for plain keys; the host takes a name over `Session.NOTE_SOURCE_MAX
 Two instruments can hold the same pitch, so wherever one player's notes are sounded on one synth
 (their own monitor, `TheirKeys`, `TheirMonitor`) a `KeysDown` (`core/session/keys_down.gd`) counts
 each pitch by source, and its note-off is sounded only when the last source lets it go.
-`Presence` plays only a keytar holder's keys notes (`&"keytar"` or plain) out of the keytar.
 
 Beside the notes go the controls: the pitch wheel (`DawKitClip.PITCH_BEND`), the mod wheel (CC 1)
 and expression (CC 11), `GuestMidi.control(kind, value, source, at)`. They travel by
@@ -1974,7 +1973,7 @@ is `GuestMidi.control`'s to say.
 
 What moves the wheel without a keyboard is the playing hand (docs/spatial_loop.md part two, slice
 15). `Wobble` (`core/music/wobble.gd`, a RefCounted, one per playing hand on each instrument that
-bends: `KeytarItem.wobble` on the hand holding it, `FingertipNotes.wobble` on its own hand, and `MouseInteractor`'s own for the plain keys) is stepped
+bends: `FingertipNotes.wobble` on its own hand, and `MouseInteractor`'s own for the plain keys) is stepped
 each physics frame. It reads its hand's `Interactor.tilt_angles()` (`HandPose.angles_of`: roll and
 pitch in radians, unclamped, of which `tilt()` is the clamped form; a bare hand's `HandGestures
 .angles`, a controller's aim, the mouse's wiggle) and, only while one of its `sources` owns the
@@ -1990,7 +1989,7 @@ off, the tilt counts for nothing. The hand's `bend_wheel()` is added: the deskto
 mouse moving up or down, 100 px a semitone, springing back as Alt is let go
 (`MouseInteractor.bend_by`). So nothing new crosses the wire: a tilt is a bend like any other,
 heard, sent, rested at the last note-off and kept in the take. The mouse's wiggle runs while an
-instrument or the keytar is carried, the fingers play, or the cursor rests ungrabbed on a control
+instrument is carried, the fingers play, or the cursor rests ungrabbed on a control
 that `plays_under_cursor()` (the room string). `KeyCatcher` gives only Ctrl and Meta keys to the studio,
 and a key let go always sends its note-off.
 
@@ -2002,7 +2001,7 @@ head of the Mix bus into a per-performer delay line ("Their monitor N"), and eac
 when the delayed backing reaches its stamp. The line grows when a note misses it and never
 shrinks while plugged in.
 
-Hand percussion (`InstrumentItem`: `ShakerItem`, `TambourineItem`) is played by moving the hand
+Hand percussion (`InstrumentItem`: `CowbellItem`, `ClavesItem`, `WoodblockItem`...) is played by moving the hand
 that holds it. A stroke that stops or turns back is a hit, as hard as the stroke was fast. The
 movement is `Interactor.shake_point`: the controller in a headset, and the mouse's wiggle of the
 carried pose on a desktop (`MouseInteractor.wiggle`). The player hears the hit at once on their
@@ -2012,8 +2011,10 @@ transport as `GuestMidi.heard()` reports it and records each hit as a drum note,
 position. The take goes onto the first armed track through `DAW.insert_midi_take`. Other
 players' hits are only heard in the room, never in a personal mix.
 
-A tracked bare hand holds the shaker and the tambourine (`InstrumentItem.held_in_fist`) by
-closing round them, not only by a pinch (`XRInteractor.step_hold`, docs/spatial_loop.md slice 17):
+A tracked bare hand holds an item that says `InstrumentItem.held_in_fist` by closing round it,
+not only by a pinch (`XRInteractor.step_hold`, docs/spatial_loop.md slice 17; the shaker and the
+tambourine, the only two that did, were removed 2026-11-06, so no item asks for it today and the
+path is dormant, with no test):
 three fingers past `HandPose.HOLD_CURL` with the palm within 6 cm of the item's `grip_point`, taken
 as the hand closes. It lets go only after 0.1 s open on confident frames (`HandGestures.confident`:
 every joint seen, not inferred); a hand tracked with guessed joints goes on carrying it at the palm
@@ -2372,21 +2373,24 @@ and controller beside it (`Studio._wear_chord_jacks`), and P in the chord layer 
 nearer glove of their ghost (`Presence.cable_end`), rebuilt at most 15 times a second while an
 end moves. docs/spatial_loop.md slice 6.
 
-The keytar (`KeytarItem`) has no sound of its own here. In this player's hands it sets
-`GuestMidi.keytar`, a view of `&"keytar"` in `GuestMidi.instruments`: the set of instruments in
-this player's reach that play their keys (the keytar, the fingertips, a cable, the
-wheel; docs/spatial_loop.md). Each puts in and takes out only its own name (`GuestMidi.reach`).
-While the set is not empty their keys play on the keys' low-latency synth, go to everyone as
-notes, and are recorded as a take whatever this machine's role (`GuestMidi.plays`). Off a guest
-the synth is started when the first instrument comes into reach, before its first note, and
-stopped when the last goes. A take with no track chosen goes onto the armed one, runs across the
-gaps between notes, and is named after what played in it (`GuestMidi.take_name`:
-`Ada keytar+fingertips 1`; plain keys alone are `Ada take 1`). A note given its own song position
-(`note_on`'s `at`, for one played elsewhere) is recorded and sent at it. On a desktop the studio's own `KeyCatcher` (`keytar_keys`) is its
-piano while it is held. `Walker` reads the arrow keys while a control in the `walks_on_arrows`
-group has the keyboard. `GuestMidi.key` shows each note on its key. Someone else's notes, while
-they hold the keytar (`Presence._on_note_played`), play out of it on a `MonitorSynth` with a
-`speaker`: an AudioStreamPlayer3D on the room's bus.
+The set of instruments in this player's reach that play their keys (the fingertips, a cable, the
+wheel; docs/spatial_loop.md) is `GuestMidi.instruments`. Each puts in and takes out only its own
+name (`GuestMidi.reach`). While the set is not empty their keys play on the keys' low-latency
+synth, go to everyone as notes, and are recorded as a take whatever this machine's role
+(`GuestMidi.plays`). Off a guest the synth is started when the first instrument comes into reach,
+before its first note, and stopped when the last goes. A take with no track chosen goes onto the
+armed one, runs across the gaps between notes, and is named after what played in it
+(`GuestMidi.take_name`: `Ada fingertips+cable 1`; plain keys alone are `Ada take 1`). A note given
+its own song position (`note_on`'s `at`, for one played elsewhere) is recorded and sent at it.
+`Walker` reads the arrow keys while a control in the `walks_on_arrows` group has the keyboard.
+`GuestMidi.key` shows each note on its key.
+
+The keytar (`KeytarItem`, `GuestMidi.keytar`, the studio's `keytar_keys` piano and the keytar
+rack), the shaker (`ShakerItem`) and the tambourine (`TambourineItem`), with their models, Blender
+scripts, Foley sounds and Tour parts, were removed on 2026-11-06, with the simple toys. Hand
+percussion that stays: bongos, claves, cowbell, woodblock, hi-hat, triangle. The Tour case holds
+every instrument now (`TourParts.ROOM` is empty), and the first brief spills one a player
+(`TourParts.first_spill`, at least one). docs/spatial_loop.md keeps the slices, marked removed.
 
 The chord harp (`ChordHarp`, station `harp`, jack source `harp`) was removed on 2026-11-06, with its
 model and Blender script. What it did for the room lives on elsewhere: the song's chord is read

@@ -5,7 +5,7 @@ extends RefCounted
 ## (channel 9, General MIDI's percussion) as drums, and its pitched items' notes (channel 10, the
 ## venue instruments' bars) as bells, where the engine's instrument (DawKitTine) would play both as tines.
 ##
-## A hit recorded off a shaker plays back as the shaker that was heard when it was played: every
+## A hit recorded off a cowbell plays back as the cowbell that was heard when it was played: every
 ## sound is Foley's own synthesis (`Foley.samples`), the one the item rings in the room, and the
 ## drum kit around them (kick, snare, cymbals, congas...) is made the same way. A note is a
 ## one-shot: it rings out whole whatever its length, as a struck drum or bell does, and only its
@@ -25,7 +25,7 @@ const DRUM_CHANNEL := 9
 const PITCHED_CHANNEL := 10
 
 ## General MIDI's percussion notes, as [Foley's sound, how far it is pitched]. Where an item of
-## the room records a note (ShakerItem 82, CowbellItem 56 and 68...), it is that item's sound at
+## the room records a note (CowbellItem 56 and 68...), it is that item's sound at
 ## the pitch the item plays it (a second voice, InstrumentItem.VOICE_PITCH, a fifth's 0.8 lower),
 ## so a take sounds as it was heard. Any note not here is `Foley.click`.
 const DRUMS := {
@@ -41,9 +41,6 @@ const DRUMS := {
 	# Cymbals: crash 1 and 2, china (a crash down), splash (a crash up); ride 1 and 2, its bell.
 	49: [&"crash", 1.0], 57: [&"crash", 0.94], 52: [&"crash", 0.8], 55: [&"crash", 1.3],
 	51: [&"ride", 1.0], 59: [&"ride", 0.95], 53: [&"ride", 1.15],
-	# The tambourine, as the jingles shaken: TambourineItem records a shake and a strike alike as
-	# 54, and a shake is how it is mostly played, so its take is the jingle the room heard.
-	54: [&"jingle", 1.0],
 	# Cowbell, and the agogos as the cowbell item's voices.
 	56: [&"cowbell", 1.0], 67: [&"cowbell", 1.25], 68: [&"cowbell", 0.8],
 	# The claves' second voice records as the vibraslap.
@@ -51,8 +48,6 @@ const DRUMS := {
 	60: [&"bongo", 1.0], 61: [&"bongo", 0.8],
 	# Congas: mute high, open high, low.
 	62: [&"conga", 1.06], 63: [&"conga", 1.0], 64: [&"conga", 0.78],
-	# Cabasa and maracas from the shaker, and the shaker's own note.
-	69: [&"shaker", 0.85], 70: [&"shaker", 1.0], 82: [&"shaker", 1.0],
 	76: [&"woodblock", 1.0], 77: [&"woodblock", 0.8],
 	80: [&"triangle", 0.8], 81: [&"triangle", 1.0],
 }

@@ -53,7 +53,7 @@ var allow_native := OS.get_environment("R3D_GODOT_KEYS") != "1"
 ## The bus it plays on through Godot: the keys' own (Monitor) unless told otherwise -- another
 ## player's keys played here have a bus of their own (TheirKeys).
 var bus: StringName = &""
-## Where in the room it plays from, when it is an instrument somebody else is holding (a keytar):
+## Where in the room it plays from, when it is an instrument somebody else is holding:
 ## out of the air at that spot, on the room's bus, rather than in the ears. Set before `start`.
 var speaker: Node3D = null
 

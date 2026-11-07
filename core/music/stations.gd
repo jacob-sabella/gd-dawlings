@@ -43,7 +43,7 @@ extends RefCounted
 ## (`weather`, slice 44, Weather.row_for), on a window's sill or a post, in the arrangements that have
 ## weather.
 ##
-## Things carried, not stood anywhere (the keytar, the shaker, the tambourine, the
+## Things carried, not stood anywhere (the
 ## fingertips, the session in miniature, the jacks), the drum pads (on the desk and on
 ## whatever real surface a headset marks, slice 41), and what the hands do anywhere (clapping to mute, leaning in),
 ## are `HELD`: help lines only, on PLAY · HELD.
@@ -237,21 +237,6 @@ const DRUM_PLAQUE_TILT := 0.7
 const DRUM_PLAQUE_WIDTH := 0.56
 
 const HELD := [
-	{
-		"id": &"keytar", "title": "KEYTAR", "area": HELD_AREA,
-		"desk": "click it on the shelf to take it · A to ' play · Z X octave · arrows walk · wiggle the mouse to wobble · Alt + mouse up or down bends",
-		"hands": "take it by the neck · play it from a MIDI keyboard or the computer's keys · tilt the neck hand to bend · shake to wobble",
-	},
-	{
-		"id": &"shaker", "title": "SHAKER", "area": HELD_AREA,
-		"desk": "click it on the shelf to pick it up · shake it with the mouse · click strikes · P jack · hits snap gently to the beat (session panel)",
-		"hands": "close your hand round it and shake · each stroke that stops is a hit · a pinch carries it too · controllers are steadier for fast parts",
-	},
-	{
-		"id": &"tambourine", "title": "TAMBOURINE", "area": HELD_AREA,
-		"desk": "click it on the shelf to pick it up · shake it with the mouse · click strikes · P jack · hits snap gently to the beat (session panel)",
-		"hands": "close your hand round the bare hoop and shake · the trigger strikes it · controllers are steadier for fast parts",
-	},
 	{
 		"id": &"fingertips", "title": "FINGERTIPS", "area": HELD_AREA,
 		"desk": "T, then J K L ; play the chord's root, third, fifth and top · T or Esc gives them back · wiggle the mouse to wobble · Alt + mouse up or down bends",

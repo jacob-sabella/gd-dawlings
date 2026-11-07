@@ -68,7 +68,7 @@ func centre_height() -> float:
 
 
 ## Mouth tipped toward you, slightly across, the way a hand-held cowbell is carried ready to
-## strike -- the same gesture as a shaker's held pose, turned the other way about.
+## strike -- the same gesture as a woodblock's held pose, turned the other way about.
 func held_pose() -> Transform3D:
 	return Transform3D(Basis(Vector3.RIGHT, -0.35) * Basis(Vector3.UP, 0.3), Vector3(0.02, -0.08, 0))
 

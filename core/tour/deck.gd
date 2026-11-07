@@ -146,8 +146,8 @@ static func _spill_card(id: StringName, title: String, description: String, kind
 ## toward gear, with a chance one of the three rides in as a curse -- matching "curses can ride
 ## along". `band_size`/`spilled` (TourRun.band_size/instruments) say how much of the room's
 ## instruments the band has filled: a spill boon drops once its kind is full (`TourParts.COPIES`
-## copies out), a spill curse drops once every kind is, and a band bigger than the room's own
-## three is always offered one while it still wants more (`want`).
+## copies out), a spill curse drops once every kind is, and a band with fewer instruments out
+## than players is always offered one while it still wants more (`want`).
 static func draw(rng: RandomNumberGenerator, exclude: Array[StringName], band_size := 1,
 		spilled: Array[StringName] = []) -> Array[TourCard]:
 	var pool: Array[TourCard] = []

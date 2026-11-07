@@ -28,7 +28,7 @@ var head: Node3D
 var tracked := false
 ## Tracked, and every joint seen rather than guessed (the runtime's POSITION_TRACKED, not only
 ## VALID): a hand half out of view, its joints inferred, is tracked but not confident. What a held
-## shaker's letting go and its throw are read from (XRInteractor), so a guess is never a throw.
+## instrument's letting go and its throw are read from (XRInteractor), so a guess is never a throw.
 var confident := false
 ## Closed round something (HandPose.closed): three fingers past HOLD_CURL.
 var closed := false

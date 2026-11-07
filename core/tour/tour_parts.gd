@@ -6,20 +6,20 @@ extends RefCounted
 ## TourFlaws -- a static holder, a seeded `draw` -- except a part is also held by someone
 ## (`assign`, and the leaving/grace handling below), where a flaw is just fixed or not.
 ##
-## One copy of each instrument exists in the room (core/items/item_room.gd's KINDS: one shaker,
-## one tambourine, one keytar), so at most INSTRUMENTS players can hold a note-making part today;
-## the rest of a big band stays on flaws. A second copy of each, and a sing part on the mic's
-## audio take, are backlog ideas -- see docs/loop_backlog.md's "Tour" section.
+## The room keeps no instrument of its own for a part (the keytar, shaker and tambourine were
+## removed 2026-11-06), so a part is held only on an instrument the case has spilled
+## (`TourRun.instruments`); the first brief spills one per player (`first_spill`), and the rest
+## of a big band stays on flaws. A sing part on the mic's audio take is a backlog idea -- see
+## docs/loop_backlog.md's "Tour" section.
 
-## One part per instrument there is to hold. The boss brief does not raise this: there is
-## nothing more in the room to give a ninth, tenth... job to.
-const INSTRUMENTS := 3
+## One part per instrument there is to hold in the room itself: none, the case holds them all.
+const INSTRUMENTS := 0
 ## How long an open part (nobody holding it, or whoever did has left) sits before it is handed
 ## to whoever on the roster holds the fewest parts right now.
 const PART_GRACE := 8.0
 
-## The room's own three, always there: INSTRUMENTS == ROOM.size().
-const ROOM: Array[StringName] = [&"shaker", &"tambourine", &"keytar"]
+## The room's own, always there: INSTRUMENTS == ROOM.size().
+const ROOM: Array[StringName] = []
 ## Kinds a draft card can still spill out of the case, each with two voices (`COPIES`) -- see
 ## docs/loop_backlog.md's "Tour" section for why two: the judge tells parts apart by
 ## (channel, pitch), so a second copy of a kind needs its own pitch to be a job rather than a
@@ -53,12 +53,10 @@ static func copies_of(kind: StringName, spilled: Array[StringName]) -> int:
 
 ## What a big band's first brief already has out of the case, so it starts with enough to do
 ## rather than spending its whole first brief on flaws alone: `clampi(band_size - ROOM.size(),
-## 0, SPILL_KINDS.size())` kinds, drawn from `SPILL_KINDS` shuffled with `rng` -- band 4 gets
-## one, 5 gets two, 6 gets three, 7 gets four, 8 (the biggest band there is) gets five of the
-## seven -- never all of them, now that the catalogue has outgrown what an 8-person first brief
-## can draw; 3 and under, none (the room's own three already cover them).
+## 1, SPILL_KINDS.size())` kinds, drawn from `SPILL_KINDS` shuffled with `rng` -- one a player,
+## so band 1 gets one and band 7 and 8 (the biggest band there is) get all seven.
 static func first_spill(rng: RandomNumberGenerator, band_size: int) -> Array[StringName]:
-	var n := clampi(band_size - ROOM.size(), 0, SPILL_KINDS.size())
+	var n := clampi(band_size - ROOM.size(), 1, SPILL_KINDS.size())
 	var pool := SPILL_KINDS.duplicate()
 	_shuffle(pool, rng)
 	return pool.slice(0, n)
@@ -78,9 +76,9 @@ static func by_id(id: StringName) -> TourPart:
 
 
 ## Solo and a duo get one part each to hold, one job at a time, so a run alone or with a friend
-## stays winnable; three and up, one part per instrument there is to hold -- the room's own
-## three by default, or more once `available` (TourRun.instruments, added to ROOM at the call
-## site) says the case has spilled some. `is_boss` changes nothing -- there being nothing more
+## stays winnable; three and up, one part per instrument there is to hold -- what
+## `available` (TourRun.instruments, added to ROOM at the call site) says the case has
+## spilled. `is_boss` changes nothing -- there being nothing more
 ## to hand a fourth, ninth... job to beyond what is actually in the room -- but is kept so this
 ## reads the same as TourFlaws.count_for at the call site.
 static func count_for(band_size: int, _is_boss: bool, available: int = INSTRUMENTS) -> int:
@@ -161,100 +159,16 @@ static func reassign(run: TourRun, roster: Array[int], ready: Array[bool]) -> in
 	return last
 
 
-## The catalogue: a backbeat, a four-on-the-floor pulse and just the four for the tambourine; a
-## wall of eighths and the offbeats for the shaker; a stab on the one and on 1-and-3 for the
-## keytar, whose chord is the player's own call. See the design note in docs/loop_backlog.md's
+## The catalogue: two parts for each instrument the case can spill. See the design note in docs/loop_backlog.md's
 ## "Tour" section for how `window`/`need`/`clean` were sized: tight enough that flailing fails.
 static func _build() -> Array[TourPart]:
 	var out: Array[TourPart] = []
-
-	var tamb_backbeat := TourPart.new()
-	tamb_backbeat.id = &"tamb_backbeat"
-	tamb_backbeat.instrument = &"tambourine"
-	tamb_backbeat.line = "TAMBOURINE: strike it on 2 and 4, every bar"
-	tamb_backbeat.channel = 9
-	tamb_backbeat.pitches = PackedInt32Array([54])
-	tamb_backbeat.beats = PackedFloat64Array([1.0, 3.0])
-	tamb_backbeat.window = 0.2
-	tamb_backbeat.need = 8
-	tamb_backbeat.clean = 0.7
-	out.append(tamb_backbeat)
-
-	var tamb_four := TourPart.new()
-	tamb_four.id = &"tamb_four"
-	tamb_four.instrument = &"tambourine"
-	tamb_four.line = "TAMBOURINE: a hit on every beat, keep it even"
-	tamb_four.channel = 9
-	tamb_four.pitches = PackedInt32Array([54])
-	tamb_four.grid = 1.0
-	tamb_four.window = 0.2
-	tamb_four.need = 12
-	tamb_four.clean = 0.7
-	out.append(tamb_four)
-
-	var tamb_last := TourPart.new()
-	tamb_last.id = &"tamb_last"
-	tamb_last.instrument = &"tambourine"
-	tamb_last.line = "TAMBOURINE: just the four, the last beat of every bar"
-	tamb_last.channel = 9
-	tamb_last.pitches = PackedInt32Array([54])
-	tamb_last.beats = PackedFloat64Array([3.0])
-	tamb_last.window = 0.2
-	tamb_last.need = 4
-	tamb_last.clean = 0.6
-	out.append(tamb_last)
-
-	var shaker_eighths := TourPart.new()
-	shaker_eighths.id = &"shaker_eighths"
-	shaker_eighths.instrument = &"shaker"
-	shaker_eighths.line = "SHAKER: every eighth, don't stop"
-	shaker_eighths.channel = 9
-	shaker_eighths.pitches = PackedInt32Array([82])
-	shaker_eighths.grid = 0.5
-	shaker_eighths.window = 0.1
-	shaker_eighths.need = 24
-	shaker_eighths.clean = 0.7
-	out.append(shaker_eighths)
-
-	var shaker_offbeats := TourPart.new()
-	shaker_offbeats.id = &"shaker_offbeats"
-	shaker_offbeats.instrument = &"shaker"
-	shaker_offbeats.line = "SHAKER: the \"and\" of every beat, nothing on the beat"
-	shaker_offbeats.channel = 9
-	shaker_offbeats.pitches = PackedInt32Array([82])
-	shaker_offbeats.beats = PackedFloat64Array([0.5, 1.5, 2.5, 3.5])
-	shaker_offbeats.window = 0.12
-	shaker_offbeats.need = 12
-	shaker_offbeats.clean = 0.7
-	out.append(shaker_offbeats)
-
-	var keys_one := TourPart.new()
-	keys_one.id = &"keys_one"
-	keys_one.instrument = &"keytar"
-	keys_one.line = "KEYTAR: one stab on the one, every bar"
-	keys_one.channel = -1
-	keys_one.beats = PackedFloat64Array([0.0])
-	keys_one.window = 0.2
-	keys_one.need = 4
-	keys_one.clean = 0.6
-	out.append(keys_one)
-
-	var keys_one_three := TourPart.new()
-	keys_one_three.id = &"keys_one_three"
-	keys_one_three.instrument = &"keytar"
-	keys_one_three.line = "KEYTAR: stabs on 1 and 3, the chord's your call"
-	keys_one_three.channel = -1
-	keys_one_three.beats = PackedFloat64Array([0.0, 2.0])
-	keys_one_three.window = 0.2
-	keys_one_three.need = 8
-	keys_one_three.clean = 0.6
-	out.append(keys_one_three)
 
 	out.append(_part(&"cowbell_one", &"cowbell", "COWBELL: one clank on the one, every bar",
 			PackedInt32Array([56]), PackedFloat64Array([0.0]), 0.0, 0.2, 4, 0.6))
 	out.append(_part(&"cowbell_four", &"cowbell", "COWBELL: every beat, more cowbell",
 			PackedInt32Array([56]), PackedFloat64Array(), 1.0, 0.2, 12, 0.7))
-	out.append(_part(&"lowbell_backbeat", &"cowbell2", "LOW COWBELL: 2 and 4, under the tambourine",
+	out.append(_part(&"lowbell_backbeat", &"cowbell2", "LOW COWBELL: 2 and 4, under the beat",
 			PackedInt32Array([68]), PackedFloat64Array([1.0, 3.0]), 0.0, 0.2, 8, 0.7))
 	out.append(_part(&"lowbell_ands", &"cowbell2", "LOW COWBELL: the \"and\" of 2 and the \"and\" of 4",
 			PackedInt32Array([68]), PackedFloat64Array([1.5, 3.5]), 0.0, 0.15, 8, 0.7))
@@ -286,7 +200,7 @@ static func _build() -> Array[TourPart]:
 			PackedInt32Array([75]), PackedFloat64Array([0.0]), 0.0, 0.2, 4, 0.6))
 	out.append(_part(&"claves_backbeat", &"claves", "CLAVES: the \"and\" of 2 and 4, the backbeat crack",
 			PackedInt32Array([75]), PackedFloat64Array([1.5, 3.5]), 0.0, 0.15, 8, 0.7))
-	out.append(_part(&"lowclaves_backbeat", &"claves2", "LOW CLAVES: 2 and 4, under the tambourine",
+	out.append(_part(&"lowclaves_backbeat", &"claves2", "LOW CLAVES: 2 and 4, under the beat",
 			PackedInt32Array([58]), PackedFloat64Array([1.0, 3.0]), 0.0, 0.15, 8, 0.7))
 	out.append(_part(&"lowclaves_eighths", &"claves2", "LOW CLAVES: every eighth, sharp and steady",
 			PackedInt32Array([58]), PackedFloat64Array(), 0.5, 0.12, 24, 0.7))
@@ -302,7 +216,7 @@ static func _build() -> Array[TourPart]:
 			PackedInt32Array([60]), PackedFloat64Array(), 0.5, 0.12, 24, 0.7))
 	out.append(_part(&"bongo_one_three", &"bongo", "BONGO: slaps on 1 and 3",
 			PackedInt32Array([60]), PackedFloat64Array([0.0, 2.0]), 0.0, 0.2, 8, 0.7))
-	out.append(_part(&"lowbongo_backbeat", &"bongo2", "LOW BONGO: 2 and 4, under the tambourine",
+	out.append(_part(&"lowbongo_backbeat", &"bongo2", "LOW BONGO: 2 and 4, under the beat",
 			PackedInt32Array([61]), PackedFloat64Array([1.0, 3.0]), 0.0, 0.15, 8, 0.7))
 	out.append(_part(&"lowbongo_four", &"bongo2", "LOW BONGO: a low slap on every beat",
 			PackedInt32Array([61]), PackedFloat64Array(), 1.0, 0.2, 12, 0.7))

@@ -5,11 +5,16 @@ pass, do ONE item from the queue at the bottom, and leave the queue truer than y
 
 Started with `/loop iterate on items: follow docs/items_loop.md`.
 
+**Removed 2026-11-06:** the keytar, the shaker and the tambourine (with the handbells, the harp and
+the other simple toys before them): the owner keeps the expressive instruments and drops the ones
+that were a single shake. Entries below that mention them are history. The instruments that stay
+are the cowbell, claves, woodblock, hi-hat, triangle, bongos, the drum pad and the venue instruments.
+
 ## Where this is going
 
 A studio is full of things you pick up. Some of them are work: a mic you sing into, a tablet you
 mix from on the far side of the room, headphones you plug into whatever you want to hear, a
-shaker you play along on. Most of the rest are what you do with your hands while somebody else
+cowbell you play along on. Most of the rest are what you do with your hands while somebody else
 does a take. Think of the idle side of PokerStars VR: chips riffled and stacked while you wait,
 props pulled from a box, things thrown across the table at a friend, a lighter flicked for no
 reason. That is half of why people stay in the room. This loop builds both halves on one item
@@ -18,7 +23,7 @@ system.
 | Kind | What it is | What holding it does |
 |---|---|---|
 | Toy | a paper plane, a ball, a rubber duck, chips, a yo-yo... | fidget, throw, play catch; makes a little noise |
-| Instrument | a shaker, a tambourine, a keytar, a uke... | you play it, others hear it, and it can be recorded as a take |
+| Instrument | a cowbell, claves, a woodblock, a triangle, a uke... | you play it, others hear it, and it can be recorded as a take |
 | Mic | a handheld mic, from the booth's stand or a shelf | your voice goes in: recorded on the armed track, and heard by you at once |
 | Tablet | a handheld control and monitoring screen | a surface in your hand: a mixer page, meters, transport, a plugin |
 | Headphones | a pair you put on, with a lead and a jack | wearing them patches your ears: plug the jack into what you want to hear |
@@ -75,7 +80,7 @@ system.
 - **Performance is low latency.** Anything you play or sing is heard by you within a few
   milliseconds. It is played by the native helper where it can be (*Your own keys in four
   milliseconds*), and it is stamped and recorded the way `GuestMidi` and guest recording already
-  do it. A shaker heard 40 ms late is a broken shaker.
+  do it. A cowbell heard 40 ms late is a broken cowbell.
 - **Readable across the room.** Who is holding what, at a glance: in the glove, in their colour.
 - **Fits every venue.** The prop shelf in the studio is walnut, on the grid it is neon, in the
   chalk zone it is sketched. Models come from Blender, run headless and scripted in
@@ -93,8 +98,7 @@ basketball hoop over the door; a frisbee; a beach ball; a snowball; a confetti p
 horn; a bubble wand; glow sticks; a fire extinguisher (PokerStars VR's classic); a coffee mug to
 sip from; drumsticks to twirl; sunglasses or a hat to put on (they go with the wardrobe).
 
-Instruments: a shaker, a tambourine, a cowbell, claves, a triangle, a kazoo, a keytar (into
-`GuestMidi`), a ukulele strummed through the chord held on the keys, a theremin you play with
+Instruments: a cowbell, claves, a triangle, a kazoo, a ukulele strummed through the chord held on the keys, a theremin you play with
 your hand's height.
 
 Work: a handheld mic with a cable (and the booth's mic, which appears where you want to sing

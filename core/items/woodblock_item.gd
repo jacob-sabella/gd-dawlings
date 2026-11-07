@@ -65,7 +65,7 @@ func centre_height() -> float:
 	return 0.025
 
 
-## Held like the shaker: across the view, tipped toward the outside, the slot up where a beater
+## Held across the view, tipped toward the outside, the slot up where a beater
 ## would find it.
 func held_pose() -> Transform3D:
 	return Transform3D(Basis(Vector3.FORWARD, 0.5) * Basis(Vector3.UP, 0.35), Vector3(0.02, -0.025, 0))

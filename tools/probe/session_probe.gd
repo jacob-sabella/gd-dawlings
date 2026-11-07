@@ -31,7 +31,7 @@ const AUDIO_TRACK := 8
 ## Where the guest's files from its own machine go, and from when: a second of tone as a WAV,
 ## then a FLAC, one after the other.
 const SENT_TRACK := 12
-## Cables (docs/spatial_loop.md slice 6): the chord tones the guest's four shaker hits play on the
+## Cables (docs/spatial_loop.md slice 6): the chord tones the guest's four cowbell hits play on the
 ## host's keys: D minor's, voiced at Jacks.TRIGGER_CENTRE.
 const CABLE_TONES := [62, 65, 69, 74]
 const SENT_AT := 30.0
@@ -58,12 +58,7 @@ const BENT_SONG := 480.0
 ## The note it holds: not the one the guest's first take left down on purpose (its "hanging"
 ## note, 67), which the guest lets go of first, so this note's off is its last and rests the wheel.
 const BENT_PITCH := 69
-## Bend and wobble by tilting (slice 15): where in the song the guest records a keytar note its
-## neck hand tips TILT_DEGREES after the press, onto TAKE_TRACK to a clock of its own, and the note.
-const TILT_SONG := 520.0
-const TILT_PITCH := 72
-const TILT_DEGREES := 20.0
-## Snapped gently (slice 17): where in the song the guest records two shaker hits onto TAKE_TRACK
+## Snapped gently (slice 17): where in the song the guest records two cowbell hits onto TAKE_TRACK
 ## to a clock of its own, each this far (s) before a sixteenth, the first snapped and the second not.
 const SNAP_SONG := 560.0
 const SNAP_EARLY := 0.02
@@ -693,13 +688,13 @@ func _host(port: int) -> void:
 
 	await _until(46.0)
 
-	# Jacks (docs/spatial_loop.md slice 5): the guest plugged the shaker on its shelf into track
+	# Jacks (docs/spatial_loop.md slice 5): the guest plugged the cowbell on its shelf into track
 	# 3 at 44.5, and the host's rule let it.
 	var plugs := _room_asks.filter(func(a: Array) -> bool: return a[0] == &"plug")
 	check("the guest's plug reached me, from the guest (%s)" % [plugs], plugs.size() == 1
-			and plugs[0][1] == [&"shaker", &"track_3"] and plugs[0][2] == _other_id())
+			and plugs[0][1] == [&"cowbell", &"track_3"] and plugs[0][2] == _other_id())
 	check("and is in my room's state (%s)" % [Session.room.get("jacks")],
-			Session.room.get("jacks", {}) == {"shaker": "track_3"})
+			Session.room.get("jacks", {}) == {"cowbell": "track_3"})
 	var rows: Dictionary = Session.room.get("jacks", {}).duplicate(true)
 
 	# Cables (docs/spatial_loop.md slice 6): jacks of my own, playing what comes into my keys, and
@@ -712,10 +707,10 @@ func _host(port: int) -> void:
 		var item: Item = _room.items.get(source)
 		var holder := Session.holder_of(item.network_key()) if item != null else 0
 		return Jacks.send_refusal(Session.room.get("jacks", {}), source, to, from, holder)
-	# The guest's shaker, in its hand and plugged into me at 48.3, hit four times at 48.8.
+	# The guest's cowbell, in its hand and plugged into me at 48.3, hit four times at 48.8.
 	await _until(49.6)
-	var hits := _jacked.filter(func(j: Array) -> bool: return j[0] == &"shaker")
-	check("the guest's four shaker hits reached me down its jack, from the guest (%s)" % [hits], hits.size() == 4
+	var hits := _jacked.filter(func(j: Array) -> bool: return j[0] == &"cowbell")
+	check("the guest's four cowbell hits reached me down its jack, from the guest (%s)" % [hits], hits.size() == 4
 			and hits.all(func(j: Array) -> bool: return j[1] == Jack.Kind.TRIGGER and j[3] == _other_id()))
 	var tones := _cabled.filter(func(c: Array) -> bool: return c[0] == Session.Note.ON).map(func(c: Array) -> int: return c[1])
 	check("and played D minor's tones up the chord on my keys, at their songs (%s)" % [tones], tones == CABLE_TONES
@@ -790,12 +785,7 @@ func _host(port: int) -> void:
 	await _until(56.7)
 	_check_bent_take()
 
-	# Bend and wobble by tilting (slice 15): the guest's keytar note, bent by its neck hand's tilt,
-	# is in the take it sends me with its bend.
-	await _until(57.55)
-	_check_tilted_take()
-
-	# Snapped gently (slice 17): the guest's shaker hit 20 ms before a sixteenth, snapped, is half
+	# Snapped gently (slice 17): the guest's cowbell hit 20 ms before a sixteenth, snapped, is half
 	# way there in the take it sends me; its unsnapped one is where it was played.
 	await _until(57.65)
 	_check_snapped_take()
@@ -1079,58 +1069,29 @@ func _check_bent_take() -> void:
 			and absf(float(bends[1][0]) - off) <= MidiTake.CONTROL_GAP + 0.0001)
 
 
-## The guest's tilted keytar take (slice 15), as my DAW has it: its note, and the bend its neck
-## hand's tilt made, risen to what the guest's keys had and back at rest at the note-off.
-func _check_tilted_take() -> void:
-	var expected_path := "/tmp/r3d_probe_tilt_%d.json" % _port
-	var expected = JSON.parse_string(FileAccess.get_file_as_string(expected_path))
-	DirAccess.remove_absolute(expected_path)
-	check("the guest wrote down how far its tilt bent", expected is Dictionary)
-	if not expected is Dictionary:
-		return
-	var takes: Array = DAW.state.track(TAKE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
-			return it.start > TILT_SONG - 0.1 and it.start < TILT_SONG + 1.0)
-	check("the guest's tilted keytar take is an item on track %d (%d)" % [TAKE_TRACK, takes.size()], takes.size() == 1)
-	if takes.size() != 1:
-		return
-	var item: MixState.ItemState = takes[0]
-	var notes := MidiTake.unpack_relative(item.notes, item.start)
-	var bends: Array = []
-	for o in range(0, item.controls.size() - DawKitClip.CONTROL_WIDTH + 1, DawKitClip.CONTROL_WIDTH):
-		if int(item.controls[o + 1]) == DawKitClip.PITCH_BEND:
-			bends.append([item.start + item.controls[o], int(item.controls[o + 2])])
-	print("tilt: placed ", bends, " expected ", expected)
-	var held := int(bends[-2][1]) if bends.size() >= 2 else 0
-	check("with its keytar note (%s)" % [notes], notes.size() == 1 and int(notes[0][2]) == TILT_PITCH)
-	check("and its bend, risen to the %d the tilt made it, during the note (%d)" % [int(expected["value"]), held],
-			bends.size() >= 3 and absi(held - int(expected["value"])) <= 8 and notes.size() == 1
-			and float(bends[0][0]) > float(notes[0][0]) and float(bends[-2][0]) < float(notes[0][1]))
-	check("then back at rest at the note-off", not bends.is_empty() and int(bends[-1][1]) == 0)
-
-
-## The guest's snapped shaker take (slice 17), as my DAW has it: its snapped hit half way to the
+## The guest's snapped cowbell take (slice 17), as my DAW has it: its snapped hit half way to the
 ## sixteenth it was played 20 ms before, by the guest's grid and by mine; its unsnapped one where it
 ## was played; and both hits as they reached me, each with its snap flag and its Foley take.
 func _check_snapped_take() -> void:
 	var expected_path := "/tmp/r3d_probe_snap_%d.json" % _port
 	var expected = JSON.parse_string(FileAccess.get_file_as_string(expected_path))
 	DirAccess.remove_absolute(expected_path)
-	check("the guest wrote down where it shook", expected is Dictionary)
+	check("the guest wrote down where it played", expected is Dictionary)
 	if not expected is Dictionary:
 		return
 	var first := float(expected["first"])
 	var second := float(expected["second"])
 	var takes: Array = DAW.state.track(TAKE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
 			return it.start > SNAP_SONG - 0.1 and it.start < SNAP_SONG + 1.0)
-	check("the guest's shaker take is an item on track %d (%d)" % [TAKE_TRACK, takes.size()], takes.size() == 1)
+	check("the guest's cowbell take is an item on track %d (%d)" % [TAKE_TRACK, takes.size()], takes.size() == 1)
 	if takes.size() != 1:
 		return
 	var item: MixState.ItemState = takes[0]
 	var notes := MidiTake.unpack_relative(item.notes, item.start)
 	notes.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
 	print("snap: placed ", notes, " expected ", expected)
-	check("with both its hits, as the shaker (%s)" % [notes], notes.size() == 2
-			and notes.all(func(n: Array) -> bool: return int(n[2]) == 82 and int(n[4]) == HitRecorder.CHANNEL))
+	check("with both its hits, as the cowbell (%s)" % [notes], notes.size() == 2
+			and notes.all(func(n: Array) -> bool: return int(n[2]) == 56 and int(n[4]) == HitRecorder.CHANNEL))
 	if notes.size() != 2:
 		return
 	var mine := HitRecorder.snapped_at(first, DAW.state)
@@ -1140,10 +1101,10 @@ func _check_snapped_take() -> void:
 			and absf(float(notes[0][0]) - first - SNAP_EARLY * HitRecorder.SNAP_PULL) < 0.0005)
 	check("and its unsnapped one where it was played (%.4f for %.4f)" % [float(notes[1][0]), second],
 			absf(float(notes[1][0]) - second) < 0.0005)
-	var shakes := _item_hits.filter(func(h: Array) -> bool: return h[0] == &"shaker" and h.size() == 7)
-	var on := shakes.filter(func(h: Array) -> bool: return absf(float(h[3]) - first) < 0.0001)
-	var off := shakes.filter(func(h: Array) -> bool: return absf(float(h[3]) - second) < 0.0001)
-	check("both hits reached me with their snap and their take, at the song they were played to (%s)" % [shakes],
+	var rung := _item_hits.filter(func(h: Array) -> bool: return h[0] == &"cowbell" and h.size() == 7)
+	var on := rung.filter(func(h: Array) -> bool: return absf(float(h[3]) - first) < 0.0001)
+	var off := rung.filter(func(h: Array) -> bool: return absf(float(h[3]) - second) < 0.0001)
+	check("both hits reached me with their snap and their take, at the song they were played to (%s)" % [rung],
 			on.size() == 1 and bool(on[0][4]) and int(on[0][5]) == 5
 			and off.size() == 1 and not bool(off[0][4]) and int(off[0][5]) == 6)
 
@@ -2517,9 +2478,9 @@ func _guest(port: int) -> void:
 	await _until(44.0)
 	_room.played.connect(func(item: InstrumentItem, velocity: int, _struck: bool, at: float, zone: StringName) -> void:
 		Session.send_item_hit(item.id, velocity, at, false, -1, zone))
-	# My shaker, on its shelf, into track 3: asked as the studio asks (Jacks).
+	# My cowbell, on its shelf, into track 3: asked as the studio asks (Jacks).
 	await _until(44.5)
-	Session.ask_room(&"plug", [&"shaker", &"track_3"])
+	Session.ask_room(&"plug", [&"cowbell", &"track_3"])
 
 	# The host's room says where my jack goes.
 	await _until(47.5)
@@ -2527,24 +2488,24 @@ func _guest(port: int) -> void:
 	add_child(jacks)
 	jacks.set_patch(Session.room.get("jacks", {}))
 	check("my plug is in the host's room (%s)" % [Session.room.get("jacks")],
-			jacks.sink_of(&"shaker") == &"track_3" and jacks.patch.size() == 1)
+			jacks.sink_of(&"cowbell") == &"track_3" and jacks.patch.size() == 1)
 	jacks.free()
 
-	# Cables (docs/spatial_loop.md slice 6): my shaker in my hand into the host's keys; my jacks follow the host's room, as the studio's do.
+	# Cables (docs/spatial_loop.md slice 6): my cowbell in my hand into the host's keys; my jacks follow the host's room, as the studio's do.
 	_wear_jacks()
 	_jacks.set_patch(Session.room.get("jacks", {}))
 	Session.room_changed.connect(func() -> void: _jacks.set_patch(Session.room.get("jacks", {})))
 	await _until(48.0)
-	var shaker := _room.items.get(&"shaker") as InstrumentItem
-	Session.claim_hold(shaker.network_key())
+	var cowbell := _room.items.get(&"cowbell") as InstrumentItem
+	Session.claim_hold(cowbell.network_key())
 	await _until(48.3)
-	Session.ask_room(&"plug", [&"shaker", Jack.player_sink(1)])
+	Session.ask_room(&"plug", [&"cowbell", Jack.player_sink(1)])
 	# Four hits, as the studio sends them (Jacks.hit), each with the song position it was played to.
 	await _until(48.8)
-	check("the host's room has my shaker into the host (%s)" % [_jacks.patch],
-			_jacks.sink_of(&"shaker") == Jack.player_sink(1))
+	check("the host's room has my cowbell into the host (%s)" % [_jacks.patch],
+			_jacks.sink_of(&"cowbell") == Jack.player_sink(1))
 	for i in 4:
-		_jacks.hit(shaker, 90, _ring_song() + 1.0 + i * 0.1)
+		_jacks.hit(cowbell, 90, _ring_song() + 1.0 + i * 0.1)
 	# The fifths wheel's SET, as the wheel sends a guest's (docs/spatial_loop.md slice 9): a room
 	# ask carrying the bar I chose.
 	await _until(53.7)
@@ -2603,7 +2564,6 @@ func _guest(port: int) -> void:
 	Session.control_played.disconnect(their.control)
 	their.queue_free()
 	await _bend_into_a_take()
-	await _tilt_into_a_take()
 	await _snap_into_a_take()
 	await _place_on_the_stage()
 	await _clap_to_mute()
@@ -2671,59 +2631,6 @@ func _bend_into_a_take() -> void:
 			not gm.is_recording() and gm.last_take.get("controls", 0) == 2)
 	gm.heard_source = Callable()
 	gm.target_track = 0
-
-
-## Bend and wobble by tilting (slice 15): a keytar in a hand of mine whose readings are a posed
-## bare hand (an XRInteractor on a HandGestures, as the rig makes them), a note played on it at
-## 56.65 and held to 57.25 while the hand tips TILT_DEGREES over 56.7 to 56.8, recorded onto TAKE_TRACK at TILT_SONG
-## to a clock of my own and sent to the host when that clock stops. The bend it made is written
-## for the host to look for.
-func _tilt_into_a_take() -> void:
-	var gm := Session.guest_midi
-	await _until(56.6)
-	gm.reach(&"keytar", true)
-	gm.target_track = TAKE_TRACK
-	gm.heard_source = _given_clock(TILT_SONG, true)
-	var hand := HandGestures.new()
-	var pad := XRInteractor.new()
-	pad.gestures = hand
-	var keytar := KeytarItem.new()
-	keytar.midi = gm
-	keytar.state = Item.State.HELD
-	keytar.carried_by = pad
-	var tip := func(degrees: float) -> void:
-		hand.take(HandPose.posed([0, 0, 0, 0, 0], 0,
-				Transform3D(Basis(Vector3.FORWARD, deg_to_rad(degrees)), Vector3(0.0, 1.2, -0.3))))
-	tip.call(0.0)
-	await _until(56.65)
-	gm.note_on(TILT_PITCH, 100, 0, 0.0, false, &"keytar")
-	check("my keytar note is in a take of my own", gm.is_recording() and gm.held.has(TILT_PITCH))
-	var from := (Time.get_ticks_msec() - _start) / 1000.0 - _shift
-	var now := from
-	while now < 57.25:
-		tip.call(TILT_DEGREES * clampf((now - from - 0.05) / 0.1, 0.0, 1.0))
-		keytar._bend_by_hand(1.0 / 60.0)
-		await get_tree().physics_frame
-		now = (Time.get_ticks_msec() - _start) / 1000.0 - _shift
-	var bent := int(gm.controls.get(DawKitClip.PITCH_BEND, 0))
-	var wanted := Wobble.value_of(Wobble.bend_for(TILT_DEGREES))
-	check("my neck hand's tilt bends my keytar note (%d, the tilt's own %d)" % [bent, wanted],
-			absi(bent - wanted) <= 64 and keytar.wobble != null and keytar.wobble.sends > 0)
-	var file := FileAccess.open("/tmp/r3d_probe_tilt_%d.json" % _port, FileAccess.WRITE)
-	file.store_string(JSON.stringify({"value": bent}))
-	file.close()
-	gm.note_off(TILT_PITCH, 0, 0.0, false, &"keytar")
-	await _until(57.3)
-	gm.heard_source = _given_clock(TILT_SONG + 1.0, false)
-	await _until(57.4)
-	check("and the take went to the host with the bend and its rest (%s)" % [gm.last_take],
-			not gm.is_recording() and int(gm.last_take.get("controls", 0)) >= 3)
-	gm.reach(&"keytar", false)
-	gm.heard_source = Callable()
-	gm.target_track = 0
-	keytar.free()
-	pad.free()
-	hand.free()
 
 
 ## The stage table (slice 18): a table of my own over the host's mix, and STAGE_TRACK's voice on it
@@ -2845,7 +2752,7 @@ func _write_a_lane() -> void:
 	fader.queue_free()
 
 
-## Snapped gently (slice 17): two shaker hits taken down at 57.42 by a HitRecorder of my own onto
+## Snapped gently (slice 17): two cowbell hits taken down at 57.42 by a HitRecorder of my own onto
 ## TAKE_TRACK at SNAP_SONG, to a clock of my own, as the studio's takes them (`hit`'s `snap`, the
 ## player's flag): one SNAP_EARLY before a sixteenth with snap on, one SNAP_EARLY before the next
 ## with it off. Each goes to the room too, with its flag and its Foley take, as the studio sends a
@@ -2857,13 +2764,13 @@ func _snap_into_a_take() -> void:
 	rec.name = "SnapRecorder"
 	add_child(rec)
 	rec.heard_source = _given_clock(SNAP_SONG, true)
-	var shaker := _room.items.get(&"shaker") as InstrumentItem
+	var cowbell := _room.items.get(&"cowbell") as InstrumentItem
 	var first := HitRecorder.nearest_sixteenth(SNAP_SONG + 0.2, DAW.state) - SNAP_EARLY
 	var second := HitRecorder.nearest_sixteenth(first + 0.3, DAW.state) - SNAP_EARLY
-	rec.hit(shaker, 90, first, TAKE_TRACK, 1)
-	rec.hit(shaker, 90, second, TAKE_TRACK, 0)
-	Session.send_item_hit(shaker.id, 90, first, true, 5)
-	Session.send_item_hit(shaker.id, 90, second, false, 6)
+	rec.hit(cowbell, 90, first, TAKE_TRACK, 1)
+	rec.hit(cowbell, 90, second, TAKE_TRACK, 0)
+	Session.send_item_hit(cowbell.id, 90, first, true, 5)
+	Session.send_item_hit(cowbell.id, 90, second, false, 6)
 	var file := FileAccess.open("/tmp/r3d_probe_snap_%d.json" % _port, FileAccess.WRITE)
 	file.store_string(JSON.stringify({"first": first, "second": second,
 			"snapped": HitRecorder.snapped_at(first, DAW.state)}))
@@ -3118,6 +3025,9 @@ func _make_room() -> void:
 		_sampler.local_peer = func() -> int: return Session.local_peer_id
 		_sampler.name_of = Session.name_of
 		add_child(_sampler)
+	# The probe's one hand-percussion instrument, a cowbell on the floor (the jacks and the snapped
+	# hits are played on it).
+	_room.spawn(&"cowbell", &"cowbell", Transform3D(Basis.IDENTITY, Vector3(0.6, 0.8, -1.0)))
 
 
 ## The host's answer to a plug, as the studio's: the host's rule (Jacks.refusal), and the room

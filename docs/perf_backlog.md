@@ -65,7 +65,7 @@ Measured with `tools/budget.sh` (desktop RTX 5080, 1600x900, vsync off, wide pos
 | desktop, 9 shadow-casting lights | 3055 | 3703 | 403k |
 | no shadows (the Quest proxy) | 1056 | 1676 | 81k |
 
-So two thirds of the desktop draw count is shadow passes, which the headset never pays. The Quest cost is the second row. Its biggest mesh parents: PatchWall 69, Swivel 48, Wheel 48, Ruler 31, PropShelf 30, studio venue 26, keytar 26, Plug 24.
+So two thirds of the desktop draw count is shadow passes, which the headset never pays. The Quest cost is the second row. Its biggest mesh parents: PatchWall 69, Swivel 48, Wheel 48, Ruler 31, PropShelf 30, studio venue 26, Plug 24 (a keytar, 26, was in this list before it was removed 2026-11-06).
 
 ## Labels (studio:0, 13 tracks, wide pose, no shadows)
 

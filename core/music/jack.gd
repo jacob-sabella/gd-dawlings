@@ -5,7 +5,7 @@ extends RefCounted
 ## (docs/spatial_loop.md, foundation B). Static, pure: nothing here holds a patch. The room's
 ## patch is `Jacks`, and the plug on an instrument is `JackSocket`.
 ##
-## A source is what plays: an item's id (`shaker`, `bell2`, a Tour spill's `cowbell2`),
+## A source is what plays: an item's id (`cowbell`, `bell2`, a Tour spill's `cowbell2`),
 ## `keys:P`, player P's own keys, or `chord:P`, player P's chord hand (part two, slice 33). A
 ## sink is where it goes: `track_N`, recorded onto track N as MIDI, or `player_P`, into player
 ## P's instrument (slice 6). The empty sink is unplugged, which is what every source is until
@@ -17,7 +17,7 @@ extends RefCounted
 ## -8192 to 8191 for the bend (docs/spatial_loop.md slice 14). Unpitched percussion sends TRIGGER,
 ## which a receiving instrument turns into a note of its own (slice 6). Onto a track, both are
 ## recorded as the source would record them anyway: a bell its chord tone on its channel, a
-## shaker its drum note.
+## cowbell its drum note.
 ##
 ## A player's chord hand sends CHORD, a shape and not a note: on each change of the chord it holds,
 ## `pitch` the chord's root as a pitch class (0 to 11) and `velocity` its quality, one more than

@@ -188,9 +188,8 @@ func _ready() -> void:
 	await _test_a_players_keys_pack_puts_their_playing_in_your_headphones()
 	await _test_their_monitor_plays_their_notes_where_they_heard_them()
 	await _test_on_air_puts_a_monitor_socket_on_your_pack()
-	await _test_a_shaker_plays_when_a_stroke_stops()
+	await _test_an_instrument_plays_when_a_stroke_stops()
 	await _test_percussion_is_heard_by_the_room_and_recorded_onto_the_armed_track()
-	await _test_a_keytar_plays_your_keys_and_shows_them()
 	await _test_chips_and_cards_do_their_tricks_in_turn()
 	await _test_darts_stick_in_the_board_and_score()
 	await _test_a_ball_goes_through_the_hoop()
@@ -199,7 +198,6 @@ func _ready() -> void:
 	await _test_each_venue_has_a_toy_of_its_own()
 	_test_the_neon_ball_glows_without_blooming_into_one_colour()
 	_test_the_beach_ball_does_not_crowd_the_view()
-	_test_a_held_keytar_clears_the_console_instead_of_covering_it()
 	_test_a_held_cradle_rests_on_the_mouses_glove_instead_of_floating_over_it()
 	await _test_pockets_carry_more_than_one_thing()
 	await _test_the_radio_plane_flies_where_you_point()
@@ -235,7 +233,7 @@ func _ready() -> void:
 	_test_the_host_records_its_own_microphone_on_the_built_in_engine()
 	_test_the_host_records_its_own_keys_on_the_built_in_engine()
 	_test_keys_play_an_instrument_plugin_without_arming_and_a_guest_plays_it_live()
-	_test_a_keytar_reaches_its_track_choice_even_where_reaper_records_its_own_midi()
+	_test_an_instrument_reaches_its_track_choice_even_where_reaper_records_its_own_midi()
 	_test_hit_recorder_rolls_takes_every_bar()
 	_test_a_looped_item_survives_the_wire_and_a_split()
 	_test_the_demo_song_loops_on_the_bar()
@@ -485,7 +483,6 @@ func _ready() -> void:
 	_test_one_take_spans_two_strums_and_lands_notes_at_their_at()
 	_test_a_thumbstick_flick_nudges_one_notch()
 	await _test_every_venue_stands_every_station_clear()
-	_test_a_pitched_note_neither_passes_nor_spoils_a_keys_part()
 	_test_the_panel_says_how_late_the_items_are()
 	_test_a_jack_names_its_ends()
 	await _test_a_track_jack_records_onto_its_track()
@@ -551,7 +548,6 @@ func _ready() -> void:
 	_test_alt_and_the_mouse_bend_and_spring_back()
 	_test_a_bend_is_shown_and_kept_in_the_take()
 	_test_hits_play_back_as_hits()
-	await _test_a_closed_bare_hand_holds_hand_percussion()
 	_test_a_hand_carrying_anything_is_no_escape_fist()
 	await _test_hand_percussion_is_snapped_gently_as_it_is_recorded()
 	await _test_a_guests_hit_is_snapped_by_its_flag_and_heard_as_its_take()
@@ -9381,10 +9377,10 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 						clear_of_solids = false
 			var before := shelf * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.12)
 			var standable: bool = walker.fits(Vector2(before.x, before.z))
-			# A spot on the shelf for everything but the headphones, the signal glasses, the tablet, the percussion, the
-			# keytar, the chips, the cards, the darts, the cradle, the yo-yo, the session in miniature (on the desk's wing) and the hand
+			# A spot on the shelf for everything but the headphones, the signal glasses, the tablet, the
+			# chips, the cards, the darts, the cradle, the yo-yo, the session in miniature (on the desk's wing) and the hand
 			# drums (in their ring on the riser, counted out by name), which have homes of their own.
-			var home_ok := duck.state == Item.State.HOME and spots.size() >= _shelf_kinds().size() - 20 \
+			var home_ok := duck.state == Item.State.HOME and spots.size() >= _shelf_kinds().size() - 17 \
 					and duck.position.is_equal_approx(spots[0].origin)
 			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
 					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
@@ -9670,9 +9666,9 @@ func _test_the_duck_is_the_rooms() -> void:
 	await get_tree().process_frame
 
 
-## THE SHARING THIS EXISTS FOR: the tablet, headphones, mic and keytar are each one shared Item
+## THE SHARING THIS EXISTS FOR: the tablet, headphones and mic are each one shared Item
 ## today, claimed in turn (`_test_the_duck_is_the_rooms`, above, proves a toy stays that way, on
-## purpose). Picking one of the four up from the shelf now gives the hand a copy of its own
+## purpose). Picking one of the three up from the shelf now gives the hand a copy of its own
 ## (`ItemRoom.take_personal`, triggered by `Item._on_grab_begin`'s redirect, the same spawn-and-
 ## bind `scenes/studio.gd`'s Tour spills already use) instead of a claim on the one shelf copy;
 ## putting it down retires that copy for good (`ItemRoom.retire`) rather than sending it to a
@@ -13069,15 +13065,14 @@ func _test_the_host_records_its_own_keys_on_the_built_in_engine() -> void:
 		reaper.queue_free()
 
 
-## THE GAP THIS EXISTS FOR (docs/loop_backlog.md, "Known rough edges": "Keytar: on a host, a
-## MIDI keyboard still goes to Reaper rather than through the keytar (GuestMidi opens MIDI only
-## from the guest's panel)"). A keytar in hand plays through GuestMidi regardless of whether the
-## DAW records its own MIDI input -- `plays()` says "anyone's with a keytar" -- but the panel
+## THE GAP THIS EXISTS FOR: an instrument in reach (the fingertips) plays through GuestMidi
+## regardless of whether the DAW records its own MIDI input -- `plays()` says "anyone's with an
+## instrument" -- but the panel
 ## that lets a player choose where its notes land (`_place_mic`'s `_keys_box`) was hidden whenever
 ## `host_records()` was false, the same test that correctly hides it for ordinary ambient MIDI
-## input on a host whose Reaper already takes that itself. The keytar is not that ambient input:
+## input on a host whose Reaper already takes that itself. An instrument is not that ambient input:
 ## it is this panel's own `target_track`, and had no way back to it.
-func _test_a_keytar_reaches_its_track_choice_even_where_reaper_records_its_own_midi() -> void:
+func _test_an_instrument_reaches_its_track_choice_even_where_reaper_records_its_own_midi() -> void:
 	_offline()
 	_as_session(Session.Role.HOST, 1)
 	Session.local_name = "Ada"
@@ -13089,14 +13084,14 @@ func _test_a_keytar_reaches_its_track_choice_even_where_reaper_records_its_own_m
 	add_child(panel)
 	panel.open()
 	check("hidden for an ordinary host on Reaper, same as before", not panel._keys_box.visible)
-	gm.keytar = true
-	check("but back once a keytar is in hand, in the host's own section",
+	gm.reach(&"fingertips", true)
+	check("but back once an instrument is in reach, in the host's own section",
 			panel._keys_box.visible and panel._keys_box.get_parent() == panel._column)
 	gm.target_track = 0
 	panel._refresh_midi()
 	check("unset still reads as the armed track, not nowhere, matching take_track()'s own fallback",
 			panel._play_into.get_item_text(panel._play_into.get_item_index(0)) == "The armed track")
-	gm.keytar = false
+	gm.reach(&"fingertips", false)
 	check("and hidden again once it is put down", not panel._keys_box.visible)
 	remove_child(panel)
 	panel.free()
@@ -17644,7 +17639,7 @@ func _test_a_ghost_is_the_size_of_a_large_person() -> void:
 ## THE BLEED-THROUGH THIS EXISTS FOR (docs/loop_backlog.md, "Known rough edges": "A ghost's
 ## caption ... is drawn over whatever is behind its head"). Confirmed with a screenshot before
 ## touching anything: a visitor placed behind the timeline's SCREEN-mode surface, close enough to
-## the seat to be fully hidden by it, still showed "Lin" and "HOLDING KEYTAR" floating in the
+## the seat to be fully hidden by it, still showed "Lin" and "HOLDING DUCK" floating in the
 ## middle of the timeline -- `no_depth_test` skips the depth comparison outright, so the label
 ## drew over the nearer, opaque screen rather than being hidden by it the way the ghost's own
 ## head already was. Removed it (the engine default is the ordinary depth test); re-shot the
@@ -18111,41 +18106,41 @@ func _test_on_air_puts_a_monitor_socket_on_your_pack() -> void:
 	Session.layout = saved_layout
 
 
-func _test_a_shaker_plays_when_a_stroke_stops() -> void:
-	var shaker := ShakerItem.new()
-	add_child(shaker)
+func _test_an_instrument_plays_when_a_stroke_stops() -> void:
+	var cowbell := CowbellItem.new()
+	add_child(cowbell)
 	var hits: Array = []
-	shaker.played.connect(func(v: int, struck: bool, _at: float, _zone: StringName) -> void: hits.append([v, struck]))
+	cowbell.played.connect(func(v: int, struck: bool, _at: float, _zone: StringName) -> void: hits.append([v, struck]))
 	var dt := 1.0 / 60.0
 	var at := Vector3.ZERO
 	# Drifting the hand about is not playing it.
 	for i in 30:
 		at.x += 0.2 * dt
-		shaker._since += dt
-		shaker.feel(at, dt)
+		cowbell._since += dt
+		cowbell.feel(at, dt)
 	at.x -= 0.0
 	for i in 5:
-		shaker._since += dt
-		shaker.feel(at, dt)
+		cowbell._since += dt
+		cowbell.feel(at, dt)
 	check("moving it slowly plays nothing (%s)" % [hits], hits.is_empty())
 	# A brisk stroke one way, brought up short.
 	for i in 6:
 		at.x += 1.6 * dt
-		shaker._since += dt
-		shaker.feel(at, dt)
-	shaker._since += dt
-	shaker.feel(at, dt)
+		cowbell._since += dt
+		cowbell.feel(at, dt)
+	cowbell._since += dt
+	cowbell.feel(at, dt)
 	check("a stroke that stops is one hit (%s)" % [hits], hits.size() == 1 and not hits[0][1])
 	check("as hard as the stroke was fast", hits.size() == 1 and hits[0][0] == InstrumentItem.velocity_for(1.6))
 	# Back the other way, harder: the turn is the next hit.
 	for i in 6:
 		at.x -= 2.4 * dt
-		shaker._since += dt
-		shaker.feel(at, dt)
+		cowbell._since += dt
+		cowbell.feel(at, dt)
 	for i in 6:
 		at.x += 2.4 * dt
-		shaker._since += dt
-		shaker.feel(at, dt)
+		cowbell._since += dt
+		cowbell.feel(at, dt)
 	check("turned round, a stroke the other way is a hit too, and harder (%s)" % [hits],
 			hits.size() == 2 and hits[1][0] > hits[0][0])
 	check("velocities run from soft to full", InstrumentItem.velocity_for(0.1) == 0
@@ -18153,22 +18148,22 @@ func _test_a_shaker_plays_when_a_stroke_stops() -> void:
 			and InstrumentItem.velocity_for(9.0) == 127)
 	# Strokes faster than the beads can cross are one hit.
 	hits.clear()
-	shaker._since = 0.0
+	cowbell._since = 0.0
 	for i in 2:
 		at.y += 2.0 * dt
-		shaker.feel(at, dt)
-	shaker.feel(at, dt)
+		cowbell.feel(at, dt)
+	cowbell.feel(at, dt)
 	check("a stop sooner than the beads can travel is not a second hit", hits.is_empty())
-	shaker.use(true)
+	cowbell.use(true)
 	check("loose, a click is heard in the room, not played (%s)" % [hits], hits.is_empty())
-	shaker.queue_free()
+	cowbell.queue_free()
 
 	# A mouse shakes it by wiggling: the hand follows the cursor a little way and springs back.
 	var hand := MouseInteractor.new()
 	add_child(hand)
 	hand.wiggle(Vector2(400, 300), dt)
 	check("with nothing in the hand, the mouse does not wiggle it", hand.shake_point() == Vector3.ZERO)
-	var shaken := ShakerItem.new()
+	var shaken := CowbellItem.new()
 	add_child(shaken)
 	hand.carrying = shaken
 	hand.wiggle(Vector2(400, 300), dt)
@@ -18198,39 +18193,19 @@ func _test_percussion_is_heard_by_the_room_and_recorded_onto_the_armed_track() -
 	add_child(studio)
 	await get_tree().physics_frame
 	var room := studio.items
-	var shaker := room.items.get(&"shaker") as ShakerItem
-	var tambourine := room.items.get(&"tambourine") as TambourineItem
-	check("there is a shaker and a tambourine, at home", shaker != null and tambourine != null
-			and shaker.state == Item.State.HOME and tambourine.state == Item.State.HOME)
-	var wrong: Array = []
-	for id in Venue.IDS:
-		studio.set_venue(id, false)
-		var shelf := studio.venue.prop_shelf_spot()
-		for spec in [[shaker, studio.venue.shaker_spot()], [tambourine, studio.venue.tambourine_spot()]]:
-			var item: Item = spec[0]
-			var local: Vector3 = shelf.affine_inverse() * item.home.origin
-			if not item.home.is_equal_approx(spec[1]) or not item.own_home \
-					or not is_equal_approx(local.y, ZoneKit.SHELF_LOWER_TOP) \
-					or absf(local.x) > ZoneKit.SHELF.x * 0.5 - 0.14 or absf(local.z) > ZoneKit.SHELF.z * 0.5 - 0.1:
-				wrong.append([id, item.id])
-	check("in every venue they lie on the shelf's lower tier (%s)" % [wrong], wrong.is_empty())
-	studio.set_venue(&"studio", false)
-	var tablet_x := (studio.venue.prop_shelf_spot().affine_inverse() * studio.venue.tablet_spot().origin).x
-	var apart := func(a: Vector3, b: Vector3) -> float:
-		var shelf := studio.venue.prop_shelf_spot().affine_inverse()
-		return absf((shelf * a).x - (shelf * b).x)
-	check("clear of each other and of the tablet", apart.call(shaker.home.origin, tambourine.home.origin)
-			> TambourineItem.RADIUS + 0.03 and tablet_x - (studio.venue.prop_shelf_spot().affine_inverse()
-			* shaker.home.origin).x > 0.15)
+	var bell := room.spawn(&"cowbell", &"cowbell", Transform3D.IDENTITY) as InstrumentItem
+	var block := room.spawn(&"woodblock", &"woodblock", Transform3D(Basis.IDENTITY, Vector3(0.5, 0.0, 0.0))) as InstrumentItem
+	check("there is a cowbell and a woodblock, at home", bell != null and block != null
+			and bell.state == Item.State.HOME and block.state == Item.State.HOME)
 
 	var hand := studio.get_node("MouseHand") as MouseInteractor
 	var played: Array = []
 	room.played.connect(func(item: InstrumentItem, v: int, struck: bool, _at: float, _zone: StringName) -> void: played.append([item.id, v, struck]))
-	hand.pick_up(shaker)
-	shaker.use(true)
+	hand.pick_up(bell)
+	bell.use(true)
 	check("in the hand, a click strikes it, firmly (%s)" % [played],
-			played == [[&"shaker", InstrumentItem.STRUCK, true]])
-	var mine := shaker.get_children().filter(func(n: Node) -> bool: return n is AudioStreamPlayer)
+			played == [[&"cowbell", InstrumentItem.STRUCK, true]])
+	var mine := bell.get_children().filter(func(n: Node) -> bool: return n is AudioStreamPlayer)
 	check("and you hear it at once, on your own keys' bus", mine.size() == 1
 			and (mine[0] as AudioStreamPlayer).bus == AudioPorts.bus(AudioPorts.MONITOR))
 
@@ -18245,10 +18220,10 @@ func _test_percussion_is_heard_by_the_room_and_recorded_onto_the_armed_track() -
 		t.rec_arm = false
 	heard["recording"] = true
 	rec.follow(heard)
-	shaker.play(90)
+	bell.play(90)
 	check("recording with nothing armed, the hit has nowhere to go, and you are told once (%s)" % [told],
 			not rec.is_recording() and told.size() == 1 and (told[0] as String).contains("Arm a track"))
-	shaker.play(90)
+	bell.play(90)
 	check("only once", told.size() == 1)
 	heard["recording"] = false
 	rec.follow(heard)
@@ -18260,13 +18235,13 @@ func _test_percussion_is_heard_by_the_room_and_recorded_onto_the_armed_track() -
 	rec.follow(heard)
 	check("recording with a track armed, a take is running", rec.is_recording())
 	heard["seconds"] = 20.5
-	shaker.play(100)
+	bell.play(100)
 	var lands := 20.5 + AudioServer.get_output_latency()
 	heard["seconds"] = 21.25
 	hand.lose_carrying()
-	shaker.snap_home()
-	hand.pick_up(tambourine)
-	tambourine.use(true)
+	bell.snap_home()
+	hand.pick_up(block)
+	block.use(true)
 	heard["seconds"] = 22.0
 	heard["recording"] = false
 	rec.follow(heard)
@@ -18278,143 +18253,21 @@ func _test_percussion_is_heard_by_the_room_and_recorded_onto_the_armed_track() -
 	var item: MixState.ItemState = taken.front() if taken.size() == 1 else MixState.ItemState.new()
 	var notes := MidiTake.unpack_relative(item.notes, item.start)
 	check("each hit a drum note, where it was heard (%s)" % [notes], notes.size() == 2
-			and is_equal_approx(notes[0][0], lands) and notes[0][2] == ShakerItem.new().pitch() and notes[0][3] == 100
-			and notes[0][4] == HitRecorder.CHANNEL and notes[1][2] == 54 and notes[1][3] == InstrumentItem.STRUCK
+			and is_equal_approx(notes[0][0], lands) and notes[0][2] == CowbellItem.new().pitch() and notes[0][3] == 100
+			and notes[0][4] == HitRecorder.CHANNEL and notes[1][2] == WoodblockItem.new().pitch() and notes[1][3] == InstrumentItem.STRUCK
 			and is_equal_approx(notes[0][1] - notes[0][0], InstrumentItem.NOTE_SECONDS))
 	Session.notice.disconnect(listen)
 
 	# Somebody else's: heard in the room from their hand, and only from whoever has it.
 	hand.lose_carrying()
-	tambourine.snap_home()
-	var sounds_before := tambourine._take
-	studio.presence._item_holders[&"tambourine"] = 7
-	Session.item_hit.emit(&"tambourine", 80, 9, -1.0)
-	check("a hit from somebody not holding it is not played", tambourine._take == sounds_before)
-	Session.item_hit.emit(&"tambourine", 80, 7, -1.0)
-	check("one from whoever has it is", tambourine._take == sounds_before + 1)
-	studio.presence._item_holders.erase(&"tambourine")
-	studio.queue_free()
-	await get_tree().process_frame
-	_as_session(Session.Role.SOLO, 1)
-	Session.layout = saved_layout
-
-
-func _test_a_keytar_plays_your_keys_and_shows_them() -> void:
-	# A host on Reaper, which records its own keys: here only a keytar makes them the game's.
-	_offline().records_inputs = true
-	var saved_layout := Session.layout
-	Session.layout = LayoutProfile.new()
-	Session.layout.save_path = "user://test_layout_profile.cfg"
-	_as_session(Session.Role.SOLO, 1)
-	var gm := Session.guest_midi
-	var saved_heard := gm.heard_source
-	var studio := Studio.new()
-	studio.medium = Presentation.Medium.SCREEN
-	add_child(studio)
-	await get_tree().physics_frame
-	var keytar := studio.items.items.get(&"keytar") as KeytarItem
-	check("there is a keytar, at home, with its 25 keys", keytar != null and keytar.state == Item.State.HOME
-			and keytar.keys.size() == KeytarItem.KEYS)
-	check("a note is shown on its own key, or the same note an octave in", KeytarItem.key_of(48) == 0
-			and KeytarItem.key_of(72) == 24 and KeytarItem.key_of(36) == 0 and KeytarItem.key_of(85) == 13)
-	var wrong: Array = []
-	for id in Venue.IDS:
-		studio.set_venue(id, false)
-		var shelf := studio.venue.prop_shelf_spot()
-		var local: Transform3D = shelf.affine_inverse() * keytar.home
-		# Standing on its edge, keys out: its body's front edge is on the low peg.
-		var edge := local * Vector3(0, 0, KeytarItem.FRONT_EDGE)
-		if not keytar.home.is_equal_approx(studio.venue.keytar_spot()) or not keytar.own_home \
-				or not is_equal_approx(edge.y, ZoneKit.KEYTAR_REST) or local.basis.y.dot(Vector3.BACK) < 0.99 \
-				or absf(edge.z - ZoneKit.KEYTAR_BACK_Z) > 0.001:
-			wrong.append(id)
-	check("in every venue it stands on its rack at the back of the shelf, keys out (%s)" % [wrong], wrong.is_empty())
-	check("the rack is inside the shelf's footprint", ZoneKit.KEYTAR_PEGS.all(func(p: Vector2) -> bool:
-			return absf(p.x) < ZoneKit.SHELF.x * 0.5) and ZoneKit.KEYTAR_BACK_Z + ZoneKit.KEYTAR_PEG_REACH < 0.0)
-	studio.set_venue(&"studio", false)
-
-	var hand := studio.get_node("MouseHand") as MouseInteractor
-	var told: Array = []
-	var listen := func(text: String): told.append(text)
-	Session.notice.connect(listen)
-	hand.pick_up(keytar)
-	studio._process(0.016)
-	check("in your hand, your keys play it, alone too", gm.keytar and gm.plays())
-	check("and on a desktop the computer keyboard is its piano, and you are told how, arrows and all (%s)" % [told],
-			studio.keytar_keys.is_active() and told.size() == 1 and (told[0] as String).contains("arrows walk"))
-	check("its piano lets the arrows walk", studio.keytar_keys.is_in_group(KeyCatcher.WALKS_ON_ARROWS))
-	studio.keytar_keys.handle(KEY_A, true)
-	studio.keytar_keys.handle(KEY_E, true)
-	check("a key down plays the note, and its key on the keytar goes down and lights (%s)" % [gm.held],
-			gm.held.has(60) and gm.held.has(63) and keytar.is_down(60) and keytar.is_down(63)
-			and is_equal_approx(keytar.keys[12].rotation.x, KeytarItem.PRESS) and keytar.keys[12].material_override != null)
-	studio.keytar_keys.handle(KEY_A, false)
-	check("let go, it comes up", not gm.held.has(60) and not keytar.is_down(60)
-			and is_zero_approx(keytar.keys[12].rotation.x) and keytar.keys[12].material_override == null)
-	studio.keytar_keys.set_active(false)
-	keytar.use(true)
-	check("the keys given back, a click with it in hand takes them again", studio.keytar_keys.is_active())
-	var walker := studio.walker
-	walker.active = true
-	walker.velocity = Vector3.ZERO
-	var up := InputEventKey.new()
-	up.physical_keycode = KEY_UP
-	up.pressed = true
-	Input.parse_input_event(up)
-	Input.flush_buffered_events()
-	for i in 10:
-		walker._physics_process(1.0 / 60.0)
-	var moving := Vector2(walker.velocity.x, walker.velocity.z).length()
-	up.pressed = false
-	Input.parse_input_event(up)
-	Input.flush_buffered_events()
-	walker.velocity = Vector3.ZERO
-	check("with the keytar's piano on, the arrows walk you (%.2f m/s)" % moving, moving > 0.5
-			and studio.keytar_keys.is_active())
-
-	# A take, onto the armed track, by the song position heard.
-	for t: MixState.TrackState in DAW.state.tracks.values():
-		t.rec_arm = false
-	DAW.state.track(4).rec_arm = true
-	var heard := {"seconds": 30.0, "playing": true, "recording": true, "valid": true}
-	gm.heard_source = func() -> Dictionary: return heard
-	gm.follow(gm.heard())
-	check("recording, with no track chosen, a take runs for the armed one", gm.is_recording() and gm.take_track() == 4)
-	heard["seconds"] = 30.5
-	studio.keytar_keys.handle(KEY_D, true)
-	heard["seconds"] = 31.0
-	studio.keytar_keys.handle(KEY_D, false)
-	studio.keytar_keys.handle(KEY_E, false)
-	heard["recording"] = false
-	gm.follow(gm.heard())
-	var taken := DAW.state.track(4).items.filter(func(it: MixState.ItemState) -> bool: return it.name.contains("keytar"))
-	check("stopped, the keytar's take lands on the armed track (%s)" % [gm.last_take], taken.size() == 1
-			and gm.last_take.get("track") == 4)
-	if taken.size() == 1:
-		var notes := MidiTake.unpack_relative(taken[0].notes, taken[0].start)
-		check("with its notes where they were heard (%s)" % [notes], notes.any(func(n: Array) -> bool:
-				return n[2] == 64 and is_equal_approx(n[0], 30.5) and is_equal_approx(n[1], 31.0)))
-
-	hand.lose_carrying()
-	keytar.snap_home()
-	studio._process(0.016)
-	check("put down, your keys are a guest's again and the keyboard is the studio's",
-			not gm.keytar and not gm.plays() and not studio.keytar_keys.is_active() and gm.held.is_empty())
-
-	# Somebody else's keytar: their notes play out of it, and show on it.
-	studio.presence._item_holders[&"keytar"] = 7
-	Session.note_played.emit(Session.Note.ON, 62, 90, 9, -1.0)
-	check("notes from someone not holding it do not", not keytar.is_down(62))
-	Session.note_played.emit(Session.Note.ON, 62, 90, 7, -1.0)
-	var room := keytar.get_node_or_null("Room") as MonitorSynth
-	check("notes from whoever has it play out of it, into the room, and press its keys", keytar.is_down(62)
-			and room != null and room.speaker == keytar)
-	Session.note_played.emit(Session.Note.OFF, 62, 0, 7, -1.0)
-	check("and let go", not keytar.is_down(62))
-	studio.presence._item_holders.erase(&"keytar")
-
-	Session.notice.disconnect(listen)
-	gm.heard_source = saved_heard
+	block.snap_home()
+	var sounds_before := block._take
+	studio.presence._item_holders[&"woodblock"] = 7
+	Session.item_hit.emit(&"woodblock", 80, 9, -1.0)
+	check("a hit from somebody not holding it is not played", block._take == sounds_before)
+	Session.item_hit.emit(&"woodblock", 80, 7, -1.0)
+	check("one from whoever has it is", block._take == sounds_before + 1)
+	studio.presence._item_holders.erase(&"woodblock")
 	studio.queue_free()
 	await get_tree().process_frame
 	_as_session(Session.Role.SOLO, 1)
@@ -18574,7 +18427,7 @@ func _test_pockets_carry_more_than_one_thing() -> void:
 	var ball := room.items[&"ball"] as Item
 	var plane := room.items[&"plane"] as Item
 	var cradle := room.items[&"cradle"] as CradleItem
-	var shaker := room.items[&"shaker"] as Item
+	var bell := room.spawn(&"woodblock", &"woodblock", Transform3D.IDENTITY)
 	check("a hand has pockets, and they are this machine's person's", hand.pockets != null and hand.pockets == Pockets.mine())
 	hand.pockets._slots = [null, null, null]
 
@@ -18597,10 +18450,10 @@ func _test_pockets_carry_more_than_one_thing() -> void:
 	check("the wheel swaps the hand for the next full pocket", hand.carrying == plane and duck.pocket == 0)
 	hand.cycle_pockets(1)
 	check("and round again", hand.carrying == ball and plane.pocket == 1 and duck.pocket == 0)
-	hand.pick_up(shaker)
+	hand.pick_up(bell)
 	check("all three full", hand.pockets.free_slot() == -1 and hand.pockets.items().size() == 3)
 	hand.pick_up(cradle)
-	check("and then a full hand's goes home, as it always did", shaker.state == Item.State.HOME and hand.carrying == cradle)
+	check("and then a full hand's goes home, as it always did", bell.state == Item.State.HOME and hand.carrying == cradle)
 
 	# A toy mid-trick stops when it is pocketed.
 	hand.swap_pocket(2)
@@ -18655,7 +18508,7 @@ func _test_pockets_carry_more_than_one_thing() -> void:
 	presence.claim_carries()
 	check("and let go of once it is not", Session.holder_of(plane.network_key()) == 0)
 
-	for item in [duck, ball, plane, cradle, shaker]:
+	for item in [duck, ball, plane, cradle, bell]:
 		item.snap_home()
 	hand.pockets._slots = [null, null, null]
 	studio.queue_free()
@@ -18792,26 +18645,6 @@ func _test_the_beach_ball_does_not_crowd_the_view() -> void:
 			ToyItem.TOYS[&"studio"]["size"] < 0.1)
 	toy.queue_free()
 	ToyItem.shown = &"studio"
-
-
-## THE CROWDING THIS EXISTS FOR (docs/loop_backlog.md, "Known rough edges": "Keytar: ... Held on
-## a desktop, it covers most of the desk"). The desktop pose's base offset had a zero z -- the
-## instrument's own 0.9m length ran forward from right in front of the glove, straight across the
-## console's whole fader row (confirmed off a screenshot, frame 90 so the carry spring-damper had
-## settled: every one of the 13 strips hidden). Pinning the exact -0.35 pushed into the base
-## offset, and that it reads as further from the eye along local -Z (the glove's own frame is
-## camera-aligned; `MouseInteractor.carry_pose()` offsets a held item by a negative z to put it
-## in front of the camera, so a more negative z is further from the eye, not closer).
-func _test_a_held_keytar_clears_the_console_instead_of_covering_it() -> void:
-	var hand := MouseInteractor.new()
-	var keytar := KeytarItem.new()
-	add_child(keytar)
-	keytar.carried_by = hand
-	var turn := Basis(Vector3.UP, -0.42) * Basis(Vector3.FORWARD, -0.12) * Basis(Vector3.RIGHT, 0.75)
-	var base := keytar.held_pose().origin + turn * KeytarItem.CRADLE
-	check("the base offset carries the -0.35m pushed out to clear the console (%.2f)" % base.z,
-			is_equal_approx(base.z, -0.35))
-	keytar.queue_free()
 
 
 ## THE FLOATING THIS EXISTS FOR (docs/loop_backlog.md, "Known rough edges": "Held on a desktop
@@ -20069,18 +19902,20 @@ func _test_tour_untaken_part_blocks_the_pass() -> void:
 
 
 func _test_tour_parts_scale_with_the_band_and_the_seed() -> void:
-	check("count_for(1, false) == 1 -- solo holds one job at a time", TourParts.count_for(1, false) == 1)
-	check("count_for(2, false) == 2", TourParts.count_for(2, false) == 2)
-	check("count_for(3, false) == 3 -- one per instrument the room has", TourParts.count_for(3, false) == 3)
-	check("count_for(4, false) == 3", TourParts.count_for(4, false) == 3)
-	check("count_for(8, false) == 3", TourParts.count_for(8, false) == 3)
-	check("the boss adds nothing -- nothing more in the room to hold a fourth",
-			TourParts.count_for(8, true) == 3)
+	var out: Array[StringName] = [&"cowbell", &"cowbell2", &"woodblock", &"pad", &"triangle", &"claves", &"hihat", &"bongo"]
+	check("count_for(1, false, 3) == 1 -- solo holds one job at a time", TourParts.count_for(1, false, 3) == 1)
+	check("count_for(2, false, 3) == 2", TourParts.count_for(2, false, 3) == 2)
+	check("count_for(3, false, 3) == 3 -- one per instrument out of the case", TourParts.count_for(3, false, 3) == 3)
+	check("count_for(4, false, 3) == 3", TourParts.count_for(4, false, 3) == 3)
+	check("count_for(8, false, 3) == 3", TourParts.count_for(8, false, 3) == 3)
+	check("the boss adds nothing -- nothing more out of the case to hold a fourth",
+			TourParts.count_for(8, true, 3) == 3)
+	check("the room itself has none: nothing to hold until the case spills", TourParts.count_for(8, false) == 0)
 
 	for seed in range(20):
 		var rng := RandomNumberGenerator.new()
 		rng.seed = seed
-		var drawn := TourParts.draw(rng, TourParts.count_for(8, false))
+		var drawn := TourParts.draw(rng, TourParts.count_for(8, false, out.size()), out)
 		var instruments := {}
 		for p: TourPart in drawn:
 			check("seed %d never draws two parts for the same instrument" % seed,
@@ -20092,10 +19927,10 @@ func _test_tour_parts_scale_with_the_band_and_the_seed() -> void:
 	var b := TourRun.new()
 	b.attempt_seed = 777
 	var rng_a := a.song_rng(1)
-	var drawn_a := TourParts.draw(rng_a, 3)
+	var drawn_a := TourParts.draw(rng_a, 3, out)
 	var holders_a := TourParts.assign(rng_a, drawn_a, [1, 2, 3, 4, 5, 6, 7, 8])
 	var rng_b := b.song_rng(1)
-	var drawn_b := TourParts.draw(rng_b, 3)
+	var drawn_b := TourParts.draw(rng_b, 3, out)
 	var holders_b := TourParts.assign(rng_b, drawn_b, [1, 2, 3, 4, 5, 6, 7, 8])
 	check("the same attempt_seed draws the same parts",
 			drawn_a.map(func(p: TourPart) -> StringName: return p.id)
@@ -20107,7 +19942,7 @@ func _test_tour_parts_scale_with_the_band_and_the_seed() -> void:
 		unique[h] = true
 	check("three parts to eight peers go to three distinct people (%s)" % [holders_a], unique.size() == 3)
 
-	var solo_parts := TourParts.draw(RandomNumberGenerator.new(), 1)
+	var solo_parts := TourParts.draw(RandomNumberGenerator.new(), 1, out)
 	var solo_holders := TourParts.assign(RandomNumberGenerator.new(), solo_parts, [1])
 	check("solo holds its own one part", solo_holders == [1])
 
@@ -20115,7 +19950,7 @@ func _test_tour_parts_scale_with_the_band_and_the_seed() -> void:
 	for seed in range(20):
 		var run := TourRun.new()
 		run.attempt_seed = seed
-		var drawn: Array[TourPart] = TourParts.draw(run.song_rng(0), 1)
+		var drawn: Array[TourPart] = TourParts.draw(run.song_rng(0), 1, out)
 		if not drawn.is_empty():
 			first_ids[drawn[0].id] = true
 	check("at least 3 distinct first parts over 20 seeds (%d)" % first_ids.size(), first_ids.size() >= 3)
@@ -20153,57 +19988,57 @@ func _test_tour_part_is_played_by_notes_on_its_lane() -> void:
 	var beat := 60.0 / 100.0
 	var rhythm := TourMeasure.Rhythm.new()
 
-	# Eight tambourine hits, dead on 2 and 4 of four bars: clears the backbeat part, but not the
-	# shaker's (wrong pitch) nor the keytar's (wrong channel).
+	# Eight pad hits, dead on 2 and 4 of four bars: clears the backbeat part, but not the
+	# low pad's (wrong pitch) nor the cowbell's.
 	var on_grid: Array = []
 	for k in 4:
 		for b in [1.0, 3.0]:
 			var on: float = (k * 4.0 + b) * beat
-			on_grid.append([on, on + 0.05, 54, 104, HitRecorder.CHANNEL])
-	DAW.insert_midi_take(TourProject.STAGE_TRACK, on_grid[0][0], on_grid.back()[1] + 1.0, on_grid, "tambourine")
+			on_grid.append([on, on + 0.05, 47, 104, HitRecorder.CHANNEL])
+	DAW.insert_midi_take(TourProject.STAGE_TRACK, on_grid[0][0], on_grid.back()[1] + 1.0, on_grid, "pad")
 
-	var tamb_backbeat := TourParts.by_id(&"tamb_backbeat")
-	rhythm.start(TourProject.STAGE_TRACK, 0.0, tamb_backbeat)
+	var pad_backbeat := TourParts.by_id(&"pad_backbeat")
+	rhythm.start(TourProject.STAGE_TRACK, 0.0, pad_backbeat)
 	var r := rhythm.result()
-	check("eight hits on 2 and 4 clear tamb_backbeat (%s)" % [r], tamb_backbeat.played(r))
+	check("eight hits on 2 and 4 clear pad_backbeat (%s)" % [r], pad_backbeat.played(r))
 
-	var shaker_eighths := TourParts.by_id(&"shaker_eighths")
-	rhythm.start(TourProject.STAGE_TRACK, 0.0, shaker_eighths)
-	check("but not shaker_eighths -- wrong pitch", not shaker_eighths.played(rhythm.result()))
+	var lowpad_one_three := TourParts.by_id(&"lowpad_one_three")
+	rhythm.start(TourProject.STAGE_TRACK, 0.0, lowpad_one_three)
+	check("but not lowpad_one_three -- wrong pitch", not lowpad_one_three.played(rhythm.result()))
 
-	var keys_one := TourParts.by_id(&"keys_one")
-	rhythm.start(TourProject.STAGE_TRACK, 0.0, keys_one)
-	check("nor keys_one -- wrong channel", not keys_one.played(rhythm.result()))
+	var cowbell_one := TourParts.by_id(&"cowbell_one")
+	rhythm.start(TourProject.STAGE_TRACK, 0.0, cowbell_one)
+	check("nor cowbell_one -- another instrument's", not cowbell_one.played(rhythm.result()))
 
 	DAW.state.track(TourProject.STAGE_TRACK).items.clear()
 
-	# Eight off-grid tambourine hits (on the one and the three, a full beat from either target):
+	# Eight off-grid pad hits (on the one and the three, a full beat from either target):
 	# flailing, not playing.
 	var off_grid: Array = []
 	for k in 4:
 		for b in [0.0, 2.0]:
 			var on: float = (k * 4.0 + b) * beat
-			off_grid.append([on, on + 0.05, 54, 100, HitRecorder.CHANNEL])
+			off_grid.append([on, on + 0.05, 47, 100, HitRecorder.CHANNEL])
 	DAW.insert_midi_take(TourProject.STAGE_TRACK, off_grid[0][0], off_grid.back()[1] + 1.0, off_grid, "flail")
-	rhythm.start(TourProject.STAGE_TRACK, 0.0, tamb_backbeat)
-	check("eight off-grid hits do not clear it", not tamb_backbeat.played(rhythm.result()))
+	rhythm.start(TourProject.STAGE_TRACK, 0.0, pad_backbeat)
+	check("eight off-grid hits do not clear it", not pad_backbeat.played(rhythm.result()))
 	DAW.state.track(TourProject.STAGE_TRACK).items.clear()
 
-	# Four channel-0 notes on the one: the keytar's part, whatever pitch the chord was.
-	var keys_notes: Array = []
+	# Four cowbell clanks on the one: the cowbell's part.
+	var bell_notes: Array = []
 	for k in 4:
 		var on: float = (k * 4.0) * beat
-		keys_notes.append([on, on + 0.1, 60, 100, 0])
-	DAW.insert_midi_take(TourProject.STAGE_TRACK, keys_notes[0][0], keys_notes.back()[1] + 1.0, keys_notes, "keys")
-	rhythm.start(TourProject.STAGE_TRACK, 0.0, keys_one)
-	check("four stabs on the one clear keys_one", keys_one.played(rhythm.result()))
+		bell_notes.append([on, on + 0.1, 56, 100, HitRecorder.CHANNEL])
+	DAW.insert_midi_take(TourProject.STAGE_TRACK, bell_notes[0][0], bell_notes.back()[1] + 1.0, bell_notes, "cowbell")
+	rhythm.start(TourProject.STAGE_TRACK, 0.0, cowbell_one)
+	check("four clanks on the one clear cowbell_one", cowbell_one.played(rhythm.result()))
 
 	DAW.use(previous, false)
 
 
 func _test_tour_open_part_is_reassigned_after_the_grace() -> void:
 	var run := TourRun.new()
-	run.parts = [&"tamb_backbeat", &"shaker_eighths"]
+	run.parts = [&"pad_backbeat", &"lowpad_one_three"]
 	run.holders = [7, 3]
 	run.hits = [0, 0]
 	run.played = [false, false]
@@ -20238,7 +20073,7 @@ func _test_tour_open_part_is_reassigned_after_the_grace() -> void:
 
 func _test_tour_run_round_trips_parts_with_eight_peers() -> void:
 	var run := TourRun.new()
-	run.parts = [&"tamb_backbeat", &"shaker_eighths", &"keys_one"]
+	run.parts = [&"pad_backbeat", &"lowpad_one_three", &"cowbell_one"]
 	run.holders = [8, 0, 3]
 	run.hits = [4, 0, 2]
 	run.played = [true, false, false]
@@ -20278,7 +20113,7 @@ func _test_tour_brief_ticks_a_part_off_the_stage_lane_and_gates_the_pass() -> vo
 	run.song_tempo = 100.0
 	run.flaws = [&"quiet_vox"]
 	run.fixed = [false]
-	run.parts = [&"tamb_backbeat"]
+	run.parts = [&"pad_backbeat"]
 	run.holders = [1]
 	run.hits = [0]
 	run.played = [false]
@@ -20296,7 +20131,7 @@ func _test_tour_brief_ticks_a_part_off_the_stage_lane_and_gates_the_pass() -> vo
 	for k in 4:
 		for b in [1.0, 3.0]:
 			var on: float = (k * 4.0 + b) * beat
-			hits.append([on, on + 0.05, 54, 104, HitRecorder.CHANNEL])
+			hits.append([on, on + 0.05, 47, 104, HitRecorder.CHANNEL])
 	DAW.insert_midi_take(Tour.STAGE_TRACK, hits[0][0], hits.back()[1] + 1.0, hits, "Ada percussion 1")
 	Tour._physics_process(0.1)
 	check("eight hits on 2 and 4 tick the part off the Stage lane (%d/8)" % run.hits[0],
@@ -20324,7 +20159,7 @@ func _test_tour_hud_names_who_holds_each_part() -> void:
 	run.song_tempo = 100.0
 	run.flaws = [&"quiet_vox"]
 	run.fixed = [false]
-	run.parts = [&"tamb_backbeat", &"keys_one"]
+	run.parts = [&"pad_backbeat", &"cowbell_one"]
 	run.holders = [1, 2]
 	run.hits = [3, 0]
 	run.played = [false, false]
@@ -20335,10 +20170,10 @@ func _test_tour_hud_names_who_holds_each_part() -> void:
 	var theirs := hud._parts_box.get_node_or_null("Part1") as Label
 	check("two part lines (%d)" % hud._parts_box.get_child_count(), hud._parts_box.get_child_count() == 2)
 	check("this player's own line says YOU, the instrument, the job and the count (%s)" % (mine.text if mine else "none"),
-			mine != null and mine.text == "YOU  " + TourParts.by_id(&"tamb_backbeat").line + "  3/8"
+			mine != null and mine.text == "YOU  " + TourParts.by_id(&"pad_backbeat").line + "  3/8"
 			and mine.get_theme_color("font_color") == TourHud.INK)
 	check("the other's names them (%s)" % (theirs.text if theirs else "none"),
-			theirs != null and theirs.text.begins_with("GRACE  KEYTAR: ")
+			theirs != null and theirs.text.begins_with("GRACE  COWBELL: ")
 			and theirs.get_theme_color("font_color") == TourHud.DIM)
 	check("the tag counts parts beside fixes (%s)" % hud._tag.text, hud._tag.text == "BAND OF 2   0 / 1 FIXED   0 / 2 PARTS")
 
@@ -20834,10 +20669,10 @@ func _test_tour_marked_instrument_refuses_another_hand() -> void:
 	room.free()
 
 
-## `TourParts.count_for` scales with how many instruments are actually in the room, not the
-## fixed three; `first_spill` seeds a big band's first brief with something to do already; and
+## `TourParts.count_for` scales with how many instruments are actually out of the case;
+## `first_spill` seeds the first brief with one a player (the case's seven at most); and
 ## `draw`/`assign` can fill eight parts on eight distinct instruments when the case has spilled
-## enough of them, while an ordinary room (the default `available`) still caps at three.
+## enough of them, while a room with nothing spilled (the default `available`) draws none.
 func _test_tour_parts_count_the_instruments_in_the_room() -> void:
 	check("count_for(8, false, 3) == 3 -- the room alone", TourParts.count_for(8, false, 3) == 3)
 	check("count_for(8, false, 9) == 8 -- a full case", TourParts.count_for(8, false, 9) == 8)
@@ -20846,8 +20681,9 @@ func _test_tour_parts_count_the_instruments_in_the_room() -> void:
 
 	var empty_rng := RandomNumberGenerator.new()
 	empty_rng.seed = 11
-	check("a band of 3 or fewer spills nothing at the start", TourParts.first_spill(empty_rng, 3).is_empty())
-	for pair in [[4, 1], [5, 2], [6, 3], [7, 4], [8, 5]]:
+	check("the room keeps no instrument of its own", TourParts.ROOM.is_empty() and TourParts.INSTRUMENTS == 0)
+	check("a solo player's first brief spills one, to have something to hold", TourParts.first_spill(empty_rng, 1).size() == 1)
+	for pair in [[2, 2], [3, 3], [4, 4], [5, 5], [6, 6], [7, 7], [8, 7]]:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = 11
 		check("band %d seeds %d kind(s) already out of the case" % [pair[0], pair[1]],
@@ -20858,8 +20694,8 @@ func _test_tour_parts_count_the_instruments_in_the_room() -> void:
 	b.seed = 42
 	check("the same seed spills the same kinds", TourParts.first_spill(a, 8) == TourParts.first_spill(b, 8))
 
-	var six: Array[StringName] = [&"cowbell", &"cowbell2", &"woodblock", &"woodblock2", &"pad", &"pad2"]
-	var available: Array[StringName] = TourParts.ROOM + six
+	var eight: Array[StringName] = [&"cowbell", &"cowbell2", &"woodblock", &"woodblock2", &"pad", &"pad2", &"triangle", &"triangle2"]
+	var available: Array[StringName] = TourParts.ROOM + eight
 	var rng8 := RandomNumberGenerator.new()
 	rng8.seed = 5
 	var drawn := TourParts.draw(rng8, 8, available)
@@ -20877,12 +20713,12 @@ func _test_tour_parts_count_the_instruments_in_the_room() -> void:
 
 	var rng_room := RandomNumberGenerator.new()
 	rng_room.seed = 5
-	check("without a case full of extras, draw(rng, 8) still gives 3 -- the room's own",
-			TourParts.draw(rng_room, 8).size() == 3)
+	check("with nothing spilled, draw(rng, 8) gives none -- the room has no instrument of its own",
+			TourParts.draw(rng_room, 8).is_empty())
 
 
-## A band bigger than the room's own three instruments is always offered one to spill while it
-## still wants more; a solo player, who never needs one, sees one far less often; a kind already
+## A band with fewer instruments out than players is always offered one to spill while it
+## still wants more; a solo player with one out, who never needs another, sees one far less often; a kind already
 ## fully spilled drops out of the draft; and a repeatable card is never hidden by `exclude`.
 func _test_tour_deck_offers_instruments_to_a_big_band() -> void:
 	var has_spill_boon := func(hand: Array[TourCard]) -> bool:
@@ -20909,7 +20745,7 @@ func _test_tour_deck_offers_instruments_to_a_big_band() -> void:
 	for seed in range(samples):
 		var rng := RandomNumberGenerator.new()
 		rng.seed = seed
-		if has_spill_boon.call(TourDeck.draw(rng, [], 1, [])):
+		if has_spill_boon.call(TourDeck.draw(rng, [], 1, [&"pad"])):
 			seen += 1
 	check("a solo player sees one well under half of %d seeds (%d)" % [samples, seen], seen < samples / 2)
 
@@ -21129,7 +20965,7 @@ func _test_tour_chaos_blocks_the_pass_until_recovered() -> void:
 	run.song_tempo = 100.0
 	run.flaws = [&"quiet_vox"]
 	run.fixed = [true]
-	run.parts = [&"tamb_backbeat"]
+	run.parts = [&"pad_backbeat"]
 	run.holders = [1]
 	run.hits = [0]
 	run.played = [false]
@@ -21147,7 +20983,7 @@ func _test_tour_chaos_blocks_the_pass_until_recovered() -> void:
 	for k in 4:
 		for b in [1.0, 3.0]:
 			var on: float = (k * 4.0 + b) * beat
-			hits.append([on, on + 0.05, 54, 104, HitRecorder.CHANNEL])
+			hits.append([on, on + 0.05, 47, 104, HitRecorder.CHANNEL])
 	DAW.insert_midi_take(Tour.STAGE_TRACK, hits[0][0], hits.back()[1] + 1.0, hits, "Ada percussion 1")
 
 	DAW.set_track_solo(3, true)
@@ -21617,7 +21453,7 @@ func _test_tour_brief_judges_the_crowd() -> void:
 
 
 ## `Tour._tick_crowd` end to end: the brief-tick test's own setup (OfflineBackend, a solo
-## session, the rescue song loaded, the vocal fixed, a tambourine take already placed so flaws
+## session, the rescue song loaded, the vocal fixed, a pad take already placed so flaws
 ## and parts are both done from the first tick), but with `Tour._ear` a deterministic
 ## `_FakeEar` standing in for the real master bus. Unhappy on the level bar alone holds the
 ## brief in BRIEF with the clock still running; once the crowd is happy on both, the same tick
@@ -21644,7 +21480,7 @@ func _test_tour_brief_waits_for_the_crowd() -> void:
 	run.song_tempo = 100.0
 	run.flaws = [&"quiet_vox"]
 	run.fixed = [false]
-	run.parts = [&"tamb_backbeat"]
+	run.parts = [&"pad_backbeat"]
 	run.holders = [1]
 	run.hits = [0]
 	run.played = [false]
@@ -21657,7 +21493,7 @@ func _test_tour_brief_waits_for_the_crowd() -> void:
 	for k in 4:
 		for b in [1.0, 3.0]:
 			var on: float = (k * 4.0 + b) * beat
-			hits.append([on, on + 0.05, 54, 104, HitRecorder.CHANNEL])
+			hits.append([on, on + 0.05, 47, 104, HitRecorder.CHANNEL])
 	DAW.insert_midi_take(Tour.STAGE_TRACK, hits[0][0], hits.back()[1] + 1.0, hits, "Ada percussion 1")
 
 	var fake := _FakeEar.new()
@@ -21708,7 +21544,7 @@ func _test_tour_brief_finishes_on_the_bar_not_the_frame() -> void:
 	run.song_tempo = 120.0
 	run.flaws = [&"quiet_vox"]
 	run.fixed = [false]
-	run.parts = [&"tamb_backbeat"]
+	run.parts = [&"pad_backbeat"]
 	run.holders = [1]
 	run.hits = [0]
 	run.played = [false]
@@ -21721,7 +21557,7 @@ func _test_tour_brief_finishes_on_the_bar_not_the_frame() -> void:
 	for k in 4:
 		for b in [1.0, 3.0]:
 			var on: float = (k * 4.0 + b) * beat
-			hits.append([on, on + 0.05, 54, 104, HitRecorder.CHANNEL])
+			hits.append([on, on + 0.05, 47, 104, HitRecorder.CHANNEL])
 	DAW.insert_midi_take(Tour.STAGE_TRACK, hits[0][0], hits.back()[1] + 1.0, hits, "Ada percussion 1")
 
 	# 120 BPM, 4/4: a bar is 2.0 s. Qualifying a touch past bar 5 (10.0 s) must not finish the
@@ -26563,6 +26399,11 @@ class _SpySynth extends MonitorSynth:
 		played.append([kind, value])
 
 
+## The `kind` item standing in `room` under its own id: the one already there, or a new one.
+func _stand(room: ItemRoom, kind: StringName) -> InstrumentItem:
+	return room.spawn(kind, kind, Transform3D.IDENTITY) as InstrumentItem
+
+
 ## GuestMidi with a _SpySynth in, for a test; `_put_back_synth` undoes it.
 func _spy_on_keys() -> _SpySynth:
 	var gm := Session.guest_midi
@@ -26597,35 +26438,35 @@ func _test_one_players_keys_hold_many_instruments() -> void:
 	gm.reach(&"string", true)
 	check("a string in reach plays them, and the synth is running before any note (%d starts)" % spy.starts,
 			gm.has_instruments() and gm.plays() and spy.is_running() and spy.starts == 1 and gm.held.is_empty())
-	check("it is not the keytar", not gm.keytar and gm.instruments.has(&"string"))
+	check("it is the string alone", gm.instruments.keys() == [&"string"])
 	gm.target_track = 0
 	check("and a take with no track chosen goes on an armed one that takes the keys (%d)" % gm.take_track(),
 			gm.take_track() > 0 and DAW.state.track(gm.take_track()).rec_arm
 			and not DAW.state.input_of(gm.take_track()).begins_with("audio:"))
-	gm.keytar = true
-	check("the keytar comes too: the view writes its own name in the set, and nothing is started twice",
-			gm.keytar and gm.instruments.has(&"string") and spy.starts == 1)
+	gm.reach(&"fingertips", true)
+	check("the fingertips come too: the view writes its own name in the set, and nothing is started twice",
+			gm.instruments.has(&"fingertips") and gm.instruments.has(&"string") and spy.starts == 1)
 	gm.reach(&"string", false)
-	check("the string going leaves the keytar's synth running (%d stops)" % spy.stops,
-			spy.is_running() and spy.stops == 0 and gm.keytar and gm.plays())
+	check("the string going leaves the fingertips' synth running (%d stops)" % spy.stops,
+			spy.is_running() and spy.stops == 0 and gm.instruments.has(&"fingertips") and gm.plays())
 	gm.reach(&"string", true)
 	gm.reach(&"string", true)
-	gm.keytar = false
-	check("the keytar going leaves the string's, and a second reach for it is the same reach",
+	gm.reach(&"fingertips", false)
+	check("the fingertips going leaves the string's, and a second reach for it is the same reach",
 			spy.is_running() and spy.stops == 0 and gm.instruments.keys() == [&"string"])
 	gm.reach(&"string", false)
 	check("the last one going stops it, and the keys are not this machine's again",
 			not spy.is_running() and spy.stops == 1 and not gm.plays() and not gm.has_instruments())
 	gm.reach(&"wheel", false)
 	check("taking out what was never in does nothing", spy.stops == 1 and spy.starts == 1)
-	gm.keytar = true
-	check("the keytar alone is the set's one name (%s)" % [gm.instruments], gm.instruments == {&"keytar": true}
+	gm.reach(&"fingertips", true)
+	check("the fingertips alone are the set's one name (%s)" % [gm.instruments], gm.instruments == {&"fingertips": true}
 			and spy.is_running() and spy.starts == 2)
-	gm.keytar = false
+	gm.reach(&"fingertips", false)
 	check("and gone, nothing", gm.instruments.is_empty() and not spy.is_running())
 	check("a take is named after what played in it", GuestMidi.take_name([&"string"]) == "string"
 			and GuestMidi.take_name([&"string", &"fingertips"]) == "string+fingertips"
-			and GuestMidi.take_name([&"keytar"]) == "keytar")
+			and GuestMidi.take_name([&"fingertips"]) == "fingertips")
 	check("and plain keys alone are a take, as before", GuestMidi.take_name([]) == "take"
 			and GuestMidi.take_name([&"keys"]) == "take" and GuestMidi.take_name([&"keys", &"string"]) == "keys+string")
 	_put_back_synth(spy)
@@ -27487,39 +27328,6 @@ func _check_zone_station(studio: Studio, id: StringName, spot: Transform3D, tag:
 			% [tag, r["zone"], r["air"], crowded, neighbours], inside and crowded.is_empty() and neighbours.is_empty())
 
 
-func _test_a_pitched_note_neither_passes_nor_spoils_a_keys_part() -> void:
-	check("Tour's item channels are the percussion's and the pitched items' (%s)" % [TourPart.ITEM_CHANNELS],
-			TourPart.ITEM_CHANNELS == [HitRecorder.CHANNEL, InstrumentItem.MELODIC_CHANNEL])
-	var backend := OfflineBackend.new()
-	DAW.use(backend, false)
-	backend.open({})
-	TourProject.load(TourProject.song_for(TourBriefs.brief(0), 100.0, [], RandomNumberGenerator.new()), backend)
-	var beat := 60.0 / 100.0
-	var rhythm := TourMeasure.Rhythm.new()
-	var keys_one := TourParts.by_id(&"keys_one")
-	# Pitched notes on the one of eight bars: on keys_one's grid, but not keys.
-	var pitched: Array = []
-	for k in 8:
-		pitched.append([k * 4.0 * beat, k * 4.0 * beat + 0.8, 69, 100, InstrumentItem.MELODIC_CHANNEL])
-	DAW.insert_midi_take(TourProject.STAGE_TRACK, 0.0, 8 * 4.0 * beat, pitched, "pitched notes")
-	rhythm.start(TourProject.STAGE_TRACK, 0.0, keys_one)
-	var r := rhythm.result()
-	check("pitched notes on the one do not pass keys_one (%s)" % [r], not keys_one.played(r) and r["notes"] == 0)
-	# Four stabs on the one, and a flurry of pitched notes off the beat: the keys part still clean.
-	var keys: Array = []
-	for k in 4:
-		keys.append([k * 4.0 * beat, k * 4.0 * beat + 0.2, 57, 100, 0])
-	var off: Array = []
-	for k in 12:
-		off.append([(k * 1.3 + 0.5) * beat, (k * 1.3 + 0.5) * beat + 0.8, 72, 90, InstrumentItem.MELODIC_CHANNEL])
-	DAW.insert_midi_take(TourProject.STAGE_TRACK, 0.0, 16.0 * beat, keys + off, "keys and pitched notes")
-	rhythm.start(TourProject.STAGE_TRACK, 0.0, keys_one)
-	r = rhythm.result()
-	check("and off-beat pitched notes beside four stabs on the one do not spoil it (%s)" % [r],
-			keys_one.played(r) and r["notes"] == 4)
-	_offline()
-
-
 func _test_the_panel_says_how_late_the_items_are() -> void:
 	check("under 25 ms it says how late (%s)" % SessionPanel.item_latency_text(0.012),
 			SessionPanel.item_latency_text(0.012) == "Hand percussion  ·  12 ms")
@@ -27544,7 +27352,7 @@ func _test_the_panel_says_how_late_the_items_are() -> void:
 
 # --- output jacks, onto tracks (docs/spatial_loop.md slice 5) ---------------------------------
 
-## A hand whose aim, carry and button are whatever the test says: one can carry the shaker
+## A hand whose aim, carry and button are whatever the test says: one can carry the cowbell
 ## while the other reaches for its jack.
 class _JackHand extends Interactor:
 	var pose := Transform3D.IDENTITY
@@ -27576,12 +27384,12 @@ func _test_a_jack_names_its_ends() -> void:
 			and Jack.valid_sink(&"player_2"))
 	check("nothing else is (track_, track_x, track_-3, track_0, track_1x, bus_2)", [&"track_", &"track_x",
 			&"track_-3", &"track_0", &"track_1x", &"bus_2", &"track_+4"].all(func(s: StringName) -> bool: return not Jack.valid_sink(s)))
-	check("a source is a name, not too long", Jack.valid_source(&"shaker") and not Jack.valid_source(&"")
+	check("a source is a name, not too long", Jack.valid_source(&"cowbell") and not Jack.valid_source(&"")
 			and not Jack.valid_source(StringName("x".repeat(Jack.NAME_MOST + 1))))
 	check("a pitched source sends its notes on and off and its controls, percussion a trigger",
 			Jack.kinds_of(true) == [Jack.Kind.NOTE_ON, Jack.Kind.NOTE_OFF, Jack.Kind.CC] and Jack.kinds_of(false) == [Jack.Kind.TRIGGER])
-	check("it is a verb the room takes: two names", Session.room_ask_is_valid(&"plug", [&"shaker", &"track_2"])
-			and not Session.room_ask_is_valid(&"plug", ["shaker", 2]))
+	check("it is a verb the room takes: two names", Session.room_ask_is_valid(&"plug", [&"cowbell", &"track_2"])
+			and not Session.room_ask_is_valid(&"plug", ["cowbell", 2]))
 
 
 ## Unplugged, a hit is taken down on the armed track as it always was; plugged into a track, onto
@@ -27600,16 +27408,16 @@ func _test_a_track_jack_records_onto_its_track() -> void:
 	Session.guest_midi.snap_hits = false
 	var s := DAW.state
 	var room := studio.items
-	var shaker := room.items.get(&"shaker") as ShakerItem
-	var tambo := room.items.get(&"tambourine") as InstrumentItem
+	var bell := _stand(room, &"cowbell")
+	var block := _stand(room, &"woodblock")
 	var jacks := studio.jacks
-	check("every instrument has a jack, and nothing is plugged", shaker.jack != null and tambo.jack != null and jacks.patch.is_empty()
+	check("every instrument has a jack, and nothing is plugged", bell.jack != null and block.jack != null and jacks.patch.is_empty()
 			and jacks.recorder == studio.hit_recorder and studio.room_state()["jacks"] == {})
 	check("its socket steps through unplugged and every track, in order (%s)" % [Jacks.sinks().slice(0, 3)],
 			Jacks.sinks().size() == s.tracks.size() + 1 and Jacks.sinks()[0] == &"" and Jacks.sinks()[1] == &"track_1")
-	check("unplugged, it shows no tag and no lead, and its card says so (%s)" % shaker.jack.readout(),
-			not shaker.jack._tag.visible and not shaker.jack._lead.visible and shaker.jack.readout() == "unplugged"
-			and shaker.jack.title() == "SHAKER  JACK")
+	check("unplugged, it shows no tag and no lead, and its card says so (%s)" % bell.jack.readout(),
+			not bell.jack._tag.visible and not bell.jack._lead.visible and bell.jack.readout() == "unplugged"
+			and bell.jack.title() == "COWBELL  JACK")
 	studio.send_item_hit = func(_id: StringName, _v: int, _song: float, _snap: bool, _take: int, _zone: StringName) -> void: pass
 	var rec := studio.hit_recorder
 	var heard := {"seconds": 20.0, "playing": true, "recording": true, "valid": true}
@@ -27624,25 +27432,25 @@ func _test_a_track_jack_records_onto_its_track() -> void:
 	InstrumentItem.clock = func() -> float: return now[0]
 
 	# Unplugged: onto the armed track, as before.
-	shaker.play(90)
+	bell.play(90)
 	# Into track 6, which is not armed.
 	var notices: Array[String] = []
 	var listen := func(t: String) -> void: notices.append(t)
 	Session.notice.connect(listen)
-	studio._on_plug_asked(&"shaker", &"track_6")
+	studio._on_plug_asked(&"cowbell", &"track_6")
 	Session.notice.disconnect(listen)
 	var six := Jacks.sink_name(&"track_6")
 	check("plugged into track 6: the room's patch says so (%s)" % [studio.room_state()["jacks"]],
-			jacks.sink_of(&"shaker") == &"track_6" and studio.room_state()["jacks"] == {"shaker": "track_6"})
+			jacks.sink_of(&"cowbell") == &"track_6" and studio.room_state()["jacks"] == {"cowbell": "track_6"})
 	check("and the player is told, in words (%s)" % [notices], notices.size() == 1
-			and notices[0] == "The shaker's jack is in %s: its hits are recorded there, armed or not." % six)
-	check("its card says where, and its lead hangs out of it; no tag floats over it (%s)" % shaker.jack.readout(),
-			not shaker.jack._tag.visible and shaker.jack._tag.text == "-> %s" % six and six.begins_with("6 ")
-			and shaker.jack._lead.visible and shaker.jack.readout() == "-> %s" % six)
+			and notices[0] == "The cowbell's jack is in %s: its hits are recorded there, armed or not." % six)
+	check("its card says where, and its lead hangs out of it; no tag floats over it (%s)" % bell.jack.readout(),
+			not bell.jack._tag.visible and bell.jack._tag.text == "-> %s" % six and six.begins_with("6 ")
+			and bell.jack._lead.visible and bell.jack.readout() == "-> %s" % six)
 	now[0] = 20.5
-	shaker.play(100)
+	bell.play(100)
 	now[0] = 20.75
-	tambo.play(80)
+	block.play(80)
 	check("a jack's take runs on track 6 alone, the armed one's beside it", rec.jacked_tracks() == [6] and rec.is_recording())
 	heard["seconds"] = 21.5
 	heard["recording"] = false
@@ -27656,11 +27464,11 @@ func _test_a_track_jack_records_onto_its_track() -> void:
 		return out
 	var armed: Array = notes_on.call(4)
 	var jacked: Array = notes_on.call(6)
-	check("the unplugged hit and the tambourine are on the armed track, as before (%s)" % [armed], armed.size() == 2
-			and is_equal_approx(armed[0][0], 20.25) and armed[0][2] == 82 and armed[0][4] == HitRecorder.CHANNEL
+	check("the unplugged hit and the woodblock are on the armed track, as before (%s)" % [armed], armed.size() == 2
+			and is_equal_approx(armed[0][0], 20.25) and armed[0][2] == 56 and armed[0][4] == HitRecorder.CHANNEL
 			and is_equal_approx(armed[1][0], 20.75) and armed[1][4] == HitRecorder.CHANNEL)
 	check("the plugged hit is on track 6, unarmed, as its drum note at its one read (%s)" % [jacked],
-			jacked.size() == 1 and is_equal_approx(jacked[0][0], 20.5) and jacked[0][2] == 82 and jacked[0][3] == 100
+			jacked.size() == 1 and is_equal_approx(jacked[0][0], 20.5) and jacked[0][2] == 56 and jacked[0][3] == 100
 			and jacked[0][4] == HitRecorder.CHANNEL and not s.track(6).rec_arm)
 	check("and both takes were sent when recording stopped", rec.jacked_tracks().is_empty() and not rec.is_recording())
 
@@ -27670,27 +27478,27 @@ func _test_a_track_jack_records_onto_its_track() -> void:
 	heard["recording"] = true
 	rec.follow(heard)
 	now[0] = 30.2
-	shaker.play(70)
+	bell.play(70)
 	heard["seconds"] = 31.0
 	heard["recording"] = false
 	rec.follow(heard)
 	check("with nothing armed, a jack's hit is still taken down onto its track (%s)" % [notes_on.call(6)],
 			(notes_on.call(6) as Array).size() == 2 and (notes_on.call(4) as Array).size() == 2)
 	# And a jack into a track that is not there falls back to the old path.
-	jacks.patch["shaker"] = "track_99"
+	jacks.patch["cowbell"] = "track_99"
 	s.track(4).rec_arm = true
 	heard["seconds"] = 40.0
 	heard["recording"] = true
 	rec.follow(heard)
 	now[0] = 40.2
-	shaker.play(60)
+	bell.play(60)
 	heard["seconds"] = 41.0
 	heard["recording"] = false
 	rec.follow(heard)
 	check("into a track that has gone, it goes where it always went", (notes_on.call(4) as Array).size() == 3)
-	studio._on_plug_asked(&"shaker", &"")
-	check("unplugged again: no tag, no lead, and the room's patch is empty", not shaker.jack._tag.visible
-			and not shaker.jack._lead.visible and jacks.patch.is_empty())
+	studio._on_plug_asked(&"cowbell", &"")
+	check("unplugged again: no tag, no lead, and the room's patch is empty", not bell.jack._tag.visible
+			and not bell.jack._lead.visible and jacks.patch.is_empty())
 	InstrumentItem.clock = Callable()
 	studio.queue_free()
 	await get_tree().process_frame
@@ -27699,8 +27507,8 @@ func _test_a_track_jack_records_onto_its_track() -> void:
 	Session.layout = saved_layout
 
 
-## The hand that carries the shaker never reaches its own jack: its trigger over the socket
-## strikes the shaker. The other hand's press, aimed the same way, steps the socket; the wheel
+## The hand that carries the cowbell never reaches its own jack: its trigger over the socket
+## strikes the cowbell. The other hand's press, aimed the same way, steps the socket; the wheel
 ## steps it either way; on a desktop P and Shift+P do it while the mouse's hand holds it.
 func _test_the_carrying_hand_strikes_and_the_other_plugs() -> void:
 	_offline()
@@ -27712,7 +27520,7 @@ func _test_the_carrying_hand_strikes_and_the_other_plugs() -> void:
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
 	await get_tree().physics_frame
-	var shaker := studio.items.items.get(&"shaker") as ShakerItem
+	var bell := _stand(studio.items, &"cowbell")
 	var jacks := studio.jacks
 	studio.send_item_hit = func(_id: StringName, _v: int, _song: float, _snap: bool, _take: int, _zone: StringName) -> void: pass
 	var carrier := _JackHand.new()
@@ -27723,20 +27531,20 @@ func _test_the_carrying_hand_strikes_and_the_other_plugs() -> void:
 	# High over the shelf's front, clear of every control.
 	var held_at := studio.studio_set.global_transform * (studio.venue.prop_shelf_spot() * Vector3(0, 1.9, 0.8))
 	carrier.carry = Transform3D(Basis.IDENTITY, held_at)
-	carrier.pick_up(shaker)
+	carrier.pick_up(bell)
 	for i in 240:
-		shaker._physics_process(1.0 / 120.0)
+		bell._physics_process(1.0 / 120.0)
 	await get_tree().physics_frame
-	var socket := shaker.jack
+	var socket := bell.jack
 	var at := socket.global_position
 	var from := at + Vector3(0.12, 0.2, 0.25)
 	var toward := Transform3D(Basis.looking_at((at - from).normalized(), Vector3.UP), from)
-	check("the shaker is in the carrying hand, its grip off and its jack still there to reach",
-			carrier.carrying == shaker and shaker.state == Item.State.HELD and not socket._shape.disabled
+	check("the cowbell is in the carrying hand, its grip off and its jack still there to reach",
+			carrier.carrying == bell and bell.state == Item.State.HELD and not socket._shape.disabled
 			and carrier.own_jack() == socket and other.own_jack() == null)
 	var hits := [0]
 	var count := func(_v: int, _struck: bool, _at: float, _zone: StringName) -> void: hits[0] += 1
-	shaker.played.connect(count)
+	bell.played.connect(count)
 	carrier.pose = toward
 	carrier._physics_process(1.0 / 60.0)
 	check("the carrying hand's ray over its own jack finds nothing (%s)" % [carrier.hovered],
@@ -27745,7 +27553,7 @@ func _test_the_carrying_hand_strikes_and_the_other_plugs() -> void:
 	carrier._physics_process(1.0 / 60.0)
 	carrier.pressing = false
 	carrier._physics_process(1.0 / 60.0)
-	check("so its trigger strikes the shaker, once, and plugs nothing (%d)" % hits[0], hits[0] == 1
+	check("so its trigger strikes the cowbell, once, and plugs nothing (%d)" % hits[0], hits[0] == 1
 			and jacks.patch.is_empty())
 	other.pose = toward
 	other._physics_process(1.0 / 60.0)
@@ -27756,41 +27564,41 @@ func _test_the_carrying_hand_strikes_and_the_other_plugs() -> void:
 	other._physics_process(1.0 / 60.0)
 	other.pressing = false
 	other._physics_process(1.0 / 60.0)
-	check("its press steps the jack into the first track, and strikes nothing (%s)" % jacks.sink_of(&"shaker"),
-			jacks.sink_of(&"shaker") == &"track_1" and hits[0] == 1 and other.held == null)
+	check("its press steps the jack into the first track, and strikes nothing (%s)" % jacks.sink_of(&"cowbell"),
+			jacks.sink_of(&"cowbell") == &"track_1" and hits[0] == 1 and other.held == null)
 	other.pressing = true
 	other._physics_process(1.0 / 60.0)
 	other.pressing = false
 	other._physics_process(1.0 / 60.0)
-	check("and again, into the next (%s)" % jacks.sink_of(&"shaker"), jacks.sink_of(&"shaker") == &"track_2")
-	check("the wheel steps it back", socket.nudge(other, -1, false) and jacks.sink_of(&"shaker") == &"track_1")
+	check("and again, into the next (%s)" % jacks.sink_of(&"cowbell"), jacks.sink_of(&"cowbell") == &"track_2")
+	check("the wheel steps it back", socket.nudge(other, -1, false) and jacks.sink_of(&"cowbell") == &"track_1")
 	socket.nudge(other, -1, false)
-	check("and back again is unplugged", jacks.sink_of(&"shaker") == &"")
+	check("and back again is unplugged", jacks.sink_of(&"cowbell") == &"")
 	socket.nudge(other, -1, false)
-	check("round the other way, the last track (%s)" % jacks.sink_of(&"shaker"),
-			jacks.sink_of(&"shaker") == Jacks.sinks()[-1])
+	check("round the other way, the last track (%s)" % jacks.sink_of(&"cowbell"),
+			jacks.sink_of(&"cowbell") == Jacks.sinks()[-1])
 	socket.nudge(other, 1, false)
-	check("and pressing on from there comes back to unplugged", jacks.sink_of(&"shaker") == &"")
-	shaker.played.disconnect(count)
+	check("and pressing on from there comes back to unplugged", jacks.sink_of(&"cowbell") == &"")
+	bell.played.disconnect(count)
 
 	# The desktop: the mouse's hand holds it, and P is its other hand.
 	carrier.lose_carrying()
 	var mouse := studio.get_node("MouseHand") as MouseInteractor
-	mouse.pick_up(shaker)
+	mouse.pick_up(bell)
 	var p := InputEventKey.new()
 	p.keycode = KEY_P
 	p.pressed = true
 	mouse._unhandled_input(p)
-	check("P steps the carried instrument's jack on (%s)" % jacks.sink_of(&"shaker"), jacks.sink_of(&"shaker") == &"track_1")
+	check("P steps the carried instrument's jack on (%s)" % jacks.sink_of(&"cowbell"), jacks.sink_of(&"cowbell") == &"track_1")
 	p.shift_pressed = true
 	mouse._unhandled_input(p)
-	check("and Shift+P back", jacks.sink_of(&"shaker") == &"")
+	check("and Shift+P back", jacks.sink_of(&"cowbell") == &"")
 	p.echo = true
 	p.shift_pressed = false
 	mouse._unhandled_input(p)
-	check("a held key's repeat is not another step", jacks.sink_of(&"shaker") == &"")
+	check("a held key's repeat is not another step", jacks.sink_of(&"cowbell") == &"")
 	mouse.lose_carrying()
-	shaker.snap_home()
+	bell.snap_home()
 	check("with nothing in the mouse's hand, P steps nothing", not mouse.step_own_jack(1) and jacks.patch.is_empty())
 	studio.queue_free()
 	await get_tree().process_frame
@@ -27810,61 +27618,61 @@ func _test_the_host_says_who_may_plug() -> void:
 	add_child(studio)
 	await get_tree().physics_frame
 	var room := studio.items
-	var shaker := room.items.get(&"shaker") as ShakerItem
+	var bell := _stand(room, &"cowbell")
 	var duck := room.items.get(&"duck") as Item
 	var jacks := studio.jacks
-	var key := shaker.network_key()
+	var key := bell.network_key()
 	_as_session(Session.Role.HOST, 1)
 	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	Session._register(1, "Ada", 0)
 	Session._register(7, "Grace", 1)
 	Session._register(9, "Lin", 2)
 	check("the refusals, in words", Jacks.refusal(duck, &"track_2", 7, 0) == "there is no jack on that"
-			and Jacks.refusal(shaker, &"bus_2", 7, 0) == "there is no such jack"
-			and Jacks.refusal(shaker, &"track_2", 9, 7) == "it is in somebody else's hand"
-			and Jacks.refusal(shaker, &"track_99", 7, 0) == "there is no track 99 to record onto"
-			and Jacks.plug_refusal(&"shaker", shaker, &"player_12", 7, 0, &"", [1, 7, 9]) == "player 12 is not in the room"
-			and Jacks.refusal(shaker, &"track_2", 7, 0) == "")
-	studio._on_room_asked(&"plug", [&"shaker", &"track_3"], 7)
+			and Jacks.refusal(bell, &"bus_2", 7, 0) == "there is no such jack"
+			and Jacks.refusal(bell, &"track_2", 9, 7) == "it is in somebody else's hand"
+			and Jacks.refusal(bell, &"track_99", 7, 0) == "there is no track 99 to record onto"
+			and Jacks.plug_refusal(&"cowbell", bell, &"player_12", 7, 0, &"", [1, 7, 9]) == "player 12 is not in the room"
+			and Jacks.refusal(bell, &"track_2", 7, 0) == "")
+	studio._on_room_asked(&"plug", [&"cowbell", &"track_3"], 7)
 	check("anyone may plug it while it is at home (%s)" % [studio.room_state()["jacks"]],
-			jacks.sink_of(&"shaker") == &"track_3" and studio.room_state()["jacks"] == {"shaker": "track_3"})
-	studio._on_room_asked(&"plug", [&"shaker", &"track_99"], 7)
-	check("not into a track there is not", jacks.sink_of(&"shaker") == &"track_3")
-	studio._on_room_asked(&"plug", [&"shaker", &"player_12"], 7)
-	check("nor into a player who is not in the room", jacks.sink_of(&"shaker") == &"track_3")
+			jacks.sink_of(&"cowbell") == &"track_3" and studio.room_state()["jacks"] == {"cowbell": "track_3"})
+	studio._on_room_asked(&"plug", [&"cowbell", &"track_99"], 7)
+	check("not into a track there is not", jacks.sink_of(&"cowbell") == &"track_3")
+	studio._on_room_asked(&"plug", [&"cowbell", &"player_12"], 7)
+	check("nor into a player who is not in the room", jacks.sink_of(&"cowbell") == &"track_3")
 	studio._on_room_asked(&"plug", [&"duck", &"track_2"], 7)
 	check("nor anything with no jack", not jacks.patch.has("duck"))
 	Session._grant(7, key)
-	shaker.follow(func() -> Transform3D: return Transform3D.IDENTITY)
-	studio._on_room_asked(&"plug", [&"shaker", &"track_5"], 9)
-	check("in Grace's hand, Lin may not", jacks.sink_of(&"shaker") == &"track_3")
-	studio._on_room_asked(&"plug", [&"shaker", &"track_5"], 7)
-	check("Grace may", jacks.sink_of(&"shaker") == &"track_5")
-	studio._on_room_asked(&"plug", [&"shaker", &""], 7)
+	bell.follow(func() -> Transform3D: return Transform3D.IDENTITY)
+	studio._on_room_asked(&"plug", [&"cowbell", &"track_5"], 9)
+	check("in Grace's hand, Lin may not", jacks.sink_of(&"cowbell") == &"track_3")
+	studio._on_room_asked(&"plug", [&"cowbell", &"track_5"], 7)
+	check("Grace may", jacks.sink_of(&"cowbell") == &"track_5")
+	studio._on_room_asked(&"plug", [&"cowbell", &""], 7)
 	check("and may unplug it", jacks.patch.is_empty())
 	Session._release(7, key)
 	var spot := studio.venue.prop_shelf_spot() * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.4)
-	room.lay(shaker, Vector2(spot.x, spot.z), 0.0)
-	studio._on_room_asked(&"plug", [&"shaker", &"track_2"], 7)
-	check("lying on the floor in nobody's hand, nobody may (%s)" % [Item.State.keys()[shaker.state]],
-			shaker.state == Item.State.LOOSE and jacks.patch.is_empty())
-	shaker.snap_home()
+	room.lay(bell, Vector2(spot.x, spot.z), 0.0)
+	studio._on_room_asked(&"plug", [&"cowbell", &"track_2"], 7)
+	check("lying on the floor in nobody's hand, nobody may (%s)" % [Item.State.keys()[bell.state]],
+			bell.state == Item.State.LOOSE and jacks.patch.is_empty())
+	bell.snap_home()
 
 	# A copy that leaves the room takes its plug with it: a Tour spill swallowed, a tablet put back.
 	var spill := room.spawn(&"cowbell", &"cowbell2", Transform3D(Basis.IDENTITY, Vector3(0.3, 0, 0.3)))
 	await get_tree().process_frame
 	check("a spill has a jack of its own", spill is InstrumentItem and (spill as InstrumentItem).jack != null)
 	studio._on_room_asked(&"plug", [&"cowbell2", &"track_2"], 7)
-	studio._on_room_asked(&"plug", [&"shaker", &"track_4"], 7)
+	studio._on_room_asked(&"plug", [&"cowbell", &"track_4"], 7)
 	check("plugged at home", jacks.sink_of(&"cowbell2") == &"track_2")
 	room.despawn(&"cowbell2")
 	check("swallowed, its plug is gone from the room, and nothing else's (%s)" % [studio.room_state()["jacks"]],
-			studio.room_state()["jacks"] == {"shaker": "track_4"})
+			studio.room_state()["jacks"] == {"cowbell": "track_4"})
 	var tablet := room.take_personal(&"tablet", 7)
 	jacks.plug(tablet.id, &"track_2")
 	room.retire(tablet)
 	check("a personal copy put back takes its plug with it", not jacks.patch.has(String(tablet.id)))
-	jacks.plug(&"shaker", &"")
+	jacks.plug(&"cowbell", &"")
 	Session.start_solo()
 	studio.queue_free()
 	await get_tree().process_frame
@@ -27884,8 +27692,8 @@ func _test_a_guests_plug_is_predicted_and_rolled_back() -> void:
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
 	await get_tree().physics_frame
-	var shaker := studio.items.items.get(&"shaker") as ShakerItem
-	var bell := studio.items.items.get(&"tambourine") as TambourineItem
+	var bell := _stand(studio.items, &"cowbell")
+	var block := _stand(studio.items, &"woodblock")
 	var jacks := studio.jacks
 	_as_session(Session.Role.GUEST, 5)
 	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
@@ -27899,40 +27707,40 @@ func _test_a_guests_plug_is_predicted_and_rolled_back() -> void:
 		out["jacks"] = rows
 		out["acks"] = {5: acks}
 		return out
-	studio._on_plug_asked(&"shaker", &"track_3")
-	check("a guest's plug is in at once", jacks.sink_of(&"shaker") == &"track_3" and shaker.jack._lead.visible)
+	studio._on_plug_asked(&"cowbell", &"track_3")
+	check("a guest's plug is in at once", jacks.sink_of(&"cowbell") == &"track_3" and bell.jack._lead.visible)
 	check("and asked of the host", studio._predictions.size() == 1 and studio._predictions[0]["verb"] == &"plug"
-			and studio._predictions[0]["args"] == [&"shaker", &"track_3"])
+			and studio._predictions[0]["args"] == [&"cowbell", &"track_3"])
 	studio.apply_room(room_with.call({}, 0))
-	check("a room from before the host heard it leaves it in", jacks.sink_of(&"shaker") == &"track_3")
-	studio.apply_room(room_with.call({"tambourine": "track_2"}, 0))
-	check("with the host's own plugs beside it", jacks.sink_of(&"tambourine") == &"track_2" and jacks.sink_of(&"shaker") == &"track_3")
-	studio.apply_room(room_with.call({"tambourine": "track_2"}, Session.room_seq))
-	check("the host's answer without it takes it out: refused", jacks.sink_of(&"shaker") == &""
-			and not shaker.jack._lead.visible and studio._predictions.is_empty())
-	studio._on_plug_asked(&"shaker", &"track_3")
-	studio.apply_room(room_with.call({"tambourine": "track_2", "shaker": "track_3"}, Session.room_seq))
-	check("an answer that took it keeps it", jacks.sink_of(&"shaker") == &"track_3" and studio._predictions.is_empty())
-	studio._on_plug_asked(&"shaker", &"")
-	studio.apply_room(room_with.call({"tambourine": "track_2", "shaker": "track_3"}, Session.room_seq - 1))
-	check("an unplug not yet answered stays unplugged", jacks.sink_of(&"shaker") == &"")
-	studio.apply_room(room_with.call({"tambourine": "track_2"}, Session.room_seq))
-	check("and the answer agrees", jacks.sink_of(&"shaker") == &"" and studio._predictions.is_empty())
+	check("a room from before the host heard it leaves it in", jacks.sink_of(&"cowbell") == &"track_3")
+	studio.apply_room(room_with.call({"woodblock": "track_2"}, 0))
+	check("with the host's own plugs beside it", jacks.sink_of(&"woodblock") == &"track_2" and jacks.sink_of(&"cowbell") == &"track_3")
+	studio.apply_room(room_with.call({"woodblock": "track_2"}, Session.room_seq))
+	check("the host's answer without it takes it out: refused", jacks.sink_of(&"cowbell") == &""
+			and not bell.jack._lead.visible and studio._predictions.is_empty())
+	studio._on_plug_asked(&"cowbell", &"track_3")
+	studio.apply_room(room_with.call({"woodblock": "track_2", "cowbell": "track_3"}, Session.room_seq))
+	check("an answer that took it keeps it", jacks.sink_of(&"cowbell") == &"track_3" and studio._predictions.is_empty())
+	studio._on_plug_asked(&"cowbell", &"")
+	studio.apply_room(room_with.call({"woodblock": "track_2", "cowbell": "track_3"}, Session.room_seq - 1))
+	check("an unplug not yet answered stays unplugged", jacks.sink_of(&"cowbell") == &"")
+	studio.apply_room(room_with.call({"woodblock": "track_2"}, Session.room_seq))
+	check("and the answer agrees", jacks.sink_of(&"cowbell") == &"" and studio._predictions.is_empty())
 	# In somebody else's hand: said, not asked.
-	studio.presence._item_holders[&"tambourine"] = 1
-	Session._receive_holds({bell.network_key(): 1})
-	bell.follow(func() -> Transform3D: return Transform3D.IDENTITY)
+	studio.presence._item_holders[&"woodblock"] = 1
+	Session._receive_holds({block.network_key(): 1})
+	block.follow(func() -> Transform3D: return Transform3D.IDENTITY)
 	var notices: Array[String] = []
 	var listen := func(t: String) -> void: notices.append(t)
 	Session.notice.connect(listen)
 	var seq := Session.room_seq
-	studio._on_plug_asked(&"tambourine", &"track_1")
+	studio._on_plug_asked(&"woodblock", &"track_1")
 	Session.notice.disconnect(listen)
-	check("a tambourine in the host's hand is not the guest's to plug, and it is told so (%s)" % [notices],
-			jacks.sink_of(&"tambourine") == &"track_2" and Session.room_seq == seq
-			and notices == ["The tambourine's jack: it is in somebody else's hand."])
+	check("a woodblock in the host's hand is not the guest's to plug, and it is told so (%s)" % [notices],
+			jacks.sink_of(&"woodblock") == &"track_2" and Session.room_seq == seq
+			and notices == ["The woodblock's jack: it is in somebody else's hand."])
 	Session._receive_holds({})
-	studio.presence._item_holders.erase(&"tambourine")
+	studio.presence._item_holders.erase(&"woodblock")
 	bell.snap_home()
 	Session.room_seq = 0
 	studio._predictions.clear()
@@ -27943,7 +27751,7 @@ func _test_a_guests_plug_is_predicted_and_rolled_back() -> void:
 	Session.layout = saved_layout
 
 
-## docs/spatial_loop.md slice 6: a shaker's hits down a cable into this player walk up the chord
+## docs/spatial_loop.md slice 6: a cowbell's hits down a cable into this player walk up the chord
 ## at the song position each was played to, not where the song is when it arrives. Four played
 ## in the last of Am and heard here in F are Am's root, third, fifth and top; the next, played in
 ## F, starts F's. Each is the cable's on this player's keys for TRIGGER_SECONDS, and let go.
@@ -27965,8 +27773,8 @@ func _test_a_trigger_into_a_player_walks_the_chord_at_its_song() -> void:
 	add_child(jacks)
 	jacks.keys = gm
 	check("nothing into me, no cable in my keys", not gm.instruments.has(Jacks.CABLE))
-	jacks.set_patch({"shaker": "player_5"})
-	check("the shaker into me puts the cable in my keys' reach", gm.instruments.has(Jacks.CABLE))
+	jacks.set_patch({"cowbell": "player_5"})
+	check("the cowbell into me puts the cable in my keys' reach", gm.instruments.has(Jacks.CABLE))
 	var sent: Array = []
 	var hear := func(kind: int, pitch: int, _v: int, song: float, source: StringName) -> void:
 		sent.append([kind, pitch, song, source])
@@ -27974,7 +27782,7 @@ func _test_a_trigger_into_a_player_walks_the_chord_at_its_song() -> void:
 	var played := [line - 0.2, line - 0.15, line - 0.1, line - 0.05]
 	var downs: Array = []
 	for song in played:
-		jacks.received(&"shaker", Jack.Kind.TRIGGER, 0, 90, 7, song)
+		jacks.received(&"cowbell", Jack.Kind.TRIGGER, 0, 90, 7, song)
 		downs.append(sent[-1][1])
 	check("four hits played in the last of Am, heard in F, walk up Am: root, third, fifth, top (%s)" % [downs],
 			downs == [57, 60, 64, 69])
@@ -27982,9 +27790,9 @@ func _test_a_trigger_into_a_player_walks_the_chord_at_its_song() -> void:
 			sent.all(func(n: Array) -> bool: return n[0] == Session.Note.ON and n[3] == Jacks.CABLE)
 			and sent.map(func(n: Array) -> float: return n[2]) == played)
 	check("all four sounding on my synth (%s)" % [spy.on.keys()], spy.on.has(57) and spy.on.has(69) and gm.held.size() == 4)
-	check("and the shaker's lead here carries them, its beads lit (%.2f)" % jacks.level_of(&"shaker"),
-			jacks.level_of(&"shaker") > SignalBeads.FLOOR and jacks.level_of(&"tambourine") == 0.0)
-	jacks.received(&"shaker", Jack.Kind.TRIGGER, 0, 90, 7, line + 0.1)
+	check("and the cowbell's lead here carries them, its beads lit (%.2f)" % jacks.level_of(&"cowbell"),
+			jacks.level_of(&"cowbell") > SignalBeads.FLOOR and jacks.level_of(&"woodblock") == 0.0)
+	jacks.received(&"cowbell", Jack.Kind.TRIGGER, 0, 90, 7, line + 0.1)
 	check("the fifth, played in F, is F's next tone round, its root F4 (%d)" % sent[-1][1], sent[-1][1] == 65)
 	jacks.tick(Jacks.TRIGGER_SECONDS - 0.05)
 	check("before TRIGGER_SECONDS each still sounds (%d)" % gm.held.size(), gm.held.size() == 5)
@@ -27994,7 +27802,7 @@ func _test_a_trigger_into_a_player_walks_the_chord_at_its_song() -> void:
 			gm.held.is_empty() and spy.on.is_empty() and sent.size() == 5
 			and sent.all(func(n: Array) -> bool: return n[0] == Session.Note.OFF and n[3] == Jacks.CABLE)
 			and is_equal_approx(sent[0][2], played[0] + Jacks.TRIGGER_SECONDS))
-	jacks.received(&"tambourine", Jack.Kind.TRIGGER, 0, 90, 7, line + 0.1)
+	jacks.received(&"woodblock", Jack.Kind.TRIGGER, 0, 90, 7, line + 0.1)
 	check("another source walks on its own, from the root (%d)" % sent[-1][1], sent[-1][1] == 65)
 	jacks.tick(1.0)
 	gm.note.disconnect(hear)
@@ -28042,7 +27850,7 @@ func _test_cable_leaves_my_keys_with_the_last_plug() -> void:
 	_offline()
 
 
-## What goes down a jack into a bandmate, from each kind of source: the shaker a TRIGGER (and not onto the armed track here), this player's keys what they play. The sockets
+## What goes down a jack into a bandmate, from each kind of source: the cowbell a TRIGGER (and not onto the armed track here), this player's keys what they play. The sockets
 ## step through each bandmate; P with an empty hand plugs this player's keys and Shift+P takes
 ## out what goes into them; a cable runs to the bandmate's glove; and a leaver's jacks come out.
 func _test_a_jack_into_a_bandmate_sends_what_its_source_plays() -> void:
@@ -28070,22 +27878,22 @@ func _test_a_jack_into_a_bandmate_sends_what_its_source_plays() -> void:
 	jacks.send = func(to: int, source: StringName, kind: int, pitch: int, velocity: int, song: float) -> void:
 		sent.append([to, source, kind, pitch, velocity, song])
 	studio.send_item_hit = func(_id: StringName, _v: int, _song: float, _snap: bool, _take: int, _zone: StringName) -> void: pass
-	var shaker_sinks := Jacks.sinks(&"shaker")
-	check("an item's socket steps through the tracks and then each bandmate (%s)" % [shaker_sinks.slice(-2)],
-			shaker_sinks[-1] == &"player_7" and shaker_sinks.size() == s.tracks.size() + 2)
+	var bell_sinks := Jacks.sinks(&"cowbell")
+	check("an item's socket steps through the tracks and then each bandmate (%s)" % [bell_sinks.slice(-2)],
+			bell_sinks[-1] == &"player_7" and bell_sinks.size() == s.tracks.size() + 2)
 	check("my keys' through bandmates only, and nobody's keys into themselves",
 			Jacks.sinks(Jack.keys_source(1)) == [&"", &"player_7"]
 			and Jacks.sinks(Jack.keys_source(7)) == [&""])
 
-	# A tambourine at home, into Grace.
-	var tambo := studio.items.items.get(&"tambourine") as TambourineItem
+	# A woodblock at home, into Grace.
+	var block := _stand(studio.items, &"woodblock")
 	var notices: Array[String] = []
 	var listen := func(t: String) -> void: notices.append(t)
 	Session.notice.connect(listen)
-	studio._on_plug_asked(&"tambourine", &"player_7")
-	check("the tambourine's jack is in Grace, its tag says so, and I am told (%s, %s)" % [tambo.jack._tag.text, notices],
-			jacks.sink_of(&"tambourine") == &"player_7" and tambo.jack._tag.text == "-> GRACE"
-			and notices.has("The tambourine goes into Grace: its hits play chord tones on their keys."))
+	studio._on_plug_asked(&"woodblock", &"player_7")
+	check("the woodblock's jack is in Grace, its tag says so, and I am told (%s, %s)" % [block.jack._tag.text, notices],
+			jacks.sink_of(&"woodblock") == &"player_7" and block.jack._tag.text == "-> GRACE"
+			and notices.has("The woodblock goes into Grace: its hits play chord tones on their keys."))
 	var rec := studio.hit_recorder
 	var heard := {"seconds": s.bar_to_seconds(1.1), "playing": true, "recording": true, "valid": true}
 	rec.heard_source = func() -> Dictionary: return heard
@@ -28098,12 +27906,12 @@ func _test_a_jack_into_a_bandmate_sends_what_its_source_plays() -> void:
 	var now := [ring]
 	InstrumentItem.clock = func() -> float: return now[0]
 	jacks.tick(1.0)
-	var shaker := studio.items.items.get(&"shaker") as ShakerItem
-	studio._on_plug_asked(&"shaker", &"player_7")
+	var bell := _stand(studio.items, &"cowbell")
+	studio._on_plug_asked(&"cowbell", &"player_7")
 	sent.clear()
 	now[0] = ring + 0.5
-	shaker.play(100)
-	check("the shaker sends a trigger with its song (%s)" % [sent], sent == [[7, &"shaker", Jack.Kind.TRIGGER, 0, 100, ring + 0.5]])
+	bell.play(100)
+	check("the cowbell sends a trigger with its song (%s)" % [sent], sent == [[7, &"cowbell", Jack.Kind.TRIGGER, 0, 100, ring + 0.5]])
 	heard["recording"] = false
 	rec.follow(heard)
 	var taken := s.track(4).items.filter(func(it: MixState.ItemState) -> bool: return it.name.contains("percussion"))
@@ -28113,26 +27921,26 @@ func _test_a_jack_into_a_bandmate_sends_what_its_source_plays() -> void:
 	# The cable to Grace's glove, slack, followed at most CABLE_HZ.
 	var end := [Vector3(1, 1.2, 1)]
 	jacks.far_end = func(peer: int, _from: Vector3) -> Variant: return end[0] if peer == 7 else null
-	tambo.jack.show_sink(&"player_7")
+	block.jack.show_sink(&"player_7")
 	check("with a ghost here to hold it, a cable runs to their glove instead of the short lead",
-			tambo.jack.cable_running() and not tambo.jack._lead.visible and tambo.jack._boot.visible
-			and tambo.jack.cable_end().is_equal_approx(end[0]))
+			block.jack.cable_running() and not block.jack._lead.visible and block.jack._boot.visible
+			and block.jack.cable_end().is_equal_approx(end[0]))
 	var spine := JackSocket.slack(Vector3(0, 1, 0), Vector3.FORWARD, Vector3(2, 1.2, 0))
 	var lowest := INF
 	for p in spine:
 		lowest = minf(lowest, p.y)
 	check("slack: it sags under both ends, and not through the floor (%.3f)" % lowest, lowest < 0.95 and lowest > 0.0)
 	end[0] = Vector3(1.2, 1.2, 1)
-	tambo.jack._physics_process(0.01)
-	check("an end moving is not followed sooner than CABLE_HZ", tambo.jack.cable_end().is_equal_approx(Vector3(1, 1.2, 1)))
-	tambo.jack._physics_process(1.0 / JackSocket.CABLE_HZ)
-	check("and then it is", tambo.jack.cable_end().is_equal_approx(Vector3(1.2, 1.2, 1)))
+	block.jack._physics_process(0.01)
+	check("an end moving is not followed sooner than CABLE_HZ", block.jack.cable_end().is_equal_approx(Vector3(1, 1.2, 1)))
+	block.jack._physics_process(1.0 / JackSocket.CABLE_HZ)
+	check("and then it is", block.jack.cable_end().is_equal_approx(Vector3(1.2, 1.2, 1)))
 	jacks.far_end = func(_peer: int, _from: Vector3) -> Variant: return null
-	tambo.jack._physics_process(1.0)
-	check("with no ghost to hold it, the short lead hangs instead", not tambo.jack.cable_running() and tambo.jack._lead.visible)
+	block.jack._physics_process(1.0)
+	check("with no ghost to hold it, the short lead hangs instead", not block.jack.cable_running() and block.jack._lead.visible)
 
-	jacks.plug(&"tambourine", &"")
-	jacks.plug(&"shaker", &"")
+	jacks.plug(&"woodblock", &"")
+	jacks.plug(&"cowbell", &"")
 	var song := s.bar_to_seconds(1.3)
 	var keys_heard := {"seconds": song, "playing": true, "recording": false, "valid": true}
 	gm.heard_source = func() -> Dictionary: return keys_heard
@@ -28159,17 +27967,17 @@ func _test_a_jack_into_a_bandmate_sends_what_its_source_plays() -> void:
 	mouse._unhandled_input(p)
 	check("and again takes them out", jacks.sink_of(&"keys:1") == &"")
 	notices.clear()
-	studio._on_room_asked(&"plug", [&"tambourine", &"player_1"], 7)
-	studio._on_room_asked(&"plug", [&"shaker", &"player_1"], 7)
-	check("Grace plugs the tambourine and the shaker into me, and I am told who plugged what (%s)" % [notices],
+	studio._on_room_asked(&"plug", [&"woodblock", &"player_1"], 7)
+	studio._on_room_asked(&"plug", [&"cowbell", &"player_1"], 7)
+	check("Grace plugs the woodblock and the cowbell into me, and I am told who plugged what (%s)" % [notices],
 			jacks.into(1).size() == 2 and notices.size() == 2
-			and notices[0].begins_with("Grace plugged the tambourine into you: its hits play chord tones on your keys.")
-			and notices[1].begins_with("Grace plugged the shaker into you: its hits play chord tones on your keys."))
+			and notices[0].begins_with("Grace plugged the woodblock into you: its hits play chord tones on your keys.")
+			and notices[1].begins_with("Grace plugged the cowbell into you: its hits play chord tones on your keys."))
 	check("so the cable is in my keys' reach", gm.instruments.has(Jacks.CABLE))
-	check("a press on a jack that goes into me says it unplugs it (%s)" % shaker.jack.hint(),
-			shaker.jack.hint() == "it goes into you: press to unplug it")
-	shaker.jack.step(1)
-	check("and does", jacks.sink_of(&"shaker") == &"" and jacks.into(1).size() == 1)
+	check("a press on a jack that goes into me says it unplugs it (%s)" % bell.jack.hint(),
+			bell.jack.hint() == "it goes into you: press to unplug it")
+	bell.jack.step(1)
+	check("and does", jacks.sink_of(&"cowbell") == &"" and jacks.into(1).size() == 1)
 	p.shift_pressed = true
 	mouse._unhandled_input(p)
 	check("Shift+P with an empty hand takes out the rest, and the cable leaves my keys",
@@ -28179,12 +27987,12 @@ func _test_a_jack_into_a_bandmate_sends_what_its_source_plays() -> void:
 	check("with nothing in, it says so (%s)" % [notices], notices == ["Nothing is plugged into you."])
 
 	# Grace leaves: her jacks come out with her.
-	jacks.plug(&"tambourine", &"player_7")
+	jacks.plug(&"woodblock", &"player_7")
 	jacks.plug(Jack.keys_source(7), &"player_1")
-	jacks.plug(&"shaker", &"track_2")
+	jacks.plug(&"cowbell", &"track_2")
 	studio._on_jack_player_left(7)
-	check("a leaver's jacks, into them and out of their keys, come out (%s)" % [jacks.patch], jacks.patch == {"shaker": "track_2"})
-	jacks.plug(&"shaker", &"")
+	check("a leaver's jacks, into them and out of their keys, come out (%s)" % [jacks.patch], jacks.patch == {"cowbell": "track_2"})
+	jacks.plug(&"cowbell", &"")
 	Session.notice.disconnect(listen)
 	gm.heard_source = saved_heard
 	_put_back_synth(spy)
@@ -28207,9 +28015,9 @@ func _test_the_host_says_who_may_send_down_a_jack() -> void:
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
 	await get_tree().physics_frame
-	var shaker := studio.items.items.get(&"shaker") as ShakerItem
+	var bell := _stand(studio.items, &"cowbell")
 	var jacks := studio.jacks
-	var key := shaker.network_key()
+	var key := bell.network_key()
 	_as_session(Session.Role.HOST, 1)
 	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	Session._register(1, "Ada", 0)
@@ -28222,18 +28030,18 @@ func _test_the_host_says_who_may_send_down_a_jack() -> void:
 		played.append([source, kind, pitch, from, song])
 	Session.jack_played.connect(hear)
 	Session._grant(7, key)
-	shaker.follow(func() -> Transform3D: return Transform3D.IDENTITY)
-	studio._on_room_asked(&"plug", [&"shaker", &"player_1"], 7)
-	check("Grace plugs the shaker in her hand into me", jacks.sink_of(&"shaker") == &"player_1")
+	bell.follow(func() -> Transform3D: return Transform3D.IDENTITY)
+	studio._on_room_asked(&"plug", [&"cowbell", &"player_1"], 7)
+	check("Grace plugs the cowbell in her hand into me", jacks.sink_of(&"cowbell") == &"player_1")
 	var refused := Session.jacks_refused
-	check("Lin's hit down the shaker's jack is refused: it is not in her hand (%s)" % Session.jack_refusal(1, &"shaker", 9),
-			not Session._pass_jack(1, &"shaker", Jack.Kind.TRIGGER, 0, 90, 5.0, 9)
-			and Session.jack_refusal(1, &"shaker", 9) == "it is not in their hand")
-	check("Grace's passes, to me, with its song (%s)" % [played], Session._pass_jack(1, &"shaker", Jack.Kind.TRIGGER, 0, 90, 5.0, 7)
-			and played == [[&"shaker", Jack.Kind.TRIGGER, 0, 7, 5.0]])
+	check("Lin's hit down the cowbell's jack is refused: it is not in her hand (%s)" % Session.jack_refusal(1, &"cowbell", 9),
+			not Session._pass_jack(1, &"cowbell", Jack.Kind.TRIGGER, 0, 90, 5.0, 9)
+			and Session.jack_refusal(1, &"cowbell", 9) == "it is not in their hand")
+	check("Grace's passes, to me, with its song (%s)" % [played], Session._pass_jack(1, &"cowbell", Jack.Kind.TRIGGER, 0, 90, 5.0, 7)
+			and played == [[&"cowbell", Jack.Kind.TRIGGER, 0, 7, 5.0]])
 	check("a nonsense kind is refused, and a song that is not one is not known",
-			not Session._pass_jack(1, &"shaker", 9, 0, 90, 5.0, 7)
-			and Session._pass_jack(1, &"shaker", Jack.Kind.TRIGGER, 0, 90, NAN, 7) and played[-1][4] == -1.0)
+			not Session._pass_jack(1, &"cowbell", 9, 0, 90, 5.0, 7)
+			and Session._pass_jack(1, &"cowbell", Jack.Kind.TRIGGER, 0, 90, NAN, 7) and played[-1][4] == -1.0)
 	jacks.plug(Jack.keys_source(7), &"player_1")
 	check("Grace's keys, from Lin, refused (%s)" % Session.jack_refusal(1, &"keys:7", 9),
 			Session.jack_refusal(1, &"keys:7", 9) == "those are Grace's keys" and Session.jack_refusal(1, &"keys:7", 7) == "")
@@ -28246,17 +28054,17 @@ func _test_the_host_says_who_may_send_down_a_jack() -> void:
 	check("nor where the patch does not send it", Session.jack_refusal(9, &"keys:7", 7) == "its jack does not go into player 9")
 	check("each refusal counted, and none of them played (%d)" % (Session.jacks_refused - refused),
 			Session.jacks_refused == refused + 2 and played.size() == 2)
-	# The sink's owner unplugs, though the shaker is in Grace's hand; nobody else may.
-	jacks.plug(&"shaker", &"player_9")
-	studio._on_room_asked(&"plug", [&"shaker", &""], 1)
-	check("in Grace's hand and going into Lin, I may not unplug it", jacks.sink_of(&"shaker") == &"player_9")
-	studio._on_room_asked(&"plug", [&"shaker", &""], 9)
-	check("Lin, whom it goes into, may", jacks.sink_of(&"shaker") == &"")
-	studio._on_room_asked(&"plug", [&"shaker", &"player_7"], 7)
-	check("and Grace may not plug it into herself", jacks.sink_of(&"shaker") == &"")
+	# The sink's owner unplugs, though the cowbell is in Grace's hand; nobody else may.
+	jacks.plug(&"cowbell", &"player_9")
+	studio._on_room_asked(&"plug", [&"cowbell", &""], 1)
+	check("in Grace's hand and going into Lin, I may not unplug it", jacks.sink_of(&"cowbell") == &"player_9")
+	studio._on_room_asked(&"plug", [&"cowbell", &""], 9)
+	check("Lin, whom it goes into, may", jacks.sink_of(&"cowbell") == &"")
+	studio._on_room_asked(&"plug", [&"cowbell", &"player_7"], 7)
+	check("and Grace may not plug it into herself", jacks.sink_of(&"cowbell") == &"")
 	Session.jack_played.disconnect(hear)
 	Session._release(7, key)
-	shaker.snap_home()
+	bell.snap_home()
 	jacks.set_patch({})
 	_put_back_synth(spy)
 	Session.start_solo()
@@ -28307,7 +28115,7 @@ func _test_a_late_note_after_an_unplug_is_dropped() -> void:
 	_offline()
 
 
-## Somebody else plugged a shaker at home and a tambourine at home into Ada, and then Ada
+## Somebody else plugged a cowbell at home and a woodblock at home into Ada, and then Ada
 ## plays them herself: that is no cable. The hits go into her
 ## take, not down a jack into herself, which the host would refuse.
 func _test_a_jack_into_whoever_plays_it_is_no_cable() -> void:
@@ -28335,9 +28143,11 @@ func _test_a_jack_into_whoever_plays_it_is_no_cable() -> void:
 	jacks.send = func(to: int, source: StringName, kind: int, pitch: int, velocity: int, song: float) -> void:
 		sent.append([to, source, kind, pitch, velocity, song])
 	studio.send_item_hit = func(_id: StringName, _v: int, _song: float, _snap: bool, _take: int, _zone: StringName) -> void: pass
-	studio._on_room_asked(&"plug", [&"shaker", &"player_1"], 7)
-	studio._on_room_asked(&"plug", [&"tambourine", &"player_1"], 7)
-	check("Lin plugs the shaker and a tambourine into me", jacks.into(1).size() == 2)
+	_stand(studio.items, &"cowbell")
+	_stand(studio.items, &"woodblock")
+	studio._on_room_asked(&"plug", [&"cowbell", &"player_1"], 7)
+	studio._on_room_asked(&"plug", [&"woodblock", &"player_1"], 7)
+	check("Lin plugs the cowbell and a woodblock into me", jacks.into(1).size() == 2)
 
 	var song := s.bar_to_seconds(1.3)
 	var keys_heard := {"seconds": song, "playing": true, "recording": false, "valid": true}
@@ -28353,12 +28163,12 @@ func _test_a_jack_into_whoever_plays_it_is_no_cable() -> void:
 	rec.follow(heard)
 	var now := [s.bar_to_seconds(1.25)]
 	InstrumentItem.clock = func() -> float: return now[0]
-	var shaker := studio.items.items.get(&"shaker") as ShakerItem
-	shaker.play(100)
-	var tambo := studio.items.items.get(&"tambourine") as TambourineItem
+	var bell := _stand(studio.items, &"cowbell")
+	bell.play(100)
+	var block := _stand(studio.items, &"woodblock")
 	now[0] += 0.2
-	tambo.play(80)
-	check("I play the shaker and the tambourine: nothing down a jack into myself (%s)" % [sent], sent.is_empty())
+	block.play(80)
+	check("I play the cowbell and the woodblock: nothing down a jack into myself (%s)" % [sent], sent.is_empty())
 	heard["recording"] = false
 	rec.follow(heard)
 	InstrumentItem.clock = Callable()
@@ -28391,11 +28201,11 @@ func _test_the_wrist_unplugs_what_goes_into_me() -> void:
 	ins.label = "INTO ME"
 	skeleton.wrist.add_child(ins)
 	check("with nothing going into me it is not there", not ins._look.visible and ins.hint() == "")
-	jacks.set_patch({"keys:7": "player_5", "chord:7": "player_5", "shaker": "player_9"})
+	jacks.set_patch({"keys:7": "player_5", "chord:7": "player_5", "cowbell": "player_9"})
 	check("something going into me: it is, and its card says what, with no tag floating over it (%s)" % ins.readout(),
 			ins._look.visible and not ins._tag.visible and ins.readout() == ins._tag.text and ins._tag.text.begins_with("<- ")
 			and ins._tag.text.contains("'S KEYS") and ins._tag.text.contains("CHORD HAND")
-			and not ins._tag.text.contains("SHAKER"))
+			and not ins._tag.text.contains("COWBELL"))
 	check("a press says it unplugs all of it (%s)" % ins.hint(), ins.hint() == "press to unplug everything going into you"
 			and ins.title() == "INTO ME  JACK")
 	var asked: Array = []
@@ -28403,7 +28213,7 @@ func _test_the_wrist_unplugs_what_goes_into_me() -> void:
 	jacks.asked.connect(ask)
 	check("pressed, it asks each out", ins.step(1) and asked.size() == 2
 			and asked.all(func(a: Array) -> bool: return a[1] == &"") and asked.has([&"keys:7", &""]))
-	jacks.set_patch({"shaker": "player_9"})
+	jacks.set_patch({"cowbell": "player_9"})
 	check("and with them out it is gone again", not ins._look.visible and not ins.step(1))
 	jacks.asked.disconnect(ask)
 	check("a desk is told Shift+P, and its jack where it has one (%s)" % Studio.unplug_how(Presentation.Medium.SCREEN, true),
@@ -29635,13 +29445,13 @@ func _test_every_station_says_how_to_play_it() -> void:
 	check("the wheel is mounted on the bricks table; the cassette rack stands by itself",
 			Stations.zoned(&"wheel") and Stations.row(&"wheel")["zone"] == &"bricks"
 			and not Stations.zoned(&"cassette_rack"))
-	check("held: the keytar, the shaker, the tambourine, the fingertips and the jacks",
-			[&"keytar", &"shaker", &"tambourine", &"fingertips", &"jacks"].all(
+	check("held: the fingertips and the jacks",
+			[&"fingertips", &"jacks"].all(
 				func(id): return not Stations.row(id).is_empty() and Stations.row(id)["area"] == Stations.HELD_AREA))
 	var venue := Venue.make(&"studio")
 	check("their spots are the venue's own", (Stations.spot(venue, &"cassette_rack") as Transform3D).is_equal_approx(venue.cassette_rack_spot())
 			and (Stations.spot(venue, &"wheel") as Transform3D).is_equal_approx(venue.wheel_spot())
-			and Stations.spot(venue, &"keytar") == null and Stations.spot(null, &"cassette_rack") == null)
+			and Stations.spot(venue, &"fingertips") == null and Stations.spot(null, &"cassette_rack") == null)
 	check("free-standing footprints are the venue's solids for them", Stations.solid(venue, &"cassette_rack") == CassetteRack.solid(venue.cassette_rack_spot())
 			and Stations.solid(venue, &"wheel").is_empty())
 	var seat: Transform3D = Stations.seat(venue, &"wheel")
@@ -29686,7 +29496,7 @@ func _test_every_station_says_how_to_play_it() -> void:
 
 
 ## The card's pages: START names F2, Ctrl-Z and B; the PLAY pages name the
-## wheel, P and Shift-P, T, the keytar, the shaker and the tambourine; at text scale 1 every page
+## wheel, P and Shift-P and T; at text scale 1 every page
 ## measures inside 1600x900 less its margins; and an area padded with 40 more rows (49 in all)
 ## runs on to numbered pages that each fit.
 func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
@@ -29702,12 +29512,12 @@ func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
 	var start: String = said.call(pages[0])
 	check("START names F2, Ctrl-Z and B", start.contains("F2") and start.contains("Ctrl-Z") and start.contains("B splits"))
 	var play := " ".join(pages.filter(func(p): return p["play"]).map(func(p): return said.call(p)))
-	var named := ["FIFTHS WHEEL", "P steps", "Shift-P", "T, then", "KEYTAR", "SHAKER", "TAMBOURINE"]
-	check("the PLAY pages name the wheel, P and Shift-P, T, the keytar, the shaker and the tambourine (%s)"
+	var named := ["FIFTHS WHEEL", "P steps", "Shift-P", "T, then"]
+	check("the PLAY pages name the wheel, P and Shift-P and T (%s)"
 			% [named.filter(func(n): return not play.contains(n))], named.all(func(n): return play.contains(n)))
 	var held_sub: String = pages[names.find("PLAY · HELD")]["sub"]
-	check("PLAY · HELD says where each kind is kept: not all on the shelf (%s)" % held_sub,
-			held_sub.contains("shelf") and held_sub.contains("always on you"))
+	check("PLAY · HELD says where each kind is kept: carried, not stood (%s)" % held_sub,
+			held_sub.contains("Carried") and held_sub.contains("always on you"))
 	var live := {"lines": pages[names.find("PLAY · LIVE ROOM")]["lines"] as Array}
 	check("each PLAY line of a stood station is its title and its desk line, and goes there",
 			live["lines"].map(func(l): return l[2]) == [&"wheel", &"sections", &"cassette_rack", &"sampler", &"drums", &"looper", &"modular", &"lyrics"]
@@ -30012,7 +29822,7 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 	check("from god mode it comes down into the body first, and goes",
 			not studio.god_mode and walker.active and Vector2(walker.global_position.x, walker.global_position.z)
 					.distance_to(Vector2(bells.origin.x, bells.origin.z)) < 0.01)
-	check("a station that does not stand here is refused, and said", not studio.go_to_station(&"keytar")
+	check("a station that does not stand here is refused, and said", not studio.go_to_station(&"fingertips")
 			and said[-1].contains("does not stand"))
 	studio.ergonomics.motion_scale = 0.3
 	studio.go_to_station(&"wheel")
@@ -31444,10 +31254,10 @@ func _test_a_tilt_bends_from_where_its_note_began() -> void:
 			is_equal_approx(Wobble.bend_for(45.0), 2.0) and is_equal_approx(Wobble.bend_for(-70.0), -2.0))
 	var hand := HandGestures.new()
 	_roll_hand(hand, 0.0)
-	var w := Wobble.new(gm, [&"keytar"], hand)
+	var w := Wobble.new(gm, [&"fingertips"], hand)
 	_wobble_for(w, 0.2)
 	check("with no note of its source down it sends nothing", w.sends == 0 and not w.engaged())
-	gm.note_on(69, 100, 0, 0.0, false, &"keytar")
+	gm.note_on(69, 100, 0, 0.0, false, &"fingertips")
 	_wobble_for(w, 0.1)
 	# Rolled over a fifth of a second, as a hand does, and held there.
 	var ramp := func(from: float, to: float, seconds := 0.2) -> Callable:
@@ -31464,35 +31274,35 @@ func _test_a_tilt_bends_from_where_its_note_began() -> void:
 	_wobble_for(w, 1.0, ramp.call(-20.0, 3.0, 0.3))
 	check("back to 3 degrees, inside the dead zone, it is at rest (%d)" % spy.controls.get(bend, 0),
 			int(spy.controls.get(bend, 0)) == 0)
-	gm.note_off(69, 0, 0.0, false, &"keytar")
+	gm.note_off(69, 0, 0.0, false, &"fingertips")
 	_wobble_for(w, 0.1)
 	check("let go, it stops bending", not w.engaged() and int(gm.controls.get(bend, 0)) == 0)
 
 	# Inside the dead zone from the start: nothing at all.
 	_roll_hand(hand, 0.0)
-	gm.note_on(69, 100, 0, 0.0, false, &"keytar")
+	gm.note_on(69, 100, 0, 0.0, false, &"fingertips")
 	_wobble_for(w, 0.1)
 	var before := w.sends
 	_wobble_for(w, 1.0, ramp.call(0.0, 3.0, 0.3))
 	check("a 3-degree roll bends nothing (%d sends, %.3f)" % [w.sends - before, w.semitones],
 			w.sends == before and w.semitones == 0.0)
-	gm.note_off(69, 0, 0.0, false, &"keytar")
+	gm.note_off(69, 0, 0.0, false, &"fingertips")
 	_wobble_for(w, 0.1)
 
 	# Tilted before the press, and held there: where the note began is the level.
 	_roll_hand(hand, 30.0)
 	_wobble_for(w, 0.3)
-	gm.note_on(69, 100, 0, 0.0, false, &"keytar")
+	gm.note_on(69, 100, 0, 0.0, false, &"fingertips")
 	before = w.sends
 	_wobble_for(w, 1.0)
 	check("a hand held tilted 30 degrees before the press bends nothing (%d sends)" % (w.sends - before),
 			w.sends == before and int(gm.controls.get(bend, 0)) == 0)
-	gm.note_off(69, 0, 0.0, false, &"keytar")
+	gm.note_off(69, 0, 0.0, false, &"fingertips")
 	_wobble_for(w, 0.1)
 
 	# Pressed palm sideways, at 90 degrees of roll: either way from there, alike.
 	_roll_hand(hand, 90.0)
-	gm.note_on(69, 100, 0, 0.0, false, &"keytar")
+	gm.note_on(69, 100, 0, 0.0, false, &"fingertips")
 	_wobble_for(w, 0.1)
 	_wobble_for(w, 1.0, ramp.call(90.0, 110.0))
 	var up: int = spy.controls.get(bend, 0)
@@ -31500,19 +31310,19 @@ func _test_a_tilt_bends_from_where_its_note_began() -> void:
 	var down: int = spy.controls.get(bend, 0)
 	check("a hand pressed at 90 degrees of roll bends both ways by the same amounts (%d, %d)" % [up, down],
 			absi(up - Wobble.value_of(want)) <= 8 and absi(down + Wobble.value_of(want)) <= 8)
-	gm.note_off(69, 0, 0.0, false, &"keytar")
+	gm.note_off(69, 0, 0.0, false, &"fingertips")
 	_wobble_for(w, 0.1)
 
 	# Another source's newer note owns the wheel: this hand leaves it alone.
 	_roll_hand(hand, 0.0)
-	gm.note_on(69, 100, 0, 0.0, false, &"keytar")
+	gm.note_on(69, 100, 0, 0.0, false, &"fingertips")
 	_wobble_for(w, 0.1)
 	gm.note_on(72, 100, 0, 0.0, false, &"string")
 	before = w.sends
 	_wobble_for(w, 1.0, ramp.call(0.0, 20.0))
 	check("while another source's newer note has the wheel it sends nothing", w.sends == before)
 	gm.note_off(72, 0, 0.0, false, &"string")
-	gm.note_off(69, 0, 0.0, false, &"keytar")
+	gm.note_off(69, 0, 0.0, false, &"fingertips")
 	_wobble_for(w, 0.1)
 
 	# A controller, held thumb up to begin with: level for it, so the same roll bends the same.
@@ -31525,14 +31335,14 @@ func _test_a_tilt_bends_from_where_its_note_began() -> void:
 	controller.add_child(pad)
 	controller.transform = Transform3D(Basis.IDENTITY, Vector3(0.2, 1.3, -0.4))
 	w.hand = pad
-	gm.note_on(69, 100, 0, 0.0, false, &"keytar")
+	gm.note_on(69, 100, 0, 0.0, false, &"fingertips")
 	_wobble_for(w, 0.1)
 	_wobble_for(w, 1.0, func(t: float) -> void:
 		controller.transform = Transform3D(Basis(Vector3.FORWARD, deg_to_rad(20.0 * clampf(t / 0.2, 0.0, 1.0))),
 				Vector3(0.2, 1.3, -0.4)))
 	check("a controller rolled 20 degrees from thumb up bends the same (%d)" % spy.controls.get(bend, 0),
 			absi(int(spy.controls.get(bend, 0)) - Wobble.value_of(want)) <= 8)
-	gm.note_off(69, 0, 0.0, false, &"keytar")
+	gm.note_off(69, 0, 0.0, false, &"fingertips")
 	controller.free()
 	hand.free()
 	_put_back_synth(spy)
@@ -31592,23 +31402,23 @@ func _test_tilt_bends_off_sends_nothing() -> void:
 	gm.control_sent.connect(on_sent)
 	var hand := HandGestures.new()
 	_roll_hand(hand, 0.0)
-	var w := Wobble.new(gm, [&"keytar"], hand)
+	var w := Wobble.new(gm, [&"fingertips"], hand)
 	gm.tilt_bends = false
-	gm.note_on(69, 100, 0, 0.0, false, &"keytar")
+	gm.note_on(69, 100, 0, 0.0, false, &"fingertips")
 	_wobble_for(w, 0.1)
 	_wobble_for(w, 1.0, func(t: float) -> void: _roll_hand(hand, 30.0 * sin(TAU * 5.0 * t) + 20.0))
 	check("with Tilt bends off, a tilted and shaken hand sends no control (%s)" % [sent],
 			sent.is_empty() and w.sends == 0 and not spy.controls.has(DawKitClip.PITCH_BEND))
-	gm.note_off(69, 0, 0.0, false, &"keytar")
+	gm.note_off(69, 0, 0.0, false, &"fingertips")
 	var mouse := MouseInteractor.new()
 	mouse.alt_override = 1
-	var by_mouse := Wobble.new(gm, [&"keytar"], mouse)
-	gm.note_on(69, 100, 0, 0.0, false, &"keytar")
+	var by_mouse := Wobble.new(gm, [&"fingertips"], mouse)
+	gm.note_on(69, 100, 0, 0.0, false, &"fingertips")
 	mouse.bend_by(100.0)
 	_wobble_for(by_mouse, 0.1)
 	check("but Alt with the mouse still bends, being meant (%s)" % [sent],
-			sent.size() == 1 and sent[0] == [DawKitClip.PITCH_BEND, 4096, &"keytar"])
-	gm.note_off(69, 0, 0.0, false, &"keytar")
+			sent.size() == 1 and sent[0] == [DawKitClip.PITCH_BEND, 4096, &"fingertips"])
+	gm.note_off(69, 0, 0.0, false, &"fingertips")
 	gm.tilt_bends = true
 	gm.control_sent.disconnect(on_sent)
 	mouse.free()
@@ -31686,8 +31496,7 @@ func _test_alt_and_the_mouse_bend_and_spring_back() -> void:
 	_offline()
 
 
-## Shown, not coloured: the keytar's neck tag says BEND and how far while the hand holding it bends
-## it, and the glove's held finger says `+1.3`; the take holds the bend.
+## Shown, not coloured: the glove's held finger says `+1.3`; the take holds the bend.
 func _test_a_bend_is_shown_and_kept_in_the_take() -> void:
 	_offline()
 	_as_session(Session.Role.SOLO, 1)
@@ -31696,42 +31505,8 @@ func _test_a_bend_is_shown_and_kept_in_the_take() -> void:
 	var bend := DawKitClip.PITCH_BEND
 	check("the glove's letter carries the bend", Glove.bent("E4", 1.3) == "E4 +1.3"
 			and Glove.bent("E4", -0.62) == "E4 -0.6" and Glove.bent("E4", 0.01) == "E4")
-	# The keytar, in a mouse's hand, bent by Alt: its tag says so.
-	var keytar := KeytarItem.new()
-	add_child(keytar)
 	var mouse := MouseInteractor.new()
 	add_child(mouse)
-	keytar.midi = gm
-	keytar.state = Item.State.HELD
-	keytar.carried_by = mouse
-	mouse.alt_override = 1
-	gm.reach(&"keytar", true)
-	gm.note_on(64, 100, 0, 0.0, false, &"keytar")
-	keytar._bend_by_hand(1.0 / 60.0)
-	mouse.bend_by(130.0)
-	keytar._bend_by_hand(1.0 / 60.0)
-	keytar._show_bend()
-	check("the hand holding the keytar bends it (%s)" % [spy.controls], spy.controls.get(bend) == Wobble.value_of(1.3))
-	check("and its card says BEND +1.3, with no tag floating by the neck (%s)" % keytar.readout(), keytar.bend_text() == "BEND +1.3"
-			and keytar.readout().ends_with("BEND +1.3")
-			and keytar._bend_tag != null and not keytar._bend_tag.visible and keytar._bend_tag.text == "BEND +1.3")
-	gm.note_off(64, 0, 0.0, false, &"keytar")
-	mouse.alt_override = 0
-	for i in 30:
-		mouse._spring_bend(1.0 / 60.0)
-		keytar._bend_by_hand(1.0 / 60.0)
-	keytar._show_bend()
-	check("let go, the card stops saying it", keytar.bend_text() == "" and not keytar.readout().contains("BEND")
-			and not keytar._bend_tag.visible)
-	# A bandmate's keytar bend shows on it too, and rests at their last note-off.
-	keytar.carried_by = null
-	keytar.heard(Session.Note.ON, 67, 100)
-	keytar.heard_control(bend, Wobble.value_of(-0.8))
-	check("a bandmate's bend on their keytar is on its tag (%s)" % keytar.bend_text(), keytar.bend_text() == "BEND -0.8")
-	keytar.heard(Session.Note.OFF, 67, 0)
-	check("and gone at their last note-off", keytar.bend_text() == "")
-	gm.reach(&"keytar", false)
-	keytar.free()
 
 	# The fingertips on the desktop: J held, bent by Alt, its letter says by how much.
 	var catcher := KeyCatcher.new()
@@ -31763,7 +31538,7 @@ func _test_a_bend_is_shown_and_kept_in_the_take() -> void:
 	tips.free()
 	catcher.free()
 
-	# The take holds the bend: a tilted keytar note recorded, its bend in the item.
+	# The take holds the bend: a tilted note recorded, its bend in the item.
 	var now := {"seconds": 90.0, "playing": true, "recording": true, "valid": true}
 	gm.heard_source = func() -> Dictionary: return now.duplicate()
 	gm.target_track = 4
@@ -31771,14 +31546,14 @@ func _test_a_bend_is_shown_and_kept_in_the_take() -> void:
 	gm.follow(now)
 	var hand := HandGestures.new()
 	_roll_hand(hand, 0.0)
-	var w := Wobble.new(gm, [&"keytar"], hand)
-	gm.note_on(69, 100, 0, 0.0, false, &"keytar")
+	var w := Wobble.new(gm, [&"fingertips"], hand)
+	gm.note_on(69, 100, 0, 0.0, false, &"fingertips")
 	_wobble_for(w, 0.1)
 	_wobble_for(w, 1.0, func(t: float) -> void:
 		_roll_hand(hand, 20.0 * clampf(t / 0.2, 0.0, 1.0))
 		now["seconds"] = 90.1 + t)
 	now["seconds"] = 91.2
-	gm.note_off(69, 0, 0.0, false, &"keytar")
+	gm.note_off(69, 0, 0.0, false, &"fingertips")
 	gm.follow(now)
 	now["recording"] = false
 	gm.follow(now)
@@ -31818,7 +31593,7 @@ func _test_hits_play_back_as_hits() -> void:
 			if ItemVoices.drum(note) != [pair[1], InstrumentItem.VOICE_PITCH[v]]:
 				wrong.append(note)
 	check("each item's recorded notes play back as its own sound and voice (wrong: %s)" % [wrong], wrong.is_empty()
-			and ItemVoices.drum(82)[0] == &"shaker" and ItemVoices.drum(54)[0] == &"jingle")
+			and ItemVoices.drum(56)[0] == &"cowbell" and ItemVoices.drum(76)[0] == &"woodblock")
 	check("a drum with no sound here is a click", ItemVoices.drum(99) == [&"click", 1.0])
 
 	var rate := 48000
@@ -31939,277 +31714,16 @@ static func _power_at(s: PackedFloat32Array, hz: float, rate: int, from: int, to
 	return sqrt(re * re + im * im) / float(maxi(to - from, 1))
 
 
-# --- shakers and a tambourine in a bare hand, snapped gently (docs/spatial_loop.md slice 17) ---
-
-## A studio's shaker and tambourine, and a bare hand to hold them with: an XRInteractor reading a
-## HandGestures the test poses itself and steps itself (`step_hold`), as the rig makes them.
-## Returns [studio, hand, gestures].
-func _bare_hand_in_a_studio() -> Array:
-	_offline()
-	_as_session(Session.Role.SOLO, 1)
-	var studio := Studio.new()
-	studio.medium = Presentation.Medium.SCREEN
-	add_child(studio)
-	var gestures := HandGestures.new()
-	gestures.tracker_name = &"/user/hand_tracker/none_here"
-	add_child(gestures)
-	gestures.set_physics_process(false)
-	var hand := XRInteractor.new()
-	hand.name = "BareHand"
-	hand.gestures = gestures
-	studio.add_child(hand)
-	hand.set_physics_process(false)
-	return [studio, hand, gestures]
-
-
-## A closed bare hand round a shaker's grip takes hold of it, and keeps it until it has been open,
-## and seen, for 0.1 s. A tracking dropout of 0.3 s mid-shake neither drops it nor throws it, and
-## one of 0.5 s sends it home. A palm swung at 4 Hz with 0.3 m/s peaks plays one hit a stroke. A
-## pinch still carries it, and plays it. The tambourine the same.
-func _test_a_closed_bare_hand_holds_hand_percussion() -> void:
-	var saved_layout := Session.layout
-	Session.layout = LayoutProfile.new()
-	Session.layout.save_path = "user://test_layout_profile.cfg"
-	var rig := _bare_hand_in_a_studio()
-	var studio: Studio = rig[0]
-	var hand: XRInteractor = rig[1]
-	var gestures: HandGestures = rig[2]
-	await get_tree().physics_frame
-	studio.send_item_hit = func(_id: StringName, _v: int, _song: float, _snap: bool, _take: int, _zone: StringName) -> void: pass
-	var shaker := studio.items.items.get(&"shaker") as ShakerItem
-	var tambourine := studio.items.items.get(&"tambourine") as TambourineItem
-	shaker.snap_home()
-	tambourine.snap_home()
-	var dt := 1.0 / 90.0
-	var fist := [0.5, 0.8, 0.8, 0.8, 0.8]
-	var open := [0.0, 0.0, 0.0, 0.0, 0.0]
-	# Palm down, the middle of the palm `over` the grip.
-	var over := Vector3(0, 0.03, 0)
-	var posed := func(curl: Array, at: Vector3) -> PackedVector3Array:
-		return HandPose.posed(curl, 0, Transform3D(Basis.IDENTITY, at))
-	var frames := func(curl: Array, at: Vector3, seconds: float) -> void:
-		var t := 0.0
-		while t < seconds - 0.0001:
-			gestures.take(posed.call(curl, at))
-			hand.step_hold(dt)
-			t += dt
-	var lost := func(seconds: float) -> void:
-		var t := 0.0
-		while t < seconds - 0.0001:
-			gestures.read(null)
-			hand.step_hold(dt)
-			t += dt
-	var grip := shaker.grip_point()
-	check("a posed fist is closed, and grips the shaker's grip under its palm; an open hand is not",
-			HandPose.closed(posed.call(fist, grip + over)) and not HandPose.closed(posed.call(open, grip + over))
-			and HandPose.grips(posed.call(fist, grip + over), grip)
-			and not HandPose.grips(posed.call(fist, grip + Vector3(0, 0.1, 0)), grip))
-	check("three fingers past HOLD_CURL are closed, two are not",
-			HandPose.closed(posed.call([0, 0.7, 0.7, 0.7, 0.0], grip)) and not HandPose.closed(posed.call([0, 0.7, 0.7, 0, 0], grip)))
-	check("the shaker and the tambourine are held in a fist", shaker.held_in_fist()
-			and tambourine.held_in_fist())
-
-	frames.call(open, grip + over, 0.1)
-	check("an open hand over it takes nothing", hand.carrying == null)
-	frames.call(fist, grip + Vector3(0, 0.12, 0), 0.05)
-	check("a fist closed 12 cm off takes nothing", hand.carrying == null)
-	frames.call(fist, grip + over, 0.05)
-	check("and a fist already made, moved onto it, takes nothing either", hand.carrying == null)
-	# A made fist moved onto it fast, guessed at for a frame on the way or lost for a moment: still
-	# a fist already made, not one closing.
-	frames.call(fist, grip + Vector3(0, 0.12, 0), 0.05)
-	gestures.take(posed.call(fist, grip + Vector3(0, 0.06, 0)), false)
-	hand.step_hold(dt)
-	frames.call(fist, grip + over, 0.05)
-	check("nor one guessed at for a frame on its way onto it", hand.carrying == null)
-	frames.call(fist, grip + Vector3(0, 0.12, 0), 0.05)
-	lost.call(0.05)
-	frames.call(fist, grip + over, 0.05)
-	check("nor one lost for a moment on its way onto it", hand.carrying == null)
-	# Closing round it with the fingers only guessed at (hidden in the fist): it takes hold.
-	frames.call(open, grip + over, 0.03)
-	gestures.take(posed.call(fist, grip + over), false)
-	hand.step_hold(dt)
-	check("a hand closing round its grip on guessed frames holds it", not gestures.confident
-			and hand.carrying == shaker and hand.fist_holding)
-	frames.call(open, grip + over, 0.12)
-	check("and seen open, lets it go", hand.carrying == null)
-	shaker.snap_home()
-	frames.call(open, grip + over, 0.03)
-	frames.call(fist, grip + over, dt)
-	check("a hand closing round its grip holds it (%s)" % [hand.carrying], hand.carrying == shaker
-			and hand.fist_holding and shaker.state == Item.State.HELD and shaker.carried_by == hand)
-	check("and carries it in the fist, at the palm", hand.carry_pose().origin.distance_to(grip + over) < 0.03)
-	frames.call(fist, grip + over + Vector3(0.05, 0, 0), 0.2)
-	frames.call(open, grip + over, 0.05)
-	check("an open hand for 0.05 s still holds it", hand.carrying == shaker and hand.fist_holding)
-	frames.call(fist, grip + over, 0.02)
-	frames.call(open, grip + over, 0.07)
-	check("opening again starts the count again", hand.carrying == shaker)
-	frames.call(open, grip + over, 0.04)
-	check("open for 0.1 s, it lets go, put down rather than thrown (%s)" % [Item.State.keys()[shaker.state]],
-			hand.carrying == null and not hand.fist_holding and shaker.state != Item.State.HELD and shaker.flight == null)
-
-	# Shaken at 4 Hz, the palm's peaks 0.3 m/s along the hand's width, for a second: 8 strokes.
-	shaker.snap_home()
-	frames.call(open, grip + over, 0.03)
-	frames.call(fist, grip + over, dt)
-	var hits: Array = []
-	var count := func(v: int, struck: bool, _at: float, _zone: StringName) -> void: hits.append([v, struck])
-	shaker.played.connect(count)
-	var middle := grip + over
-	var w := TAU * 4.0
-	var swing := 0.3 / w
-	var t := 0.0
-	while t < 1.0 - 0.0001:
-		t += dt
-		gestures.take(posed.call(fist, middle + Vector3(swing * sin(w * t), 0, 0)))
-		hand.step_hold(dt)
-		shaker._physics_process(dt)
-	check("a palm swung at 4 Hz with 0.3 m/s peaks plays one hit a stroke (%d for 8)" % hits.size(),
-			absi(hits.size() - 8) <= 1 and hits.all(func(h: Array) -> bool: return not h[1] and h[0] >= 40))
-	check("its strokes are read off the palm, levered", hand.shake_point().distance_to(gestures.palm()) < 0.0001
-			and is_equal_approx(hand.shake_lever(), XRInteractor.PALM_LEVER))
-
-	# Tracking lost for 0.3 s mid-shake: still held, where it was last seen, and no throw.
-	var seen := hand.carry_pose()
-	hits.clear()
-	var t_lost := 0.0
-	while t_lost < 0.3 - 0.0001:
-		gestures.read(null)
-		hand.step_hold(dt)
-		shaker._physics_process(dt)
-		t_lost += dt
-	check("a 0.3 s dropout mid-shake neither drops it nor throws it", hand.carrying == shaker and hand.fist_holding
-			and shaker.state == Item.State.HELD and shaker.flight == null and hand.carry_pose().is_equal_approx(seen))
-	# Back 25 cm off where it went: the jump is no stroke and, opened, no throw.
-	var back := middle + Vector3(0.25, 0, 0)
-	for i in 5:
-		gestures.take(posed.call(fist, back))
-		hand.step_hold(dt)
-		shaker._physics_process(dt)
-	check("seen again 25 cm away, the jump is no hit (%s)" % [hits], hits.is_empty() and hand.carrying == shaker)
-	frames.call(open, back, 0.12)
-	check("and opened, it is put down, never thrown by the jump (%s)" % [hand.palm_velocity()],
-			hand.carrying == null and shaker.flight == null)
-	shaker.played.disconnect(count)
-
-	# Lost for 0.5 s: it goes home.
-	shaker.snap_home()
-	frames.call(open, grip + over, 0.03)
-	frames.call(fist, grip + over, dt)
-	check("held again", hand.carrying == shaker)
-	lost.call(0.35)
-	check("0.35 s lost, still held", hand.carrying == shaker)
-	lost.call(0.15)
-	check("a 0.5 s dropout sends it home (%s)" % [Item.State.keys()[shaker.state]], hand.carrying == null
-			and not hand.fist_holding and shaker.state == Item.State.HOME)
-
-	# Tracked, but with joints only guessed (fingers hidden in the fist, a blurred shake) for 0.6 s:
-	# still held, still carried at the palm and still played; only letting go waits to be sure.
-	shaker.snap_home()
-	frames.call(open, grip + over, 0.03)
-	frames.call(fist, grip + over, dt)
-	check("held again, to be guessed at", hand.carrying == shaker and hand.fist_holding)
-	hits.clear()
-	shaker.played.connect(count)
-	t = 0.0
-	var guessed_at := middle
-	while t < 0.6 - 0.0001:
-		t += dt
-		guessed_at = middle + Vector3(0, 0, -0.2 * t) + Vector3(swing * sin(w * t), 0, 0)
-		gestures.take(posed.call(fist, guessed_at), false)
-		hand.step_hold(dt)
-		shaker._physics_process(dt)
-	shaker.played.disconnect(count)
-	check("a closed hand tracked but unconfident for 0.6 s keeps it (%s)" % [Item.State.keys()[shaker.state]],
-			not gestures.confident and hand.carrying == shaker and hand.fist_holding and shaker.state == Item.State.HELD)
-	check("and goes on carrying it at its palm, 12 cm on (%.3f m off)" % hand.carry_pose().origin.distance_to(guessed_at),
-			hand.carry_pose().origin.distance_to(guessed_at) < 0.03 and hand.shake_tracked())
-	check("and its guessed shake still plays (%d)" % hits.size(), hits.size() >= 3)
-	for i in 20:
-		gestures.take(posed.call(open, guessed_at), false)
-		hand.step_hold(dt)
-	check("open, but only guessed at, it does not let go", hand.carrying == shaker and hand.fist_holding)
-	frames.call(open, guessed_at, 0.12)
-	check("seen open for 0.1 s, it lets go, put down", hand.carrying == null and shaker.flight == null)
-
-	# A flick as the hand opens throws it, at the palm's own speed over seen frames.
-	shaker.snap_home()
-	frames.call(open, grip + over, 0.03)
-	frames.call(fist, grip + over, dt)
-	var at := grip + over
-	for i in 12:
-		at += Vector3(0, 0.5, -2.5) * dt
-		gestures.take(posed.call(open if i >= 2 else fist, at))
-		hand.step_hold(dt)
-	check("opened while flung, it is thrown (%s)" % [hand.palm_velocity()], hand.carrying == null
-			and shaker.is_flying())
-	shaker.snap_home()
-
-	# A pinch still carries it, and its strokes are still the palm's.
-	hand.pick_up(shaker)
-	hits.clear()
-	shaker.played.connect(count)
-	t = 0.0
-	while t < 0.5 - 0.0001:
-		t += dt
-		gestures.take(HandPose.posed(open, HandPose.INDEX, Transform3D(Basis.IDENTITY, middle + Vector3(0.03 * sin(w * t), 0, 0))))
-		hand.step_hold(dt)
-		shaker._physics_process(dt)
-	check("a pinch-carried shaker still plays (%d)" % hits.size(), hits.size() >= 3 and not hand.fist_holding
-			and hand.carrying == shaker)
-	shaker.played.disconnect(count)
-	hand.lose_carrying()
-	shaker.snap_home()
-
-	# The tambourine the same, round the bare stretch of its hoop.
-	var hoop := tambourine.grip_point()
-	frames.call(open, hoop + over, 0.03)
-	frames.call(fist, hoop + over, dt)
-	check("a hand closing round the tambourine's hoop holds it", hand.carrying == tambourine and hand.fist_holding)
-	var rung: Array = []
-	var ring := func(v: int, struck: bool, _at: float, _zone: StringName) -> void: rung.append([v, struck])
-	tambourine.played.connect(ring)
-	t = 0.0
-	while t < 1.0 - 0.0001:
-		t += dt
-		gestures.take(posed.call(fist, hoop + over + Vector3(swing * sin(w * t), 0, 0)))
-		hand.step_hold(dt)
-		tambourine._physics_process(dt)
-	check("and shaken at 4 Hz it plays one hit a stroke (%d for 8)" % rung.size(), absi(rung.size() - 8) <= 1)
-	lost.call(0.3)
-	check("a 0.3 s dropout keeps it", hand.carrying == tambourine)
-	frames.call(open, hoop + over, 0.12)
-	check("and open for 0.1 s, seen, lets it go", hand.carrying == null and tambourine.flight == null)
-	tambourine.played.disconnect(ring)
-	tambourine.snap_home()
-
-	# Said for both media: the hover hint, the PLAY lines and, in a headset, the shelf tag.
-	var desk_line: String = Stations.row(&"shaker")["desk"]
-	var hands_line: String = Stations.row(&"shaker")["hands"]
-	check("the hover hint says how it is played (%s)" % shaker.hint(), shaker.hint().contains("shake it · click strikes · P jack")
-			and tambourine.hint().contains("shake it · click strikes · P jack"))
-	check("its PLAY lines say it for a desk and for hands (%s / %s)" % [desk_line, hands_line],
-			desk_line.contains("P jack") and desk_line.contains("snap") and hands_line.contains("close your hand round it")
-			and hands_line.contains("controllers are steadier") and (Stations.row(&"tambourine")["hands"] as String).contains("close your hand"))
-	studio.queue_free()
-	gestures.queue_free()
-	await get_tree().process_frame
-	_as_session(Session.Role.SOLO, 1)
-	Session.layout = saved_layout
-
-
 ## Two bare fists held for ESCAPE_HOLD are the way out, but not when one of them is carrying
-## something: a shaker held in a closed hand, or anything.
+## something: anything.
 func _test_a_hand_carrying_anything_is_no_escape_fist() -> void:
 	var rig := XRRig.new()
 	var escapes := [0]
 	rig.escape_requested.connect(func() -> void: escapes[0] += 1)
 	var empty := XRInteractor.new()
 	var holding := XRInteractor.new()
-	var shaker := ShakerItem.new()
-	holding.carrying = shaker
+	var cowbell := CowbellItem.new()
+	holding.carrying = cowbell
 	check("a tracked fist counts, an untracked one or an open hand does not, nor one carrying anything",
 			XRRig.escape_fist(true, true, empty) and not XRRig.escape_fist(false, true, empty)
 			and not XRRig.escape_fist(true, false, empty) and not XRRig.escape_fist(true, true, holding)
@@ -32217,7 +31731,7 @@ func _test_a_hand_carrying_anything_is_no_escape_fist() -> void:
 	var fists := int(XRRig.escape_fist(true, true, holding)) + int(XRRig.escape_fist(true, true, empty))
 	for i in 60:
 		rig.watch_fists(fists, 1.0 / 60.0)
-	check("two fists, one holding the shaker, held a second, do not escape (%d)" % escapes[0], escapes[0] == 0)
+	check("two fists, one holding the cowbell, held a second, do not escape (%d)" % escapes[0], escapes[0] == 0)
 	fists = int(XRRig.escape_fist(true, true, empty)) * 2
 	for i in 60:
 		rig.watch_fists(fists, 1.0 / 60.0)
@@ -32225,13 +31739,13 @@ func _test_a_hand_carrying_anything_is_no_escape_fist() -> void:
 	rig.free()
 	empty.free()
 	holding.free()
-	shaker.free()
+	cowbell.free()
 
 
 ## A hand percussion hit is recorded a little nearer the beat than it was played, and only
 ## recorded: 20 ms early is recorded 10 ms early, 60 ms off is untouched, and what is heard and
 ## sent is where it was played. With "Snap hand percussion" off, as played.
-## The take plays back as the shaker and the tambourine (slice 16).
+## The take plays back as the cowbell and the woodblock (slice 16).
 func _test_hand_percussion_is_snapped_gently_as_it_is_recorded() -> void:
 	var saved_layout := Session.layout
 	Session.layout = LayoutProfile.new()
@@ -32273,33 +31787,33 @@ func _test_hand_percussion_is_snapped_gently_as_it_is_recorded() -> void:
 	s.track(4).items.clear()
 	rec.follow(heard)
 	var room := studio.items
-	var shaker := room.items.get(&"shaker") as ShakerItem
-	var tambourine := room.items.get(&"tambourine") as TambourineItem
+	var bell := _stand(room, &"cowbell")
+	var block := _stand(room, &"woodblock")
 	var hand := studio.get_node("MouseHand") as MouseInteractor
 	var played_at := [0.0]
 	InstrumentItem.clock = func() -> float: return played_at[0]
-	hand.pick_up(shaker)
+	hand.pick_up(bell)
 	played_at[0] = 20.0 - 0.02
-	shaker.play(90)
-	var heard_take := shaker.sound_take()
-	var mine := shaker.get_children().filter(func(n: Node) -> bool: return n is AudioStreamPlayer)
+	bell.play(90)
+	var heard_take := bell.sound_take()
+	var mine := bell.get_children().filter(func(n: Node) -> bool: return n is AudioStreamPlayer)
 	check("the hit is heard at once, as played", mine.size() == 1 and (mine[0] as AudioStreamPlayer).playing)
 	check("and sent where it was played, with my snap and the take I heard (%s)" % [sent],
 			sent.size() == 1 and sent[0][2] == 20.0 - 0.02 and sent[0][3] == true and sent[0][4] == heard_take)
 	played_at[0] = 20.5 + 0.06
-	shaker.play(90)
+	bell.play(90)
 	gm.snap_hits = false
 	played_at[0] = 21.0 - 0.02
-	shaker.play(90)
+	bell.play(90)
 	check("with snap off, it is sent so (%s)" % [sent], sent.size() == 3 and sent[2][3] == false)
 	gm.snap_hits = true
 	hand.lose_carrying()
-	shaker.snap_home()
-	hand.pick_up(tambourine)
+	bell.snap_home()
+	hand.pick_up(block)
 	played_at[0] = 21.5 + 0.02
-	tambourine.play(80)
+	block.play(80)
 	hand.lose_carrying()
-	tambourine.snap_home()
+	block.snap_home()
 	heard["seconds"] = 23.0
 	heard["recording"] = false
 	rec.follow(heard)
@@ -32307,13 +31821,13 @@ func _test_hand_percussion_is_snapped_gently_as_it_is_recorded() -> void:
 	var notes := MidiTake.unpack_relative(takes[0].notes, takes[0].start) if takes.size() == 1 else []
 	notes.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
 	var ons := notes.map(func(n: Array) -> float: return snappedf(float(n[0]), 0.0001))
-	check("recorded: 20 ms early 10 ms early, 60 ms off untouched, snap off as played, the tambourine snapped (%s)" % [ons],
+	check("recorded: 20 ms early 10 ms early, 60 ms off untouched, snap off as played, the woodblock snapped (%s)" % [ons],
 			notes.size() == 4 and is_equal_approx(ons[0], 19.99) and is_equal_approx(ons[1], 20.56)
 			and is_equal_approx(ons[2], 20.98) and is_equal_approx(ons[3], 21.51))
 	if notes.size() == 4:
-		check("as the shaker and the tambourine (%s)" % [notes.map(func(n: Array) -> int: return int(n[2]))],
-				int(notes[0][2]) == 82 and int(notes[3][2]) == 54 and int(notes[0][4]) == HitRecorder.CHANNEL)
-		# Slice 16: the take plays back as the shaker and the tambourine heard in the room.
+		check("as the cowbell and the woodblock (%s)" % [notes.map(func(n: Array) -> int: return int(n[2]))],
+				int(notes[0][2]) == 56 and int(notes[3][2]) == 76 and int(notes[0][4]) == HitRecorder.CHANNEL)
+		# Slice 16: the take plays back as the cowbell and the woodblock heard in the room.
 		var flat := PackedFloat64Array()
 		for n in notes:
 			flat.append_array(PackedFloat64Array([float(n[0]) - 19.9, float(n[1]) - 19.9, n[2], n[3], n[4]]))
@@ -32324,32 +31838,23 @@ func _test_hand_percussion_is_snapped_gently_as_it_is_recorded() -> void:
 		var loud := 0.0
 		for i in range(at, at + 2400):
 			loud = maxf(loud, absf(out[i].x))
-		check("and plays back as a shaker and a tambourine: their own sounds, rung where they were recorded (%.3f)" % loud,
-				ItemVoices.drum(82)[0] == &"shaker" and ItemVoices.drum(54)[0] == &"jingle" and loud > 0.01
+		check("and plays back as a cowbell and a woodblock: their own sounds, rung where they were recorded (%.3f)" % loud,
+				ItemVoices.drum(56)[0] == &"cowbell" and ItemVoices.drum(76)[0] == &"woodblock" and loud > 0.01
 				and (split[0] as PackedFloat64Array).is_empty())
 
-	# The shelf tag's words: SNAP while on; in a headset, how a hand holds it too. Never shown over
-	# it: the card says it.
-	check("the shelf tag says SNAP while snapping (%s)" % shaker.tag_text(), shaker.tag_text() == "SNAP"
-			and tambourine.tag_text() == "SNAP")
-	check("and its card says so (%s)" % shaker.readout(), shaker.readout().contains("snapped to the beat"))
+	# The shelf tag's words belong to hand percussion held in a fist (`held_in_fist`), and no
+	# item is today: a cowbell carried or stood on its shelf says nothing, and never floats a tag.
+	check("a hand-held cowbell has no shelf tag to say SNAP (%s)" % bell.tag_text(), bell.tag_text() == ""
+			and block.tag_text() == "")
 	gm.snap_hits = false
-	check("and nothing at a desk with it off", shaker.tag_text() == "")
 	InstrumentItem.hands_hint = true
-	check("in a headset it says how a hand holds it, and which way its hits are heard (slice 39)",
-			shaker.tag_text() == InstrumentItem.HANDS_HINT + "\n" + InstrumentItem.path_tag()
-			and InstrumentItem.HANDS_HINT.contains("close your hand round it and shake")
-			and InstrumentItem.HANDS_HINT.contains("controllers are steadier for fast parts"))
-	shaker._retag()
-	var tag := shaker.get_node("ShelfTag") as Label3D
-	check("but never floats it over the shelf: its card's hint says how a hand holds it (%s)" % shaker.hint(),
-			not tag.visible and tag.text == shaker.tag_text()
-			and shaker.hint().contains("close your hand round it and shake"))
-	hand.pick_up(shaker)
-	shaker._retag()
-	check("nor in your own hand", not tag.visible)
+	bell._retag()
+	check("and in a headset the cowbell's tag still says nothing (%s)" % bell.tag_text(), bell.tag_text() == "")
+	hand.pick_up(bell)
+	bell._retag()
+	check("nor in your own hand", bell.tag_text() == "")
 	hand.lose_carrying()
-	shaker.snap_home()
+	bell.snap_home()
 	InstrumentItem.hands_hint = false
 	gm.snap_hits = true
 	# The session panel has the switch, just after the keys, said in words on its hover card.
@@ -32375,7 +31880,7 @@ func _test_hand_percussion_is_snapped_gently_as_it_is_recorded() -> void:
 
 
 ## "Snap hand percussion" is each player's own, and a solo player or a host on Reaper records the
-## shaker's hits too (HitRecorder), though their keys box is hidden there (Reaper takes their keys
+## cowbell's hits too (HitRecorder), though their keys box is hidden there (Reaper takes their keys
 ## itself, RECORDS_OWN_INPUTS). So the switch sits outside the keys box, just after it, and is in
 ## reach for solo, host and guest alike, which is what the desk's PLAY line ("session panel") says.
 func _test_snap_hand_percussion_is_in_reach_where_reaper_records_its_own_input() -> void:
@@ -32389,7 +31894,6 @@ func _test_snap_hand_percussion_is_in_reach_where_reaper_records_its_own_input()
 		_as_session(role, 1 if role != Session.Role.GUEST else 2)
 		DAW.use(reaper)
 		var gm := Session.guest_midi
-		gm.keytar = false
 		gm.snap_hits = true
 		panel.open()
 		panel._refresh()
@@ -32435,16 +31939,16 @@ func _test_a_guests_hit_is_snapped_by_its_flag_and_heard_as_its_take() -> void:
 	var s := DAW.state
 	s.tempo = 120.0
 	s.tempo_points = []
-	var shaker := studio.items.items.get(&"shaker") as ShakerItem
+	var bell := _stand(studio.items, &"cowbell")
 	var rec := studio.hit_recorder
 	var heard := {"seconds": 30.0, "playing": true, "recording": true, "valid": true}
 	rec.heard_source = func() -> Dictionary: return heard
 	s.track(6).items.clear()
 	# The host snaps; the guest's first hit says it does not, its second that it does.
 	gm.snap_hits = true
-	rec.hit(shaker, 90, 31.0 - 0.02, 6, 0)
+	rec.hit(bell, 90, 31.0 - 0.02, 6, 0)
 	gm.snap_hits = false
-	rec.hit(shaker, 90, 31.5 - 0.02, 6, 1)
+	rec.hit(bell, 90, 31.5 - 0.02, 6, 1)
 	gm.snap_hits = true
 	heard["recording"] = false
 	rec.follow(heard)
@@ -32464,17 +31968,17 @@ func _test_a_guests_hit_is_snapped_by_its_flag_and_heard_as_its_take() -> void:
 			and absf(float(their_notes[0][0]) - 40.49) < 0.0002)
 
 	# Heard on the host: from the guest's hand, as the Foley take their hand rang.
-	studio.presence._item_holders[&"shaker"] = 7
-	Session.item_hit.emit(&"shaker", 90, 7, 31.0, true, 5)
-	var rung := shaker.get_children().filter(func(n: Node) -> bool: return n is AudioStreamPlayer3D)
+	studio.presence._item_holders[&"cowbell"] = 7
+	Session.item_hit.emit(&"cowbell", 90, 7, 31.0, true, 5)
+	var rung := bell.get_children().filter(func(n: Node) -> bool: return n is AudioStreamPlayer3D)
 	check("a guest's hit sounds its own take on the host, and its tag says they snap",
-			rung.size() >= 1 and (rung[-1] as AudioStreamPlayer3D).stream == Foley.shaker(5) and shaker.holder_snaps
-			and is_equal_approx((rung[-1] as AudioStreamPlayer3D).pitch_scale, shaker.pitch_scale()))
-	Session.item_hit.emit(&"shaker", 90, 7, 31.0, false, 11)
-	rung = shaker.get_children().filter(func(n: Node) -> bool: return n is AudioStreamPlayer3D)
-	check("and another its own (%d)" % rung.size(), (rung[-1] as AudioStreamPlayer3D).stream == Foley.shaker(11)
-			and not shaker.holder_snaps)
-	studio.presence._item_holders.erase(&"shaker")
+			rung.size() >= 1 and (rung[-1] as AudioStreamPlayer3D).stream == Foley.cowbell(5) and bell.holder_snaps
+			and is_equal_approx((rung[-1] as AudioStreamPlayer3D).pitch_scale, bell.pitch_scale()))
+	Session.item_hit.emit(&"cowbell", 90, 7, 31.0, false, 11)
+	rung = bell.get_children().filter(func(n: Node) -> bool: return n is AudioStreamPlayer3D)
+	check("and another its own (%d)" % rung.size(), (rung[-1] as AudioStreamPlayer3D).stream == Foley.cowbell(11)
+			and not bell.holder_snaps)
+	studio.presence._item_holders.erase(&"cowbell")
 	check("the host passes a hit on cleaned (%s)" % [Session.clean_item_hit(300, NAN, -4)],
 			Session.clean_item_hit(300, NAN, -4) == [127, -1.0, -1] and Session.clean_item_hit(0, 12.5, 3) == [1, 12.5, 3])
 	studio.queue_free()
@@ -34155,12 +33659,12 @@ func _test_beads_go_with_the_level() -> void:
 					beads.transform_of(beads.slots_of(quiet).x).basis.get_scale().x))
 	# A jack's lead carries its last hit, fading to nothing.
 	var jacks := Jacks.new()
-	check("a jack that has played nothing carries nothing", jacks.level_of(&"shaker_1", 1000) == 0.0)
-	jacks.heard_from(&"shaker_1", 127, 1000)
-	check("a hit shows at once", is_equal_approx(jacks.level_of(&"shaker_1", 1000), Jacks.HEARD_LOUD))
-	check("and fades (%.2f half way)" % jacks.level_of(&"shaker_1", 1300),
-			jacks.level_of(&"shaker_1", 1300) < Jacks.HEARD_LOUD and jacks.level_of(&"shaker_1", 1300) > 0.0)
-	check("to stillness", jacks.level_of(&"shaker_1", 1000 + int(Jacks.HEARD_FADE * 1000.0)) == 0.0)
+	check("a jack that has played nothing carries nothing", jacks.level_of(&"cowbell_1", 1000) == 0.0)
+	jacks.heard_from(&"cowbell_1", 127, 1000)
+	check("a hit shows at once", is_equal_approx(jacks.level_of(&"cowbell_1", 1000), Jacks.HEARD_LOUD))
+	check("and fades (%.2f half way)" % jacks.level_of(&"cowbell_1", 1300),
+			jacks.level_of(&"cowbell_1", 1300) < Jacks.HEARD_LOUD and jacks.level_of(&"cowbell_1", 1300) > 0.0)
+	check("to stillness", jacks.level_of(&"cowbell_1", 1000 + int(Jacks.HEARD_FADE * 1000.0)) == 0.0)
 	jacks.free()
 	var socket := JackSocket.new(null, Jack.keys_source(1))
 	check("an unplugged socket carries nothing", socket.signal_level() == 0.0 and socket.signal_spine().is_empty())
@@ -34829,7 +34333,7 @@ func _test_a_clip_pulled_off_the_timeline_is_a_cassette_in_the_hand() -> void:
 	var room := studio.items
 	var hand := studio.get_node("MouseHand") as MouseInteractor
 	check("the shelf is what it was: no cassette on it (%d kinds, besides the hand drums)" % _shelf_kinds().size(),
-			_shelf_kinds().size() == 20 and not (&"cassette" in ItemRoom.KINDS)
+			_shelf_kinds().size() == 17 and not (&"cassette" in ItemRoom.KINDS)
 			and room.spawned_ids().is_empty() and room.made_ids().is_empty())
 	check("the cassette rack stands in the live room, its slots and its bin the room's",
 			studio.cassette_rack != null and studio.cassette_rack.is_inside_tree()
@@ -36199,7 +35703,7 @@ static func _samples_of(kind: StringName) -> Array:
 
 
 ## The kinds of sample the sampler tests make, for clearing them away before and after.
-const _SAMPLED: Array[StringName] = [&"duck_squeeze", &"shaker", &"tambourine_hit", &"ball_bounce",
+const _SAMPLED: Array[StringName] = [&"duck_squeeze", &"cowbell", &"woodblock", &"ball_bounce",
 		&"yoyo_trick", &"cards_trick", &"handbell", &"platter_scratch"]
 
 
@@ -36214,7 +35718,7 @@ static func _clear_samples() -> void:
 ## the hand: one WAV in the media, the very stream Foley made for that take, and a sample cassette of
 ## it on the rack's first free slot, and REC off. A second squeeze writes nothing; REC off does
 ## nothing; out of the mic's reach nothing is caught unless it is in the presser's hand; anything
-## used within reach is caught, whoever used it; a shaker's shake is a hit, caught as its take; the
+## used within reach is caught, whoever used it; a cowbell's shake is a hit, caught as its take; the
 ## ball's squeeze is not its sound but its bounce is; a yo-yo's trick and a deck's are each one
 ## sample of the whole trick; a bell's chord tone and a low second voice are kept at the pitch they
 ## were heard at. REC is the room's row.
@@ -36317,35 +35821,35 @@ func _test_a_squeeze_after_rec_is_one_sample_on_the_rack() -> void:
 			room.made_ids().size() == 1 and sampler.armed_by == 5)
 	hand.lose_carrying()
 	duck.go_home()
-	# The tambourine struck within reach: caught, whoever's REC it was.
-	var tambourine := room.items[&"tambourine"] as InstrumentItem
-	hand.pick_up(tambourine)
-	tambourine.global_position = sampler.mic_point() + Vector3(0.3, -0.4, 0.6)
-	var near := tambourine.middle().distance_to(sampler.mic_point())
-	tambourine.work(true)
-	var hit := Foley.take_of(&"tambourine_hit", tambourine.sound_take())
-	check("within reach (%.2f m), the tambourine struck is caught for the guest's REC (%s)" % [near, _samples_of(&"tambourine_hit")],
-			near <= Sampler.REACH and _samples_of(&"tambourine_hit") == ["tambourine_hit_1.wav"] and room.made_ids().size() == 2
-			and _wav_body(DAW.backend.media_path("tambourine_hit_1.wav"))[0] == hit.data and sampler.armed_by == 0)
+	# The woodblock struck within reach: caught, whoever's REC it was.
+	var block := _stand(room, &"woodblock")
+	hand.pick_up(block)
+	block.global_position = sampler.mic_point() + Vector3(0.3, -0.4, 0.6)
+	var near := block.middle().distance_to(sampler.mic_point())
+	block.work(true)
+	var hit := Foley.take_of(&"woodblock", block.sound_take())
+	check("within reach (%.2f m), the block struck is caught for the guest's REC (%s)" % [near, _samples_of(&"woodblock")],
+			near <= Sampler.REACH and _samples_of(&"woodblock") == ["woodblock_1.wav"] and room.made_ids().size() == 2
+			and _wav_body(DAW.backend.media_path("woodblock_1.wav"))[0] == hit.data and sampler.armed_by == 0)
 	var second := room.items.get(room.made_ids()[1]) as CassetteItem
 	check("made by whoever struck it, onto the next free slot", second != null and (Session.made[second.id] as Array)[1] == 1
 			and second.slot_in == CassetteRack.RACK and second.slot_n == 1)
-	tambourine.work(false)
+	block.work(false)
 	hand.lose_carrying()
-	tambourine.go_home()
+	block.go_home()
 
 	# A shake, as a hand here shakes it: a hit, caught as its take.
 	studio._on_rec_pressed(true)
-	var shaker := room.items[&"shaker"] as InstrumentItem
-	hand.pick_up(shaker)
-	shaker.play(90)
-	check("a shaker shaken after REC is its take, shaken (%s)" % [_samples_of(&"shaker")],
-			_samples_of(&"shaker") == ["shaker_1.wav"]
-			and _wav_body(DAW.backend.media_path("shaker_1.wav"))[0] == Foley.take_of(&"shaker", shaker.sound_take()).data
+	var bell := _stand(room, &"cowbell")
+	hand.pick_up(bell)
+	bell.play(90)
+	check("a bell shaken after REC is its take, shaken (%s)" % [_samples_of(&"cowbell")],
+			_samples_of(&"cowbell") == ["cowbell_1.wav"]
+			and _wav_body(DAW.backend.media_path("cowbell_1.wav"))[0] == Foley.take_of(&"cowbell", bell.sound_take()).data
 			and sampler.armed_by == 0 and room.made_ids().size() == 3)
 	hand.lose_carrying()
-	shaker.go_home()
-	check("the screen says the newest one (%s)" % sampler.screen_text().replace("\n", " / "), sampler.screen_text().contains("last: shaker 1"))
+	bell.go_home()
+	check("the screen says the newest one (%s)" % sampler.screen_text().replace("\n", " / "), sampler.screen_text().contains("last: cowbell 1"))
 
 	# The ball: a squeeze is not its sound; a bounce by the mic is, the take its throw rang.
 	studio._on_rec_pressed(true)
@@ -36419,20 +35923,20 @@ func _test_a_squeeze_after_rec_is_one_sample_on_the_rack() -> void:
 	hand.lose_carrying()
 	cards.go_home()
 
-	# The tambourine's low second voice, a fifth down: kept a fifth down.
+	# The woodblock's low second voice, a fifth down: kept a fifth down.
 	studio._on_rec_pressed(true)
-	tambourine.voice = 1
-	hand.pick_up(tambourine)
-	tambourine.work(true)
-	var low := Foley.resampled(Foley.take_of(&"tambourine_hit", tambourine.sound_take()), InstrumentItem.VOICE_PITCH[1])
-	check("a low-voiced tambourine struck is kept at its low voice, not its own (%s)" % [_samples_of(&"tambourine_hit")],
-			_samples_of(&"tambourine_hit") == ["tambourine_hit_1.wav", "tambourine_hit_2.wav"] and is_equal_approx(tambourine.tune_at(), 0.8)
-			and _wav_body(DAW.backend.media_path("tambourine_hit_2.wav"))[0] == low.data
-			and low.data != Foley.take_of(&"tambourine_hit", tambourine.sound_take()).data and sampler.armed_by == 0)
-	tambourine.work(false)
+	block.voice = 1
+	hand.pick_up(block)
+	block.work(true)
+	var low := Foley.resampled(Foley.take_of(&"woodblock", block.sound_take()), InstrumentItem.VOICE_PITCH[1])
+	check("a low-voiced block struck is kept at its low voice, not its own (%s)" % [_samples_of(&"woodblock")],
+			_samples_of(&"woodblock") == ["woodblock_1.wav", "woodblock_2.wav"] and is_equal_approx(block.tune_at(), 0.8)
+			and _wav_body(DAW.backend.media_path("woodblock_2.wav"))[0] == low.data
+			and low.data != Foley.take_of(&"woodblock", block.sound_take()).data and sampler.armed_by == 0)
+	block.work(false)
 	hand.lose_carrying()
-	tambourine.voice = 0
-	tambourine.go_home()
+	block.voice = 0
+	block.go_home()
 
 	# The room's row as a guest has it: the host's word, once its own press is answered.
 	_as_session(Session.Role.GUEST, 5)
@@ -36520,12 +36024,12 @@ func _test_a_guests_squeeze_is_sampled_on_the_host_with_its_take() -> void:
 	check("her second squeeze writes nothing", room.made_ids().size() == 1 and _samples_of(&"duck_squeeze") == ["duck_squeeze_1.wav"])
 
 	# Her shake, take 6.
-	var shaker := room.items[&"shaker"] as InstrumentItem
+	var bell := _stand(room, &"cowbell")
 	studio._on_room_asked(&"sampler", [true], 5)
-	Session._grant(5, shaker.network_key())
-	Session.item_hit.emit(&"shaker", 90, 5, -1.0, false, 6)
-	check("her shake is caught as her take, shaken (%s)" % [_samples_of(&"shaker")], _samples_of(&"shaker") == ["shaker_1.wav"]
-			and _wav_body(DAW.backend.media_path("shaker_1.wav"))[0] == Foley.take_of(&"shaker", 6).data
+	Session._grant(5, bell.network_key())
+	Session.item_hit.emit(&"cowbell", 90, 5, -1.0, false, 6)
+	check("her shake is caught as her take, shaken (%s)" % [_samples_of(&"cowbell")], _samples_of(&"cowbell") == ["cowbell_1.wav"]
+			and _wav_body(DAW.backend.media_path("cowbell_1.wav"))[0] == Foley.take_of(&"cowbell", 6).data
 			and room.made_ids().size() == 2 and sampler.armed_by == 0)
 	# Her yo-yo trick, her fourth since she picked it up: the host's copy plays her fourth, and the
 	# sampler keeps that trick, not the host copy's own next.
@@ -38987,7 +38491,7 @@ func _test_the_miniature_is_the_session_to_hold() -> void:
 	var studio: Studio = await _miniature_studio(Presentation.Medium.SCREEN)
 	var mini := studio.items.items.get(MiniatureItem.KIND) as MiniatureItem
 	check("the miniature is a room item, one of the 20 kinds, with a home of its own",
-			mini != null and MiniatureItem.KIND in ItemRoom.KINDS and _shelf_kinds().size() == 20
+			mini != null and MiniatureItem.KIND in ItemRoom.KINDS and _shelf_kinds().size() == 17
 			and mini.own_home and mini.state == Item.State.HOME and not ItemRoom.is_made(MiniatureItem.KIND)
 			and not (MiniatureItem.KIND in ItemRoom.PERSONAL_KINDS))
 	if mini == null:
@@ -41189,7 +40693,7 @@ func _test_the_hits_helper_loads_and_plays_struck_sounds() -> void:
 func _test_a_hit_here_takes_the_fast_path_and_a_bandmates_never() -> void:
 	var room := ItemRoom.new()
 	add_child(room)
-	var shaker := room.spawn(&"shaker", &"shaker", Transform3D(Basis.IDENTITY, Vector3(0.6, 0.8, -1.0))) as InstrumentItem
+	var bell := room.spawn(&"cowbell", &"cowbell", Transform3D(Basis.IDENTITY, Vector3(0.6, 0.8, -1.0))) as InstrumentItem
 	var calls: Array = []
 	var answer := [true]
 	InstrumentItem.fast_path = func(kind: StringName, take: int, gain: float, pan: float, speed: float) -> bool:
@@ -41198,63 +40702,63 @@ func _test_a_hit_here_takes_the_fast_path_and_a_bandmates_never() -> void:
 	InstrumentItem.fast_latency = func() -> float: return 0.0046
 	var through_godot := func(item: Node) -> Array:
 		return item.get_children().filter(func(n: Node) -> bool: return n is AudioStreamPlayer)
-	shaker.play(100)
+	bell.play(100)
 	check("a shake here goes on the fast path: its sound, its take, its level, from the middle (%s)" % [calls],
-			calls.size() == 1 and calls[0][0] == shaker.kind_of_hit(false) and calls[0][1] == shaker.sound_take()
+			calls.size() == 1 and calls[0][0] == bell.kind_of_hit(false) and calls[0][1] == bell.sound_take()
 			and is_equal_approx(calls[0][2], InstrumentItem.monitor_gain(100)) and calls[0][3] == 0.0
-			and is_equal_approx(calls[0][4], 1.0) and shaker.last_path == &"fast")
-	check("and is not played through Godot as well", through_godot.call(shaker).is_empty())
+			and is_equal_approx(calls[0][4], 1.0) and bell.last_path == &"fast")
+	check("and is not played through Godot as well", through_godot.call(bell).is_empty())
 	check("its level there is what MONITOR would have played it at (%.4f)" % InstrumentItem.monitor_gain(64),
 			is_equal_approx(InstrumentItem.monitor_gain(64), db_to_linear(InstrumentItem.level_db(64))))
-	shaker.play(100, false, &"", -1)
-	shaker.play(100, true, &"", 1)
+	bell.play(100, false, &"", -1)
+	bell.play(100, true, &"", 1)
 	check("a left hand's hit is panned left, a right hand's right (%s)" % [calls.slice(1)], calls.size() == 3
 			and is_equal_approx(calls[1][3], -InstrumentItem.HAND_PAN) and is_equal_approx(calls[2][3], InstrumentItem.HAND_PAN)
-			and calls[2][0] == shaker.kind_of_hit(true))
-	shaker.voice = 1
-	shaker.play(100)
+			and calls[2][0] == bell.kind_of_hit(true))
+	bell.voice = 1
+	bell.play(100)
 	check("a second copy's lower voice is played slower there, as through Godot (%.2f)" % calls[3][4],
 			is_equal_approx(calls[3][4], InstrumentItem.VOICE_PITCH[1]))
-	shaker.voice = 0
+	bell.voice = 0
 	answer[0] = false
-	shaker.play(90)
-	var mine := through_godot.call(shaker) as Array
+	bell.play(90)
+	var mine := through_godot.call(bell) as Array
 	check("where the fast path cannot take it, it is on MONITOR through Godot, as before", mine.size() == 1
 			and (mine[0] as AudioStreamPlayer).bus == AudioPorts.bus(AudioPorts.MONITOR)
 			and is_equal_approx((mine[0] as AudioStreamPlayer).volume_db, InstrumentItem.level_db(90))
-			and shaker.last_path == &"monitor")
+			and bell.last_path == &"monitor")
 	InstrumentItem.fast_path = Callable()
-	shaker.play(90)
-	check("and with none at all", through_godot.call(shaker).size() == 2 and shaker.last_path == &"monitor")
+	bell.play(90)
+	check("and with none at all", through_godot.call(bell).size() == 2 and bell.last_path == &"monitor")
 
 	# A bandmate's hit is placed in the room, and the fast path is never asked.
 	InstrumentItem.fast_path = func(kind: StringName, take: int, gain: float, pan: float, speed: float) -> bool:
 		calls.append([kind, take, gain, pan, speed])
 		return true
 	calls.clear()
-	shaker.heard(80, false, -1.0, 2)
-	var placed := shaker.get_children().filter(func(n: Node) -> bool: return n is AudioStreamPlayer3D)
+	bell.heard(80, false, -1.0, 2)
+	var placed := bell.get_children().filter(func(n: Node) -> bool: return n is AudioStreamPlayer3D)
 	check("a bandmate's hit never goes to the helper: it is heard from where it is", calls.is_empty()
-			and placed.size() >= 1 and through_godot.call(shaker).size() == 2)
+			and placed.size() >= 1 and through_godot.call(bell).size() == 2)
 
 	# Through a helper's own lines: a sound it holds is a `hit` line, one it has not loaded is MONITOR.
 	var keys := NativeKeys.new()
 	var said := OS.get_cache_dir().path_join("dawlings/tmp/ports/hits_said.txt")
 	DirAccess.make_dir_recursive_absolute(said.get_base_dir())
 	keys._io = FileAccess.open(said, FileAccess.WRITE)
-	var slot := Foley.hit_slot(shaker.kind_of_hit(false), 1)
+	var slot := Foley.hit_slot(bell.kind_of_hit(false), 1)
 	keys.hear("loaded %d 5000" % slot)
 	InstrumentItem.fast_path = keys.play_hit
-	shaker._take = 0
-	shaker.play(127, false, &"", 1)
-	var first := shaker.last_path
-	shaker.play(127)
+	bell._take = 0
+	bell.play(127, false, &"", 1)
+	var first := bell.last_path
+	bell.play(127)
 	keys._io.close()
 	keys._io = null
 	var lines := FileAccess.get_file_as_string(said)
 	check("on a helper that holds its sound it is that slot's line (%s), and one it has not loaded is MONITOR" % lines.strip_edges(),
 			first == &"fast" and lines == NativeKeys.hit_line(slot, InstrumentItem.monitor_gain(127), InstrumentItem.HAND_PAN, 1.0) + "\n"
-			and shaker.last_path == &"monitor")
+			and bell.last_path == &"monitor")
 	check("a hand's key says its side (%d %d %d %d)" % [Strike.side_of(&"/user/hand_tracker/left"), Strike.side_of(&"right_hand"),
 			Strike.side_of(&"left"), Strike.side_of(&"mouse")], Strike.side_of(&"/user/hand_tracker/left") == -1
 			and Strike.side_of(&"right_hand") == 1 and Strike.side_of(&"left") == -1 and Strike.side_of(&"mouse") == 0
@@ -41283,14 +40787,14 @@ func _test_a_hit_here_takes_the_fast_path_and_a_bandmates_never() -> void:
 	# What the card and the tag say.
 	check("the tag names the fast path and its figure (%s)" % InstrumentItem.path_tag(),
 			InstrumentItem.path_tag() == "FAST PATH · 5 ms")
-	check("and so does the card (%s; %s)" % [shaker.readout(), drum.readout()],
-			shaker.readout().begins_with("on the shelf  ·  ") and shaker.readout().ends_with("heard on the fast path, 5 ms")
+	check("and so does the card (%s; %s)" % [bell.readout(), drum.readout()],
+			bell.readout().begins_with("on the shelf  ·  ") and bell.readout().ends_with("heard on the fast path, 5 ms")
 			and drum.readout().contains("rim slap") and drum.readout().ends_with("heard on the fast path, 5 ms"))
 	InstrumentItem.fast_latency = func() -> float: return -1.0
 	var monitor_ms := roundi(AudioServer.get_output_latency() * 1000.0)
-	check("with none running it names MONITOR and Godot's figure (%s; %s)" % [InstrumentItem.path_tag(), shaker.readout()],
+	check("with none running it names MONITOR and Godot's figure (%s; %s)" % [InstrumentItem.path_tag(), bell.readout()],
 			InstrumentItem.path_tag() == "MONITOR · %d ms" % monitor_ms
-			and shaker.readout().ends_with("heard on MONITOR through the app, %d ms" % monitor_ms))
+			and bell.readout().ends_with("heard on MONITOR through the app, %d ms" % monitor_ms))
 	InstrumentItem.fast_latency = Callable()
 	check("and unset, too", InstrumentItem.path_tag().begins_with("MONITOR") and not InstrumentItem.on_fast_path())
 	InstrumentItem.hands_hint = true
@@ -42644,7 +42148,7 @@ func _test_plugging_the_venue_records_every_bar_onto_a_track() -> void:
 			and is_equal_approx((there[-1] as AudioStreamPlayer3D).pitch_scale, third.sound_pitch(tone)))
 	check("down a cable into a bandmate, a fixed instrument's notes are anyone's to send, a carried one's only its holder's",
 			Jacks.send_refusal({"venue": "player_2"}, VenueInstrument.SOURCE, 2, 3, 0, true) == ""
-			and Jacks.send_refusal({"shaker": "player_2"}, &"shaker", 2, 3, 0) != "")
+			and Jacks.send_refusal({"cowbell": "player_2"}, &"cowbell", 2, 3, 0) != "")
 	studio.queue_free()
 	await get_tree().process_frame
 	Session.start_solo()

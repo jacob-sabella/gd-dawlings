@@ -193,8 +193,8 @@ func finger_pinches() -> int:
 # --- shaking -------------------------------------------------------------------------------
 #
 # An instrument in the hand is shaken by moving the mouse: the hand follows the cursor's
-# movement a little way and springs back, so a wiggle of the mouse is a shake of the shaker, and
-# each stroke that stops is a hit (InstrumentItem). Only while an instrument (or the keytar) is
+# movement a little way and springs back, so a wiggle of the mouse is a shake of the instrument, and
+# each stroke that stops is a hit (InstrumentItem). Only while an instrument is
 # carried, while the fingers play (docs/spatial_loop.md slice 7), or while the cursor rests on
 # something that plays under it with no grab (a room string, `plays_under_cursor`; part two,
 # slice 15): a duck rides still while the cursor points at things. The wiggle is the desktop's
@@ -231,10 +231,10 @@ func tilt_angles() -> Vector2:
 	return tilt() * deg_to_rad(HandPose.TILT_MOST)
 
 
-## Whether the mouse's movement is a shake now: an instrument or the keytar carried, the fingers
+## Whether the mouse's movement is a shake now: an instrument carried, the fingers
 ## playing, or the cursor resting, ungrabbed, on something that plays under it.
 func wiggles() -> bool:
-	if carrying is InstrumentItem or carrying is KeytarItem or fingers_play:
+	if carrying is InstrumentItem or fingers_play:
 		return true
 	return held == null and hovered != null and is_instance_valid(hovered) and hovered.plays_under_cursor()
 
@@ -262,8 +262,7 @@ var alt_override := -1
 ## Where Alt's bend wheel stands (semitones, up positive).
 var _bend := 0.0
 ## The plain keys' own wobble: no tilt, only the Alt bend (`bend_wheel`), for a MIDI keyboard or
-## the computer's piano, whose notes no instrument here plays. With the keytar in hand its plain
-## keys are the keytar's, which bends them itself (KeytarItem).
+## the computer's piano, whose notes no instrument here plays.
 var _keys_wobble: Wobble = null
 
 
@@ -299,7 +298,7 @@ func _bend_plain_keys(delta: float) -> void:
 		_keys_wobble = Wobble.new(keys, [&""], self)
 		_keys_wobble.tilts = false
 	_keys_wobble.keys = keys
-	_keys_wobble.sources = [] if keys.keytar else [&""]
+	_keys_wobble.sources = [&""]
 	_keys_wobble.step(delta)
 
 

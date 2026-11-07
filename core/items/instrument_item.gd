@@ -1,15 +1,15 @@
 class_name InstrumentItem
 extends Item
 
-## Something you play by shaking it: a shaker, a tambourine (docs/items_loop.md).
+## Something you play by shaking it: a cowbell, a woodblock, a drum pad (docs/items_loop.md).
 ##
 ## A hit is a stroke that stops. The hand moves the instrument one way and brings it up short --
-## or turns it round -- and the beads or the jingles carry on and hit: so the instrument watches
+## or turns it round -- and the instrument's own striker carries on and hits: so the instrument watches
 ## where the hand that has it shakes it from (`Interactor.shake_point`), keeps the fastest it went
 ## this stroke, and plays when the stroke has lost most of that speed or gone back the other
 ## way. How hard is how fast the stroke was. In a headset that is the controller moving; on a
 ## desktop it is the mouse, which wiggles the hand that holds it (MouseInteractor). A click is
-## one firm hit, the way a tambourine is struck with the heel of a hand.
+## one firm hit, the way a pad is struck with the heel of a hand.
 ##
 ## A hit played here is heard at once, by the player, and is `played` for the studio to tell
 ## everyone and to record. Where the studio's hits helper runs (`fast_path`, NativeKeys:
@@ -27,7 +27,7 @@ extends Item
 ## `song`). Whoever hears it elsewhere pitches it by that same position (`heard`), so a hit played
 ## just before a bar line rings the old chord's tone everywhere, however late it arrives.
 ##
-## Hand percussion (`held_in_fist`: the shaker, the tambourine) is held in a closed bare hand as
+## Hand percussion (`held_in_fist`: none is today) is held in a closed bare hand as
 ## well as a pinch or a controller (XRInteractor.step_hold, docs/spatial_loop.md slice 17), round
 ## its `grip_point`, and its strokes are read off the palm then. Its recorded hits are snapped
 ## gently to the beat (HitRecorder.snapped_at): the take's note moves, never the sound. Its card
@@ -165,7 +165,7 @@ func _ready() -> void:
 
 
 ## Whether a closed bare hand holds it (XRInteractor.step_hold), not only a pinch: hand
-## percussion, the shaker and the tambourine. A bell is held by its handle, by a pinch.
+## percussion. A bell is held by its handle, by a pinch.
 func held_in_fist() -> bool:
 	return false
 
@@ -430,7 +430,7 @@ func _hint(loose: String) -> String:
 
 ## Override: which of Foley's sounds (Foley.take_of) a hit rings, shaken or `struck`.
 func sound_kind(_struck: bool) -> StringName:
-	return &"shaker"
+	return &"click"
 
 
 ## A click rings it struck (`use`): the sampler (Sampler) catches that sound.

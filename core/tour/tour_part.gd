@@ -12,8 +12,8 @@ extends RefCounted
 ## (`channel`/`pitches`), the way the room can only ever hold one of each.
 
 var id: StringName
-## The Item.id a player has to be holding to make these notes: &"shaker", &"tambourine", or
-## &"keytar". Read by TourParts.draw (never two parts for the same instrument at once) and by
+## The Item.id a player has to be holding to make these notes: &"cowbell", &"claves2"...
+## a spilled instance's id. Read by TourParts.draw (never two parts for the same instrument at once) and by
 ## the HUD to say which strip a holder is sent to; not read by the judge itself, which only
 ## looks at the notes' channel and pitch.
 var instrument: StringName
@@ -26,10 +26,10 @@ const ITEM_CHANNELS: Array[int] = [9, 10]
 
 ## A note's MIDI channel, 0-based as HitRecorder/GuestMidi write it: 9 is the hand percussion's
 ## channel (HitRecorder.CHANNEL, not referenced directly -- Tour code knows nothing of
-## core/items/). -1 means any channel but the items' (ITEM_CHANNELS): a keytar's keys, wherever
+## core/items/). -1 means any channel but the items' (ITEM_CHANNELS): keys, wherever
 ## they come from.
 var channel: int = 9
-## Which General MIDI pitches count; empty means any pitch counts (a keytar's stabs, whose chord
+## Which General MIDI pitches count; empty means any pitch counts (a keys part's stabs, whose chord
 ## is the player's call).
 var pitches: PackedInt32Array = PackedInt32Array()
 ## Bar positions in beats this part is judged against (0 = the one); empty means use `grid`.

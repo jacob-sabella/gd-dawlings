@@ -13,7 +13,7 @@ extends Node
 ## Every note also goes to everyone as it is played (Session.send_note), the host's keys and
 ## guests' alike, for whoever has a plug in this player's keys (TheirKeys), stamped with the song
 ## position it was played to (`song`), for whoever has a plug in their monitor (TheirMonitor),
-## and with what played it (`source`: the keytar, the fingertips...; `instruments`).
+## and with what played it (`source`: the fingertips...; `instruments`).
 ##
 ## Beside the notes go the controls (`control`): the pitch wheel, the mod wheel and expression,
 ## on a channel of their own that may drop one (Session.send_control). A player has one wheel, as
@@ -39,7 +39,7 @@ extends Node
 ## strings before the player walked up to the rack, the keys after they left it while it rolled on) is.
 
 signal changed()
-## A key down or up, wherever it was played from: for the keytar in this player's hands to show.
+## A key down or up, wherever it was played from: for the modular's keys to show.
 signal key(pitch: int, down: bool)
 ## A note on or off (Session.Note's ON, OFF) as it is sent to everyone, with the song position and
 ## source it went with: for this player's keys' own jack (`keys:P`, Jacks), which passes it on.
@@ -75,7 +75,7 @@ var record_with_host := true:
 			_commit()
 		record_with_host = v
 		changed.emit()
-## The instruments in this player's reach that play their keys: {name: true}, from `&"keytar"`,
+## The instruments in this player's reach that play their keys: {name: true}, from
 ## `&"fingertips"`, `&"cable"` and `&"wheel"`. While any is here, their keys are
 ## played, sent and taken down whatever this machine is, a host or alone too, and a take with no
 ## track chosen goes on the armed one (HitRecorder.armed_track). Each instrument puts in and takes
@@ -86,12 +86,6 @@ var instruments := {}
 ## Where hardware MIDI notes go first while this player stands at the sampling station
 ## (PadDeck.midi): called (pitch, velocity, on) -> whether the pads took the note. Unset otherwise.
 var pad_sink := Callable()
-## A keytar in this player's hands (KeytarItem): `&"keytar"` in `instruments`.
-var keytar: bool:
-	get:
-		return instruments.has(&"keytar")
-	set(v):
-		reach(&"keytar", v)
 ## Whether a playing hand's tilt bends its notes and its shake wobbles them (Wobble; "Tilt bends"
 ## in the session panel's keys box). On by default; off, for a player who wants a steady pitch
 ## from a hand that moves. A bend wheel held on purpose (the desktop's Alt-drag) still bends.
@@ -558,7 +552,7 @@ func _restore_hardware(at: float) -> void:
 
 
 ## What owns this player's wheel: the source of their newest note still down (`_down`), or null
-## with nothing down, when the wheel is anyone's to move. The keytar's neck and a
+## with nothing down, when the wheel is anyone's to move. A hand's tilt and a
 ## hardware wheel never fight over it, because only one of them is ever its owner.
 func wheel_source() -> Variant:
 	return _down.newest()
@@ -853,18 +847,17 @@ func _commit() -> void:
 	changed.emit()
 
 
-## `source` played into the running take: kept, to name the take by. Plain keys played with
-## the keytar in hand are the keytar's, as they show on it.
+## `source` played into the running take: kept, to name the take by. Plain keys are `keys`.
 func _take_played(source: StringName) -> void:
 	var played := source
 	if played == &"":
-		played = &"keytar" if keytar else &"keys"
+		played = &"keys"
 	if played not in _take_sources:
 		_take_sources.append(played)
 
 
-## What a take is called after what played in it (`_take_played`): `keytar`,
-## `keytar+fingertips`, and `take` for plain keys alone, as every take was before there were instruments.
+## What a take is called after what played in it (`_take_played`): `fingertips`,
+## `cable+fingertips`, and `take` for plain keys alone, as every take was before there were instruments.
 static func take_name(played: Array) -> String:
 	if played.is_empty() or played == [&"keys"]:
 		return "take"

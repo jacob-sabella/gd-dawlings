@@ -5,7 +5,7 @@ extends Node3D
 ## stand at the drum riser's front corner. Slap the pad to loop. Recording starts at the next bar,
 ## after that bar's count shown as dots on its screen, and lasts LENGTH bars (1, 2, 4 or 8, its
 ## LENGTH key's), or the loop range's bars where a loop is set. It takes everything the player who
-## slapped it plays: their keys from every source (GuestMidi.sends, the keytar, the
+## slapped it plays: their keys from every source (GuestMidi.sends, the
 ## fingertips, a cable, a hardware keyboard) and their hits (the studio's `hit`, every instrument
 ## they shake or strike). With the transport stopped a slap starts it (`answer`: transport_play) from
 ## the start of the bar the playhead is in, and that first bar played is the count. Slap again while

@@ -41,7 +41,7 @@ extends Node
 ## holds again once the host's room says where the jack goes (`answered`).
 ##
 ## A jack into the player who is playing its source is no cable (`cable_into`): somebody else
-## plugged a shaker at home into Ada, and then Ada played it. Its notes go
+## plugged a cowbell at home into Ada, and then Ada played it. Its notes go
 ## where an unplugged source's would, onto her keys and into her take, not down a cable back into
 ## herself, which the host would refuse.
 ##
@@ -638,7 +638,7 @@ static func sink_name(sink: StringName) -> String:
 	return "unplugged"
 
 
-## What a source is called in a notice: `shaker`, `cowbell 2`, `your keys`,
+## What a source is called in a notice: `cowbell`, `cowbell 2`, `your keys`,
 ## `Ada's chord hand`.
 static func source_name(source: StringName, item: Item = null) -> String:
 	if item is InstrumentItem:

@@ -687,38 +687,23 @@ func _on_item_used(id: StringName, down: bool, from: int, take := -1) -> void:
 		item.heard_use(down, take)
 
 
-## Somebody's keys: if the keytar is in their hands, it plays them, out of the keytar. Only
-## what their keys play as keys (`source` `&"keytar"`, or plain keys): a note from another
-## instrument of theirs is heard from that instrument. The modular's is routed by its source alone, never by who holds anything.
+## Somebody's note: the modular's is routed by its source alone, never by who holds anything.
+## Their keys' own are played where their keys are (TheirKeys, TheirMonitor).
 func _on_note_played(kind: int, pitch: int, velocity: int, from: int, _song: float,
 		source := &"") -> void:
 	if source == Modular.SOURCE:
 		if modular_heard.is_valid() and from != Session.local_peer_id:
 			modular_heard.call(from, kind, pitch, velocity)
 		return
-	if source != &"" and source != &"keytar":
-		return
-	if items == null or _item_holders.get(&"keytar", 0) != from:
-		return
-	var keytar := items.items.get(&"keytar") as KeytarItem
-	if keytar != null:
-		keytar.heard(kind, pitch, velocity)
 
 
-## Somebody's control (Session.control_played): the modular's goes to the wall, and
-## their keys' to the keytar in their hands. Their keys' own are played where their keys are
-## (TheirKeys, TheirMonitor) too.
+## Somebody's control (Session.control_played): the modular's goes to the wall. Their keys' own
+## are played where their keys are (TheirKeys, TheirMonitor).
 func _on_control_played(kind: int, value: int, from: int, _song: float, source := &"") -> void:
 	if source == Modular.SOURCE:
 		if modular_control_heard.is_valid() and from != Session.local_peer_id:
 			modular_control_heard.call(from, kind, value)
 		return
-	# Their keytar's, out of the keytar in their hands, as its notes are (slice 15's bend tag).
-	if (source == &"" or source == &"keytar") and items != null and from != Session.local_peer_id \
-			and _item_holders.get(&"keytar", 0) == from:
-		var keytar := items.items.get(&"keytar") as KeytarItem
-		if keytar != null:
-			keytar.heard_control(kind, value)
 
 
 ## Somebody else shook the instrument in their hand: ours plays the hit, in their glove. A pitched
@@ -968,7 +953,7 @@ void fragment() {
 			# Was no_depth_test: floated the name and the "HOLDING ..." caption in front of
 			# anything nearer the camera too, not just whatever was actually behind the ghost's
 			# head -- a screenshot through the timeline screen (SCREEN mode, right in front of the
-			# seat) showed "Lin" and "HOLDING KEYTAR" drawn straight over it. The ordinary depth
+			# seat) showed "Lin" and "HOLDING DUCK" drawn straight over it. The ordinary depth
 			# test is what a billboard a few centimetres above a head wants: nothing stands
 			# between an unobstructed view and the label it would not also stand between for the
 			# head itself.

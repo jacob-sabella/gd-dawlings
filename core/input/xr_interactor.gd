@@ -89,7 +89,7 @@ static func steadied(was: Transform3D, raw: Transform3D, delta: float) -> Transf
 
 
 func is_pressing() -> bool:
-	# A hand closed round a shaker is not pinching anything, whatever the runtime reads off a fist.
+	# A hand closed round hand percussion is not pinching anything, whatever the runtime reads off a fist.
 	if controller == null or fingers_play or fist_holding:
 		return false
 	return controller.is_button_pressed(press_action)
@@ -428,7 +428,7 @@ func hand_velocity() -> Vector3:
 
 # --- a closed bare hand round hand percussion (docs/spatial_loop.md slice 17) ----------------
 #
-# A tracked bare hand takes hold of a shaker or a tambourine (InstrumentItem.held_in_fist) by
+# A tracked bare hand takes hold of hand percussion (InstrumentItem.held_in_fist) by
 # closing round it, as a hand holds one: three fingers past HandPose.HOLD_CURL with the middle of
 # the palm within HandPose.GRIP_REACH of its grip, not a pinch. It keeps it while it is closed, or
 # half closed, and lets go only once the hand has been open (HandPose.is_open) for LET_GO_AFTER
@@ -447,7 +447,7 @@ const LET_GO_AFTER := 0.1
 ## guessed joints is not out of tracking.
 const LOST_HOLD := 0.4
 ## How much further a held instrument's end swings than the middle of the palm does
-## (`shake_lever`): a wrist's shake turns the hand, and the shaker's far end goes further.
+## (`shake_lever`): a wrist's shake turns the hand, and the instrument's far end goes further.
 const PALM_LEVER := 1.6
 ## Where a closed hand carries what it holds: this far into the fist from the middle of the palm (m).
 const FIST_DEPTH := 0.02

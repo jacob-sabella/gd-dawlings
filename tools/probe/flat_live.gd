@@ -206,7 +206,7 @@ func _run() -> void:
 
 	# --- notes --------------------------------------------------------------------------------
 	# The rig's session is all audio: a clip of notes is put in Reaper first, as a take recorded
-	# on the keytar would be, for the piano roll to open.
+	# on the keys would be, for the piano roll to open.
 	var midi := Vector2i(-1, -1)
 	var midi_track := mini(10, s.tracks.size())
 	DAW.insert_midi_take(midi_track, 100.0, 104.0, [[100.0, 100.5, 60, 90, 0], [101.0, 101.5, 64, 90, 0], [102.0, 102.5, 67, 90, 0]], "FLAT MIDI")

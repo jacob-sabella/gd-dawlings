@@ -35,7 +35,7 @@ extends ControlAffordance
 ## Beside a player's own keys' socket on the wrist they wear one more (`into_me`): not a source's
 ## but theirs as a sink, for a headset's hand to do what Shift+P with an empty hand does on a
 ## desktop. It is there only while something goes into them, its card says what (`<- GRACE'S KEYS,
-## SHAKER`), and a press takes all of it out (Jacks.unplug_mine). It is how a bandmate's keys,
+## COWBELL`), and a press takes all of it out (Jacks.unplug_mine). It is how a bandmate's keys,
 ## whose own socket is on the bandmate's wrist and not here, come out of this player.
 
 const SOCKETS := &"jack_sockets"
@@ -217,7 +217,7 @@ func show_ins(sources: Array[StringName]) -> void:
 	_tag.text = ins_text(ins)
 
 
-## What the tag over the socket for what goes into this player says: `<- GRACE'S KEYS, SHAKER`.
+## What the tag over the socket for what goes into this player says: `<- GRACE'S KEYS, COWBELL`.
 func ins_text(sources: Array[StringName]) -> String:
 	var by_id := {}
 	if is_inside_tree():

@@ -74,7 +74,7 @@ func centre_height() -> float:
 	return 0.02
 
 
-## Held slanted like the tambourine, the pad face up where a beater (or the hand itself) finds
+## Held slanted, the pad face up where a beater (or the hand itself) finds
 ## it.
 func held_pose() -> Transform3D:
 	var turn := Basis(Vector3.UP, 0.4) * Basis(Vector3.FORWARD, 0.3) * Basis(Vector3.RIGHT, 0.2)

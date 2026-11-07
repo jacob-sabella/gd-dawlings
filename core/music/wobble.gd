@@ -4,7 +4,7 @@ extends RefCounted
 ## Bend and wobble by tilting (docs/spatial_loop.md part two, slice 15; idea #37): one playing
 ## hand's roll, turned into the player's pitch wheel while a note it plays sounds.
 ##
-## One per playing hand on each instrument that bends: the keytar's neck hand, the room string's plucking
+## One per playing hand on each instrument that bends: the room string's plucking
 ## hand, the fingertips' own hand, and on a desktop the mouse over the plain keys (MouseInteractor).
 ## Each physics frame `step` reads its hand's `tilt_angles()` (a bare hand's palm, a controller's
 ## aim, the mouse's wiggle), and while one of its `sources` owns the player's wheel
@@ -120,7 +120,7 @@ static func semitones_of(value: int) -> float:
 	return value / 8192.0 * BEND_MOST
 
 
-## The bend in words, for what shows it (the keytar's tag, the glove's letters): `+1.3`, or ""
+## The bend in words, for what shows it (the glove's letters): `+1.3`, or ""
 ## for one too small to see.
 static func words(st: float) -> String:
 	return "%+.1f" % st if absf(st) >= 0.05 else ""

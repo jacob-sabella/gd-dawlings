@@ -29,8 +29,7 @@ var _walk_mirror := 0.0
 ## personal kind (`ItemRoom.PERSONAL_KINDS`) this takes a copy of your own, as a real grab would,
 ## rather than holding the shelf's dispenser.
 ## `--carry tablet:mix:keys` puts its plugs A and B in those SEND sockets (`track_5`: a strip's);
-## `:home` after them puts it back on its shelf. `--carry keytar:chord` holds a C major chord down
-## on it (play these into the null sink: it sounds). `--carry chips:t2@0.5` does a fidget's
+## `:home` after them puts it back on its shelf. `--carry chips:t2@0.5` does a fidget's
 ## tricks before trick 2 and stops trick 2 half way. `--carry rcplane:fly:cut@300` flies the radio
 ## plane and cuts its motor on frame 300; `--carry rcplane:fly@400` takes off on frame 400.
 var _carry := ""
@@ -39,7 +38,7 @@ var _carry := ""
 ## this?" begun fourteen frames before the shot (`trace:8:30`, thirty), so it is caught mid-trace.
 ## `look:6`: at frame 12 look to solo held over track 6 (Studio.look_solo), as U held over it does.
 var _signal: PackedStringArray = []
-## `--pockets duck,ball,keytar`: those items picked up and put in pockets 1, 2 and 3 in turn, from
+## `--pockets duck,ball,cards`: those items picked up and put in pockets 1, 2 and 3 in turn, from
 ## frame 9, before anything `--carry` puts in the hand.
 var _pockets: PackedStringArray = []
 ## `--visitor 0.6,-0.4,3.0`: another player, Lin (peer 7), standing there (studio x, z) facing
@@ -53,7 +52,7 @@ var _point_at := Vector3.ZERO
 ## `--note 36:try_a_fill_here`: a sticky note (a NOTE marker, PointAndMark.add_note) at that song
 ## time (an underscore a space, for a shell argument), from frame 6, and the timeline's window put round it.
 var _note := ""
-## `--plug shaker:player_7`: that source's jack stepped into that sink at frame 10, asked as a hand
+## `--plug djembe:player_7`: that source's jack stepped into that sink at frame 10, asked as a hand
 ## here asks (Studio._on_plug_asked; docs/spatial_loop.md slices 5 and 6). With --visitor, a
 ## jack into `player_7` runs its cable to Lin's ghost.
 var _plug := ""
@@ -82,7 +81,7 @@ var _test_drum := false
 ## part two, slice 23).
 var _cassettes := 0
 ## `--samples 2`: at frame 8 the sampler's REC pressed and something carried used that many times
-## (the duck squeezed, the tambourine struck, the shaker struck), each a sample cassette on the rack,
+## (the duck squeezed, a yo-yo tricked, the cards shuffled), each a sample cassette on the rack,
 ## REC pressed once more so it is lit and listening, and the sampler gone to unless SHOT_CAM frames
 ## it (docs/spatial_loop.md part two, slice 26). Its WAVs go to user://shot_samples, never the project's media.
 var _samples := 0
@@ -118,14 +117,6 @@ var _posed_gestures: HandGestures
 var _posed_label: Label3D
 var _posed_tracker: XRHandTracker
 var _posed_place: Array = []
-## `--fist-shake`: with `--posed-hand`, the hand put round the studio's shaker instead, palm down
-## over its grip, open at first and closed round it at frame FIST_FRAME, so a bare hand's closed-hand
-## hold takes it (XRInteractor.step_hold, read off the posed hand); then lifted FIST_LIFT and swung
-## across at 4 Hz, so it plays (docs/spatial_loop.md slice 17). Its yaw and roll still apply.
-const FIST_FRAME := 8
-const FIST_LIFT := 0.22
-var _fist_shake := false
-var _fist_hand: XRInteractor
 var _posed_curls: Array = [0.15, 0.05, 0.1, 0.35, 0.5]
 ## `--on-air 7`: that player ON AIR from frame 8, so their pack has its MONITOR socket
 ## (`--carry tablet:monitor_7`); `--on-air 1` is the one at this machine.
@@ -372,8 +363,6 @@ func _ready() -> void:
 				if i + 1 < args.size(): _help_page = args[i + 1]
 			"--posed-hand":
 				if i + 1 < args.size(): _posed_hand = Array(args[i + 1].split(",")).map(func(v): return float(v))
-			"--fist-shake":
-				_fist_shake = true
 			"--rope":
 				if i + 1 < args.size(): _rope = Array(args[i + 1].split(",")).map(func(v): return float(v))
 			"--bead":
@@ -506,11 +495,6 @@ func _pose_a_hand() -> void:
 	var roll: float = _posed_hand[4] if _posed_hand.size() > 4 else 0.0
 	var mask := int(_posed_hand[5]) if _posed_hand.size() > 5 else 0
 	var tracker_name := &"/user/hand_tracker/shot"
-	var shaker := (studio as Studio).items.items.get(&"shaker") as ShakerItem if _fist_shake else null
-	if shaker != null:
-		at = shaker.grip_point() + Vector3(0, 0.03, 0)
-		_posed_curls = [0.0, 0.0, 0.0, 0.0, 0.0]
-		print("SHOT_SHAKER grip ", shaker.grip_point())
 	var hand := XRHandTracker.new()
 	hand.name = tracker_name
 	hand.hand = XRPositionalTracker.TRACKER_HAND_RIGHT
@@ -539,14 +523,6 @@ func _pose_a_hand() -> void:
 	_posed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_posed_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	studio.add_child(_posed_label)
-	if shaker != null:
-		# Up close to a shelf: smaller lettering, so the readings sit beside the hand.
-		_posed_label.pixel_size = 0.00028
-		# A bare hand's pinch ray and closed-hand hold, reading the posed hand, as the rig makes one.
-		_fist_hand = XRInteractor.new()
-		_fist_hand.name = "PosedFist"
-		_fist_hand.gestures = _posed_gestures
-		studio.add_child(_fist_hand)
 
 
 ## The posed hand's joints, rolled `roll` degrees and moved `offset`, onto its tracker, every joint
@@ -712,7 +688,7 @@ func _make_samples() -> void:
 		DirAccess.remove_absolute(dir.path_join(name))
 	studio.sampler.media_path = func(name: String) -> String: return dir.path_join(name)
 	var hand := studio.get_node_or_null("MouseHand") as MouseInteractor
-	var kinds: Array[StringName] = [&"duck", &"tambourine", &"shaker"]
+	var kinds: Array[StringName] = [&"duck", &"yoyo", &"cards"]
 	for n in _samples:
 		var item: Item = studio.items.items.get(kinds[n % kinds.size()])
 		if item == null or hand == null:
@@ -976,16 +952,8 @@ func _process(_delta: float) -> void:
 
 	if _frames == 5 and _posed_hand.size() >= 3:
 		_pose_a_hand()
-	if _fist_hand != null and is_instance_valid(_fist_hand) and _frames >= FIST_FRAME:
-		# Closed round it, then up and shaken across at 4 Hz.
-		_posed_curls = [0.5, 0.8, 0.8, 0.8, 0.8]
-		var lifted := clampf((_frames - FIST_FRAME - 2) / 6.0, 0.0, 1.0) * FIST_LIFT
-		var swing := 0.03 * sin(TAU * 4.0 * Time.get_ticks_msec() / 1000.0) if _frames > FIST_FRAME + 8 else 0.0
-		_tip_posed_hand(_posed_hand[4] if _posed_hand.size() > 4 else 0.0, Vector3(swing, lifted, 0))
 	if _posed_gestures != null and is_instance_valid(_posed_gestures):
 		_posed_label.text = _posed_gestures.describe()
-		if _fist_hand != null and is_instance_valid(_fist_hand) and _fist_hand.fist_holding:
-			_posed_label.text += "\nHOLDING %s, CLOSED HAND" % (_fist_hand.carrying as Item).item_title()
 		if _posed_gestures.tracked:
 			_posed_label.global_position = _posed_gestures.joints[HandPose.PALM] + Vector3(0, 0.16, 0)
 
@@ -1120,11 +1088,6 @@ func _process(_delta: float) -> void:
 			if what.has("home"):
 				hand.lose_carrying()
 				item.snap_home()
-
-	# `--carry keytar:chord`: C, E and G held down on it, once it has been in the hand a frame or two.
-	if _frames == 13 and _carry.split(":").has("chord") and Session.guest_midi != null:
-		for pitch in [60, 64, 67]:
-			Session.guest_midi.note_on(pitch, 90)
 
 	# `--rc-debug`: where the radio plane is and how it flies, on this machine, every 30 frames --
 	# for a guest watching a host fly it.

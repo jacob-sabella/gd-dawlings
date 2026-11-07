@@ -203,10 +203,6 @@ var pads: SurfacePads
 ## chord hand's (`chord:P`, MY CHORDS, part two slice 33), on the chord hand: the left, or for a
 ## left-handed player the right; P in the chord layer on a desktop.
 var wrist_jacks: Array[JackSocket] = []
-## The computer keyboard as the keytar's keys, while it is in this player's hands (KeytarItem).
-var keytar_keys: KeyCatcher
-## Whether the keytar is in this player's hands, as last seen: for GuestMidi to play it.
-var _keytar_mine := false
 ## The desktop's fingertips' keys, J K L ; (docs/spatial_loop.md slice 8): while it has the
 ## keyboard the mouse's fingers play notes and the mouse grabs nothing. T gives it the keys.
 var fingertip_keys: KeyCatcher
@@ -4003,8 +3999,7 @@ func _item_homes() -> Dictionary:
 	if venue == null:
 		return _kit_homes({})
 	var out := {&"headphones": venue.headphones_spot(), &"glasses": venue.glasses_spot(), &"tablet": venue.tablet_spot(),
-			&"shaker": venue.shaker_spot(), &"tambourine": venue.tambourine_spot(),
-			&"keytar": venue.keytar_spot(), &"chips": venue.chips_spot(), &"cards": venue.cards_spot(),
+			&"chips": venue.chips_spot(), &"cards": venue.cards_spot(),
 			&"cradle": venue.cradle_spot(), &"yoyo": venue.yoyo_spot(), &"toy": venue.toy_spot(),
 			&"rcplane": venue.rcplane_spot()}
 	for n in 3:
@@ -4167,21 +4162,7 @@ func _build_items() -> void:
 	jacks.show_all()
 	items.child_exiting_tree.connect(_on_item_leaving)
 	items.played.connect(_on_item_played)
-	keytar_keys = KeyCatcher.new()
-	keytar_keys.name = "KeytarKeys"
-	add_child(keytar_keys)
-	# The keytar's piano plays the player's keys as the keytar (GuestMidi.instruments).
-	keytar_keys.note_on.connect(func(pitch: int, velocity: int) -> void:
-		if Session.guest_midi != null:
-			Session.guest_midi.note_on(pitch, velocity, 0, 0.0, false, &"keytar"))
-	keytar_keys.note_off.connect(func(pitch: int) -> void:
-		if Session.guest_midi != null:
-			Session.guest_midi.note_off(pitch, 0, 0.0, false, &"keytar"))
-	var keytar := items.items.get(&"keytar") as KeytarItem
-	if keytar != null:
-		keytar.wants_keys.connect(func() -> void: _keytar_play(true))
 	if Session.guest_midi != null:
-		Session.guest_midi.key.connect(_on_key_played)
 		# Everything this player's keys send, from every source, into their loop while they loop.
 		Session.guest_midi.sends.connect(_on_keys_sent)
 	Session.participant_left.connect(_on_looper_player_left)
@@ -6351,39 +6332,6 @@ func _on_patch_asked(receiver: int, socket: StringName) -> void:
 				PersonalMix.place_of(socket), "" if _heard_phones else " when you put them on", late])
 
 
-## Whether the keytar is in this player's hands now, and if that has changed, its keys given or
-## taken back: GuestMidi plays it, and on a desktop the computer keyboard is its piano.
-func _follow_keytar() -> void:
-	var keytar := items.items.get(&"keytar") as KeytarItem if items != null else null
-	# In the hand: not one slung across your back in a pocket.
-	var mine := keytar != null and keytar.in_hand()
-	if mine == _keytar_mine:
-		return
-	_keytar_mine = mine
-	if Session.guest_midi != null:
-		Session.guest_midi.keytar = mine
-	if keytar != null and not mine:
-		keytar.release_all()
-	_keytar_play(mine and medium == Presentation.Medium.SCREEN)
-
-
-## The computer keyboard as the keytar's piano, on or off, and said so the first time.
-func _keytar_play(on: bool) -> void:
-	if keytar_keys == null or on == keytar_keys.is_active():
-		return
-	keytar_keys.set_active(on)
-	if on:
-		Session.notice.emit("Keytar: A to ' play from %s, Z and X move the octave, the arrows walk. Alt with the mouse moving up or down bends. Esc gives the keys back; click the keytar to take them again."
-				% keytar_keys.octave_name())
-
-
-## A key played on this player's keys: shown on the keytar, while it is theirs.
-func _on_key_played(pitch: int, down: bool) -> void:
-	var keytar := items.items.get(&"keytar") as KeytarItem if items != null else null
-	if keytar != null and _keytar_mine:
-		keytar.press(pitch, down)
-
-
 ## An instrument played by a hand here: into the take, and, shaken, out to everyone else. A
 ## click on percussion is out already, as a use; a pitched item's click is sent as a hit too,
 ## since its ring is all a use of it is, and only a hit carries the song position (`at`) that
@@ -6482,7 +6430,7 @@ func _plug_refusal(source: StringName, sink: StringName, from: int, here := fals
 
 
 ## The host tells whoever a jack now goes into, or no longer does, who plugged what: a bandmate's
-## shaker playing your keys is not a thing to find out by surprise. Not the one who did it.
+## cowbell playing your keys is not a thing to find out by surprise. Not the one who did it.
 func _tell_plugged(source: StringName, was: StringName, sink: StringName, by: int) -> void:
 	var item: Item = items.source_item(source) if items != null else null
 	var what := "the %s" % Jacks.source_name(source, item) if Jack.keys_player(source) == 0 \
@@ -6907,7 +6855,7 @@ const MOVES_YOU := [KEY_F, KEY_I, KEY_V, KEY_N]
 
 
 ## Whether `keycode` is one that would move you while a piano has the keyboard (KeyCatcher: the
-## modular's PLAY, the keytar, the fingertips): held back, so a stray I in the middle of a phrase
+## modular's PLAY, the fingertips): held back, so a stray I in the middle of a phrase
 ## does not carry you off to another instrument with the keys still playing this one. Said, so the
 ## way on (Esc first) is not a guess.
 func _held_while_playing(keycode: int) -> bool:
@@ -7130,7 +7078,6 @@ func _process(delta: float) -> void:
 	_follow_look_solo(delta)
 	_follow_lean()
 	_follow_ear()
-	_follow_keytar()
 	_follow_wheel()
 	_modular_owed += get_process_delta_time()
 	if _modular_owed >= 1.0 / 30.0 - 0.001:

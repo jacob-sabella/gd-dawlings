@@ -3,6 +3,11 @@
 What is actually finished, what is scaffolded, and what has not been started. Kept honest
 because a scaffold that reads as a finished project wastes the next person's afternoon.
 
+> **Removed 2026-11-06:** the keytar, the shaker and the tambourine, and with them Tour's room
+> instruments (`TourParts.ROOM` is now empty: every part is held on an instrument the case spilled,
+> and the first brief spills one a player), the tamb_/shaker_/keys_ parts and `GuestMidi.keytar`.
+> Entries below about them are history, or notes on a path that is gone.
+
 ## Working, verified
 
 - **Guest audio takes.** A guest's microphone records onto the host's track, placed by the song
@@ -800,7 +805,7 @@ gloriously wrong and you survive anyway.
   one that can ever take one; who holds a part is HUD/run state, not anything on the lane, so a
   part is told apart from another by its instrument's channel and pitch (TourPart, TourParts,
   the catalogue in core/tour/tour_parts.gd: tamb_backbeat/tamb_four/tamb_last, shaker_eighths/
-  shaker_offbeats, keys_one/keys_one_three). Judged by a new TourMeasure.Rhythm, on-grid vs. off
+  shaker_offbeats, keys_one/keys_one_three -- all removed 2026-11-06 with their instruments). Judged by a new TourMeasure.Rhythm, on-grid vs. off
   against each part's own beats/grid and window, counted rather than averaged so flailing fails a
   `clean` ratio rather than passing by volume. One instrument of each kind exists in the room
   (shaker, tambourine, keytar), so INSTRUMENTS=3 caps a brief at three note-making parts no
@@ -840,11 +845,6 @@ gloriously wrong and you survive anyway.
   notes onto Stage at B.B.00" is right for an ordinary take, but with `roll_every` ticking a part
   every bar it was a notice a bar per player playing one; held back while `Session.tour` is
   non-empty, the HUD's part lines being the word on it.
-- **The keys part without a keytar.** `keys_one`/`keys_one_three` are judged on channel, not on
-  who is holding what, so they will take notes from a host's computer keyboard too, but nothing
-  turns those keys into the keytar's input unless the item is actually in hand (KeyCatcher wires
-  the keytar's own keys). Worth a path that lets the host (or anyone without a keytar to hand)
-  take a keys part from the computer keyboard directly.
 - **A sing part.** The mic's take is audio, not notes -- no judge for it headless, and opening a
   mic in the test suite is off-limits -- so a vocal double stays mixed only, never played. A part
   judged on an audio take's presence/level on Vox Dbl is the natural next one, once that is safe
@@ -899,9 +899,6 @@ gloriously wrong and you survive anyway.
   a brief whose song fails to load mid-run nulls the run without `run_ended`, which would leave
   the host's spilled items in the room until the next run ends -- the pre-existing failure path,
   one `_end_run` would also count as a loss.
-- **A second tambourine/shaker from the case.** The room's own three instruments get no second
-  voice today -- only the three spill kinds do. A cowbell-shaped curse spill could instead hand
-  out "the room's SECOND shaker", voiced the same way, once the band is big enough to want one.
 - **Chaos: a marked instrument's holder leaves mid-bar.** `Tour._on_participant_left` clears
   `run.instrument_bound` and `scenes/studio.gd`'s own handler clears the real item's `bound_to`,
   but nothing currently re-offers it as a part if it was already assigned and dropped -- it

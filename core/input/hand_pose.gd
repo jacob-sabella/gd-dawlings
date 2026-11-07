@@ -29,7 +29,7 @@ const TRAVEL_FROM := 0.09
 ## A finger curled less than this is open, for `is_open` (0 open to 1 curled tight).
 const OPEN_CURL := 0.3
 ## A finger curled past this is closed round something, for `closed` and `grips`: a hand holding
-## a shaker, not a fist clenched tight (docs/spatial_loop.md slice 17).
+## an instrument, not a fist clenched tight (docs/spatial_loop.md slice 17).
 const HOLD_CURL := 0.6
 ## How many of the four fingers have to be past HOLD_CURL for the hand to be closed: three, so a
 ## little finger left out, or one the runtime reads wrong, still holds.
@@ -198,7 +198,7 @@ static func pointing(joints: PackedVector3Array, side: int, held := false) -> bo
 
 
 ## Whether the hand is closed round something: HOLD_FINGERS of its four fingers curled past
-## HOLD_CURL. Not a pinch: the thumb is left out, as it lies along a shaker or across a hoop.
+## HOLD_CURL. Not a pinch: the thumb is left out, as it lies along a handle or across a hoop.
 static func closed(joints: PackedVector3Array) -> bool:
 	var curled := curls(joints)
 	var past := 0

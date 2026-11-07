@@ -14,10 +14,10 @@ extends CanvasLayer
 ## already is, rather than in a log nobody at a mixing desk is reading.
 
 ## "Tilt bends"'s hover card (docs/spatial_loop.md part two, slice 15).
-const TILT_BENDS_TIP := ("Tip the hand that plays from where its note began to bend it, up to two semitones, and shake it to wobble it: the keytar's neck hand, the fingertips. "
+const TILT_BENDS_TIP := ("Tip the hand that plays from where its note began to bend it, up to two semitones, and shake it to wobble it: the fingertips' hand. "
 		+ "At a desk the mouse's wiggle is the tilt. Off, for a steady pitch from a hand that moves; Alt with the mouse moving up or down still bends.")
 ## "Snap hand percussion"'s hover card (slice 17): HitRecorder.SNAP_WINDOW and SNAP_PULL, in words.
-const SNAP_HITS_TIP := ("The shaker's and the tambourine's hits are recorded a little nearer the beat: one within 35 ms of a sixteenth is moved half way to it. "
+const SNAP_HITS_TIP := ("Hand percussion's hits (the cowbell's, the claves'...) are recorded a little nearer the beat: one within 35 ms of a sixteenth is moved half way to it. "
 		+ "You hear every hit where you played it; only the recorded note moves. Yours alone: it goes with each hit you play.")
 ## COMFORT's hover cards (docs/spatial_loop.md part two, slice 21).
 const MOTION_TIP := ("How much the room moves for you. Full glides the gear to you and runs the signal beads along the cables; Gentle does both at under half the pace; Still cuts every move and holds the beads still, their brightness alone saying how loud each cable is. "
@@ -131,8 +131,8 @@ var _devices_box: VBoxContainer
 ## The keys' controls, placed the same way as the microphone's.
 var _keys_box: VBoxContainer
 ## Hand percussion's own setting ("Snap hand percussion"), just after the keys and always shown:
-## a solo player or host on Reaper, whose keys box is hidden, still records the shaker's and the
-## tambourine's hits (HitRecorder), and the setting is each player's own.
+## a solo player or host on Reaper, whose keys box is hidden, still records hand percussion's
+## hits (HitRecorder), and the setting is each player's own.
 var _hits_box: VBoxContainer
 var _column: VBoxContainer
 var _keys: KeyCatcher
@@ -786,7 +786,7 @@ func _build_midi(box: VBoxContainer) -> void:
 	box.add_child(_take_status)
 
 
-## The shaker's and the tambourine's recorded hits: whether they are snapped gently to the beat
+## Hand percussion's recorded hits: whether they are snapped gently to the beat
 ## (GuestMidi.snap_hits, HitRecorder.snapped_at). Shown to every player, whatever their DAW.
 func _build_hits(box: VBoxContainer) -> void:
 	box.add_child(_caption("YOUR HAND PERCUSSION"))
@@ -797,9 +797,9 @@ func _build_hits(box: VBoxContainer) -> void:
 	box.add_child(_snap_hits)
 	if Session.guest_midi != null:
 		Session.guest_midi.changed.connect(_refresh_take)
-		# A keytar picked up makes this machine's keys play (GuestMidi.plays) even on a host
+		# An instrument picked up (the fingertips) makes this machine's keys play (GuestMidi.plays) even on a host
 		# whose Reaper records its own MIDI input, where the panel is otherwise hidden on the
-		# assumption that Reaper's own input needs no "Play into" choice from here. The keytar is
+		# assumption that Reaper's own input needs no "Play into" choice from here. It is
 		# not that MIDI input: it is this panel's own `target_track`, same as a guest's, so a
 		# host (or someone alone) holding one needs the panel back for exactly as long as they
 		# hold it.
@@ -1105,7 +1105,7 @@ func _place_mic() -> void:
 	if _hits_box.get_index() > after:
 		after += 1
 	home.move_child(_hits_box, after)
-	# An instrument in reach (a keytar in hand...) plays through GuestMidi regardless of
+	# An instrument in reach (the fingertips on...) plays through GuestMidi regardless of
 	# whether Reaper records its own MIDI input (GuestMidi.plays): "anyone's with an instrument".
 	# Without this, a host or solo player on Reaper had no way back into "Play into" to choose
 	# where their instrument's notes land, and fell through to take_track()'s own guess (the

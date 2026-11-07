@@ -315,7 +315,7 @@ func _build_parts(run: TourRun) -> void:
 	_refresh_parts(run)
 
 
-## "ADA  TAMBOURINE: strike it on 2 and 4 .. 3/8" -- who holds it (or "OPEN", nobody has),
+## "ADA  COWBELL: one clank on the one .. 3/8" -- who holds it (or "OPEN", nobody has),
 ## what the band is told, then the on-grid count against what is needed. This player's own line
 ## says "YOU" in INK, so a job is found at a glance on a card of eight lines; everyone else's is
 ## DIM while held and not yet played. CURSE while open (a job the band is not doing), ACCENT once

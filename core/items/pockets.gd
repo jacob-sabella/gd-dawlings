@@ -72,7 +72,7 @@ func next_full(after: int, way := 1) -> int:
 	return -1
 
 
-## What is in them, for a hint: "1 duck · 2 — · 3 keytar".
+## What is in them, for a hint: "1 duck · 2 — · 3 ball".
 func summary() -> String:
 	var parts: PackedStringArray = []
 	for slot in COUNT:

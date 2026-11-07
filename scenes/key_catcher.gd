@@ -15,7 +15,7 @@ extends Control
 ## between them, and Z and X move the octave.
 ##
 ## The arrow keys are not the piano's: they walk (Walker, which looks for WALKS_ON_ARROWS), so
-## the keytar can be played on the move. Taken here all the same, or the GUI would move focus on
+## a piano can be played on the move. Taken here all the same, or the GUI would move focus on
 ## them and the piano would stop.
 ##
 ## The same control, laid out otherwise, is the fingertips' four keys (docs/spatial_loop.md slice

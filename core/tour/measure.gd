@@ -330,9 +330,9 @@ class Rhythm extends RefCounted:
 		return {"on": on, "off": off, "notes": on + off}
 
 	## -1 on a part's own `channel` means any channel but the items' (TourPart.ITEM_CHANNELS: the
-	## hand percussion's and the pitched items') -- a keytar's stabs, wherever they come from, never
+	## hand percussion's and the pitched items') -- a keys part's stabs, wherever they come from, never
 	## land on those.
-	## Everything else (shaker, tambourine) asks for an exact channel and, when given, an exact
+	## Everything else (the spilled hand percussion) asks for an exact channel and, when given, an exact
 	## pitch.
 	func _matches(channel: int, pitch: int) -> bool:
 		var chan_ok := channel == _part.channel if _part.channel >= 0 else not (channel in TourPart.ITEM_CHANNELS)

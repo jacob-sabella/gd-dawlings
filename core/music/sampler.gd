@@ -8,7 +8,7 @@ extends Node3D
 ## Its REC key is a room row, `sampler`: the peer who pressed it, or 0 (`armed_by`). A press asks
 ## the host (the room's `sampler` [on]) and shows at once here; the host's room is the truth. One
 ## press catches one sound: the next use, by anyone, of an item within REACH of the mic, or of one
-## in the hand of whoever pressed REC -- the duck squeezed, the cowbell struck, the shaker shaken,
+## in the hand of whoever pressed REC -- the duck squeezed, the cowbell struck,
 ## a yo-yo's or a deck's trick -- or the next bounce of a ball by the mic or thrown by them. Then
 ## REC goes off, so it is a sample a press, never a file a hit. Only the host catches (`heard`):
 ## every use reaches it with the Foley take its player's hand rang (Session.item_used's and
@@ -234,7 +234,7 @@ const SAID := {&"duck_squeeze": "squeeze", &"duck_release": "letting go", &"ball
 		&"yoyo_trick": "trick", &"cards_trick": "trick", &"platter_scratch": "scratch"}
 
 
-## "the rubber duck's squeeze", "the deck of cards' trick", "the tambourine", for the notice.
+## "the rubber duck's squeeze", "the deck of cards' trick", "the cowbell", for the notice.
 static func _what(item: Item, kind: StringName) -> String:
 	var title := item.item_title().to_lower() if item != null else "something"
 	if SAID.has(kind):

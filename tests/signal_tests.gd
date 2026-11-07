@@ -172,9 +172,9 @@ func graph_breaks() -> void:
 	check("armed, monitored, an input: the voice goes through its folder to OUT", sung.heard()
 			and sung.stages.map(func(x): return x.id).has("t9:in"))
 	s.track(10).rec_arm = false
-	var shaker: SignalGraph.Trace = why.call(SignalGraph.source_id("shaker"))
-	check("an instrument with no track armed: nothing records it, live on MONITOR (%s)" % shaker.words,
-			shaker.reason == SignalGraph.NOT_ARMED and shaker.words.contains("MONITOR"))
+	var cowbell: SignalGraph.Trace = why.call(SignalGraph.source_id("cowbell"))
+	check("an instrument with no track armed: nothing records it, live on MONITOR (%s)" % cowbell.words,
+			cowbell.reason == SignalGraph.NOT_ARMED and cowbell.words.contains("MONITOR"))
 	var jacked: SignalGraph.Trace = why.call(SignalGraph.source_id("bell1"))
 	check("one jacked into a track goes onto it armed or not", jacked.heard())
 	var platter: SignalGraph.Trace = why.call(SignalGraph.source_id("platter"))
@@ -185,12 +185,12 @@ func graph_breaks() -> void:
 	check("the first break on the road is the one said: unarmed before muted", first.reason == SignalGraph.NOT_ARMED)
 
 
-## The sources graph_breaks traces: the mic on Lead Vox (10), the shaker with nothing armed, a bell
+## The sources graph_breaks traces: the mic on Lead Vox (10), the cowbell with nothing armed, a bell
 ## jacked into Strings (12), the platter, and something played onto Bass DI (6).
 func _sources(s: MixState) -> Array:
 	return [
 		{"id": "mic", "title": "MIC", "track": 10, "kind": SignalGraph.VOICE},
-		{"id": "shaker", "title": "SHAKER", "track": HitRecorder.armed_track(), "kind": SignalGraph.NOTES},
+		{"id": "cowbell", "title": "COWBELL", "track": HitRecorder.armed_track(), "kind": SignalGraph.NOTES},
 		{"id": "bell1", "title": "BELL", "track": 12, "kind": SignalGraph.NOTES, "jacked": true},
 		{"id": "platter", "title": "PLATTER", "track": 0, "kind": SignalGraph.LOCAL_SOURCE},
 		{"id": "kick_in", "title": "PADS", "track": 6, "kind": SignalGraph.NOTES},
