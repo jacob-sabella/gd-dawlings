@@ -140,27 +140,46 @@ and lit by a small desk lamp of its own. It is where the things you can pick up 
 sketch (`prop_shelf_solid()`). A venue that moves its back wall moves the shelf with it, as the
 studio's beside-the-desk variant does.
 
+## How a venue is made up
+
+A venue is two things:
+
+- **Data**: `layouts/venues/<id>.layout.json` (id, title, cycle `order`, `extends` the two common fragments, the
+  `shell.builder`, the `mood` the modular room glows in, the arrangements as `variants`, and any placement it
+  overrides). `VenueCatalogue` reads them; `Venue.IDS`, `Venue.make_title`, `Venue.variant_titles` and the stage
+  manager's venue row are derived from them. See `docs/layouts.md`.
+- **A shell class** (`core/venues/<id>_venue.gd`, a `Venue` subclass): the geometry, materials, sky and
+  scenery, built in `_ready` by `variant`. `ShellBuilders.BY_NAME` maps the layout's `shell.builder` to the class.
+
+`Venue` (`core/venues/venue.gd`) is the base: the contract below, plus thin delegates to five `RefCounted` helpers
+held as fields (`reacting` = `VenueReact`: how a venue hears the mix; `shelf_spots` = `VenueShelf`: the prop shelf
+and the things on it; `station_spots` = `VenueStations`: the furniture and wheeled pieces as the venue sees them;
+`zone_spots` = `VenueZoneSpots`: zone-mounted stations, the walkable rooms; `shell_floor` = `VenueShell`: shared
+shell-building helpers and floor maths). Shared dressing kits: `ZoneKit` (the zone shapes), `ShellKit` (walls with
+window bays), `BoxStyle` and `BoxVenue` (a player-made room). Other things that live here: `ModularAnnex` (the
+modular room, built onto every venue but the roulette room, with `AnnexSite` for what it does to the scenery),
+`RouletteRoom`, `Chalk`, `Mirror` and `Wardrobe` (the ghost's mirror).
+
+Who calls whom: `Studio.venue_switch` (`VenueSwitch`) makes the venue with `Venue.make` and adds it as a child;
+`Studio.venue_look` (`VenueLook`) gives it the environment and lamps; `PieceHost` and `LiveRoom` ask it for
+spots (`default_spot`, which reads the layout); the walker asks it for `walk_rooms`, `zone_solids`, `floor_at`.
+
 ## Adding one
 
-1. Subclass `Venue` and override `venue_id`, `dress`, and optionally `lamp_colour`,
-   `lamp_energy` and `pulse`.
-2. Build the geometry in `_ready`. It must include a floor plane at y = 0 at least as wide as the room.
-   It must also dress all five zones (see above) and keep its scenery out of them.
-3. Add the id to `Venue.IDS`, `Venue.make` and `Venue.make_title`.
-4. For more than one arrangement, list their titles under the id in `Venue.VARIANTS` and build
-   by `variant` in `_ready`. The zones test, the z-fight scan and `tools/light_check.sh` all
-   cover every arrangement.
+1. Write `layouts/venues/<id>.layout.json` (copy a small one, e.g. `rooftop`; the schema is
+   `layouts/layout.schema.json`, the fields `docs/layouts.md` section 5).
+2. Subclass `Venue` in `core/venues/<id>_venue.gd`: override `venue_id`, `dress`, optionally `lamp_colour`,
+   `lamp_energy`, `pulse`, `rooms`, `zone_solids`. Build the geometry in `_ready`, by `variant`. It must include a
+   floor plane at y = 0 at least as wide as the room and dress all five zones (see above).
+3. Add the class to `ShellBuilders.BY_NAME`. Nothing else lists venues: `Venue.IDS`, the titles, the moods and the
+   stage manager come from the layout file.
+4. For more than one arrangement, list their titles under `variants` in the layout file and build by `variant`.
 
-`_test_venues_change_the_world_and_not_the_setup` then covers it automatically:
-
-- no gear moves
-- nothing else is added or lost
-- there is a floor
-- the choice persists
-
-The z-fight scan runs over it too. `_test_every_venue_leaves_room_for_the_activities` checks
-that every zone is there, is big enough, clears the footprint and the other zones, and is
-dressed, at the base width and at a widened one.
+The tests then cover it automatically: `_test_venues_change_the_world_and_not_the_setup` (no gear moves, nothing
+else added or lost, there is a floor, the choice persists), `_test_every_venue_leaves_room_for_the_activities`
+(every zone is there, big enough, clear of the footprint and each other, dressed, at the base width and a widened
+one), `_test_every_layout_is_valid`, `tests/venue_files_tests.gd`, and the z-fight scan. `tools/light_check.sh`
+holds the light budget and `tools/probe/walk_map.tscn` draws the floor.
 
 ## Chalk
 
