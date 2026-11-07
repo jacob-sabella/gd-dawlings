@@ -1,0 +1,36 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "test.lib",
+  "name": "Test mod",
+  "version": "1.2.0",
+  "licence": {
+    "spdx": "CC0-1.0"
+  },
+  "source": {
+    "kind": "data"
+  },
+  "provides": [
+    {
+      "kind": "rack_preset",
+      "name": "test_lib_demo",
+      "title": "Demo",
+      "patch": {
+        "modules": {},
+        "cables": []
+      }
+    }
+  ],
+  "groups": [
+    {
+      "id": "Voice",
+      "title": "Voice",
+      "order": 2
+    },
+    {
+      "id": "Source",
+      "title": "Source",
+      "order": 1
+    }
+  ]
+}

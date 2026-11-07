@@ -1,0 +1,24 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "test.dup",
+  "name": "Second dup",
+  "version": "1.0.0",
+  "licence": {
+    "spdx": "CC0-1.0"
+  },
+  "source": {
+    "kind": "data"
+  },
+  "provides": [
+    {
+      "kind": "rack_preset",
+      "name": "test_dup_demo",
+      "title": "Demo",
+      "patch": {
+        "modules": {},
+        "cables": []
+      }
+    }
+  ]
+}

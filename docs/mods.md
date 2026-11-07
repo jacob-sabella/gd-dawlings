@@ -108,7 +108,7 @@ Top level: as the schema. `format`, `api_version`, `id`, `name`, `version`, `lic
 | `type` | R | The id patches use. Builtin mods are named `builtin.<name>` (`builtin.plaits`); every other mod is namespaced `<mod id>.<name>`. |
 | `title`, `group`, `blurb` | R | Plate title, palette group, tooltip. For `engine` modules `title`/`group`/`blurb` default to the engine's `--describe` values. |
 | `sound` | R | `{"kind":"engine","type":"plaits"}` or `{"kind":"composite", ...}` (4.1). Any other kind is rejected (4.2). |
-| `interface` | R for composite, forbidden for engine | `ins`, `outs`, `knobs`. For `engine` modules the interface is **not** repeated: it comes from the engine (6.2). |
+| `interface` | (none) | The interface lives in `sound`: for `composite`, `sound.ins`, `sound.outs` and `sound.knobs` (3.5); for `engine` modules it is **not** repeated and `sound.ins/outs/knobs` are rejected (`bad_schema`): it comes from the engine (8). The parser has no separate `interface` key. |
 | `skin` | R | `face`, `accent` (`#RRGGBB`), `pattern`, `tagline`. Today's four-tuple. |
 | `pad_knobs` | O | The two knob ids of the orb pad (`rack_wall.gd:114`). |
 | `face` | O | `{"kind":"standard"}` (default) or a builtin custom face: `out`, `scope`, `seq` (today's `rack_wall.gd:713,738,778`). User mods may only use `standard`. May add `model`. |
@@ -310,6 +310,7 @@ never throws; every failure leaves the game running.
 | `licence_missing` | no `licence.spdx` | `bad_schema` |
 | `plugin_not_found` | `plugin` entry whose plugin is not scanned | listed as "plugin not installed"; no effect on the game |
 | `unknown_group` | module group not declared | placed in "Other"; warning |
+| `unknown_key` | top-level key the format does not define | ignored; warning (3.1: forward compatibility) |
 
 On start the game shows one toast ("2 mods could not be loaded: see MODS") if any `error` problem
 exists, and writes all problems to the log. The MODS screen (a plate in the modular room, built in
@@ -444,6 +445,20 @@ submodules; the registry never loads DSP.
   (`run_tests.gd:44881`).
 
 ## 9. Migration plan
+
+Steps 1 and 2 are built (`core/mods/`: `ModProblem`, `ModManifest`, `ModEntryCheck`, `ModFiles`,
+`ModRegistry`; `DataHome.dir`; `mods/mod.schema.json`; fixtures in `tests/fixtures/mods/`). They raise
+`no_manifest`, `bad_json`, `bad_schema`, `unknown_key`, `api_version_unsupported`, `game_too_old`,
+`id_collision`, `type_collision`, `reserved_id`, `missing_dependency`, `dependency_cycle`, `missing_file`,
+`bad_model`, `unsupported_sound_kind`, `unknown_group`. The rest of section 5 (`engine_*`, `snapshot_stale`,
+`binary_hash_mismatch`, `unsupported_platform`, `composite_invalid`, `plugin_not_found`) waits for the
+step that has the thing to check (`ModProblem.LATER_CODES`). Details settled while building: `parse(data,
+source_path, game_version)` reads `source_path` as the path of the `mod.json` (file checks run only then);
+the game version is `ModManifest.GAME_VERSION` until the game has one constant; a non-shipped mod's rack
+module `type` must equal its id or start with `<id>.`, else that entry is `reserved_id` (the sample mod's type
+is its id); "shipped" roots are `ModRegistry.shipped_roots` (default `res://mods/`); `$DAWLINGS_MODS`
+splits on `;` on Windows; an empty or missing root is skipped; mods that fail a dependency stay in
+`mods()` with status `unavailable`, invalid ones appear only in `problems()`.
 
 Each step ends with the suite green and no behaviour change unless stated. Steps 1-4 are queue item 3,
 5-8 are 4-5 (see the loop file).

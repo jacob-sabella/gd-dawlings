@@ -1,0 +1,82 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "dawlings.sample.pluck",
+  "name": "Test mod",
+  "version": "1.0.0",
+  "licence": {
+    "spdx": "CC0-1.0"
+  },
+  "source": {
+    "kind": "data"
+  },
+  "provides": [
+    {
+      "kind": "rack_module",
+      "type": "dawlings.sample.pluck",
+      "title": "PLUCK",
+      "group": "Voice",
+      "blurb": "One note in, one pluck out.",
+      "sound": {
+        "kind": "composite",
+        "modules": {
+          "osc": {
+            "type": "plaits",
+            "knobs": {
+              "engine": 0.35
+            }
+          },
+          "amp": {
+            "type": "vca"
+          }
+        },
+        "cables": [
+          [
+            "osc.out",
+            "amp.in"
+          ]
+        ],
+        "ins": {
+          "pitch": [
+            "osc.pitch"
+          ]
+        },
+        "outs": {
+          "out": "amp.out"
+        },
+        "knobs": {
+          "timbre": {
+            "to": "osc.timbre",
+            "label": "TIMBRE"
+          }
+        }
+      },
+      "skin": {
+        "face": "#1E2A1A",
+        "accent": "#E6FF6A",
+        "pattern": "dots",
+        "tagline": "PLUCK IT"
+      },
+      "pad_knobs": [
+        "timbre",
+        "timbre"
+      ]
+    },
+    {
+      "kind": "rack_preset",
+      "name": "pluck_demo",
+      "title": "Pluck demo",
+      "patch": {
+        "modules": {},
+        "cables": []
+      }
+    }
+  ],
+  "min_game_version": "0.0.14",
+  "requires": [
+    {
+      "mod": "builtin.mutable",
+      "min": "1.0.0"
+    }
+  ]
+}

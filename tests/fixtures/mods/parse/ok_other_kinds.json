@@ -1,0 +1,43 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "user.surge_look",
+  "name": "Test mod",
+  "version": "1.0.0",
+  "licence": {
+    "spdx": "CC0-1.0"
+  },
+  "source": {
+    "kind": "user_installed"
+  },
+  "provides": [
+    {
+      "kind": "plugin",
+      "plugin": {
+        "format": "clap",
+        "id": "org.surge-synth-team.surge-xt"
+      },
+      "display": {
+        "title": "SURGE XT"
+      }
+    },
+    {
+      "kind": "skin",
+      "for": "builtin.plaits",
+      "skin": {
+        "face": "#421F47",
+        "accent": "#FF8CFF",
+        "pattern": "checker",
+        "tagline": "ONE OF 16"
+      }
+    },
+    {
+      "kind": "piece",
+      "id": "cassette_rack",
+      "title": "CASSETTE RACK",
+      "class": "single",
+      "builder": "CassetteRack",
+      "mount": "floor"
+    }
+  ]
+}

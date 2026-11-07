@@ -729,6 +729,10 @@ func _ready() -> void:
 	_test_signal_look_solo_puts_everything_back()
 	await _test_signal_look_solo_in_the_studio()
 	_test_signal_patch_wall_meters_its_own_streams()
+	_test_a_manifest_parses_and_every_failure_is_named()
+	_test_the_registry_orders_mods_and_resolves_collisions()
+	_test_a_bad_mod_is_a_problem_and_never_a_crash()
+	_test_the_mod_roots_come_from_the_data_home_and_the_environment()
 	_test_a_rack_catalogue_is_the_engines_own_description()
 	_test_a_rack_patch_checks_every_verb()
 	_test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input()
@@ -45358,3 +45362,272 @@ func _test_letting_go_of_a_rack_module_builds_only_what_moved() -> void:
 	check("headless there is no sound card, so the rack does not play itself", not voice._direct())
 	voice.free()
 	studio.queue_free()
+
+
+# ---- mods: manifest parser and registry (docs/mods.md section 9, steps 1 and 2) ----
+
+const _MODS_FIXTURES := "res://tests/fixtures/mods/"
+
+
+func _mod_fixture(rel: String) -> Dictionary:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(_MODS_FIXTURES + rel))
+	return parsed if parsed is Dictionary else {}
+
+
+func _mod_parse(rel: String) -> ModManifest:
+	return ModManifest.parse(_mod_fixture(rel), _MODS_FIXTURES + rel)
+
+
+func _mod_codes(m: ModManifest) -> Array:
+	return m.problems.map(func(p: ModProblem) -> StringName: return p.code)
+
+
+## A binary glTF holding just this JSON chunk: enough for the limits the loader reads.
+func _mod_glb(json: Dictionary) -> PackedByteArray:
+	var text := JSON.stringify(json).to_utf8_buffer()
+	while text.size() % 4 != 0:
+		text.append(0x20)
+	var b := StreamPeerBuffer.new()
+	b.put_u32(0x46546C67)
+	b.put_u32(2)
+	b.put_u32(20 + text.size())
+	b.put_u32(text.size())
+	b.put_u32(0x4E4F534A)
+	b.put_data(text)
+	return b.data_array
+
+
+func _mod_rmdir(path: String) -> void:
+	for d in DirAccess.get_directories_at(path):
+		_mod_rmdir(path.path_join(d))
+	for f in DirAccess.get_files_at(path):
+		DirAccess.remove_absolute(path.path_join(f))
+	DirAccess.remove_absolute(path)
+
+
+func _test_a_manifest_parses_and_every_failure_is_named() -> void:
+	# Good manifests: the worked examples of docs/mods.md 3.3-3.5 and the other entry kinds.
+	var plaits := _mod_parse("parse/ok_plaits.json")
+	check("the Plaits manifest parses", plaits.status == ModManifest.STATUS_OK and plaits.problems.is_empty())
+	check("it keeps its identity", plaits.id == "builtin.mutable" and plaits.version == "1.0.0"
+			and plaits.mod_name == "Mutable Instruments modules" and plaits.licence["spdx"] == "MIT")
+	check("it keeps its source pin", plaits.source["kind"] == "submodule" and plaits.source["commit"] == "f4cfa76")
+	check("it keeps its one entry", plaits.entries.size() == 1
+			and ModEntryCheck.entry_key(plaits.entries[0]) == "rack_module:builtin.plaits")
+	var pluck := _mod_parse("parse/ok_pluck.json")
+	check("a composite mod with a preset parses", pluck.status == ModManifest.STATUS_OK and pluck.entries.size() == 2)
+	check("its requirement is read", pluck.requires.size() == 1 and pluck.requires[0]["mod"] == "builtin.mutable"
+			and pluck.min_game_version == "0.0.14")
+	var others := _mod_parse("parse/ok_other_kinds.json")
+	check("plugin, skin and piece entries parse", others.status == ModManifest.STATUS_OK and others.entries.size() == 3)
+	check("their keys name them", others.entries.map(ModEntryCheck.entry_key) == [
+			"plugin:clap:org.surge-synth-team.surge-xt", "skin:builtin.plaits", "piece:cassette_rack"])
+	check("the smallest manifest parses", _mod_parse("parse/ok_minimal.json").status == ModManifest.STATUS_OK)
+	var unknown := _mod_parse("parse/unknown_key.json")
+	check("an unknown top-level key is a warning and the mod still loads",
+			unknown.status == ModManifest.STATUS_OK and unknown.has_problem(&"unknown_key")
+			and not unknown.problems[0].is_error())
+	# Every bad_schema fixture says what is wrong and invalidates the mod.
+	var dir := DirAccess.open(_MODS_FIXTURES + "parse")
+	var bad_count := 0
+	for f in dir.get_files():
+		if f.begins_with("bad_schema_"):
+			bad_count += 1
+			var m := _mod_parse("parse/" + f)
+			check("%s is bad_schema and not usable" % f, m.status == ModManifest.STATUS_INVALID
+					and m.has_problem(&"bad_schema") and not m.problems[0].message.is_empty())
+	check("there are fixtures for the schema failures", bad_count >= 10)
+	var lic := _mod_parse("parse/bad_schema_no_licence.json")
+	check("a missing licence is named", "licence" in lic.problems[0].message)
+	# One fixture per remaining parser code.
+	var api := _mod_parse("parse/api_version_unsupported.json")
+	check("a newer manifest format is api_version_unsupported", api.status == ModManifest.STATUS_INVALID
+			and _mod_codes(api) == [&"api_version_unsupported"])
+	var old := _mod_parse("parse/game_too_old.json")
+	check("a mod for a newer game is game_too_old", old.status == ModManifest.STATUS_INVALID
+			and _mod_codes(old) == [&"game_too_old"])
+	check("the same mod loads in that newer game",
+			ModManifest.parse(_mod_fixture("parse/game_too_old.json"), "", "9.0.0").status == ModManifest.STATUS_OK)
+	var snd := _mod_parse("parse/unsupported_sound_kind.json")
+	check("the reserved native_plugin kind is unsupported_sound_kind", snd.has_problem(&"unsupported_sound_kind"))
+	check("only that entry is unavailable, the mod and its other entry stay",
+			snd.status == ModManifest.STATUS_OK and snd.unavailable_entries.has("rack_module:test.mod.native")
+			and not snd.unavailable_entries.has("rack_preset:still_here"))
+	check("the problem names its entry", snd.problems[0].entry == "rack_module:test.mod.native")
+	# Folder loading: no_manifest, bad_json.
+	var none := ModManifest.load_folder(_MODS_FIXTURES + "folders/no_manifest")
+	check("a folder with no mod.json is no_manifest", _mod_codes(none) == [&"no_manifest"] and none.status == ModManifest.STATUS_INVALID)
+	check("it is named by its folder", none.problems[0].mod == "no_manifest")
+	var junk := ModManifest.load_folder(_MODS_FIXTURES + "folders/bad_json")
+	check("broken JSON is bad_json with a line number", _mod_codes(junk) == [&"bad_json"] and "line" in junk.problems[0].message)
+	check("a good folder loads whole", ModManifest.load_folder(_MODS_FIXTURES + "scan/root_a/lib").status == ModManifest.STATUS_OK)
+	# Files the manifest names.
+	var miss := ModManifest.load_folder(_MODS_FIXTURES + "folders/missing_file")
+	check("missing files are warnings: licence, model and patch",
+			miss.status == ModManifest.STATUS_OK and _mod_codes(miss) == [&"missing_file", &"missing_file", &"missing_file"]
+			and miss.problems.all(func(p: ModProblem) -> bool: return not p.is_error()))
+	var badm := ModManifest.load_folder(_MODS_FIXTURES + "folders/bad_model")
+	check("a model that is not a glb is a bad_model warning, the mod still loads",
+			badm.status == ModManifest.STATUS_OK and _mod_codes(badm) == [&"bad_model"])
+	# Model limits, with glbs built here.
+	var tmp := "user://mods_parse_test/"
+	DirAccess.make_dir_recursive_absolute(tmp)
+	var fine := {"asset": {"version": "2.0"}, "accessors": [{"count": 300}], "meshes": [{"primitives": [{"attributes": {"POSITION": 0}}]}], "nodes": [{"mesh": 0}]}
+	FileAccess.open(tmp + "fine.glb", FileAccess.WRITE).store_buffer(_mod_glb(fine))
+	check("a small glb passes", ModFiles.model_problem(tmp + "fine.glb") == "")
+	var heavy := {"accessors": [{"count": 3 * 12000}], "meshes": [{"primitives": [{"attributes": {"POSITION": 0}}]}], "nodes": [{"mesh": 0}, {"mesh": 0}]}
+	FileAccess.open(tmp + "heavy.glb", FileAccess.WRITE).store_buffer(_mod_glb(heavy))
+	check("instances count towards the 20k triangle cap", "triangles" in ModFiles.model_problem(tmp + "heavy.glb"))
+	var ext := {"buffers": [{"uri": "https://example.com/x.bin"}], "meshes": []}
+	FileAccess.open(tmp + "ext.glb", FileAccess.WRITE).store_buffer(_mod_glb(ext))
+	check("an external URI is refused", "external" in ModFiles.model_problem(tmp + "ext.glb"))
+	var big := _mod_glb(fine)
+	big.resize(ModFiles.MAX_MODEL_BYTES + 1)
+	FileAccess.open(tmp + "big.glb", FileAccess.WRITE).store_buffer(big)
+	check("over 2 MB is refused", "limit" in ModFiles.model_problem(tmp + "big.glb"))
+	check("a missing file is refused", ModFiles.model_problem(tmp + "nope.glb") != "")
+	_mod_rmdir(tmp.trim_suffix("/"))
+	# No input throws: arbitrary junk comes back as a problem.
+	for junk_data: Dictionary in [{}, {"format": "dawlings.mod"}, {"format": "dawlings.mod", "api_version": "1"},
+			{"format": "dawlings.mod", "api_version": 1, "id": 5, "provides": "x", "requires": 3, "groups": [1]}]:
+		var jm := ModManifest.parse(junk_data)
+		check("junk %s is invalid with a problem" % str(junk_data).left(30),
+				jm.status == ModManifest.STATUS_INVALID and not jm.problems.is_empty())
+	# The machine schema and the parser agree on what is required.
+	var schema: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://mods/mod.schema.json"))
+	check("the schema file parses", schema is Dictionary)
+	check("it requires what the parser requires", schema["required"] == [
+			"format", "api_version", "id", "name", "version", "licence", "source", "provides"])
+	check("it names the entry kinds the parser knows", schema["$defs"]["entry"]["properties"]["kind"]["enum"] == ModEntryCheck.KINDS)
+	check("compare_versions orders numerically", ModManifest.compare_versions("0.0.9", "0.0.14") < 0
+			and ModManifest.compare_versions("1.2.0", "1.2.0") == 0 and ModManifest.compare_versions("2.0.0", "1.99.99") > 0)
+
+
+func _scan_fixtures(roots: Array[String]) -> ModRegistry:
+	var reg := ModRegistry.new()
+	reg.scan(roots)
+	return reg
+
+
+func _mod_ids(reg: ModRegistry) -> Array:
+	return reg.mods().map(func(m: ModManifest) -> String: return m.id)
+
+
+func _problem_pairs(reg: ModRegistry, code: StringName) -> Array:
+	return reg.problems_with(code).map(func(p: ModProblem) -> String: return p.mod)
+
+
+func _test_the_registry_orders_mods_and_resolves_collisions() -> void:
+	var a := _MODS_FIXTURES + "scan/root_a"
+	var b := _MODS_FIXTURES + "scan/root_b"
+	var reg := _scan_fixtures([a, b])
+	var ids := _mod_ids(reg)
+	# Order: a root's folders sorted, a mod after what it requires, roots in the order given.
+	check("a requirement comes before the mod that needs it", ids.find("test.lib") < ids.find("test.app") and ids.has("test.app"))
+	check("root a's folders come before root b's", ids.find("test.p1") < ids.find("test.p2"))
+	check("within a root, sorted by folder name", ids.find("test.app") < ids.find("test.dup") and ids.find("test.dup") < ids.find("test.p1"))
+	check("the dependency chain is lib, app, then the rest in discovery order",
+			ids.slice(0, 4) == ["test.lib", "test.app", "test.dup", "test.p1"])
+	check("a hidden folder is not scanned", reg.mod("test.hidden") == null)
+	# Id collisions: the first wins.
+	check("a repeated id is an id_collision", _problem_pairs(reg, &"id_collision") == ["test.dup"])
+	check("the first of the two wins", reg.mod("test.dup").mod_name == "First dup")
+	check("the winner is not marked", reg.mod("test.dup").status == ModManifest.STATUS_OK)
+	check("the loser is not registered twice", ids.count("test.dup") == 1)
+	# Entry collisions: the first wins, the later entry alone goes.
+	var clashes := reg.problems_with(&"type_collision")
+	check("a repeated preset name is a type_collision, in the mod and across mods", clashes.size() == 2
+			and clashes.map(func(p: ModProblem) -> String: return p.mod) == ["test.p1", "test.p2"])
+	check("the first mod to name it owns it", reg.entry_owner("rack_preset:shared") == "test.p1")
+	check("the loser keeps its other entries", reg.mod("test.p2").entries.is_empty() and reg.mod("test.p2").status == ModManifest.STATUS_OK)
+	check("the colliding entry is recorded as unavailable", reg.mod("test.p2").unavailable_entries["rack_preset:shared"] == &"type_collision")
+	check("an entry of a mod that stays keeps its place", reg.mod("test.p1").entries.size() == 2)
+	# Reserved ids.
+	check("a user mod may not take a builtin id", _problem_pairs(reg, &"reserved_id").has("builtin.fake") and reg.mod("builtin.fake") == null)
+	check("nor an un-namespaced rack module type", _problem_pairs(reg, &"reserved_id").has("test.squat")
+			and reg.mod("test.squat").unavailable_entries.has("rack_module:plaits"))
+	var shipped := ModRegistry.new()
+	shipped.shipped_roots = [b]
+	shipped.scan([b])
+	check("the same ids are fine under a shipped root", shipped.mod("builtin.fake") != null
+			and shipped.mod("test.squat").entries.size() == 1 and shipped.problems_with(&"reserved_id").is_empty())
+	# Dependencies.
+	check("a missing dependency makes the mod unavailable", reg.mod("test.needs").status == ModManifest.STATUS_UNAVAILABLE
+			and "test.nothere" in reg.problems_with(&"missing_dependency")[0].message)
+	check("a dependency that is too old is named", reg.mod("test.newer").status == ModManifest.STATUS_UNAVAILABLE
+			and reg.problems_with(&"missing_dependency").any(func(p: ModProblem) -> bool: return "2.0.0" in p.message and "1.2.0" in p.message))
+	check("unavailability follows the chain", reg.mod("test.chain").status == ModManifest.STATUS_UNAVAILABLE)
+	check("the app that has its dependency is fine", reg.is_available("test.app") and reg.is_available("test.lib"))
+	check("a cycle makes both unavailable", _problem_pairs(reg, &"dependency_cycle").size() == 2
+			and "test.cyc_a" in _problem_pairs(reg, &"dependency_cycle") and "test.cyc_b" in _problem_pairs(reg, &"dependency_cycle")
+			and not reg.is_available("test.cyc_a") and not reg.is_available("test.cyc_b"))
+	check("an unavailable mod claims no entries", reg.entry_owner("rack_preset:test_needs_demo") == "")
+	check("a group nobody declared is a warning", reg.problems_with(&"unknown_group").size() == 1
+			and not reg.problems_with(&"unknown_group")[0].is_error())
+	check("groups come out ordered", reg.groups().map(func(g: Dictionary) -> String: return g["id"]) == ["Source", "Voice"])
+	# Idempotence, order of roots, reload and signals.
+	var again := _scan_fixtures([a, b])
+	check("scanning twice gives the same result", _mod_ids(again) == ids and again.problems().size() == reg.problems().size())
+	reg.scan([a, b])
+	check("a second scan does not stack problems", reg.problems().size() == again.problems().size())
+	var flipped := _scan_fixtures([b, a])
+	check("the other root order flips who wins a collision", flipped.mod("test.dup").mod_name == "Second dup")
+	var seen := [0, 0]
+	reg.changed.connect(func() -> void: seen[0] += 1)
+	reg.problem_found.connect(func(_p: ModProblem) -> void: seen[1] += 1)
+	reg.reload()
+	check("reload scans the same roots and says so", seen[0] == 1 and seen[1] == reg.problems().size() and _mod_ids(reg) == ids)
+
+
+func _test_a_bad_mod_is_a_problem_and_never_a_crash() -> void:
+	var b := _MODS_FIXTURES + "scan/root_b"
+	var reg := ModRegistry.new()
+	reg.scan([_MODS_FIXTURES + "scan/does_not_exist", _MODS_FIXTURES + "scan/root_a", b, "", _MODS_FIXTURES + "scan/root_c"])
+	check("a root that does not exist, or is empty text, is skipped without a problem", reg.problems().all(func(p: ModProblem) -> bool: return p.mod != "does_not_exist"))
+	check("broken JSON is a recorded bad_json", reg.problems_with(&"bad_json").size() == 1 and reg.problems_with(&"bad_json")[0].mod == "broken")
+	check("a folder with no manifest is a recorded no_manifest", _problem_pairs(reg, &"no_manifest") == ["empty"])
+	check("neither stops the good mods after them", reg.is_available("test.solo") and reg.is_available("test.p2"))
+	check("neither appears as a mod", reg.mod("broken") == null and reg.mod("empty") == null)
+	check("every problem names a mod and says what", reg.problems().all(func(p: ModProblem) -> bool: return not p.mod.is_empty() and not p.message.is_empty()))
+	check("errors are told from warnings", reg.problems().any(func(p: ModProblem) -> bool: return p.is_error())
+			and reg.problems().any(func(p: ModProblem) -> bool: return not p.is_error()))
+	var empty := ModRegistry.new()
+	empty.scan([])
+	check("scanning nothing is an empty registry", empty.mods().is_empty() and empty.problems().is_empty())
+	check("asking for an unknown mod gives null", empty.mod("nope") == null and not empty.is_available("nope"))
+	# A mod whose only trouble is a bad file loads with warnings.
+	var tmp := "user://mods_registry_test"
+	_mod_rmdir(tmp)
+	DirAccess.make_dir_recursive_absolute(tmp + "/one")
+	FileAccess.open(tmp + "/one/mod.json", FileAccess.WRITE).store_string(FileAccess.get_file_as_string(_MODS_FIXTURES + "folders/bad_model/mod.json"))
+	DirAccess.make_dir_recursive_absolute(tmp + "/one/models")
+	FileAccess.open(tmp + "/one/models/x.glb", FileAccess.WRITE).store_string("junk")
+	var warn := ModRegistry.new()
+	warn.scan([tmp])
+	check("a bad model leaves the mod available with a warning", warn.is_available("test.badmodel")
+			and warn.problems().size() == 1 and warn.problems()[0].code == &"bad_model")
+	_mod_rmdir(tmp)
+
+
+func _test_the_mod_roots_come_from_the_data_home_and_the_environment() -> void:
+	var roots := ModRegistry.default_roots("")
+	check("the shipped root is first", roots[0] == "res://mods/")
+	check("the player's mods folder is second and exists", roots[1] == "user://mods/" and DirAccess.dir_exists_absolute("user://mods/"))
+	check("with no environment there are two roots", roots.size() == 2)
+	var sep := ";" if OS.get_name() == "Windows" else ":"
+	var env := sep.join(["/tmp/one", " /tmp/two ", ""])
+	check("$DAWLINGS_MODS adds its paths in order, after the others",
+			ModRegistry.default_roots(env).slice(2) == ["/tmp/one", "/tmp/two"])
+	check("the variable's name is DAWLINGS_MODS", ModRegistry.ENV == "DAWLINGS_MODS")
+	# DataHome.dir
+	var probe := DataHome.dir("mods_dir_probe")
+	check("DataHome.dir makes and returns the folder", probe == "user://mods_dir_probe/" and DirAccess.dir_exists_absolute(probe))
+	check("asking again is the same", DataHome.dir("mods_dir_probe") == probe)
+	DirAccess.remove_absolute(probe)
+	for bad in ["", "a/b", "..", "a\\b", "../x"]:
+		check("DataHome.dir refuses '%s'" % bad, DataHome.dir(bad) == "")
+	# A scan of the default roots on a clean machine does not crash and finds the shipped folder empty.
+	var reg := ModRegistry.new()
+	reg.scan(ModRegistry.default_roots(""))
+	check("the default roots scan without a crash", reg.problems().all(func(p: ModProblem) -> bool: return not p.is_error() or p.mod != ""))
+	check("the API range is one to one", ModRegistry.API_MIN == 1 and ModRegistry.API_MAX == 1)

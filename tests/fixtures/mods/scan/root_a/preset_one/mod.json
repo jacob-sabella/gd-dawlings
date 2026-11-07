@@ -1,0 +1,44 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "test.p1",
+  "name": "Test mod",
+  "version": "1.0.0",
+  "licence": {
+    "spdx": "CC0-1.0"
+  },
+  "source": {
+    "kind": "data"
+  },
+  "provides": [
+    {
+      "kind": "rack_preset",
+      "name": "shared",
+      "title": "From p1",
+      "patch": {}
+    },
+    {
+      "kind": "rack_preset",
+      "name": "shared",
+      "title": "Twice in p1",
+      "patch": {}
+    },
+    {
+      "kind": "rack_module",
+      "type": "test.p1.osc",
+      "title": "O",
+      "group": "Nowhere",
+      "blurb": "b",
+      "sound": {
+        "kind": "engine",
+        "type": "x"
+      },
+      "skin": {
+        "face": "#421F47",
+        "accent": "#FF8CFF",
+        "pattern": "checker",
+        "tagline": "ONE OF 16"
+      }
+    }
+  ]
+}

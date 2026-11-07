@@ -1,0 +1,31 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "test.mod",
+  "name": "Test mod",
+  "version": "1.0.0",
+  "licence": {
+    "spdx": "CC0-1.0"
+  },
+  "source": {
+    "kind": "data"
+  },
+  "provides": [
+    {
+      "kind": "rack_module",
+      "type": "test.mod.x",
+      "title": "X",
+      "group": "Voice",
+      "blurb": "b",
+      "sound": {
+        "kind": "composite"
+      },
+      "skin": {
+        "face": "#421F47",
+        "accent": "#FF8CFF",
+        "pattern": "checker",
+        "tagline": "ONE OF 16"
+      }
+    }
+  ]
+}

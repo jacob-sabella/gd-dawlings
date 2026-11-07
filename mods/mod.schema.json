@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "dawlings mod manifest, api_version 1",
+  "description": "Machine form of docs/mods.md section 3. ModManifest.parse implements these rules by hand; a test keeps the two in step.",
+  "type": "object",
+  "required": ["format", "api_version", "id", "name", "version", "licence", "source", "provides"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "format": {"const": "dawlings.mod"},
+    "api_version": {"type": "integer", "minimum": 1},
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$", "maxLength": 64},
+    "name": {"type": "string", "minLength": 1, "maxLength": 40},
+    "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "min_game_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "author": {"type": "string", "maxLength": 80},
+    "description": {"type": "string", "maxLength": 400},
+    "licence": {
+      "type": "object",
+      "required": ["spdx"],
+      "properties": {
+        "spdx": {"type": "string", "minLength": 1},
+        "copyright": {"type": "string"},
+        "file": {"type": "string", "description": "licence text, relative to the mod folder"},
+        "redistributed": {"type": "boolean", "default": true}
+      }
+    },
+    "source": {
+      "oneOf": [
+        {"properties": {"kind": {"const": "submodule"}, "path": {"type": "string"}, "commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"}, "upstream": {"type": "string"}}, "required": ["kind", "path", "commit", "upstream"]},
+        {"properties": {"kind": {"const": "binary"}, "file": {"type": "string"}, "version": {"type": "string"}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "platforms": {"type": "array", "items": {"type": "string"}}, "upstream": {"type": "string"}}, "required": ["kind", "file", "version", "sha256", "upstream"]},
+        {"properties": {"kind": {"const": "in_tree"}, "path": {"type": "string"}}, "required": ["kind", "path"]},
+        {"properties": {"kind": {"const": "data"}}, "required": ["kind"]},
+        {"properties": {"kind": {"const": "user_installed"}}, "required": ["kind"]}
+      ]
+    },
+    "requires": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["mod"],
+        "properties": {
+          "mod": {"type": "string"},
+          "min": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+          "max": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"}
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "order"],
+        "properties": {"id": {"type": "string"}, "title": {"type": "string"}, "order": {"type": "integer"}}
+      }
+    },
+    "provides": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/entry"}}
+  },
+  "$defs": {
+    "hex": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+    "skin": {
+      "type": "object",
+      "required": ["face", "accent", "pattern", "tagline"],
+      "properties": {
+        "face": {"$ref": "#/$defs/hex"},
+        "accent": {"$ref": "#/$defs/hex"},
+        "pattern": {"type": "string", "minLength": 1},
+        "tagline": {"type": "string", "minLength": 1}
+      }
+    },
+    "entry": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {"kind": {"enum": ["rack_module", "rack_preset", "plugin", "skin", "piece"]}},
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {"const": "rack_module"},
+            "type": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"},
+            "title": {"type": "string"}, "group": {"type": "string"}, "blurb": {"type": "string"},
+            "sound": {
+              "type": "object",
+              "required": ["kind"],
+              "properties": {"kind": {"enum": ["engine", "composite"], "description": "any other kind, such as the reserved native_plugin, is unsupported_sound_kind"}}
+            },
+            "skin": {"$ref": "#/$defs/skin"},
+            "pad_knobs": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2},
+            "face": {"type": "object", "properties": {"kind": {"enum": ["standard", "out", "scope", "seq"]}}},
+            "model": {"type": "object", "required": ["glb"], "properties": {"glb": {"type": "string"}, "slot": {"type": "string"}}},
+            "mood": {"type": "object", "properties": {"accent": {"$ref": "#/$defs/hex"}, "reacts_to": {"enum": ["level", "hit", "none"]}}},
+            "port_signals": {"type": "object", "additionalProperties": {"enum": ["gate", "audio", "cv"]}}
+          },
+          "required": ["kind", "type", "sound", "skin"],
+          "description": "engine: title/group/blurb optional, no interface (read from the engine). composite: title, group, blurb, and sound.modules/ins/outs required."
+        },
+        {"properties": {"kind": {"const": "rack_preset"}, "name": {"type": "string"}, "title": {"type": "string"}, "patch": {"type": "object"}}, "required": ["kind", "name", "title", "patch"]},
+        {"properties": {"kind": {"const": "plugin"}, "plugin": {"type": "object", "required": ["format", "id"], "properties": {"format": {"enum": ["clap", "vst3", "lv2"]}, "id": {"type": "string"}}}, "display": {"type": "object"}}, "required": ["kind", "plugin"]},
+        {"properties": {"kind": {"const": "skin"}, "for": {"type": "string"}, "skin": {"$ref": "#/$defs/skin"}}, "required": ["kind", "for", "skin"]},
+        {"properties": {"kind": {"const": "piece"}, "id": {"type": "string"}, "title": {"type": "string"}, "class": {"enum": ["single", "room_scale"]}, "builder": {"type": "string"}, "mount": {"enum": ["floor", "wall", "zone", "surface", "venue", "shelf"]}}, "required": ["kind", "id", "title", "class", "builder", "mount"]}
+      ]
+    }
+  }
+}

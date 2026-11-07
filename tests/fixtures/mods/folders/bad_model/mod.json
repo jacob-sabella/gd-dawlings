@@ -1,0 +1,32 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "test.badmodel",
+  "name": "Test mod",
+  "version": "1.0.0",
+  "licence": {
+    "spdx": "CC0-1.0"
+  },
+  "source": {
+    "kind": "data"
+  },
+  "provides": [
+    {
+      "kind": "rack_module",
+      "type": "test.badmodel.x",
+      "sound": {
+        "kind": "engine",
+        "type": "x"
+      },
+      "skin": {
+        "face": "#421F47",
+        "accent": "#FF8CFF",
+        "pattern": "checker",
+        "tagline": "ONE OF 16"
+      },
+      "model": {
+        "glb": "models/x.glb"
+      }
+    }
+  ]
+}

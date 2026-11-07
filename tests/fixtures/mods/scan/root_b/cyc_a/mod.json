@@ -1,0 +1,29 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "test.cyc_a",
+  "name": "Test mod",
+  "version": "1.0.0",
+  "licence": {
+    "spdx": "CC0-1.0"
+  },
+  "source": {
+    "kind": "data"
+  },
+  "provides": [
+    {
+      "kind": "rack_preset",
+      "name": "test_cyc_a_demo",
+      "title": "Demo",
+      "patch": {
+        "modules": {},
+        "cables": []
+      }
+    }
+  ],
+  "requires": [
+    {
+      "mod": "test.cyc_b"
+    }
+  ]
+}

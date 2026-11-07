@@ -14,6 +14,18 @@ const DONE := ".copied_from_reaper-3d"
 const SKIP := ["logs", "shader_cache", "vulkan", "objectdb_snapshots", "bin"]
 
 
+## The folder `user://<kind>/` for this kind of saved data ("mods", "patches", "layouts"),
+## made if it is missing. Returns "user://<kind>/", or "" when `kind` is not a plain folder name
+## (empty, or holding a slash or "..") or the folder cannot be made.
+static func dir(kind: String) -> String:
+	if kind.is_empty() or "/" in kind or "\\" in kind or ".." in kind:
+		return ""
+	var path := "user://%s/" % kind
+	if not DirAccess.dir_exists_absolute(path) and DirAccess.make_dir_recursive_absolute(path) != OK:
+		return ""
+	return path
+
+
 ## Returns how many files were copied: 0 when there was nothing to do.
 static func migrate(new_dir: String = OS.get_user_data_dir(), old_dir: String = "") -> int:
 	if old_dir.is_empty():
