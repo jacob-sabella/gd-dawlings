@@ -1,0 +1,33 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "my-roof",
+  "title": "My roof",
+  "extends": [
+    "rooftop"
+  ],
+  "zones": {
+    "synth": null
+  },
+  "pieces": [
+    {
+      "id": "hoop",
+      "enabled": false
+    },
+    {
+      "id": "duck",
+      "piece": "duck",
+      "at": {
+        "anchor": {
+          "x": "wall.right",
+          "z": "control_rear"
+        },
+        "pos": [
+          -1.0,
+          2.0
+        ],
+        "yaw": 0.0
+      }
+    }
+  ]
+}

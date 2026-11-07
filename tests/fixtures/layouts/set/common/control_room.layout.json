@@ -1,0 +1,29 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "common.control_room",
+  "title": "Control room",
+  "pieces": [
+    {
+      "id": "console",
+      "piece": "console",
+      "mobility": "wheeled"
+    },
+    {
+      "id": "rack_trolley",
+      "piece": "rack_trolley",
+      "mobility": "wheeled"
+    }
+  ],
+  "groups": [
+    {
+      "id": "mixing",
+      "title": "MIXING",
+      "colour": "#FFD27A",
+      "members": [
+        "console",
+        "rack_trolley"
+      ]
+    }
+  ]
+}

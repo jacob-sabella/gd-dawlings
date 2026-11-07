@@ -1,0 +1,14 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "vars",
+  "title": "Vars",
+  "variants": [
+    {
+      "title": "One"
+    },
+    {
+      "title": "Two"
+    }
+  ]
+}

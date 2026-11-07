@@ -1,0 +1,26 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "both",
+  "title": "B",
+  "pieces": [
+    {
+      "id": "a",
+      "piece": "a",
+      "at": {
+        "anchor": {
+          "x": "mix"
+        },
+        "frame": "authored:b",
+        "pos": [
+          0,
+          0
+        ],
+        "local": [
+          0,
+          0
+        ]
+      }
+    }
+  ]
+}

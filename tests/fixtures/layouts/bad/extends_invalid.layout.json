@@ -1,0 +1,9 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "onbad",
+  "title": "On bad",
+  "extends": [
+    "dup"
+  ]
+}

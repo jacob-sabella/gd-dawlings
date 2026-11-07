@@ -1,0 +1,14 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "warns",
+  "title": "Warns",
+  "colour": "red",
+  "pieces": [
+    {
+      "id": "a",
+      "piece": "a",
+      "extra": 1
+    }
+  ]
+}

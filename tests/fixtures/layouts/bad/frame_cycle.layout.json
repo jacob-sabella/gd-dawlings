@@ -1,0 +1,41 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "loop",
+  "title": "Loop",
+  "pieces": [
+    {
+      "id": "a",
+      "piece": "p",
+      "at": {
+        "frame": "authored:b",
+        "local": [
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "b",
+      "piece": "p",
+      "at": {
+        "frame": "authored:a",
+        "local": [
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "c",
+      "piece": "p",
+      "at": {
+        "frame": "authored:ghost",
+        "local": [
+          0,
+          0
+        ]
+      }
+    }
+  ]
+}

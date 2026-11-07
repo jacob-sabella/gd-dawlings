@@ -758,6 +758,13 @@ func _ready() -> void:
 	_test_the_module_cap_is_counted_on_the_expansion()
 	_test_a_composite_plate_meters_its_inner_module()
 	_test_a_composite_plays()
+	_test_a_layout_parses_and_names_every_error()
+	_test_layout_fragments_and_variants_merge_and_resolve()
+	_test_a_layout_that_cannot_be_resolved_says_why()
+	_test_the_layout_schema_agrees_with_the_parser()
+	_test_shell_facts_from_an_unreadied_venue_match_the_built_one()
+	_test_shell_facts_of_a_venue_in_a_studio_are_the_unreadied_ones()
+	_test_shell_anchors_have_the_values_placement_uses()
 	await _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates()
 	_test_a_rack_catalogue_is_the_engines_own_description()
 	_test_a_rack_patch_checks_every_verb()
@@ -45772,3 +45779,38 @@ const SampleModProofTests := preload("res://tests/sample_mod_proof_tests.gd")
 ## The proof of docs/mods.md step 9: a mod that is only a folder appears, plays, saves, reloads and replicates.
 func _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates() -> void:
 	await SampleModProofTests.new(self).the_proof()
+
+
+const LayoutDataTests := preload("res://tests/layout_data_tests.gd")
+const ShellFactsTests := preload("res://tests/shell_facts_tests.gd")
+
+
+## docs/layouts.md section 11 step 1: the parser, the problem codes and the files that break it.
+func _test_a_layout_parses_and_names_every_error() -> void:
+	LayoutDataTests.new(self).parsing()
+
+
+func _test_layout_fragments_and_variants_merge_and_resolve() -> void:
+	LayoutDataTests.new(self).merging()
+	LayoutDataTests.new(self).resolving()
+
+
+func _test_a_layout_that_cannot_be_resolved_says_why() -> void:
+	LayoutDataTests.new(self).failing()
+
+
+func _test_the_layout_schema_agrees_with_the_parser() -> void:
+	LayoutDataTests.new(self).schema()
+
+
+## docs/layouts.md section 11 step 2: a venue made and never readied gives the facts the built one does.
+func _test_shell_facts_from_an_unreadied_venue_match_the_built_one() -> void:
+	ShellFactsTests.new(self).equivalence()
+
+
+func _test_shell_facts_of_a_venue_in_a_studio_are_the_unreadied_ones() -> void:
+	ShellFactsTests.new(self).in_a_studio()
+
+
+func _test_shell_anchors_have_the_values_placement_uses() -> void:
+	ShellFactsTests.new(self).anchors()

@@ -1,0 +1,9 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "lost",
+  "title": "Lost",
+  "extends": [
+    "nowhere"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "dup",
+  "title": "D",
+  "pieces": [
+    {
+      "id": "a",
+      "piece": "a"
+    },
+    {
+      "id": "a",
+      "piece": "b"
+    }
+  ]
+}

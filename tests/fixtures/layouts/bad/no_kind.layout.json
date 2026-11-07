@@ -1,0 +1,37 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "nokind",
+  "title": "No kind",
+  "pieces": [
+    {
+      "id": "a"
+    }
+  ],
+  "zones": {
+    "z": {
+      "size": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "groups": [
+    {
+      "id": "g",
+      "title": "G",
+      "members": [
+        "a",
+        "b"
+      ]
+    }
+  ],
+  "wiring": [
+    {
+      "kind": "feeds",
+      "from": "a",
+      "to": "b"
+    }
+  ]
+}

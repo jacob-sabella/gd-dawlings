@@ -1,0 +1,23 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "anch",
+  "title": "A",
+  "pieces": [
+    {
+      "id": "a",
+      "piece": "a",
+      "at": {
+        "anchor": {
+          "x": "wall.middle",
+          "z": "control_rear"
+        },
+        "pos": [
+          0,
+          0
+        ],
+        "yaw": 0
+      }
+    }
+  ]
+}

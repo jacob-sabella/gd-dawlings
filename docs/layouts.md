@@ -1,7 +1,9 @@
 # Layouts: rooms as data
 
-Status: **DESIGN, draft for owner review** (2026-11-07). Nothing here is built. It is queue item 2 of
-`docs/refactor_loop.md` and feeds items 6-8. "Today" claims cite `docs/refactor_state_map.md` (SM) or
+Status: **DESIGN, signed off 2026-11-07** (13). Migration steps 1 and 2 (11) are built and unused by the game:
+`core/layouts/` (`LayoutData`, `LayoutCheck`, `LayoutMerge`, `LayoutSet`, `LayoutProblem`, `ShellFacts`),
+`layouts/layout.schema.json`, fixtures in `tests/fixtures/layouts/`. Where they differ from the text below, the
+text says so ("Built:"). It is queue item 2 of `docs/refactor_loop.md` and feeds items 6-8. "Today" claims cite `docs/refactor_state_map.md` (SM) or
 a file:line. Companion: `docs/mods.md` (manifests, registry; a piece is delivered as a mod entry).
 
 ## 1. Terms
@@ -78,7 +80,33 @@ class_name ShellFacts extends RefCounted
 
 `Venue.make(id, v)` followed by `facts()` must not need `_ready` (it must not read child nodes). Step 2 proves
 this by comparing `ShellFacts` from an un-readied venue with one from a built venue for all 42 combinations
-(and the roulette room). Where a venue's `solids()` reads nodes today, the solid becomes a constant.
+(and the roulette room). No venue's `solids()` reads nodes, so nothing had to become a constant (see "Built" below).
+
+**Built (step 2)**, `core/layouts/shell_facts.gd`, differences from the sketch above:
+
+* Extra fields `venue_id`, `variant` and `ceiling` (`Venue.ceiling_height()`, where a person stops going up); `to_dict()` and
+  `ShellFacts.differences(a, b)` (names of facts that differ, numbers within 1e-5) exist for the equivalence test and for tools.
+* `footprint` is the bounds of `Venue.footprint_corners()`, i.e. the 0.05 m inset rectangle the placement tests measure with.
+* `solids` is the shell's own: `zone_solids()`, the instrument's, the weather's and the roulette door (what `Venue.solids()` holds),
+  **without the five wheeled pieces**. They are pieces, and `Venue.solids()` adds them only when no trolley stands in for them. It is
+  `Venue.solids()` minus `Venue.wheeled_solids()`, so a shell that adds a solid of its own in `solids()` (the roulette room's
+  setup-wall post) is kept. Step 5, when the wheeled pieces leave the venue, turns this into a plain call.
+* `anchor(name)` returns a float for a line (`wall.left`, `control_rear`, `annex_edge`, `zone.<id>.cx|cz`), a `Vector2` for a point
+  (`zone.<id>` is the middle, `.min`/`.max` the corners) and null when the shell has no such anchor (a zone it lacks). `anchor_axis(name,
+  "x"|"z")` reads either as a number. `ShellFacts.is_anchor_name` is the syntax (`ANCHOR_RE`, also in the schema).
+* A shell can be described without a venue: `ShellFacts.new()` and set the fields (the `box` kit of the maker will do this).
+
+**What needs `_ready`: nothing a fact reads.** The state map left this unverified; it was checked two ways. By reading: the only
+venue code that reads child nodes and is reachable from a placement question is `lyrics_spot` and `mic_spot` (`find_child("MicStand")`,
+for the felt's height under the stand: a piece's spot, not a shell fact), `hoops()` (`get_node_or_null("Hoop")`, the node beside a
+computed shape) and `ZoneKit.yield_rack` (visibility). `rooms`, `zones`, `zone_solids`, the instrument's and weather's specs,
+`live_room_half`, `annex_edge`, `has_walls`, `ceiling_height`, `footprint_corners` and `door_solid` are constants, `variant` and
+`room_width`. By test: `_test_shell_facts_from_an_unreadied_venue_match_the_built_one` compares facts from a venue made and never
+entered into a tree with the same venue after `_ready`, for the 42 combinations and the roulette room, each at the base width and 3.2 m
+wider (86 comparisons, none differs), and `_test_shell_facts_of_a_venue_in_a_studio_are_the_unreadied_ones` against the venue a real
+`Studio` built for each of the 43. `rich` only changes shadows, so it is not varied. So "where a `solids()` reads nodes the solid becomes
+a constant" (below) turned out to be needed nowhere. `lyrics_spot`/`mic_spot` will need it when step 6 makes the lyric board a piece:
+the booth's felt height is then a constant of the zone kit.
 
 Anchors the shell provides (names are the contract): `wall.left`, `wall.right` (x of the live room's
 side walls, +-`live_room_half`), `control_wall.left|right` (+-`room_width/2`), `control_rear` (z =
@@ -187,6 +215,35 @@ does, `venue.gd:641`). A zone-mounted piece has no `at`: its definition's zone-r
 `variants[i]` may carry any of `zones`, `pieces` (merged by `id`; `"enabled": false` removes), `groups`,
 `wiring`. Variant 0 is the base. Merge rule: objects merge by key, arrays of `id`-bearing objects merge by
 `id`, other arrays replace.
+
+**Built (step 1)**, `LayoutData` (parse), `LayoutCheck` (field rules), `LayoutMerge` (merge), `LayoutSet` (scan, resolve), with
+these rules made exact; each is a clarification or a deviation from the text above:
+
+* **Layout ids may be dotted** (`common.live_room`, the id the worked example already uses); the schema pattern in 5.1 above
+  forbade the dot. Pattern: dotted words of `[a-z][a-z0-9_-]{0,39}`. Piece, zone, group ids: `[a-z][a-z0-9_]{0,39}`.
+* **`null` removes a key** when merged (`"zones": {"synth": null}` drops a zone; this is how a made room, or the roulette room, has
+  fewer zones than its fragments).
+* **`at` replaces whole** when merged (an override must be able to swap an anchor placement for a frame one, not leave half of each).
+* **`wiring` entries have no `id`**: they merge by `kind|from|to`, and `"enabled": false` removes one. (Replacing the list would have
+  lost the live room's `feeds` wire from any venue that lists its own wiring, as the rooftop example does.) `groups` merge by `id`.
+* **`enabled: false` survives merging** (so a later fragment can switch a piece back on) and is taken out last, by `LayoutMerge.settle`,
+  which also drops the group members and wires that named a removed piece. A piece removed from a room therefore leaves no stale
+  reference; a member that never existed is a warning (`unknown_piece`).
+* **Order of merging**: each `extends` entry, in order, each expanded first; then the file's own body; then the chosen variant
+  (without its title); then `settle`. Only the file being resolved contributes `variants`; a fragment's are ignored. Fragments nest
+  at most 8 deep. `order: null` or absent = not cycled.
+* **A fragment or variant may carry part of an entry** (`{"id": "prop_shelf", "at": {...}}`, a zone with only `min`). Completeness
+  is checked on the merged room: every piece has `piece`, every zone `min` and `size`, every group a `title` and `members`.
+  Frames (`authored:<id>`) must name a piece of the room and must not loop. At most 64 pieces after the merge (`over_limit`).
+* **Parser problem codes** (`LayoutProblem`, file-level; `error` makes the layout unusable, `warning` is only reported):
+  `no_file`, `bad_json`, `bad_schema` (the section's `schema`), `unknown_key` (warning, ignored), `version_unsupported`,
+  `duplicate_id`, `unknown_anchor` (syntax only; whether the shell has it is `ShellFacts.anchor`), `unknown_piece` (a frame, group
+  member or wire end naming a piece not in the room; a warning for groups and wires), `cycle` (frames), `extends_missing` (also
+  raised for a fragment that cannot be used), `extends_cycle` (also for nesting deeper than 8), `id_collision` (two files, one
+  id: the first wins), `bad_variant`, `over_limit`. They are not the `LayoutIssue` codes of 6, which need a shell and come in step 4.
+* **Not yet checked** (needs the piece catalogue or the shell, so step 4): that `piece` names a known definition, `mobility` against
+  the definition, `grow` against the shell, and the 16 kB delta limit (a room-delta property, step 8).
+* `shell.size` is any short name until queue slice 8 settles the sizes (decision 4); no size is designed here.
 
 ### 5.2 Worked example: the rooftop, today's numbers
 
@@ -441,8 +498,8 @@ room falls back to its default, and the player sees a toast.
 Each step keeps the suite green; none changes behaviour until step 5. Steps 1-7 are queue item 6, 8-10
 item 7, 11-12 item 8.
 
-1. **`LayoutData` parser and merge** (`extends`, variants), `layouts/layout.schema.json`, fixtures. Unused.
-2. **`ShellFacts`** and the un-readied-venue equivalence test over 42 + 1.
+1. **`LayoutData` parser and merge** (`extends`, variants), `layouts/layout.schema.json`, fixtures. Unused. **Done** (see 5.1 "Built").
+2. **`ShellFacts`** and the un-readied-venue equivalence test over 42 + 1. **Done** (see 3 "Built"; no fact needs `_ready`).
 3. **`LayoutResolver`** and `common.live_room` for the five wheeled pieces; a test that resolved transforms
    equal `Venue.default_spot` for every combination (1e-4). Venues untouched.
 4. **`LayoutValidator`** and `_test_every_layout_is_valid`, with seeded violations. Old tests unchanged.
@@ -465,8 +522,8 @@ item 7, 11-12 item 8.
 
 | Test | Proves |
 |---|---|
-| `_test_a_layout_parses_merges_and_names_every_error` | step 1 |
-| `_test_shell_facts_from_an_unreadied_venue_match_the_built_one` | 3 |
+| `_test_a_layout_parses_and_names_every_error`, `_test_layout_fragments_and_variants_merge_and_resolve`, `_test_a_layout_that_cannot_be_resolved_says_why`, `_test_the_layout_schema_agrees_with_the_parser` (`tests/layout_data_tests.gd`) | step 1 (built) |
+| `_test_shell_facts_from_an_unreadied_venue_match_the_built_one`, `_test_shell_facts_of_a_venue_in_a_studio_are_the_unreadied_ones`, `_test_shell_anchors_have_the_values_placement_uses` (`tests/shell_facts_tests.gd`) | step 2 (built) |
 | `_test_the_layout_resolves_to_the_venues_own_defaults` (temporary) | 5 |
 | `_test_every_layout_is_valid` | the 42 guarantees, no Studio |
 | `_test_the_validator_names_each_seeded_violation` | each code in 6 fires |

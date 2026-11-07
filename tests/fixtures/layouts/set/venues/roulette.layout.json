@@ -1,0 +1,35 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "roulette",
+  "title": "Rig Roulette room",
+  "order": null,
+  "extends": [
+    "common.control_room",
+    "common.live_room"
+  ],
+  "zones": {
+    "vocals": null,
+    "drums": null,
+    "matrix": null,
+    "bricks": null,
+    "synth": null
+  },
+  "pieces": [
+    {
+      "id": "sampler",
+      "enabled": false
+    },
+    {
+      "id": "rig_roulette",
+      "piece": "rig_roulette",
+      "at": {
+        "pos": [
+          -2.2,
+          -1.5
+        ],
+        "yaw": 0.5
+      }
+    }
+  ]
+}

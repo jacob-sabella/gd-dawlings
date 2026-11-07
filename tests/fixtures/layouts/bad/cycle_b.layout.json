@@ -1,0 +1,9 @@
+{
+  "format": "dawlings.layout",
+  "version": 1,
+  "id": "cyc-b",
+  "title": "B",
+  "extends": [
+    "cyc-a"
+  ]
+}
