@@ -457,13 +457,13 @@ func _ready() -> void:
 		_build_walker()
 		_update_camera()
 	if medium != Presentation.Medium.AR:
-		_build_items()
-		_build_tour_case()
-		_build_rig_roulette_station()
+		item_host._build_items()
+		tour_room._build_tour_case()
+		roll_room._build_rig_roulette_station()
 	else:
 		# AR's room is the player's own real one: of the room's items, only the drum pads' kit on the
 		# desk's rail, which plays there as anywhere (docs/spatial_loop.md part two, slice 41).
-		_build_items()
+		item_host._build_items()
 	_build_pads()
 	if medium == Presentation.Medium.AR and xr_bootstrap != null:
 		# Now, and not in XRBootstrap.start(): the environment it has to clear is the one built
@@ -2362,7 +2362,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		items.apply_made(state["made"])
 	if items != null and state.has("items"):
 		items.apply(state["items"], pending_items)
-	_settle_makes(answered)
+	item_host._settle_makes(answered)
 	if state.has("on_air"):
 		on_air = (state["on_air"] as Array).duplicate()
 		for p in _predictions:
@@ -2373,7 +2373,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		# This guest's plugs it has moved and not heard back about, on top.
 		for p in _predictions:
 			if p["verb"] == &"patch":
-				_set_patch(Session.local_peer_id, p["args"][0], p["args"][1], false)
+				patch_host._set_patch(Session.local_peer_id, p["args"][0], p["args"][1], false)
 		_show_patches()
 	if jacks != null and state.has("jacks"):
 		var rows: Dictionary = (state["jacks"] as Dictionary).duplicate()
@@ -2394,10 +2394,10 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		sampler.armed_by = int(state["sampler"])
 	if state.has("weather") and not _predictions.any(func(p): return p["verb"] == Weather.VERB):
 		# Once its press is answered, the host's word: LISTEN or OFF.
-		_show_weather(bool(state["weather"]))
+		item_host._show_weather(bool(state["weather"]))
 	if state.has("looper") and not _predictions.any(func(p): return p["verb"] == Looper.VERB or p["verb"] == Looper.LAYER_VERB):
 		# Once its slaps and layers are answered, the host's word: who is looping, from which bar.
-		_show_looper(state["looper"])
+		item_host._show_looper(state["looper"])
 	if state.has(RackPatch.ROW):
 		# The host's rack, with this guest's own edits it has not heard back about on top.
 		var row: Dictionary = (state[RackPatch.ROW] as Dictionary).duplicate(true)
@@ -2407,7 +2407,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 				_rack_apply(row, String(p["args"][0]), p["args"][1])
 		_show_rack(row)
 	if state.has("board") and not _predictions.any(func(p): return p["verb"] == &"board_source"):
-		_show_board(StringName(state["board"]))
+		roll_room._show_board(StringName(state["board"]))
 	_applying_room = false
 	_looms_dirty = true
 
@@ -2527,7 +2527,7 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 			# A monitor only while its performer is on air: off air, there is no socket to plug into.
 			var into := PersonalMix.monitor_of(args[1])
 			if PersonalMix.valid_socket(args[1]) and (into == 0 or into in on_air):
-				_set_patch(from, args[0], args[1])
+				patch_host._set_patch(from, args[0], args[1])
 				_publish_room_soon()
 		&"on_air":
 			_set_on_air(from, args[0])
@@ -2538,7 +2538,7 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 			if jacks != null and _plug_refusal(args[0], args[1], from) == "":
 				var was := jacks.sink_of(args[0])
 				jacks.plug(args[0], args[1])
-				_tell_plugged(args[0], was, args[1], from)
+				patch_host._tell_plugged(args[0], was, args[1], from)
 				_publish_room_soon()
 		&"open_tablet":
 			if floor_plan != null and DAW.state.fx(args[0], args[1], false) != null:
@@ -2576,7 +2576,7 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 			# their hand -- or it is refused, and they are told why.
 			var made := _mint_for(args[0], args[1], from)
 			if made != null:
-				_hand_made(made, from)
+				item_host._hand_made(made, from)
 		&"slot_item":
 			var item: Item = items.items.get(args[0]) if items != null else null
 			if item != null and _may_put(item, from) and not items.slot(item, args[1], args[2]):
@@ -2585,14 +2585,14 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 			var item: Item = items.items.get(args[0]) if items != null else null
 			if item != null and Session.holder_of(item.network_key()) == from and args[1] != from \
 					and Session.participants.has(args[1]):
-				_give(item, args[1], from)
+				item_host._give(item, args[1], from)
 		&"paste":
 			# A guest's paste: the cassette in its hand, by id; the clip is the host's own row.
 			var cassette := items.items.get(args[0]) as CassetteItem if items != null else null
 			if cassette == null or Session.holder_of(cassette.network_key()) != from:
 				Session.tell(from, "That cassette is not in your hand here yet: pick it up again and paste.")
 			else:
-				paste_cassette(cassette, args[1], args[2], from)
+				item_host.paste_cassette(cassette, args[1], args[2], from)
 		&"open_track_rack":
 			if floor_plan != null and DAW.state.tracks.has(args[0]):
 				open_track_rack(args[0], Vector2(args[1], args[2]))
@@ -2613,13 +2613,13 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 			_arm_sampler(args[0], from)
 		&"weather":
 			# A guest's press on the weather's switch: LISTEN or OFF, for everyone.
-			_set_weather(args[0])
+			item_host._set_weather(args[0])
 		&"looper":
 			# A guest's slap on the looper's pad: armed for them, or refused while somebody else loops.
-			_answer_looper(args[0], args[1], from)
+			item_host._answer_looper(args[0], args[1], from)
 		&"looper_layer":
 			# A guest's finished layer: onto a track of theirs in the LOOPER folder.
-			_write_looper_layer(args[0], args[1], args[2], from)
+			item_host._write_looper_layer(args[0], args[1], args[2], from)
 		&"rack":
 			# A guest's edit of the rack, or its track: the room's row, or told why not.
 			_answer_rack(String(args[0]), args[1], from)
@@ -2635,7 +2635,7 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 				_sample_scratch(there as CassetteItem, path, from)
 		&"board_source":
 			if board_sources().has(args[0]):
-				_show_board(args[0])
+				roll_room._show_board(args[0])
 				_publish_room()
 
 
@@ -2997,7 +2997,7 @@ func _build_anchors() -> void:
 		mouse.camera = camera
 		mouse.name = "MouseHand"
 		add_child(mouse)
-		mouse.bare_jack.connect(_on_bare_jack)
+		mouse.bare_jack.connect(patch_host._on_bare_jack)
 	else:
 		rig = XRRig.new()
 		rig.name = "XRRig"
@@ -3599,618 +3599,6 @@ func _refresh_looms_if_moved(delta: float) -> void:
 
 
 # --- desktop camera -----------------------------------------------------------------------
-
-## The items' homes off the shelf: the headphones on their hook under it, the mic in the booth's stand, where the venue has one, the session in
-## miniature on the side table by the seat, the hand drums in their ring on the drum riser, and the venue's
-## instrument's bars on its mount.
-func _item_homes() -> Dictionary:
-	if venue == null:
-		return _kit_homes({})
-	var out := {&"headphones": venue.headphones_spot(), &"glasses": venue.glasses_spot(), &"tablet": venue.tablet_spot(),
-			&"chips": venue.chips_spot(), &"cards": venue.cards_spot(),
-			&"cradle": venue.cradle_spot(), &"yoyo": venue.yoyo_spot(), &"toy": venue.toy_spot(),
-			&"rcplane": venue.rcplane_spot()}
-	for n in 3:
-		out[StringName("dart%d" % (n + 1))] = venue.dart_spot(n)
-	var mic_at: Variant = venue.mic_spot()
-	if mic_at != null:
-		out[&"mic"] = mic_at
-	var mini_at: Variant = venue.miniature_spot()
-	if mini_at != null:
-		out[MiniatureItem.KIND] = mini_at
-	# The hand drums round their ring on the drum riser (slice 40); none where there is no riser.
-	for n in HandDrum.KINDS.size():
-		var drum_at: Variant = venue.drum_circle_spot(n)
-		if drum_at != null:
-			out[HandDrum.KINDS[n]] = drum_at
-	# The venue's instrument's bars on its mount (slice 42); past its count, or with none, put away.
-	if venue_instrument != null and is_instance_valid(venue_instrument):
-		out.merge(VenueInstrument.homes(venue_instrument.spec))
-	return _kit_homes(out)
-
-
-## `homes` with the drum pads' kit's (slice 41): on the console's front rail, wherever the desk is,
-## in AR too; none (put away) with no console built yet.
-func _kit_homes(homes: Dictionary) -> Dictionary:
-	var at: Variant = kit_home()
-	if at != null:
-		homes[KitItem.KIND] = at
-	return homes
-
-
-## The things people pick up (docs/items_loop.md), in the set's frame, the floor plan's. They
-## lie only where the walker could stand to pick them up again.
-func _build_items() -> void:
-	items = ItemRoom.new()
-	items.name = "Items"
-	if medium == Presentation.Medium.AR:
-		items.only = ItemRoom.AR_KINDS
-	if walker != null:
-		items.fits = walker.reachable
-		items.ground_at = walker.ground_at
-		items.floor_rects = func() -> Array: return walker.walkable
-		# What a throw lands on: the venue's fixed things, and the free-standing ones wherever they
-		# have been pushed (the walker stops at those as trolleys, which say nothing of how tall).
-		items.solids = func() -> Array:
-			return walker.fixed + (venue.wheeled_solids() if venue != null and not live_pieces.is_empty() else [])
-		items.gear = walker.footprints
-	items.local_peer = func() -> int: return Session.local_peer_id
-	Session.takeable = func(key: String) -> bool:
-		return is_instance_valid(items) and items.items.values().any(
-				func(item: Item) -> bool: return item.network_key() == key)
-	# A marked instrument (Item.bound_to, Tour's "marked" spill) is refused every other hand by
-	# the host's own arbitration, not only by the hand's own `may_hold` check.
-	Session.holdable = func(key: String, _peer: int) -> int:
-		if not is_instance_valid(items):
-			return 0
-		for item: Item in items.items.values():
-			if item.network_key() == key:
-				return item.bound_to
-		return 0
-	if venue != null:
-		ToyItem.shown = venue.venue_id()
-	studio_set.add_child(items)
-	if venue != null:
-		items.boards = venue.dart_boards()
-		items.hoops = RoomSync.hoops(self)
-		items.set_venue(venue.venue_id())
-	var shelf: Array[Transform3D] = []
-	if venue != null:
-		shelf = venue.item_spots()
-	_dress_venue_bars()
-	items.set_spots(shelf, _item_homes())
-	var mic := items.items.get(&"mic") as MicItem
-	if mic != null:
-		mic.live_changed.connect(func(live: bool) -> void:
-			if live:
-				mic_arm.take()
-			else:
-				mic_arm.let_go())
-	var phones := items.items.get(&"headphones") as HeadphonesItem
-	if phones != null:
-		phones.worn_changed.connect(_on_phones_changed)
-		phones.state_changed.connect(func(_s: Item.State) -> void: _on_phones_changed())
-	var tablet := items.items.get(&"tablet") as TabletItem
-	if tablet != null:
-		tablet.mix = personal
-		tablet.colour = _colour_of(Session.local_peer_id)
-		tablet.patch_asked.connect(_on_patch_asked)
-		tablet.on_air_asked.connect(_on_air_asked)
-	personal.changed.connect(_on_personal_changed)
-	_wire_miniature()
-	their_keys = TheirKeys.new()
-	their_keys.name = "TheirKeys"
-	add_child(their_keys)
-	Session.note_played.connect(their_keys.play)
-	# A guest's keys, live on the instrument plugin of the track they play into.
-	var guest_play := GuestPlay.new()
-	guest_play.name = "GuestPlay"
-	add_child(guest_play)
-	# A guest's audio input, offered and allowed, heard live through the track the host put it on.
-	var guest_live := GuestLive.new()
-	guest_live.name = "GuestLive"
-	add_child(guest_live)
-	Session.control_played.connect(their_keys.control)
-	their_monitor = TheirMonitor.new()
-	their_monitor.name = "TheirMonitor"
-	add_child(their_monitor)
-	ear = EarCue.new()
-	ear.name = "EarCue"
-	add_child(ear)
-	Session.note_played.connect(their_monitor.play)
-	Session.control_played.connect(their_monitor.control)
-	console.rebuilt.connect(_show_patches)
-	# A rack's OUT is made again with the rack, and shows the plugs in it again.
-	if rack != null:
-		rack.rebuilt.connect(_show_patches)
-	Session.roster_changed.connect(_on_roster_for_patches)
-	_show_patches()
-	items.asked.connect(_on_items_asked)
-	items.refused.connect(_on_item_refused)
-	items.used.connect(func(item: Item, down: bool) -> void: Session.send_item_use(item.id, down, item.use_take))
-	# What the sampler catches (slice 26): a use or a hit by a hand here, or anyone's the host hears.
-	items.used.connect(_sample_use_here)
-	items.rang.connect(_sample_ring)
-	Session.item_used.connect(_on_someones_use)
-	Session.item_hit.connect(_on_someones_hit)
-	items.personal_taken.connect(_on_item_personal_taken)
-	hit_recorder = HitRecorder.new()
-	hit_recorder.name = "HitRecorder"
-	add_child(hit_recorder)
-	# Every hit's one song position is read from the take's own stamp (InstrumentItem.clock).
-	InstrumentItem.clock = hit_recorder.stamp
-	# The shelf tags of the instruments that stand still say, in a headset, which way a hit is heard.
-	InstrumentItem.hands_hint = medium != Presentation.Medium.SCREEN
-	hit_recorder.unarmed.connect(func() -> void:
-		Session.notice.emit("Arm a track to record the percussion: hits are only heard until one is."))
-	# A fixed instrument is struck where it stands: by a hand or a controller crossing its head here.
-	strike = Strike.new()
-	strike.name = "Strike"
-	add_child(strike)
-	# This player's own hits a few milliseconds after the hand, where the helper can run.
-	InstrumentItem.fast_path = _hit_on_fast_path
-	InstrumentItem.fast_latency = _fast_path_latency
-	_start_hit_voices()
-	jacks = Jacks.new()
-	jacks.name = "Jacks"
-	jacks.recorder = hit_recorder
-	add_child(jacks)
-	jacks.asked.connect(_on_plug_asked)
-	# A cable into a bandmate ends at their ghost's glove; one into this player plays their keys.
-	jacks.far_end = func(peer: int, from: Vector3) -> Variant:
-		return presence.cable_end(peer, from) if presence != null else null
-	jacks.keys = Session.guest_midi
-	Session.jack_played.connect(jacks.received)
-	Session.jack_check = _jack_refusal
-	Session.participant_left.connect(_on_jack_player_left)
-	_wear_wrist_jacks()
-	# The sockets made before there were jacks to ask: shown now.
-	jacks.show_all()
-	items.child_exiting_tree.connect(_on_item_leaving)
-	items.played.connect(_on_item_played)
-	if Session.guest_midi != null:
-		# Everything this player's keys send, from every source, into their loop while they loop.
-		Session.guest_midi.sends.connect(_on_keys_sent)
-	Session.participant_left.connect(_on_looper_player_left)
-	items.moved.connect(_on_item_moved)
-	if presence != null:
-		presence.items = items
-	# AR makes no items while playing: no rack, no shelf to keep them on.
-	if medium != Presentation.Medium.AR:
-		_wire_made_items()
-
-
-# --- made items: cassettes (docs/spatial_loop.md part two, slice 23) ------------------------
-#
-# A clip pulled out of the timeline is a cassette in the hand that pulled it: minted by the host
-# (ItemRoom.mint) from its own song, its data sent once (Session.publish_made) and named by id in
-# the room. A guest's pull is an ask (`make`) and a blank cassette in its hand until the host's
-# arrives there or the ask is refused. Handed over: thrown, held by a bandmate's glove
-# (GIVE_REACH, GIVE_HOLD), or clicked on their ghost at a desk; the room's `give` puts it in their
-# hand. Shelved on the rack's slots, binned in its BIN. Pressed onto a lane, a strip or a stage voice,
-# pasted there (slice 24): the host's own at once, a guest's asked by id with the room's `paste`.
-
-func _wire_made_items() -> void:
-	items.made = Session.made
-	items.authority = Session.is_authority
-	items.made_home = _made_home
-	items.press_ahead = _press_ahead
-	items.minted.connect(_on_minted)
-	items.unmade.connect(_on_unmade)
-	items.told.connect(_on_items_told)
-	items.used.connect(_on_item_used_here)
-	items.paste_pressed.connect(_on_paste_pressed)
-	Session.made_changed.connect(_on_made_changed)
-	Session.holds_changed.connect(_take_given_soon)
-	if timeline != null:
-		timeline.clip_pulled.connect(_on_clip_pulled)
-	pieces.hold_the_rack()
-	_restore_made()
-
-
-## Something in the room moved: told to the room, and a made item's place kept with the layout.
-func _on_item_moved(item: Item) -> void:
-	_publish_room_soon()
-	if ItemRoom.is_made(item.id) and Session.is_authority():
-		_remember_made_soon()
-
-
-func _on_items_told(text: String) -> void:
-	Session.notice.emit(text)
-
-
-## Minted here, on the host: its row to everyone once, and kept with this host's layout.
-func _on_minted(item: Item) -> void:
-	Session.publish_made(item.id)
-	_remember_made()
-	_publish_room_soon()
-
-
-## Binned here, on the host: gone everywhere, row and all.
-func _on_unmade(id: StringName) -> void:
-	Session.drop_made(id)
-	Session.notice.emit("Binned %s." % _made_name(id))
-	_remember_made()
-	_publish_room_soon()
-
-
-func _made_name(id: StringName) -> String:
-	var kind := ItemRoom.kind_of(id)
-	return "%s %s" % [String(kind), String(id).trim_prefix(String(kind))]
-
-
-## A guest heard the host take a made item away: here too.
-func _on_made_changed(id: StringName, gone: bool) -> void:
-	if gone and items != null:
-		items.forget_made(id)
-
-
-## A hand here pulled track `track`'s item `index` out of the timeline: the host's own pull is a
-## cassette in that hand at once; a guest's is an ask, and a blank one in the hand meanwhile.
-func _on_clip_pulled(track: int, index: int, hand: Node) -> void:
-	var interactor := hand as Interactor
-	if items == null or interactor == null:
-		return
-	var from := "clip:%d:%d" % [track, index]
-	if Session.is_authority():
-		var made := _mint_for(CassetteItem.KIND, from, Session.local_peer_id)
-		if made != null:
-			interactor.pick_up(made)
-			_say_cassette(made)
-		return
-	var seq := _predict(&"make", [CassetteItem.KIND, from])
-	if seq > 0:
-		var look := ItemRoom.look_of(CassetteItem.KIND)
-		look.top_level = true
-		look.name = "MakingCassette"
-		add_child(look)
-		_making.append({"seq": seq, "hand": interactor, "look": look})
-		Session.notice.emit("Asking %s for a cassette of it..." % Session.name_of(1))
-
-
-## A made item of `kind`, of what `from` names in the host's own song, made by `maker`: minted, or
-## null with `maker` told why not.
-func _mint_for(kind: StringName, from: String, maker: int) -> Item:
-	if items == null:
-		return null
-	var made := items.mint(kind, ItemRoom.made_data(kind, from), maker)
-	if made == null:
-		Session.tell(maker, items.mint_refusal)
-	return made
-
-
-## Made item `made`, just minted for `maker`'s pull: in their hand, everywhere.
-func _hand_made(made: Item, maker: int) -> void:
-	if maker == Session.local_peer_id:
-		var hand := _free_hand()
-		if hand != null:
-			hand.pick_up(made)
-	else:
-		Session.hand_to(maker, made.network_key())
-	_publish_room_soon()
-
-
-## How a cassette just put in a hand is used, said once. A tracked bare hand has no trigger, so it is
-## told only of the push (Interactor.paste_press_words).
-func _say_cassette(made: Item) -> void:
-	var desk := medium == Presentation.Medium.SCREEN
-	var press := made.carried_by.paste_press_words() if is_instance_valid(made.carried_by) else "a press"
-	Session.notice.emit(("%s is in your hand: hold L to hear it; click a timeline lane, a strip or a stage voice to paste it, a bandmate to hand it over, a rack slot to shelve it; Q puts it down."
-			if desk else "%s is in your hand: hold it to your ear to hear it; " + press + " on a timeline lane, a strip or a stage voice pastes it; hold it by a bandmate's glove to hand it over, let it go by a rack slot to shelve it.")
-			% made.item_title().capitalize())
-
-
-## The blank cassettes waiting in hands follow them.
-func _follow_making() -> void:
-	for m: Dictionary in _making:
-		var hand := m["hand"] as Interactor
-		var look := m["look"] as Node3D
-		if is_instance_valid(hand) and is_instance_valid(look):
-			look.global_transform = hand.carry_pose() * Transform3D(Basis(Vector3.UP, PI), Vector3(0, -0.01, 0))
-
-
-## The host has answered every pull up to `answered`: each one's blank cassette goes, and its hand
-## waits for the made one the holds put there (`_take_given`); a refused one's hand waits for
-## nothing, and the host has said why.
-func _settle_makes(answered: int) -> void:
-	var still: Array = []
-	for m: Dictionary in _making:
-		if int(m["seq"]) > answered:
-			still.append(m)
-			continue
-		if is_instance_valid(m["look"]):
-			(m["look"] as Node3D).queue_free()
-		_awaiting_hands.append(m["hand"])
-	_making = still
-	_take_given()
-	_awaiting_hands.clear()
-
-
-func _take_given_soon() -> void:
-	_take_given.call_deferred()
-
-
-## Whatever the holds say is in this player's hand and no hand here has yet: a made item minted
-## for this guest's pull, or something handed over. Into the hand that pulled it, else a free one.
-func _take_given() -> void:
-	if items == null or not is_inside_tree():
-		return
-	var pending := {}
-	for p in _predictions:
-		if p["verb"] in [&"put_item", &"home_item", &"throw_item", &"slot_item", &"give"]:
-			pending[p["args"][0]] = true
-	for id in items.items:
-		var item: Item = items.items[id]
-		if item.carried_by != null or pending.has(id) or not ItemRoom.is_made(id) \
-				or Session.holder_of(item.network_key()) != Session.local_peer_id \
-				or not (item.is_held_elsewhere() or item.state == Item.State.HOME):
-			continue
-		var hand: Interactor = null
-		while hand == null and not _awaiting_hands.is_empty():
-			var waiting = _awaiting_hands.pop_front()
-			if is_instance_valid(waiting) and (waiting as Interactor).carrying == null:
-				hand = waiting
-		if hand == null:
-			hand = _free_hand()
-		if hand != null:
-			hand.pick_up(item)
-
-
-## A hand of this player's with nothing in it: the mouse's on a desktop, else an empty controller
-## or hand, else the mouse's or the first, whose pick-up pockets what it has.
-func _free_hand() -> Interactor:
-	var first: Interactor = null
-	for node in get_tree().get_nodes_in_group(Interactor.GROUP):
-		var hand := node as Interactor
-		if hand == null or not hand.is_inside_tree():
-			continue
-		if hand.carrying == null:
-			return hand
-		if first == null:
-			first = hand
-	return first
-
-
-## Hand `item`, in a hand here, to `peer`: at once on the host; a guest asks, and its glove lets go
-## into theirs meanwhile.
-func give_item(item: Item, peer: int) -> void:
-	if peer <= 0 or peer == Session.local_peer_id or not Session.participants.has(peer):
-		return
-	if Session.is_authority():
-		_give(item, peer, Session.local_peer_id)
-		return
-	if item.carried_by != null:
-		item.carried_by.lose_carrying()
-	if presence != null:
-		item.follow(presence.palm_of(peer, item))
-	_predict(&"give", [item.id, peer])
-	Session.notice.emit("Handed %s to %s." % [_given_name(item), Session.name_of(peer)])
-
-
-## The host hands `item` from `from` to `peer`: out of a hand here if one has it, into theirs.
-func _give(item: Item, peer: int, from: int) -> void:
-	if item.carried_by != null:
-		item.carried_by.lose_carrying()
-	# The table first: the hand that takes it here then finds it already this player's.
-	Session.hand_to(peer, item.network_key())
-	if peer == Session.local_peer_id:
-		var hand := _free_hand()
-		if hand != null:
-			hand.pick_up(item)
-	var what := _given_name(item)
-	Session.tell(peer, "%s handed you %s." % [Session.name_of(from), what])
-	if from == Session.local_peer_id:
-		Session.notice.emit("Handed %s to %s." % [what, Session.name_of(peer)])
-	_publish_room_soon()
-
-
-## A cassette pressed onto `track` at `seconds` by a hand here (ItemRoom.paste_pressed;
-## docs/spatial_loop.md part two, slice 24): the host pastes it at once; a guest asks with the room's
-## `paste` [id, track, time], and the host pastes the clip it holds. The cassette stays in the hand.
-func _on_paste_pressed(item: Item, track: int, seconds: float) -> void:
-	var cassette := item as CassetteItem
-	if cassette == null or not cassette.pastes():
-		return
-	if Session.is_authority():
-		paste_cassette(cassette, track, seconds, Session.local_peer_id)
-		return
-	if _predict(&"paste", [cassette.id, track, seconds]) > 0:
-		var t := DAW.state.track(track, false)
-		Session.notice.emit("Asking %s to paste the %s cassette onto %s at %s..." % [Session.name_of(1),
-				cassette.clip_name(), t.display_name() if t != null else "track %d" % track, DAW.state.bar_beat(seconds)])
-
-
-## The host pastes `cassette`'s clip onto `track` at `seconds` for `who` (this machine's own peer, or
-## the guest who asked): one undo step that is theirs, or refused with the reason. Both are told; the
-## host as well when it is a guest's, since an item appearing on its timeline unannounced is a
-## surprise mid-session.
-func paste_cassette(cassette: CassetteItem, track: int, seconds: float, who: int) -> void:
-	var why := DAW.paste_item(track, seconds, cassette.clip)
-	if not why.is_empty():
-		Session.tell(who, why)
-		return
-	var said := "the %s cassette onto %s at %s" % [cassette.clip_name(), DAW.state.track(track).display_name(),
-			DAW.state.bar_beat(seconds)]
-	Session.tell(who, "Pasted %s." % said)
-	if who != Session.local_peer_id:
-		Session.notice.emit("%s pasted %s." % [Session.name_of(who), said])
-
-
-## What a hand-over toast calls `item`: a cassette by its clip's name as the song has it ("the
-## Kick verse 1 cassette"), anything else by its title.
-func _given_name(item: Item) -> String:
-	var cassette := item as CassetteItem
-	if cassette != null:
-		return "the %s cassette" % cassette.clip_name()
-	return item.item_title().to_lower()
-
-
-## A click with a made item in the mouse's hand and nothing under the cursor: on a bandmate's
-## ghost, it is theirs.
-func _on_item_used_here(item: Item, down: bool) -> void:
-	if not down or presence == null or not ItemRoom.is_made(item.id) or not (item.carried_by is MouseInteractor):
-		return
-	var aim := item.carried_by.aim()
-	var peer := presence.peer_at(aim.origin, -aim.basis.z)
-	if peer != 0:
-		give_item(item, peer)
-
-
-# --- the weather (docs/spatial_loop.md part two, slice 44) ----------------------------------
-#
-# The switch is the room's row `weather`: a guest's press is the room's ask `weather` [on], shown at
-# once here; the host's is done. Every machine schedules the same drops from its own song clock, so
-# nothing else crosses the wire: the host alone records them, onto the track the jack goes into.
-
-## A hand here pressed the weather's switch: `on` for LISTEN, off for OFF.
-func _on_weather_pressed(on: bool) -> void:
-	if Session.is_authority():
-		_set_weather(on)
-	elif _predict(Weather.VERB, [on]) > 0:
-		_show_weather(on)
-	var what := str(weather.spec.get("title", "the weather")).to_lower() if weather != null else "the weather"
-	var said := what.left(1).to_upper() + what.substr(1)
-	Session.notice.emit("%s: LISTEN. Each drop is a note of the song's scale, %s, heard by everyone. Its jack records them onto a track." \
-			% [said, Weather.pitch_of(weather.spec if weather != null else {})] if on else "%s: OFF. The drops fall silent." % said)
-
-
-## The room's word on the switch: LISTEN or OFF, shown here and told to the room.
-func _set_weather(on: bool) -> void:
-	_show_weather(on)
-	_publish_room_soon()
-
-
-## The switch shown as the room has it, on this weather and any stood later.
-func _show_weather(on: bool) -> void:
-	weather_listening = on
-	if weather != null and is_instance_valid(weather):
-		weather.listening = on
-
-
-## A drop landed (Weather.dropped): its jack's lead shows it, and the host records it onto the track
-## the jack goes into, heard or not. Every machine has the same drop, so only one takes it down.
-func _on_weather_dropped(drop: Dictionary) -> void:
-	if jacks == null:
-		return
-	var source := StringName(drop["source"])
-	var track := Jack.track_of(jacks.sink_of(source))
-	if track <= 0:
-		return
-	jacks.heard_from(source, int(drop["velocity"]))
-	if Session.is_authority() and hit_recorder != null and Jacks.takes_midi(track):
-		hit_recorder.note(track, int(drop["note"]), int(drop["velocity"]), InstrumentItem.MELODIC_CHANNEL,
-				float(drop["length"]), float(drop["song"]))
-
-
-# --- the looper (docs/spatial_loop.md part two, slice 45) -----------------------------------
-#
-# Who is looping is the room's row `looper` [peer, from_bar, bars]: a guest's slap is the room's ask
-# `looper` [from_bar, bars], shown at once here; the host's is answered (Looper.answer). The layer is
-# taken down where it is played, by the song as its player hears it, and written on the host: a
-# guest's sent whole (`looper_layer`), for the host to put on a track of theirs.
-
-## What a player is called on the looper's screen and their tracks: their name, or this player's own.
-func _looper_name(peer: int) -> String:
-	if peer == Session.local_peer_id and Session.local_name != "":
-		return Session.local_name
-	return Session.name_of(peer)
-
-
-## A hand here slapped the looper's pad: armed (the host's own at once, a guest's asked and shown),
-## refused while somebody else loops, called off during this player's own count.
-func _on_looper_slapped() -> void:
-	if looper == null:
-		return
-	var me := Session.local_peer_id
-	var why := Looper.refusal(looper_row, me, _looper_name)
-	if why != "":
-		Session.notice.emit("%s: one player at a time. Slap again when their layer is done." % why)
-		return
-	if not looper_row.is_empty():
-		if looper.phase == Looper.Phase.COUNT:
-			_on_looper_called_off()
-			Session.notice.emit("Loop called off.")
-		elif looper.phase == Looper.Phase.REC:
-			Session.notice.emit("Recording your layer: it ends at bar %d." % (int(looper_row[1]) + int(looper_row[2])))
-		return
-	var plan := Looper.plan(DAW.state, looper.heard(), looper_length)
-	# Read before the answer, which sets the loop for a first layer.
-	var stacking := Looper.loop_set(DAW.state)
-	if Session.is_authority():
-		_answer_looper(plan[0], plan[1], me)
-	elif _predict(Looper.VERB, plan) > 0:
-		_show_looper([me, plan[0], plan[1]])
-	var bars := int(plan[1])
-	Session.notice.emit(("Stacking a layer: the rest of this pass counts in, then %d bar%s of everything you play." \
-			if stacking else "Looping: a bar's count, then %d bar%s of everything you play, keys and hits, as a layer of your own.") \
-			% [bars, "" if bars == 1 else "s"])
-
-
-## Host: `from`'s slap (theirs asked, or this player's own): Looper.answer against the room's row, and
-## the row told to the room. A refusal is told to them; their own screen goes back with the room.
-func _answer_looper(from_bar: int, bars: int, from: int) -> void:
-	var out := Looper.answer(looper_row, from_bar, bars, from, _looper_name)
-	if bool(out["refused"]):
-		Session.tell(from, "%s One player at a time." % out["said"])
-	_show_looper(out["row"])
-	_publish_room_soon()
-
-
-## This player's layer is taken down (Looper.layer_done): the host's written at once, a guest's sent.
-func _on_looper_layer(start: float, end: float, notes: Array) -> void:
-	if Session.is_authority():
-		_write_looper_layer(start, end, notes, Session.local_peer_id)
-	elif _predict(Looper.LAYER_VERB, [start, end, notes]) > 0:
-		_show_looper([])
-
-
-## Host: `from`'s layer onto a track of theirs (Looper.write_layer), their row cleared. A layer with
-## nothing played in it makes no track. Only the row's own player's, and only while it is theirs; and
-## it goes where the row says, over the row's bars as the host has them (Looper.span_of), not where
-## the layer says it began and ended, with only the notes begun inside them (Looper.inside).
-func _write_looper_layer(_start: float, _end: float, notes: Array, from: int) -> void:
-	if looper_row.is_empty() or int(looper_row[0]) != from:
-		return
-	var span := Looper.span_of(looper_row, DAW.state)
-	_show_looper([])
-	_publish_room_soon()
-	var kept := Looper.inside(notes, span).slice(0, MidiTake.MAX_NOTES)
-	if kept.is_empty():
-		Session.tell(from, "Nothing was played into the loop, so there is no layer. Slap again to try another.")
-		return
-	var made := Looper.write_layer(_looper_name(from), float(span[0]), float(span[1]), kept)
-	Session.tell(from, "%s: %d note%s on a track of its own in the LOOPER folder. Slap again while it loops to stack another." \
-			% [made["name"], kept.size(), "" if kept.size() == 1 else "s"])
-
-
-## This player's count or layer was cut short (the transport stopped, the riser gone): their row
-## cleared, by the host or asked of it.
-func _on_looper_called_off() -> void:
-	if Session.is_authority():
-		_answer_looper(0, 0, Session.local_peer_id)
-	elif _predict(Looper.VERB, [0, 0]) > 0:
-		_show_looper([])
-
-
-## The room's row on this looper and any stood later.
-func _show_looper(row: Array) -> void:
-	looper_row = row.duplicate()
-	if looper != null and is_instance_valid(looper):
-		looper.row = looper_row
-
-
-## What this player's keys send, into their loop while they loop.
-func _on_keys_sent(kind: int, pitch: int, velocity: int, song: float, channel: int) -> void:
-	if looper != null and is_instance_valid(looper):
-		looper.key(kind, pitch, velocity, song, channel)
-
-
-## Host: whoever was looping left: nobody is now.
-func _on_looper_player_left(peer: int) -> void:
-	if Session.is_authority() and not looper_row.is_empty() and int(looper_row[0]) == peer:
-		_show_looper([])
-		_publish_room_soon()
-
 
 ## EDIT on the lyric board: in a headset, the typing pad by the singer's hand (LyricBoard.PAD_AT), its
 ## line added to the end of the lyrics untimed; at a desk, the session panel's LYRICS box, which has
@@ -4899,44 +4287,6 @@ func _restore_made(missing_only := false) -> void:
 			items.lay(item, Vector2(float(place[0]), float(place[2])), float(place[3]))
 
 
-## The case that starts a Tour run, chained in the back of house. The small hook the studio
-## gives Tour (docs/architecture.md): everything past "it broke" or "the run is over" is
-## core/tour/tour.gd's.
-func _build_tour_case() -> void:
-	tour_case = TourCase.new()
-	studio_set.add_child(tour_case)
-	tour_case.transform = _venue_to_set(venue.tour_case_spot())
-	tour_case.local_peer = func() -> int: return Session.local_peer_id
-	if items != null:
-		items.targets = [{"node": tour_case, "radius": TourCase.STRIKE_RADIUS}]
-	tour_case.break_attempted.connect(_on_tour_case_struck)
-	tour_case.broken_open.connect(_on_tour_case_broken_open)
-	Tour.run_started.connect(_on_tour_run_started)
-	Tour.run_ended.connect(_on_tour_run_ended)
-	Tour.brief_started.connect(_on_tour_brief_started)
-	Tour.instrument_spilled.connect(_on_tour_instrument_spilled)
-	Tour.chaos_telegraphed.connect(_on_tour_chaos_telegraphed)
-	Tour.chaos_struck.connect(_on_tour_chaos_struck)
-	Tour.flaw_fixed.connect(_on_tour_flaw_fixed)
-	Tour.clock_low.connect(_on_tour_clock_low)
-	Session.tour_changed.connect(_on_session_tour_changed)
-	Session.participant_left.connect(_on_tour_participant_left)
-	_sync_tour_roll()
-
-
-## The panel on the control room wall: works against whichever DAW backend is open, not gated to
-## the built-in engine the way Tour is, so it is built unconditionally alongside the case.
-func _build_rig_roulette_station() -> void:
-	if not roulette_enabled:
-		return
-	_build_roll_board()
-	_stand_the_setup_wall()
-	Session.roll_changed.connect(_on_session_roll_changed)
-	Session.roll_setup_changed.connect(_on_session_roll_setup_changed)
-	venue_changed.connect(func(_id): _build_roll_board())
-	venue_changed.connect(func(_id): _stand_the_setup_wall())
-
-
 ## What the host has set for the next roll: kept here, not in the panel, so it outlives the
 ## panel (which only stands in the Rig Roulette room) and a roll anywhere reads it.
 var roll_settings := RollSettings.new()
@@ -4945,164 +4295,17 @@ var roll_settings := RollSettings.new()
 const SETUP_WALL_SCALE := 2.9
 
 
-## The setup wall (`RigRouletteStation`) stands in the Rig Roulette room and nowhere else: the
-## venues have a door instead (`RouletteDoor`). It is a child of the venue, so it goes when the
-## venue does; its wheels start from `roll_settings` and write back to it.
-func _stand_the_setup_wall() -> void:
-	rig_roulette_station = null
-	if venue == null or not in_roulette_room():
-		return
-	var wall := RigRouletteStation.new()
-	wall.name = "SetupWall"
-	if not Session.is_authority() and not Session.roll_setup.is_empty():
-		roll_settings = RollSettings.from_dict(Session.roll_setup)
-	wall.read_only = not Session.is_authority()
-	wall.count = roll_settings.count
-	wall.pool = wall_pool(roll_settings.pool)
-	wall.key_locked = roll_settings.key_locked
-	wall.per_track_cap = roll_settings.per_track_cap
-	wall.no_repeats = roll_settings.no_repeats
-	wall.scales = int(roll_settings.scales)
-	wall.near_semitones = roll_settings.near_semitones
-	wall.replay_last = roll_settings.replay_last
-	wall.reroll_limit = roll_settings.reroll_limit
-	wall.chaos = roll_settings.chaos
-	wall.tempo_pick = roll_settings.tempo_pick
-	wall.weights = roll_settings.weights.duplicate()
-	wall.transform = venue.rig_roulette_spot()
-	# A wall for the whole room to read from the seat, not a panel to stand at.
-	wall.scale = Vector3.ONE * SETUP_WALL_SCALE
-	wall.roll_requested.connect(_on_rig_roulette_roll_requested)
-	wall.changed.connect(func() -> void:
-		if not Session.is_authority():
-			# Only the host sets the roll: a guest's nudge is put back to the host's word.
-			wall.apply_settings(roll_settings)
-			Session.notice.emit("Only %s can change the roll." % Session.name_of(1))
-			return
-		var s := wall.settings()
-		roll_settings.count = s.count
-		roll_settings.pool = s.pool
-		roll_settings.key_locked = s.key_locked
-		roll_settings.per_track_cap = s.per_track_cap
-		roll_settings.no_repeats = s.no_repeats
-		roll_settings.scales = s.scales
-		roll_settings.near_semitones = s.near_semitones
-		roll_settings.replay_last = s.replay_last
-		roll_settings.reroll_limit = s.reroll_limit
-		roll_settings.chaos = s.chaos
-		roll_settings.tempo_pick = s.tempo_pick
-		roll_settings.weights = s.weights
-		Session.publish_roll_setup(roll_settings.to_dict()))
-	wall.preset_sources = _preset_choices
-	wall.undo_requested.connect(undo_the_roll)
-	wall.preset_chosen.connect(func(id: int) -> void: _on_preset_chosen(wall, id))
-	wall.preset_save_requested.connect(func() -> void: _on_preset_save_requested(wall))
-	wall.screen_sources = func() -> Array:
-		var out := []
-		var sources := board_sources()
-		for i in sources.size():
-			out.append([i, "SCREEN: " + board_title(sources[i])])
-		return out
-	wall.screen_chosen.connect(func(i: int) -> void:
-		var sources := board_sources()
-		if i >= 0 and i < sources.size():
-			choose_board_source(sources[i]))
-	venue.add_child(wall)
-	wall.set_free_standing(true)
-	rig_roulette_station = wall
-	if not Session.roll.is_empty():
-		wall.show_result(Session.roll["tracks"], Session.roll["pedals"].size(), Session.roll["key"])
-	if wall.screen_wheel != null:
-		wall.screen_wheel.choice = maxi(board_sources().find(board_source), 0)
-		wall.screen_wheel.refresh()
-
-
 ## Where the saved presets live; a test points it elsewhere.
 var roll_presets_path := RollPresets.PATH
-
-
-## The PRESET wheel's list: a resting word, the ones that ship, the saved slots.
-func _preset_choices() -> Array:
-	var out := [[0, "PRESETS"]]
-	var built := RollPresets.built_in()
-	for i in built.size():
-		out.append([1 + i, "LOAD: " + built[i][0]])
-	var slots := RollPresets.saved(roll_presets_path)
-	for i in slots.size():
-		out.append([1 + built.size() + i, "LOAD MINE %d: %s" % [i + 1, "EMPTY" if slots[i].is_empty() else RollPresets.name_of(slots[i])]])
-	return out
-
-
-## A preset was picked: the host's settings become it (seed apart), told to the room.
-func _on_preset_chosen(wall: RigRouletteStation, id: int) -> void:
-	if id == 0:
-		return
-	if not Session.is_authority():
-		Session.notice.emit("Only %s can change the roll." % Session.name_of(1))
-		wall.apply_settings(roll_settings)
-		return
-	var built := RollPresets.built_in()
-	var d: Dictionary = {}
-	if id <= built.size():
-		d = built[id - 1][1]
-	else:
-		var slots := RollPresets.saved(roll_presets_path)
-		var slot := id - 1 - built.size()
-		if slot >= 0 and slot < slots.size():
-			d = slots[slot]
-	if d.is_empty():
-		Session.notice.emit("That slot is empty: set the wheels and press SAVE.")
-		return
-	var loaded := RollSettings.from_dict(d)
-	loaded.seed_value = roll_settings.seed_value
-	roll_settings = loaded
-	wall.apply_settings(roll_settings)
-	Session.publish_roll_setup(roll_settings.to_dict())
-
-
-func _on_preset_save_requested(wall: RigRouletteStation) -> void:
-	if not Session.is_authority():
-		Session.notice.emit("Only %s can save a preset." % Session.name_of(1))
-		return
-	var at := RollPresets.save(roll_settings, roll_presets_path)
-	wall.preset_wheel.refresh()
-	Session.notice.emit("Saved as mine %d: %s." % [at + 1, RollPresets.name_of(roll_settings.to_dict())])
 
 
 static func wall_pool(pool: RollSettings.Pool) -> RigRouletteStation.Pool:
 	return int(pool) as RigRouletteStation.Pool
 
 
-## The board the roll is written up on, built again for each venue: how it is drawn and whether
-## it stands on its own posts are the venue's to say.
-func _build_roll_board() -> void:
-	if roll_board != null:
-		studio_set.remove_child(roll_board)
-		roll_board.queue_free()
-	roll_board = RollBoard.new()
-	roll_board.landed.connect(_on_roll_result_landed)
-	roll_board.chalky = venue.roll_board_chalky()
-	roll_board.free_standing = venue.back_wall_gear_stands()
-	roll_board.transform = venue.roll_board_spot()
-	roll_board.rich = rich_rendering()
-	roll_board.environment_from = world_env.environment if world_env != null else null
-	studio_set.add_child(roll_board)
-	_on_session_roll_changed()
-	_show_board(board_source)
-
-
 ## What the big board shows: &"" for the roll's write-up, or a mounted surface's id. The room's
 ## choice, the same for everyone in it (`room_state`'s "board").
 var board_source: StringName = &""
-
-
-## Everything the big board can show, the write-up first.
-func board_sources() -> Array[StringName]:
-	var out: Array[StringName] = [&""]
-	if mount != null:
-		for id in mount.mounted_ids():
-			out.append(id)
-	return out
 
 
 static func board_title(source: StringName) -> String:
@@ -5113,158 +4316,14 @@ static func board_title(source: StringName) -> String:
 	return String(source).replace("_", " ").to_upper()
 
 
-## Someone here chose what the big board shows: done at once, and the room asked (or told, by
-## the host) so every screen in it shows the same.
-func choose_board_source(source: StringName) -> void:
-	if source == board_source or not board_sources().has(source):
-		return
-	if Session.is_authority():
-		_show_board(source)
-		_publish_room()
-	else:
-		_predict(&"board_source", [source])
-		_show_board(source)
-
-
-func _show_board(source: StringName) -> void:
-	if not board_sources().has(source):
-		source = &""
-	board_source = source
-	if roll_board != null:
-		roll_board.show_source(mount.surface(source) if source != &"" else null, board_title(source))
-	if rig_roulette_station != null and rig_roulette_station.screen_wheel != null:
-		rig_roulette_station.screen_wheel.choice = board_sources().find(source)
-		rig_roulette_station.screen_wheel.refresh()
-
-
-## The host's word on the roll's settings reached this guest: kept, and shown on the wall.
-func _on_session_roll_setup_changed() -> void:
-	if Session.is_authority():
-		return
-	roll_settings = RollSettings.from_dict(Session.roll_setup)
-	if rig_roulette_station != null:
-		rig_roulette_station.apply_settings(roll_settings)
-
-
 var _roll_shown := 0
 ## Rolls made since the band last came into the Rig Roulette room.
 var _rolls_this_visit := 0
 
 
-## A result landed on the board: a thud, higher each time, and the wheel on the floor spun up.
-func _on_roll_result_landed(step: int, of: int) -> void:
-	Foley.play(roll_board, Foley.board_thud(step), -6.0, 0.8 + 0.5 * float(step) / float(of))
-	if venue.has_method("pulse"):
-		venue.pulse(1.0 if step < of else 0.4)
-
-
-## `Session.roll` changed (the host's own roll, or word of it reaching a guest): the board and
-## the panel's own line say what it was.
-func _on_session_roll_changed() -> void:
-	# A roll not seen yet lands part by part; the same one sent again (a guest admitted late) is
-	# simply written up.
-	var n: int = Session.roll.get("n", 0)
-	var fresh := n != 0 and n != _roll_shown
-	_roll_shown = n
-	roll_board.show_roll(Session.roll, fresh)
-	if fresh and venue.has_method("pulse"):
-		venue.pulse(1.0)
-	if not Session.roll.is_empty() and rig_roulette_station != null:
-		rig_roulette_station.show_result(Session.roll["tracks"], Session.roll["pedals"].size(), Session.roll["key"])
-
-
-## RigRouletteStation.roll_requested: told so only the host can roll, the same pattern
-## `choose_venue` and `_on_tour_case_struck` both use.
-func _on_rig_roulette_roll_requested() -> void:
-	if not roulette_enabled:
-		return
-	if not Session.is_authority():
-		Session.notice.emit("Only %s can roll the rig." % Session.name_of(1))
-		return
-	_roll_rig()
-
-
 ## How many tracks a roll starts the new project with.
 const ROLL_TRACKS_MIN := RollSettings.TRACKS_MIN
 const ROLL_TRACKS_MAX := RollSettings.TRACKS_MAX
-
-## The roll itself, host-only by the time this runs (`_on_rig_roulette_roll_requested`'s own
-## gate): refused while the open project has changes no save has kept, since it starts a NEW
-## project. The roll is worked out by `RigRoll` from the panel's settings (fresh randomness
-## unless a seed is set -- nothing to do with a Tour run's own seed); this starts the project and
-## puts the effects on. The key is only named, never applied: the project is empty, so there is
-## no note to move. The rolled project is the starting point, not an edit, so it counts as saved
-## and can be rolled again untouched.
-func _roll_rig() -> void:
-	if DAW.has_unsaved_changes():
-		Session.notice.emit("Save the project first: a roll starts a new one.")
-		return
-	var limit := roll_settings.reroll_limit
-	if limit >= 0 and _rolls_this_visit > limit:
-		Session.notice.emit("No re-rolls left: write the song with this one.")
-		return
-	# Every roll runs off a seed of its own, so the board can say it and the band can replay it.
-	var settings := RollSettings.from_dict(roll_settings.to_dict())
-	settings.seed_value = RigRoll.seed_for(settings, int(Session.roll.get("seed", 0)))
-	var rng := RigRoll.rng_for(settings)
-	var tracks := RigRoll.track_count(rng)
-	var before := _remember_before_roll()
-	var refused := DAW.new_project(tracks)
-	if not refused.is_empty():
-		_forget(before)
-		Session.notice.emit("Could not start the new project: %s" % "; ".join(refused))
-		return
-
-	var indices: Array = []
-	for i in DAW.state.track_indices():
-		indices.append(i)
-	var plan := RigRoll.plan(settings, rng, indices, _rig_roulette_pool(settings), str(Session.roll.get("key", "")))
-	# The project is empty, so a new tempo has no item to leave behind in time.
-	var tempo: int = plan["tempo"]
-	if tempo > 0:
-		DAW.set_tempo(float(tempo))
-	var landed := 0
-	var pedals: Array = []
-	for p in plan["pedals"]:
-		DAW.add_fx(int(p["track"]), str(p["plugin"]), -1)
-		landed += 1
-		var added: MixState.FXState = DAW.state.track(int(p["track"])).fx.values()[-1]
-		_throw_the_knobs(int(p["track"]), added, rng, settings.chaos)
-		pedals.append({"track": DAW.state.track(int(p["track"])).display_name(), "fx": added.name})
-	var key: String = plan["key"]
-	DAW.mark_clean()
-	_rolls_this_visit += 1
-	# The board is for the write-up now, whatever it was showing.
-	_show_board(&"")
-	_publish_room()
-
-	if not before.is_empty():
-		_roll_history.append(before)
-		while _roll_history.size() > ROLL_HISTORY_MAX:
-			_forget(_roll_history.pop_front())
-	Session.publish_roll({"by": Session.name_of(Session.local_peer_id), "n": Session.roll.get("n", 0) + 1, "past": _past_rolls(),
-			"tracks": tracks, "key": key, "pedals": pedals, "seed": settings.seed_value, "chaos": settings.chaos, "tempo": tempo,
-			"left": -1 if limit < 0 else limit - _rolls_this_visit + 1})
-	var msg := "%s rolled a new project: %d tracks, %d pedal%s" % [Session.name_of(Session.local_peer_id), tracks,
-			landed, "" if landed == 1 else "s"]
-	if not key.is_empty():
-		msg += ", key of %s" % key
-	if tempo > 0:
-		msg += ", %d BPM" % tempo
-	Session.tell_room(msg + ".")
-
-
-## A landed pedal's knobs thrown by the chaos, off the roll's own generator so a replay throws them
-## the same. The pedal's parameters as the engine reports them; a DAW that has not listed any (Reaper
-## gives only the current bank) is left alone.
-func _throw_the_knobs(track: int, fx: MixState.FXState, rng: RandomNumberGenerator, chaos: int) -> void:
-	if chaos <= 0:
-		return
-	var params := fx.params.keys()
-	params.sort()
-	for param in params:
-		DAW.set_fx_param(track, fx.index, int(param), RigRoll.knob(rng, float(fx.params[param]), chaos))
-
 
 ## How many rolls back an undo can go.
 const ROLL_HISTORY_MAX := 8
@@ -5274,28 +4333,6 @@ var _roll_history: Array = []
 var _history_swept := false
 
 
-## The project as it stands, kept aside before a roll replaces it, so an undo can bring it back.
-## Only the built-in engine and its stand-in own project files; against Reaper there is nothing
-## to keep, so a roll there cannot be undone (and the wall says so when asked).
-func _remember_before_roll() -> Dictionary:
-	if not DAW.backend is OfflineBackend:
-		return {}
-	if not _history_swept:
-		# What an earlier run left (a quit, a crash) is no history of this one.
-		_history_swept = true
-		for f in DirAccess.get_files_at("user://roll_history"):
-			DirAccess.remove_absolute("user://roll_history".path_join(f))
-	var file := "user://roll_history/before_%d_%d.%s" % [Time.get_ticks_msec(), _roll_history.size(), ProjectFiles.EXTENSION]
-	if not ProjectFiles.save(DAW.backend, file, true).is_empty() and not FileAccess.file_exists(file):
-		return {}
-	return {"file": file, "original": DAW.backend.project_path, "prev_roll": Session.roll.duplicate(true)}
-
-
-func _forget(entry: Dictionary) -> void:
-	if not entry.is_empty():
-		DirAccess.remove_absolute(entry["file"])
-
-
 ## A roll in a few words, for the board's list of the ones before.
 static func roll_summary(roll: Dictionary) -> String:
 	var key: String = roll.get("key", "")
@@ -5303,410 +4340,11 @@ static func roll_summary(roll: Dictionary) -> String:
 			"" if (roll.get("pedals", []) as Array).size() == 1 else "s", (", " + key) if not key.is_empty() else ""]
 
 
-## The rolls before the one on the board, newest first, a few of them.
-func _past_rolls() -> Array:
-	var out := []
-	for i in range(_roll_history.size() - 1, -1, -1):
-		var prev: Dictionary = _roll_history[i]["prev_roll"]
-		if not prev.is_empty():
-			out.append(roll_summary(prev))
-		if out.size() >= 3:
-			break
-	return out
-
-
-## Host: put the project back as it was before the last roll. Refused with changes no save has
-## kept, as a roll is, since it replaces the project.
-func undo_the_roll() -> void:
-	if not Session.is_authority():
-		Session.notice.emit("Only %s can undo a roll." % Session.name_of(1))
-		return
-	if _roll_history.is_empty():
-		Session.notice.emit("Nothing to undo." if DAW.backend is OfflineBackend else "This engine cannot undo a roll.")
-		return
-	if DAW.has_unsaved_changes():
-		Session.notice.emit("Save the project first: undoing a roll replaces it.")
-		return
-	var entry: Dictionary = _roll_history.back()
-	var refused := DAW.open_project(entry["file"])
-	if not refused.is_empty():
-		Session.notice.emit("Could not bring it back: %s" % "; ".join(refused))
-		return
-	_roll_history.pop_back()
-	# It is the project it was, not the file it was kept in.
-	DAW.backend.project_path = entry["original"]
-	DAW.backend.name_project()
-	DAW.backend.mark_clean()
-	_forget(entry)
-	_rolls_this_visit = maxi(_rolls_this_visit - 1, 0)
-	var prev: Dictionary = entry["prev_roll"].duplicate(true)
-	if not prev.is_empty():
-		prev["past"] = _past_rolls()
-	_roll_shown = int(prev.get("n", 0))
-	_publish_room()
-	Session.publish_roll(prev)
-	Session.tell_room("%s undid the roll." % Session.name_of(Session.local_peer_id))
-
-
-## The effects a roll may land: CHARACTER draws only the character kinds out of
-## `DAW.state.fx_choices`; EVERYTHING, or any pool against a live Reaper list (no kind metadata to
-## filter by), is the whole thing.
-func _rig_roulette_pool(settings: RollSettings) -> Array:
-	return RigRoll.pool_of(settings, DAW.state.fx_choices, not DAW.backend is ReaperBackend)
-
-
-## A thrown item has hit the case, broken or not (TourCase.break_attempted): told so only the
-## host can start the tour, the same pattern `choose_venue` uses for the venue picker.
-func _on_tour_case_struck() -> void:
-	if not Session.is_authority():
-		Session.notice.emit("Only %s can start the tour." % Session.name_of(1))
-
-
-## The hit that broke the case: starts the run. `Tour.start_run()` is host-only and quiet about
-## refusing (wrong engine, a run already under way, or simply not the host) -- nothing else
-## here needs to check first.
-func _on_tour_case_broken_open() -> void:
-	if not Tour.is_available():
-		Session.notice.emit("A tour needs the built-in engine: start dawlings with --built-in.")
-		tour_case.reset(Tour.unlocks.runs, Tour.unlocks.wins)
-		return
-	Tour.start_run()
-
-
-## A run just started, on the host (`Tour.run_started`, which never fires on a guest -- see
-## core/tour/tour.gd's class note): the case catches up broken, in case it is still chained --
-## true after the normal five hits already burst it, but not after `start_run()` is reached some
-## other way (tools/screenshot.gd's `--tour` flag, say). A no-op once it already is.
-func _on_tour_run_started() -> void:
-	if tour_case != null:
-		tour_case.sync_broken()
-		if Tour.run != null:
-			tour_case.show_seed(Tour.run.attempt_seed)
-
-
-## The run is over, won or lost: the case is chained again, its tally brought up to date, and the
-## result told to the whole room (`Session.tell_room`, not `Session.notice.emit` -- this is
-## host-only, unlike a chaos telegraph's every-peer-computes-it-itself pattern, so it has to
-## reach a guest the same way a take's own placement notice does). Fires on the host the moment
-## `Tour._end_run` runs -- never on a guest (see core/tour/tour.gd's class note) -- which is
-## exactly why `tell_room` rather than `notice.emit` alone: a guest's own case still catches up
-## from the emptied `Session.tour` (`_on_session_tour_changed`) below, but the result itself has
-## no wire state of its own to read once the run is gone, only this one broadcast.
-func _on_tour_run_ended(won: bool) -> void:
-	if tour_case != null:
-		tour_case.reset(Tour.unlocks.runs, Tour.unlocks.wins)
-		Foley.play(tour_case, Foley.win_fanfare() if won else Foley.loss_sting())
-	var line := "The gig's a hit. Reputation %d." % Tour.unlocks.reputation
-	if not won:
-		line = "That one got away. Lost a point -- Reputation %d." % Tour.unlocks.reputation
-	Session.tell_room(line)
-	# Back in the case: every instrument the run spilled stops existing here, the host's own
-	# half of the reset (a guest's copies go with it too, off the emptied `Session.tour` --
-	# `_sync_spilled`, through `_on_session_tour_changed` below).
-	if items != null:
-		for id in items.spawned_ids():
-			items.despawn(id)
-		_publish_room_soon()
-	_sync_tour_roll()
-	# A run can end mid-`power_flicker`'s blackout (the boss brief lost with the lights still
-	# out): never leave the room dark once there is no run left to light it back up for.
-	_relight()
-
-
-## Host only (see core/tour/tour.gd's class note): a new brief is in, which may have a different
-## tempo (and so a different bar length) than the last -- `_sync_tour_roll` re-reads it.
-func _on_tour_brief_started(_index: int) -> void:
-	_sync_tour_roll()
-
-
-## A guest's half of the same reset: the host's word on the run (`Session.tour`) went empty --
-## or just arrived, in which case this guest's own case catches up broken (TourCase.sync_broken),
-## in case this guest's own hits never reached it (someone else's throws, a dropped one, lag):
-## "every guest sees it break" rides the run's synced state, not a local count. The host skips
-## this half -- its own case already broke, from its own authoritative hits, if a run is under
-## way at all.
-func _on_session_tour_changed() -> void:
-	_sync_tour_roll()
-	_sync_spilled()
-	if tour_case == null:
-		return
-	if Session.tour.is_empty():
-		tour_case.reset(Tour.unlocks.runs, Tour.unlocks.wins)
-		_relight()
-	elif not Session.is_authority():
-		tour_case.sync_broken()
-		# Off `Session.tour` directly, not `Tour.run`: `Tour`'s own `Session.tour_changed`
-		# connection is made with `call_deferred` (core/tour/tour.gd's `_ready`), so `Tour.run`
-		# is not guaranteed to have caught up to this signal yet when this handler runs.
-		tour_case.show_seed(int(Session.tour.get("attempt_seed", 0)))
-
-
-## The host's own word on an instrument hitting the floor (`Tour.instrument_spilled`, which
-## never reaches this guest's `Session.tour_changed` -- see Tour's own class note): the real
-## item, thrown the same way everyone else sees it land.
-func _on_tour_instrument_spilled(id: StringName, kind: StringName, curse: StringName, bound_to: int) -> void:
-	_spill_instrument(id, kind, curse, bound_to)
-
-
-## Makes `id` (a copy of `kind`) a real item in the room, cursed and marked as the card said,
-## and tosses it out of the case's open lid; everyone else sees the same flight off the room
-## (`ItemRoom.state` carries the launch) -- the host's own half of a spill; a guest's is
-## `_sync_spilled`, off the same facts riding `Session.tour`.
-func _spill_instrument(id: StringName, kind: StringName, curse: StringName, bound_to: int) -> void:
-	if items == null or tour_case == null:
-		return
-	var n := items.spawned_ids().size()
-	var home := _spill_home(n)
-	var item := items.spawn(kind, id, home)
-	if item == null:
-		return
-	_dress_spilled(item, id, kind, curse, bound_to)
-	var mouth := tour_case.transform * Vector3(0, TourCase.BODY_H + 0.15, TourCase.CASE_DEPTH * 0.5 + 0.06)
-	var seed := Tour.run.attempt_seed if Tour.run != null else 0
-	items.spill(item, mouth, home.origin, hash([String(id), seed]))
-	_announce_spill(item, curse)
-	_publish_room_soon()
-
-
-## The case's thump and the toast, on every machine an instrument falls out on: the host's as
-## it throws (`_spill_instrument`), a guest's as it learns of it (`_sync_spilled`) -- a reward
-## nobody is told about is one nobody goes looking for.
-func _announce_spill(item: Item, curse: StringName) -> void:
-	Foley.play(tour_case, Foley.case_toss())
-	var low := item.item_title().to_lower()
-	match curse:
-		&"sour":
-			Session.notice.emit("A %s fell out of the case, tuned sour." % low)
-		&"low":
-			Session.notice.emit("A %s fell out of the case, an octave low." % low)
-		&"bound":
-			Session.notice.emit("A %s fell out of the case, marked for %s: only they can hold it." % [low, item.bound_name])
-		_:
-			Session.notice.emit("A %s fell out of the case." % low)
-
-
-## `item`'s voice, curse and mark, whichever of a fresh spill (`_spill_instrument`) or one a
-## guest is only now catching up with (`_sync_spilled`) is asking.
-func _dress_spilled(item: Item, id: StringName, kind: StringName, curse: StringName, bound_to: int) -> void:
-	if item is InstrumentItem:
-		var instrument := item as InstrumentItem
-		instrument.voice = 1 if id != kind else 0
-		match curse:
-			&"sour":
-				instrument.curse_pitch = 0.917
-			&"low":
-				instrument.curse_pitch = 0.5
-	item.bound_to = bound_to
-	item.bound_name = Session.name_of(bound_to) if bound_to != 0 else ""
-
-
-## A half-ring 0.85m in front of the case, one spot per copy the case can ever spill
-## (TourParts.SPILL_KINDS.size() * TourParts.COPIES, six today), so no two land on the same spot.
-func _spill_home(n: int) -> Transform3D:
-	var spots := TourParts.SPILL_KINDS.size() * TourParts.COPIES
-	var a := lerpf(-1.2, 1.2, float(n) / float(maxi(spots - 1, 1)))
-	return tour_case.transform * Transform3D(Basis(Vector3.UP, PI + a), Vector3(sin(a) * 0.85, 0, cos(a) * 0.85))
-
-
-## This guest's half of `Session.tour`'s `instruments`: spawn whatever is missing, despawn
-## whatever is no longer wanted (the run ended), and bring every spill's mark up to date (a
-## leaver's unbinding lands here too). Idempotent on the host as well, though the host's own
-## spawns already happened off `Tour.instrument_spilled` -- this only ever finds them already
-## there.
-func _sync_spilled() -> void:
-	if items == null:
-		return
-	var run := TourRun.from_dict(Session.tour) if not Session.tour.is_empty() else null
-	var want: Array[StringName] = []
-	if run != null:
-		want = run.instruments
-	for id in items.spawned_ids():
-		if not (id in want):
-			items.despawn(id)
-	if run == null:
-		return
-	var spawned_any := false
-	for i in run.instruments.size():
-		var id: StringName = run.instruments[i]
-		var item: Item = items.items.get(id)
-		if item == null:
-			var kind := TourParts.kind_of(id)
-			item = items.spawn(kind, id, _spill_home(items.spawned_ids().size()))
-			if item == null:
-				continue
-			_dress_spilled(item, id, kind, run.instrument_curses[i], run.instrument_bound[i])
-			# The host already said so as it threw; this is a guest hearing it land.
-			if not Session.is_authority() and tour_case != null:
-				_announce_spill(item, run.instrument_curses[i])
-			spawned_any = true
-		else:
-			var bound: int = run.instrument_bound[i]
-			item.bound_to = bound
-			item.bound_name = Session.name_of(bound) if bound != 0 else ""
-	if spawned_any:
-		apply_room(Session.room, false)
-
-
-## A hand here was refused an item it is not marked for (ItemRoom.refused, Item.may_hold): the
-## same toast a claimed fader gives a second hand.
-func _on_item_refused(item: Item, _why: String) -> void:
-	Session.notice.emit("Only %s can hold the %s." % [item.bound_name, item.item_title().to_lower()])
-
-
-## A personal copy was just spawned and bound (ItemRoom.personal_taken): whose it is, which
-## stays out of item_room.gd the way `local_peer` does, for the same reason
-## (`core/items/item_room.gd`'s own `PERSONAL_KINDS` note).
-func _on_item_personal_taken(item: Item) -> void:
-	item.bound_name = Session.name_of(item.bound_to) if item.bound_to != 0 else ""
-
-
-## A peer left the session: any instrument marked for them is nobody's to be marked for any
-## more. `Tour._on_participant_left` clears the run's own record (`run.instrument_bound`); this
-## clears the real item's here on the host, so a hand can take it up at once rather than it
-## staying a brick until the next spill or sync happens to touch it. A personal copy is not
-## something anyone else could take up anyway (its id names only the one peer it was ever for),
-## so it is retired instead of left bound to someone no longer in the room.
-func _on_tour_participant_left(peer_id: int) -> void:
-	if items == null or not Session.is_authority():
-		return
-	for id in items.spawned_ids():
-		var item: Item = items.items.get(id)
-		if item == null or item.bound_to != peer_id:
-			continue
-		if items.is_personal_copy(id):
-			items.despawn(id)
-		else:
-			item.bound_to = 0
-			item.bound_name = ""
-
-
-## A running take is sent (and a fresh one begun) about every bar while a brief needs its parts
-## ticked live, rather than only when recording stops (Tour.take_roll_seconds). Read from
-## `Tour.run`, correct on both sides (live on the host, rebuilt from `Session.tour` on a guest),
-## so this one sync point covers Tour's own signals and `Session.tour_changed` alike.
-func _sync_tour_roll() -> void:
-	var seconds := Tour.take_roll_seconds()
-	if hit_recorder != null:
-		hit_recorder.roll_every = seconds
-	if Session.guest_midi != null:
-		Session.guest_midi.roll_every = seconds
-
-
-## A chaos event's telegraph, on EVERY peer, from their own clock (Tour.chaos_telegraphed is the
-## one signal pair here that is not host-only -- see Tour's own class note): the room says so
-## before it happens, so getting hit by one is never a surprise from nowhere. `crowd_throws`
-## warns with a rumble from the back of house, where the crowd actually is; everything else
-## warns from the case itself, the run's own corner of the room.
-func _on_tour_chaos_telegraphed(index: int) -> void:
-	var run := Tour.run
-	if run == null or index < 0 or index >= run.events.size():
-		return
-	var event := TourChaos.by_id(run.events[index])
-	if event == null or tour_case == null:
-		return
-	_flicker_lights()
-	tour_case.rattle()
-	if event.id == &"crowd_throws":
-		_play_at(_crowd_house_point(), Foley.crowd_rumble(0))
-	else:
-		Foley.play(tour_case, Foley.chaos_warning())
-	var track: int = run.event_track[index] if index < run.event_track.size() else 0
-	Session.notice.emit(event.telegraph_for(run, track))
-
-
-## The strike itself, on every peer: the sound everywhere, and whichever of the events here has
-## a presentation of its own on top of the desk's own verb landing through ordinary replication
-## (every other event's strike is nothing but a DAW verb, already shown by the strip it moved).
-func _on_tour_chaos_struck(index: int) -> void:
-	var run := Tour.run
-	if run == null or index < 0 or index >= run.events.size():
-		return
-	var id: StringName = run.events[index]
-	if tour_case != null:
-		Foley.play(tour_case, Foley.chaos_strike())
-	match id:
-		&"power_flicker":
-			_lights_out(Tour.take_roll_seconds() * TourChaos.LIGHTS_OUT_BARS)
-		&"crowd_throws":
-			if Session.is_authority():
-				_throw_crowd_things(index)
-
-
-## A flaw just turned fixed, on every peer from their own copy of `run.fixed` (Tour.flaw_fixed is
-## not host-only -- see Tour's own class note by `chaos_telegraphed`): the crowd cheers from the
-## back of house, the band's own job landing somewhere the room can hear it, on top of the HUD's
-## line already flipping to ACCENT the same tick.
-func _on_tour_flaw_fixed(index: int) -> void:
-	_play_at(_crowd_house_point(), Foley.crowd_cheer(index % 3))
-
-
-## The clock running out, on every peer from their own `brief_elapsed()` (Tour.clock_low is not
-## host-only, the same reasoning as the chaos telegraph): the lid rattles for the whole of the
-## brief's last `Tour.CLOCK_LOW_SECONDS` rather than a telegraph's short jitter -- the room living
-## through the final stretch with the band, not just warning them it is coming.
-func _on_tour_clock_low() -> void:
-	if tour_case != null:
-		tour_case.rattle(Tour.CLOCK_LOW_SECONDS)
-	Session.notice.emit("Ten seconds. Finish it.")
-
-
-## Where the crowd is, in the frame the gear's floor plan is measured in: the back of house's
-## centre, a little short of its far wall -- `crowd_throws`'s rumble comes from here, and so does
-## the throw itself.
-func _crowd_house_point() -> Vector3:
-	if venue == null:
-		return Vector3.ZERO
-	var rect := venue.back_of_house()
-	return Vector3(rect.position.x + rect.size.x * 0.5, 1.5, rect.end.y - 0.4)
-
-
-## A one-shot emitter at an arbitrary point, for a sound that is not coming from any gear already
-## standing there -- `crowd_rumble`, from the house rather than the case. Freed shortly after:
-## long enough for the clip to finish, short enough not to litter the set over a busy run.
-##
-## `not is_inside_tree()`: several tests `remove_child` a studio without freeing it once they are
-## done, leaving its signal connections (`Tour.flaw_fixed` among them, which now fires on every
-## flaw a test's own brief happens to clear) live on a node with no `SceneTree` of its own --
-## `get_tree()` would be null on exactly that node, same reasoning `_walk_to_seat` already needed
-## this guard for.
-func _play_at(point: Vector3, stream: AudioStream, volume_db := 0.0) -> void:
-	if studio_set == null or not is_inside_tree():
-		return
-	var marker := Node3D.new()
-	marker.position = point
-	studio_set.add_child(marker)
-	Foley.play(marker, stream, volume_db)
-	get_tree().create_timer(1.5).timeout.connect(marker.queue_free)
-
-
 ## Up to three of the room's loose, unheld things, thrown in from the back of house at the desk:
 ## the room's own flight (ItemRoom.fly), so a guest sees exactly the same throw through the room
 ## state -- nothing new rides the wire. Seeded off the run, so a replay throws the same things at
 ## the same spots. Host only: the room is the host's.
 const CROWD_PROPS: Array[StringName] = [&"duck", &"ball", &"toy", &"plane"]
-
-func _throw_crowd_things(event_index: int) -> void:
-	if items == null or Tour.run == null:
-		return
-	var from := _crowd_house_point()
-	var thrown := 0
-	for kind in CROWD_PROPS:
-		if thrown >= 3:
-			break
-		var item: Item = items.items.get(kind)
-		if item == null or item.carried_by != null or Session.holds.has(kind):
-			continue
-		if item.state != Item.State.HOME and item.state != Item.State.LOOSE:
-			continue
-		var rng := RandomNumberGenerator.new()
-		rng.seed = hash([Tour.run.attempt_seed, event_index, thrown])
-		var to := Vector3(rng.randf_range(-1.0, 1.0), 1.0, TIMELINE_Z + 0.5)
-		var spin := Vector3(rng.randf_range(-6.0, 6.0), rng.randf_range(-6.0, 6.0), rng.randf_range(-6.0, 6.0))
-		items.fly(item, from, ItemRoom.lob(from, to, 6.0), spin, 1)
-		thrown += 1
-	if thrown > 0:
-		_publish_room_soon()
-
 
 ## What the headphones on this person's head let through (Ears), and what this person is told
 ## about it when they go on.
@@ -5904,88 +4542,6 @@ func _hears_tracks() -> bool:
 	return DAW.backend is GodotBackend and Session.role != Session.Role.GUEST
 
 
-## A plug dropped on a socket by a hand here, or brought back to the tray: done here at once,
-## and asked of the host, whose table it is.
-func _on_patch_asked(receiver: int, socket: StringName) -> void:
-	if not PersonalMix.valid_socket(socket) or receiver < 0 or receiver >= PersonalMix.RECEIVERS:
-		return
-	var letter: String = PersonalMix.LETTERS[receiver]
-	_set_patch(Session.local_peer_id, receiver, socket)
-	if Session.is_authority():
-		_publish_room_soon()
-	else:
-		_predict(&"patch", [receiver, socket])
-	if socket == &"":
-		Session.notice.emit("Plug %s is back in the tray." % letter)
-	elif personal.unheard(receiver):
-		Session.notice.emit("Plug %s in %s. One track by itself is not heard here: %s" % [letter,
-				PersonalMix.place_of(socket), _why_no_tracks()])
-	else:
-		var late := ""
-		var player := PersonalMix.player_of(socket)
-		if player > 0 and Session.note_delay_ms(player) >= 0.0:
-			late = " Their notes are played here, about %d ms after they play them." \
-					% roundi(Session.note_delay_ms(player))
-		if PersonalMix.monitor_of(socket) > 0:
-			late = " In time with the backing they hear: your mix waits for their notes."
-			if not Ears.reaches_mix(Session.role == Session.Role.GUEST, DAW.backend is ReaperBackend):
-				late += " Reaper's mix is not the game's to copy, so only their notes are heard."
-		Session.notice.emit("Plug %s in %s: in your headphones%s.%s" % [letter,
-				PersonalMix.place_of(socket), "" if _heard_phones else " when you put them on", late])
-
-
-## An instrument played by a hand here: into the take, and, shaken, out to everyone else. A
-## click on percussion is out already, as a use; a pitched item's click is sent as a hit too,
-## since its ring is all a use of it is, and only a hit carries the song position (`at`) that
-## pitches it. The take and the room both get that one `at`, unmoved: a snap moves only the
-## recorded note (HitRecorder.snapped_at), and whether this player snaps goes with the hit, with the
-## Foley take their hand rang, so everyone hears the sound they heard. A strike on an instrument that
-## stands still (Item.fixed) has no use to go as, so it goes as a hit, with where on it it landed
-## (`zone`).
-func _on_item_played(item: InstrumentItem, velocity: int, struck: bool, at: float, zone := &"") -> void:
-	# Onto the armed track, or the track its jack goes into.
-	jacks.hit(item, velocity, at, zone)
-	# A strike of the venue's instrument into the rack's `world` module.
-	if modular_world != null and item.jack_source() == VenueInstrument.SOURCE:
-		modular_world.strike(at, velocity)
-	# And into this player's loop, while they loop (slice 45).
-	if looper != null and is_instance_valid(looper):
-		looper.hit(item, velocity, at, zone)
-	if _sampling():
-		_sample(item, item.kind_of_hit(struck, zone), item.sound_take(), Session.local_peer_id, item.tune_at(at))
-	if not struck or item.pitched() or item.fixed:
-		send_item_hit.call(item.id, velocity, at, HitRecorder.snaps(), item.sound_take(), zone)
-
-
-## A hand here stepped an instrument's jack (Jacks.asked): done here at once, and asked of the
-## host, whose table it is. One that plainly is not this player's to plug -- in somebody else's
-## hand, or lying on the floor -- is said instead, and nothing is asked.
-func _on_plug_asked(source: StringName, sink: StringName) -> void:
-	var item: Item = items.source_item(source) if items != null else null
-	if item == null and Jack.is_item(source):
-		return
-	var whose := "Your keys'" if Jack.keys_player(source) > 0 else "The %s's" % Jacks.source_name(source, item)
-	if Jack.chord_player(source) > 0:
-		whose = "Your chord hand's"
-	var why := _plug_refusal(source, sink, Session.local_peer_id, true)
-	if why != "":
-		Session.notice.emit("%s jack: %s." % [whose, why])
-		return
-	if Jack.own_player(source) > 0 and sink == &"" and jacks.sink_of(source) == &"":
-		Session.notice.emit("%s jack: there is nobody in the room to plug %s into." % [whose,
-				"them" if Jack.keys_player(source) > 0 else "it"])
-		return
-	var was := jacks.sink_of(source)
-	if not jacks.plug(source, sink):
-		return
-	if Session.is_authority():
-		_tell_plugged(source, was, sink, Session.local_peer_id)
-		_publish_room_soon()
-	else:
-		_predict(&"plug", [source, sink])
-	Session.notice.emit(plugged_text(source, item, was, sink))
-
-
 ## What this player is told on plugging `source` (its `item`, if it is one) from `was` into
 ## `sink`: where what it plays goes now.
 static func plugged_text(source: StringName, item: Item, was: StringName, sink: StringName) -> String:
@@ -6017,44 +4573,6 @@ static func plugged_text(source: StringName, item: Item, was: StringName, sink: 
 	return "%s is unplugged: its hits go on the armed track again." % the
 
 
-## The host's word on `from`'s plug of `source` into `sink` (Jacks.plug_refusal), from what this
-## machine knows: who holds the source item, where it goes now, who is in the room. `here`: asked
-## by a hand on this machine, which knows its own hand better than the holds table does.
-func _plug_refusal(source: StringName, sink: StringName, from: int, here := false) -> String:
-	var item: Item = items.source_item(source) if items != null else null
-	var holder := 0
-	if item != null:
-		holder = _holder_here(item) if here else Session.holder_of(item.network_key())
-	var members: Array = Session.participants.keys()
-	if not members.has(Session.local_peer_id):
-		members.append(Session.local_peer_id)
-	return Jacks.plug_refusal(source, item, sink, from, holder, jacks.sink_of(source), members)
-
-
-## The host tells whoever a jack now goes into, or no longer does, who plugged what: a bandmate's
-## cowbell playing your keys is not a thing to find out by surprise. Not the one who did it.
-func _tell_plugged(source: StringName, was: StringName, sink: StringName, by: int) -> void:
-	var item: Item = items.source_item(source) if items != null else null
-	var what := "the %s" % Jacks.source_name(source, item) if Jack.keys_player(source) == 0 \
-			else "their keys"
-	if Jack.chord_player(source) > 0:
-		what = "their chord hand"
-	var into := Jack.player_of(sink)
-	if into > 0 and into != by:
-		var plays := "its hits play chord tones" if item is InstrumentItem and not (item as InstrumentItem).pitched() \
-				else "its notes play"
-		if Jack.keys_player(source) > 0:
-			plays = "what they play plays"
-		var said := "%s on your keys" % plays
-		if Jack.chord_player(source) > 0:
-			said = "the chord they hold is yours, on your fingertips, while you hold none"
-		Session.tell(into, "%s plugged %s into you: %s. %s"
-				% [Session.name_of(by), what, said, unplug_how(_medium_of(into), Jack.own_player(source) == 0)])
-	var out := Jack.player_of(was)
-	if out > 0 and out != by and out != into:
-		Session.tell(out, "%s unplugged %s from you." % [Session.name_of(by), what])
-
-
 ## How a player at `medium` (Presentation.Medium) takes out a jack that goes into them, in words:
 ## at a desk Shift+P with an empty hand, in a headset a press on the INTO ME jack on their left
 ## wrist; and, `own_jack` (an item, not a bandmate's keys, whose socket is on the
@@ -6063,272 +4581,6 @@ static func unplug_how(medium: int, own_jack: bool) -> String:
 	var how := "Shift+P with an empty hand" if medium == Presentation.Medium.SCREEN \
 			else "A press on the INTO ME jack on your left wrist"
 	return "%s%s unplugs it." % [how, ", or a press on its jack," if own_jack else ""]
-
-
-## The medium player `peer` is in, as they said on joining (screen where not known).
-func _medium_of(peer: int) -> int:
-	if peer == Session.local_peer_id:
-		return medium
-	var p: Variant = Session.participants.get(peer)
-	return int(p.medium) if p != null else Presentation.Medium.SCREEN
-
-
-## Host: the studio's word on a jack's event (Session.jack_check): the room's patch and who has
-## the source in hand (Jacks.send_refusal).
-func _jack_refusal(to: int, source: StringName, from: int) -> String:
-	if jacks == null:
-		return "there is no room here to say where it goes"
-	var item: Item = items.source_item(source) if items != null else null
-	var holder := Session.holder_of(item.network_key()) if item != null else 0
-	return Jacks.send_refusal(jacks.patch, source, to, from, holder, item != null and item.fixed)
-
-
-## Somebody left: as host, every jack into them and out of their keys comes out.
-func _on_jack_player_left(peer: int) -> void:
-	if Session.role == Session.Role.HOST and jacks != null and jacks.drop_player(peer):
-		_publish_room_soon()
-
-
-## P with nothing in the mouse's hand: this player's own keys' jack steps on (a headset wears it on
-## the wrist); Shift+P takes out every jack going into this player.
-func _on_bare_jack(unplug: bool) -> void:
-	if jacks == null:
-		return
-	if not unplug:
-		jacks.step_source(Jack.keys_source(Session.local_peer_id), 1)
-	elif jacks.unplug_mine() == 0:
-		Session.notice.emit("Nothing is plugged into you.")
-
-
-## This player's keys' jack, worn on the left wrist: on the tracked hand's wrist, and on the left
-## controller while it is held, a hand's width back from the grip. The other hand presses it.
-## Beside each, a little further up the arm, the socket for what goes into this player
-## (JackSocket.into_me), there while anything does: a press takes it all out, as Shift+P does at a
-## desk, and it is the only way a bandmate's keys come out of a headset player.
-func _wear_wrist_jacks() -> void:
-	if rig == null or rig.left == null or not rig.skeletons.has(rig.left) or not wrist_jacks.is_empty():
-		return
-	var skeleton := rig.skeletons[rig.left] as HandSkeleton
-	var poke := rig.pokes.get(rig.left) as PokeInteractor
-	var on_hand := JackSocket.new(null)
-	on_hand.mine_keys = true
-	on_hand.label = "MY KEYS"
-	skeleton.wrist.add_child(on_hand)
-	var on_controller := JackSocket.new(null)
-	on_controller.mine_keys = true
-	on_controller.label = "MY KEYS"
-	on_controller.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 0.03, 0.09))
-	on_controller.available = func() -> bool: return poke == null or not poke.tracked()
-	rig.left.add_child(on_controller)
-	var in_hand := JackSocket.new(null)
-	in_hand.into_me = true
-	in_hand.label = "INTO ME"
-	# The wrist mount's +Y runs out toward the fingers: up the forearm, clear of MY KEYS' reach.
-	in_hand.position = Vector3(0, -WRIST_IN_APART, 0)
-	skeleton.wrist.add_child(in_hand)
-	var in_controller := JackSocket.new(null)
-	in_controller.into_me = true
-	in_controller.label = "INTO ME"
-	in_controller.transform = on_controller.transform.translated(Vector3(0, 0, WRIST_IN_APART))
-	in_controller.available = on_controller.available
-	rig.left.add_child(in_controller)
-	wrist_jacks = [on_hand, on_controller, in_hand, in_controller]
-	_wear_chord_jacks()
-
-
-## The chord hand's jack (`chord:P`, MY CHORDS; part two, slice 33), worn on the chord hand as
-## MY KEYS is: on the tracked hand's wrist and on its controller while it holds one. On the left
-## hand it sits beside MY KEYS, down onto the back of the hand on the wrist and across the
-## controller, clear of both reaches; a left-handed player's chord hand is the right, where it
-## sits where MY KEYS does on the left. The other hand presses it, through each bandmate.
-func _wear_chord_jacks() -> void:
-	var controller: XRController3D = rig.left if ergonomics.handedness >= 0 else rig.right
-	if controller == null or not rig.skeletons.has(controller):
-		return
-	var skeleton := rig.skeletons[controller] as HandSkeleton
-	var poke := rig.pokes.get(controller) as PokeInteractor
-	var beside := controller == rig.left
-	var on_hand := JackSocket.new(null)
-	on_hand.mine_chord = true
-	on_hand.label = "MY CHORDS"
-	on_hand.position = Vector3(0, WRIST_CHORD_APART if beside else 0.0, 0)
-	skeleton.wrist.add_child(on_hand)
-	var on_controller := JackSocket.new(null)
-	on_controller.mine_chord = true
-	on_controller.label = "MY CHORDS"
-	on_controller.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 0.03, 0.09))
-	if beside:
-		on_controller.transform = on_controller.transform.translated(Vector3(WRIST_CHORD_APART, 0, 0))
-	on_controller.available = func() -> bool: return poke == null or not poke.tracked()
-	controller.add_child(on_controller)
-	wrist_jacks.append_array([on_hand, on_controller])
-
-
-## Whose hand has `item`, as this machine sees it: this player's when a hand here carries it,
-## the holder's (or somebody's, -1) when a ghost does, else nobody's (0).
-func _holder_here(item: Item) -> int:
-	if item.carried_by != null:
-		return Session.local_peer_id
-	if item.is_held_elsewhere():
-		var holder := Session.holder_of(item.network_key())
-		return holder if holder != 0 else -1
-	return 0
-
-
-## An item left the room (ItemRoom.despawn: a Tour spill swallowed, a personal copy put back):
-## its jack goes with it. Not one leaving with the whole room, which still lists it.
-func _on_item_leaving(node: Node) -> void:
-	var item := node as Item
-	if item == null or jacks == null or items == null or items.items.has(item.id):
-		return
-	if jacks.drop(item.id):
-		_publish_room_soon()
-
-
-## Why a single track is not heard on this machine (`_hears_tracks`).
-func _why_no_tracks() -> String:
-	if Session.role == Session.Role.GUEST:
-		return "a guest hears the host's mix as one stream."
-	if DAW.backend is ReaperBackend:
-		return "Reaper plays the tracks, not the game."
-	return "the stand-in DAW makes no sound."
-
-
-## Put `peer`'s receiver `receiver`'s plug in `socket`, or back in its tray (empty).
-func _set_patch(peer: int, receiver: int, socket: StringName, show := true) -> void:
-	if receiver < 0 or receiver >= PersonalMix.RECEIVERS:
-		return
-	var row: Array = []
-	for i in PersonalMix.RECEIVERS:
-		var had: Array = patches.get(peer, [])
-		row.append(String(had[i]) if i < had.size() else "")
-	row[receiver] = String(socket)
-	if row.all(func(s: String) -> bool: return s == ""):
-		patches.erase(peer)
-	else:
-		patches[peer] = row
-	if show:
-		_show_patches()
-
-
-## Everyone's plugs in the sockets, in their colours, and this person's own in their ears.
-func _show_patches() -> void:
-	personal.hears_tracks = _hears_tracks()
-	personal.set_sockets(patches.get(Session.local_peer_id, []))
-	var peers := patches.keys()
-	peers.sort()
-	# The desk's sockets once it is built (it builds a frame or two after the studio, and shows
-	# them then: `console.rebuilt`); a bandmate's pack and the racks' OUTs whether it is or not.
-	var sockets: Array[SendSocket] = []
-	if console != null and console.master != null:
-		sockets.append_array(console.master.sends)
-		for strip in console.strips:
-			sockets.append(strip.send)
-	# Every effects rack's OUT: the main one and each track pulled out on a rack of its own.
-	var racks: Array = [rack] if rack != null else []
-	for id in track_racks:
-		racks.append(track_racks[id][1])
-	for r: RackSurface in racks:
-		if is_instance_valid(r):
-			sockets.append_array(r.out_sockets())
-	if presence != null:
-		for peer in Session.participants:
-			var avatar := presence.avatar_of(peer)
-			if avatar != null:
-				avatar.set_on_air(peer in on_air, peer)
-		for avatar: Presence.Avatar in presence.avatars():
-			if avatar.send != null:
-				sockets.append(avatar.send)
-			if avatar.monitor_send != null:
-				sockets.append(avatar.monitor_send)
-	var tablet := items.items.get(&"tablet") as TabletItem if items != null else null
-	if tablet != null:
-		tablet.on_air = Session.local_peer_id in on_air
-	for socket in sockets:
-		if not socket.pressed.is_connected(_on_send_pressed):
-			socket.pressed.connect(_on_send_pressed.bind(socket.source))
-		var colours: Array[Color] = []
-		for peer in peers:
-			for s: String in patches[peer]:
-				if StringName(s) == socket.source:
-					colours.append(_colour_of(peer))
-		socket.set_plugs(colours)
-
-
-## A SEND socket clicked: this person's plugs in it come back to their tray. With none in it,
-## where the plugs are.
-func _on_send_pressed(source: StringName) -> void:
-	var mine: Array = patches.get(Session.local_peer_id, [])
-	var any := false
-	for i in mine.size():
-		if StringName(mine[i]) == source:
-			_on_patch_asked(i, &"")
-			any = true
-	if not any:
-		Session.notice.emit("Drag a plug onto %s from your tablet: it lies on the prop shelf's lower tier."
-				% PersonalMix.place_of(source))
-
-
-## Who is here changed: colours may have, and a guest who left takes their plugs with them.
-func _on_roster_for_patches() -> void:
-	var tablet := items.items.get(&"tablet") as TabletItem if items != null else null
-	if tablet != null:
-		tablet.colour = _colour_of(Session.local_peer_id)
-	if Session.role == Session.Role.HOST:
-		for peer in patches.keys():
-			if not Session.participants.has(peer):
-				patches.erase(peer)
-				_publish_room_soon()
-		for peer in on_air.duplicate():
-			if not Session.participants.has(peer):
-				_set_on_air(peer, false, false)
-				_publish_room_soon()
-		# And the plugs in the keys of whoever left come back to their trays.
-		for peer in patches.keys():
-			var row: Array = patches[peer]
-			for i in row.size():
-				var into := PersonalMix.player_of(StringName(row[i]))
-				if into > 0 and not Session.participants.has(into):
-					_set_patch(peer, i, &"", false)
-					_publish_room_soon()
-	# After the ghosts: a new one's pack is made on the same news.
-	_show_patches.call_deferred()
-
-
-## The ON AIR switch on the tablet in a hand here: done here at once, and asked of the host.
-func _on_air_asked(on: bool) -> void:
-	_set_on_air(Session.local_peer_id, on)
-	if Session.is_authority():
-		_publish_room_soon()
-	else:
-		_predict(&"on_air", [on])
-	if on:
-		Session.notice.emit("On air: anyone can plug into the MONITOR on your pack and hear your keys in time with the backing you play to.")
-	else:
-		Session.notice.emit("Off air: the plugs in your monitor went back to their trays.")
-
-
-## `peer` ON AIR or off. Off, the plugs in their monitor come back to their owners' trays: the
-## host's to do, as it keeps the table; a guest predicting its own leaves the others to it.
-func _set_on_air(peer: int, on: bool, show := true) -> void:
-	if on and peer not in on_air:
-		on_air.append(peer)
-		on_air.sort()
-	elif not on:
-		on_air.erase(peer)
-		if Session.is_authority():
-			for listener in patches.keys():
-				var row: Array = patches[listener]
-				for i in row.size():
-					if PersonalMix.monitor_of(StringName(row[i])) == peer:
-						_set_patch(listener, i, &"", false)
-	if show:
-		_show_patches()
-
-
-func _colour_of(peer: int) -> Color:
-	var p: Session.Participant = Session.participants.get(peer)
-	return p.colour if p != null else SendSocket.LAMP
 
 
 var _made_remember_due := false
@@ -8044,3 +6296,164 @@ func _follow_trace_holds(delta: float) -> void:
 		else:
 			held = [on if hand.is_pressing() else null, 0.0, false]
 		_trace_holds[hand] = held
+
+
+## The Rig Roulette panel, setup wall and the roll itself (`RollRoom`).
+var roll_room := RollRoom.new(self)
+
+
+## Delegates to `roll_room.board_sources`.
+func board_sources() -> Array[StringName]:
+	return roll_room.board_sources()
+
+
+## Delegates to `roll_room.choose_board_source`.
+func choose_board_source(source: StringName) -> void:
+	roll_room.choose_board_source(source)
+
+
+## Delegates to `roll_room._roll_rig`.
+func _roll_rig() -> void:
+	roll_room._roll_rig()
+
+
+## Delegates to `roll_room._throw_the_knobs`.
+func _throw_the_knobs(track: int, fx: MixState.FXState, rng: RandomNumberGenerator, chaos: int) -> void:
+	roll_room._throw_the_knobs(track, fx, rng, chaos)
+
+
+## Delegates to `roll_room._forget`.
+func _forget(entry: Dictionary) -> void:
+	roll_room._forget(entry)
+
+
+## Delegates to `roll_room.undo_the_roll`.
+func undo_the_roll() -> void:
+	roll_room.undo_the_roll()
+
+
+## The Tour case, its chaos, spills and crowd in the room (`TourRoom`).
+var tour_room := TourRoom.new(self)
+
+
+## Delegates to `tour_room._on_tour_case_struck`.
+func _on_tour_case_struck() -> void:
+	tour_room._on_tour_case_struck()
+
+
+## Delegates to `tour_room._on_tour_run_ended`.
+func _on_tour_run_ended(won: bool) -> void:
+	tour_room._on_tour_run_ended(won)
+
+
+## Delegates to `tour_room._spill_home`.
+func _spill_home(n: int) -> Transform3D:
+	return tour_room._spill_home(n)
+
+
+## Items in the room: their homes, minting, giving, weather and the looper (`ItemHost`).
+var item_host := ItemHost.new(self)
+
+
+## Delegates to `item_host._item_homes`.
+func _item_homes() -> Dictionary:
+	return item_host._item_homes()
+
+
+## Delegates to `item_host._on_clip_pulled`.
+func _on_clip_pulled(track: int, index: int, hand: Node) -> void:
+	item_host._on_clip_pulled(track, index, hand)
+
+
+## Delegates to `item_host._mint_for`.
+func _mint_for(kind: StringName, from: String, maker: int) -> Item:
+	return item_host._mint_for(kind, from, maker)
+
+
+## Delegates to `item_host._follow_making`.
+func _follow_making() -> void:
+	item_host._follow_making()
+
+
+## Delegates to `item_host.give_item`.
+func give_item(item: Item, peer: int) -> void:
+	item_host.give_item(item, peer)
+
+
+## Delegates to `item_host._on_weather_pressed`.
+func _on_weather_pressed(on: bool) -> void:
+	item_host._on_weather_pressed(on)
+
+
+## Delegates to `item_host._on_weather_dropped`.
+func _on_weather_dropped(drop: Dictionary) -> void:
+	item_host._on_weather_dropped(drop)
+
+
+## Delegates to `item_host._looper_name`.
+func _looper_name(peer: int) -> String:
+	return item_host._looper_name(peer)
+
+
+## Delegates to `item_host._on_looper_slapped`.
+func _on_looper_slapped() -> void:
+	item_host._on_looper_slapped()
+
+
+## Delegates to `item_host._on_looper_layer`.
+func _on_looper_layer(start: float, end: float, notes: Array) -> void:
+	item_host._on_looper_layer(start, end, notes)
+
+
+## Delegates to `item_host._on_looper_called_off`.
+func _on_looper_called_off() -> void:
+	item_host._on_looper_called_off()
+
+
+## Delegates to `item_host._on_looper_player_left`.
+func _on_looper_player_left(peer: int) -> void:
+	item_host._on_looper_player_left(peer)
+
+
+## Jacks, patch cables and the on-air light in the room (`PatchHost`).
+var patch_host := PatchHost.new(self)
+
+
+## Delegates to `patch_host._on_patch_asked`.
+func _on_patch_asked(receiver: int, socket: StringName) -> void:
+	patch_host._on_patch_asked(receiver, socket)
+
+
+## Delegates to `patch_host._on_plug_asked`.
+func _on_plug_asked(source: StringName, sink: StringName) -> void:
+	patch_host._on_plug_asked(source, sink)
+
+
+## Delegates to `patch_host._plug_refusal`.
+func _plug_refusal(source: StringName, sink: StringName, from: int, here := false) -> String:
+	return patch_host._plug_refusal(source, sink, from, here)
+
+
+## Delegates to `patch_host._on_jack_player_left`.
+func _on_jack_player_left(peer: int) -> void:
+	patch_host._on_jack_player_left(peer)
+
+
+## Delegates to `patch_host._wear_chord_jacks`.
+func _wear_chord_jacks() -> void:
+	patch_host._wear_chord_jacks()
+
+
+## Delegates to `patch_host._show_patches`.
+func _show_patches() -> void:
+	patch_host._show_patches()
+
+
+## Delegates to `patch_host._on_send_pressed`.
+func _on_send_pressed(source: StringName) -> void:
+	patch_host._on_send_pressed(source)
+
+
+## Delegates to `patch_host._set_on_air`.
+func _set_on_air(peer: int, on: bool, show := true) -> void:
+	patch_host._set_on_air(peer, on, show)
