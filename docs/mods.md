@@ -561,9 +561,42 @@ Each step ends with the suite green and no behaviour change unless stated. Steps
    * Tests: `_test_the_manifests_equal_the_old_tables` (in `tests/rack_mod_tests.gd`, against the frozen
      fixture) and `_test_a_preset_with_a_bad_file_is_empty_and_never_a_crash`; the catalogue and skin tests
      now enumerate the registry.
-5. **Patch file and keep-unknown.** `RackPatch.to_dict/from_dict`, `w`, `uses`, the keep-unknown
-   `sanitize`, autosave/load in `user://patches/`. Tests of 6.1 and 6.2. The unavailable plate is a
-   plain label for now.
+5. **Patch file and keep-unknown.** Built (2026-11-07). `RackPatch.to_dict/from_dict/problem`, `w`, `uses`,
+   the keep-unknown `sanitize`, autosave/load in `user://patches/`. Tests of 6.1 and 6.2
+   (`tests/rack_patch_file_tests.gd`). The unavailable plate is a plain label for now. As built:
+   * `RackPatch.problem(raw)` says why a dictionary cannot be read ("" if it can): not a dictionary, a
+     `format` other than `dawlings.rack-patch`, a `version` that is not a number, below 1 or above `VERSION`
+     (2), or no `modules`. No `format` means version 1, which loads. `from_dict` is `problem` then `sanitize`
+     (an empty patch on a problem); `sanitize` itself never looks at `format` or `version`, so a room row,
+     which has neither, still works.
+   * **Keep-unknown.** `sanitize` keeps a module whose type the catalogue lacks, as
+     `{type, at, w, knobs, missing: true}` (`w` clamped to 1..COLS, knobs only numbers under plain names, at
+     most 64, not clamped; type 1..80 characters). `missing` is in memory only (`to_dict` does not write it).
+     Known modules gain no new field in memory: `w` exists for them only in the file. `uses` entries for a
+     missing type are carried in the patch (`p["uses"]`, only for missing types) so `to_dict` can write them
+     again. A cable is kept when one end is a missing module and the other end is a real jack of a known
+     module or a missing module (only the form `id.port` is checked). `RackLayout.width_in(p, id)` is the
+     width everywhere a patch's module is measured (fits, tidy, flow, the wall); `fits`/`free_slot` take
+     an optional `wide`. `RackPatch.playable(p)` is the patch without missing modules and their cables;
+     `lines` and `RackVoice.set_patch` use it, so the engine never hears them.
+   * `RackWall._build_module` draws a missing module as a plain plate titled `<type> not installed`, in its
+     place and at its width, with the take-out key and the grip; no knobs, no jacks, so its cables are
+     not drawn until step 6.
+   * `RackPatchFile` (`core/music/rack/rack_patch_file.gd`): `read(path)` -> `{ok, patch, title, track,
+     error}` (falls back to the `.bak`; size cap 256 kB), `text_of(dict)` (sorted keys, tab-indented, final
+     newline: the same patch is always the same bytes), `write_text(path, text)` (temp file, the old file
+     renamed to `.bak`, temp renamed over). `RackAutosave` (a Node, `core/music/rack/rack_autosave.gd`)
+     restores `user://patches/_current.patch.json` into the studio's `rack_row` when the wall is built, and
+     `note(row)` after each change starts a 1.5 s timer (restarted by every change); when it fires the dictionary is
+     built on the main thread and the text and the file write run on a `WorkerThreadPool` task, only if the
+     patch hash changed since the last save; leaving the tree flushes. Only `Session.is_authority()` writes.
+     `RackAutosave.disabled` (the test runner sets it) keeps a studio under test off the player's file.
+     `studio.gd` holds one `RackAutosave` and calls `restore` once and `note` twice.
+   * **Not done here:** named saves (`<slug>.patch.json`) have no caller yet; a cable on a *known* module
+     whose port has gone is still dropped by `sanitize` (the dangling-cable stub of 6.2 needs the drawing and is
+     step 6); the room row does not yet carry `uses` (`to_dict` is used for the file only; step 6 fills it on publish).
+   * Cost (headless, `big_rig`, 35 modules, 11 kB): `to_dict` 105 us on the main thread, text 180 us and
+     the file write 130 us on the worker; `note()` 1.3 us per call. A knob sweep costs the note and nothing else.
 6. **Unavailable plate and guests.** `RackWall` draws missing modules and dangling cables; `uses`
    filled on publish; room-row and guest tests.
 7. **Composite.** Expansion in `RackPatch.lines`; `interface` handling in `RackModuleDef`; meters.

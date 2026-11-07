@@ -546,7 +546,7 @@ func _build_blanks() -> void:
 	var taken := {}
 	for id in patch["modules"]:
 		var m: Dictionary = patch["modules"][id]
-		for c in RackLayout.width_of(m["type"]):
+		for c in RackLayout.width_in(patch, id):
 			taken[Vector2i(int(m["at"][0]) + c, int(m["at"][1]))] = true
 	for key: String in module_nodes.keys():
 		if not key.begins_with("blank/"):
@@ -644,7 +644,7 @@ func _move_module(id: String) -> void:
 		return
 	var col := int(m["at"][0])
 	var row := int(m["at"][1])
-	var to := Vector3(_x_of(col + RackLayout.width_of(m["type"]) * 0.5), _row_foot(row), 0)
+	var to := Vector3(_x_of(col + RackLayout.width_in(patch, id) * 0.5), _row_foot(row), 0)
 	if not _carry.is_empty() and _carry["id"] == id:
 		_carry["home"] = to
 	else:
@@ -657,8 +657,10 @@ func _move_module(id: String) -> void:
 func _build_module(id: String) -> void:
 	var m: Dictionary = patch["modules"][id]
 	var type: String = m["type"]
-	var spec := RackCatalogue.spec(type)
-	var w := RackLayout.width_of(type)
+	# A module no mod here provides is a plain plate (title: its type, "not installed"), in its place.
+	var absent: bool = m.get("missing", false)
+	var spec := {"title": "%s not installed" % type, "knobs": [], "ins": [], "outs": []} if absent else RackCatalogue.spec(type)
+	var w := RackLayout.width_in(patch, id)
 	var col := int(m["at"][0])
 	var row := int(m["at"][1])
 	var holder := Node3D.new()
@@ -1229,7 +1231,7 @@ func _on_grip_began(from: RackHandle, at: Vector3) -> void:
 	var ghost := MeshInstance3D.new()
 	ghost.name = "MoveGhost"
 	var box := BoxMesh.new()
-	var w := RackLayout.width_of(type)
+	var w := RackLayout.width_in(patch, from.module_id)
 	box.size = Vector3(MODULE_WIDE * w - 0.003, ROW_TALL - 0.004, 0.006)
 	ghost.mesh = box
 	var m := StandardMaterial3D.new()

@@ -246,42 +246,184 @@ static func knob_of(p: Dictionary, id: String, knob: String) -> float:
 	return float(p["modules"].get(id, {}).get("knobs", {}).get(knob, RackCatalogue.default_position(k)))
 
 
-## A patch from anywhere (a guest's ask, a saved song) made safe: only known modules, jacks and knobs,
-## clamped, within the limits. What cannot be kept is dropped.
+## The file format's name and version (docs/mods.md 6.1). Version 1 is the bare dictionary this class
+## always used (no `format`, no `w`); it still loads.
+const FORMAT := "dawlings.rack-patch"
+const VERSION := 2
+## A type name longer than this is not one.
+const MAX_TYPE_LENGTH := 80
+## A module nobody here provides keeps at most this many knobs.
+const MAX_KEPT_KNOBS := 64
+
+
+## Why `raw` is not a patch this game can read, or "" when it is: not a dictionary, another format, a
+## version newer than this game's, or no `modules`. A dictionary with no `format` is a version-1 patch.
+static func problem(raw: Variant) -> String:
+	if not raw is Dictionary:
+		return "not a patch"
+	var d: Dictionary = raw
+	if d.has("format") and d["format"] != FORMAT:
+		return "not a rack patch (format %s)" % str(d["format"])
+	if d.has("version"):
+		if not (d["version"] is int or d["version"] is float) or int(d["version"]) < 1:
+			return "no readable version"
+		if int(d["version"]) > VERSION:
+			return "saved by a newer game (patch version %d, this game reads up to %d)" % [int(d["version"]), VERSION]
+	if not d.get("modules") is Dictionary:
+		return "a patch with no modules"
+	return ""
+
+
+## A patch from anywhere (a guest's ask, a saved song) made safe: ids, places, knobs and cables checked,
+## clamped, within the limits. A module whose type no mod provides is KEPT, with its place, width, knobs
+## and the cables on it (`missing: true`, and `uses` for the name of the mod it came from), so a mod that
+## goes away and comes back loses nothing (docs/mods.md 6.2). Only what is plainly broken is dropped.
 static func sanitize(raw: Variant) -> Dictionary:
 	var p := empty()
 	if not raw is Dictionary or not (raw as Dictionary).get("modules") is Dictionary:
 		return p
+	var raw_uses: Variant = raw.get("uses", {})
 	for id in raw["modules"]:
 		var m: Variant = raw["modules"][id]
 		var sid := String(id)
-		if p["modules"].size() >= MAX_MODULES or not m is Dictionary or not RackCatalogue.has(String(m.get("type", ""))):
-			continue
-		if not sid.is_valid_identifier() or sid.length() > 20:
+		if p["modules"].size() >= MAX_MODULES or not m is Dictionary or not m.get("type") is String:
 			continue
 		var type := String(m["type"])
+		if type.is_empty() or type.length() > MAX_TYPE_LENGTH or not sid.is_valid_identifier() or sid.length() > 20:
+			continue
 		if type == OUT_MODULE and has_type(p, OUT_MODULE):
 			continue
 		var at: Variant = m.get("at", [0, 0])
-		var col := int(at[0]) if at is Array and at.size() >= 2 else 0
-		var row := int(at[1]) if at is Array and at.size() >= 2 else 0
-		_put(p, sid, type, clampi(col, 0, RackLayout.COLS - RackLayout.width_of(type)), clampi(row, 0, RackLayout.ROWS - 1))
+		var col := _int(at[0]) if at is Array and at.size() >= 2 else 0
+		var row := _int(at[1]) if at is Array and at.size() >= 2 else 0
 		var knobs: Variant = m.get("knobs", {})
-		if knobs is Dictionary:
-			for k in knobs:
-				set_knob(p, sid, String(k), float(knobs[k]))
+		if RackCatalogue.has(type):
+			_put(p, sid, type, clampi(col, 0, RackLayout.COLS - RackLayout.width_of(type)), clampi(row, 0, RackLayout.ROWS - 1))
+			if knobs is Dictionary:
+				for k in knobs:
+					if knobs[k] is float or knobs[k] is int:
+						set_knob(p, sid, String(k), float(knobs[k]))
+		else:
+			var w := clampi(_int(m.get("w", 1), 1), 1, RackLayout.COLS)
+			p["modules"][sid] = {"type": type, "at": [clampi(col, 0, RackLayout.COLS - w), clampi(row, 0, RackLayout.ROWS - 1)],
+					"w": w, "knobs": _raw_knobs(knobs), "missing": true}
+			_keep_use(p, type, raw_uses)
 	var cables: Variant = raw.get("cables", [])
 	if cables is Array:
 		for c in cables:
 			if c is Array and c.size() == 2:
-				connect_cable(p, String(c[0]), String(c[1]))
+				_cable_kept(p, String(c[0]), String(c[1]))
 	RackLayout.tidy(p)
 	return p
 
 
-## The engine's lines for a whole patch: clear, every module and its knobs, every cable.
+## `v` as a whole number if it is a number, else `otherwise`.
+static func _int(v: Variant, otherwise := 0) -> int:
+	return int(v) if v is float or v is int else otherwise
+
+
+## The knobs of a module nobody provides, as they came: numbers under plain names, nothing clamped.
+static func _raw_knobs(knobs: Variant) -> Dictionary:
+	var out := {}
+	if knobs is Dictionary:
+		for k in knobs:
+			if out.size() < MAX_KEPT_KNOBS and String(k).is_valid_identifier() and (knobs[k] is float or knobs[k] is int):
+				out[String(k)] = float(knobs[k])
+	return out
+
+
+## What a saved patch said about the mod behind a type, kept for the type that is missing here.
+static func _keep_use(p: Dictionary, type: String, raw_uses: Variant) -> void:
+	if not raw_uses is Dictionary or not raw_uses.get(type) is Dictionary:
+		return
+	var u := {}
+	for f in ["mod", "version", "title"]:
+		if raw_uses[type].get(f) is String:
+			u[f] = String(raw_uses[type][f]).left(80)
+	if not u.is_empty():
+		if not p.has("uses"):
+			p["uses"] = {}
+		p["uses"][type] = u
+
+
+## A cable into the patch for `sanitize`: as `connect_cable` has it, and also one with an end on a module
+## that is missing (its ports are unknown, so only the form of its path is checked).
+static func _cable_kept(p: Dictionary, from: String, to: String) -> bool:
+	if connect_cable(p, from, to):
+		return true
+	var a := from.get_slice(".", 0)
+	var b := to.get_slice(".", 0)
+	if a == b or from.count(".") != 1 or to.count(".") != 1 or (p["cables"] as Array).size() >= MAX_CABLES:
+		return false
+	var a_gone := is_missing(p, a)
+	var b_gone := is_missing(p, b)
+	if not (a_gone or b_gone) or not (p["modules"] as Dictionary).has(a) or not (p["modules"] as Dictionary).has(b):
+		return false
+	if (not a_gone and not is_out(p, from)) or (not b_gone and not is_in(p, to)):
+		return false
+	for c in p["cables"]:
+		if c[0] == from and c[1] == to:
+			return false
+	(p["cables"] as Array).append([from, to])
+	return true
+
+
+## Whether module `id` is one no mod here provides (kept for its place and cables, never sounded).
+static func is_missing(p: Dictionary, id: String) -> bool:
+	return (p["modules"] as Dictionary).get(id, {}).get("missing", false)
+
+
+## The patch as the engine can play it: without the modules nobody here provides, and the cables on them.
+static func playable(p: Dictionary) -> Dictionary:
+	var out := empty()
+	for id in p["modules"]:
+		if not is_missing(p, id):
+			out["modules"][id] = (p["modules"][id] as Dictionary).duplicate(true)
+	for c in p["cables"]:
+		if out["modules"].has(String(c[0]).get_slice(".", 0)) and out["modules"].has(String(c[1]).get_slice(".", 0)):
+			out["cables"].append(c.duplicate())
+	return out
+
+
+## The patch as a versioned plain dictionary (the file of docs/mods.md 6.1; the room row's patch is the
+## same shape): `w` for every module, and `uses` naming the mod behind each type, from the registry here
+## or, for a type missing here, from what the patch carried. Takes `p` as `sanitize` leaves it and does not
+## change it. Written with sorted keys it is the same bytes every time.
+static func to_dict(p: Dictionary, title := "", track := 0) -> Dictionary:
+	var reg := ModRegistry.ensure_current()
+	var modules := {}
+	var uses := {}
+	for id in p["modules"]:
+		var m: Dictionary = p["modules"][id]
+		var type: String = m["type"]
+		var gone: bool = m.get("missing", false)
+		modules[id] = {"type": type, "at": (m["at"] as Array).duplicate(), "w": int(m["w"]) if gone else RackLayout.width_of(type),
+				"knobs": (m["knobs"] as Dictionary).duplicate()}
+		if uses.has(type):
+			continue
+		var owner := reg.entry_owner("rack_module:" + type)
+		if owner != "":
+			uses[type] = {"mod": owner, "version": reg.mod(owner).version, "title": String(RackCatalogue.spec(type).get("title", type))}
+		elif p.get("uses", {}).has(type):
+			uses[type] = (p["uses"][type] as Dictionary).duplicate()
+	var cables: Array = []
+	for c in p["cables"]:
+		cables.append([c[0], c[1]])
+	return {"format": FORMAT, "version": VERSION, "saved_with": ModManifest.GAME_VERSION, "title": title, "track": track,
+			"modules": modules, "cables": cables, "uses": uses}
+
+
+## A patch from a dictionary `to_dict` made, or a version-1 one: `sanitize`d, or `empty()` where `problem`
+## says it cannot be read. Never throws.
+static func from_dict(raw: Variant) -> Dictionary:
+	return empty() if problem(raw) != "" else sanitize(raw)
+
+
+## The engine's lines for a whole patch: clear, every module and its knobs, every cable (a module no
+## mod here provides, and the cables on it, are not sounded).
 static func lines(p: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray(["clear"])
+	p = playable(p)
 	for id in module_ids(p):
 		out.append("add %s %s" % [id, RackCatalogue.engine_type(p["modules"][id]["type"])])
 	for id in module_ids(p):

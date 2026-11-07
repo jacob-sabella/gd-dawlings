@@ -20,6 +20,8 @@ func _ready() -> void:
 	# The game ticks physics at 30 a second to leave frames for drawing; the checks are written for 60.
 	Engine.physics_ticks_per_second = 60
 	OfflineBackend.autosave_every = 0.0
+	# A studio under test neither reads nor writes the player's saved rack.
+	RackAutosave.disabled = true
 	# Rig Roulette is off in the game for now; its tests run with it on.
 	check("Rig Roulette is off unless asked for", not Studio.roulette_enabled)
 	Studio.roulette_enabled = true
@@ -736,6 +738,11 @@ func _ready() -> void:
 	_test_the_manifests_equal_the_old_tables()
 	_test_a_preset_with_a_bad_file_is_empty_and_never_a_crash()
 	_test_builtin_types_are_prefixed_and_the_engine_keeps_its_names()
+	_test_a_patch_file_round_trips()
+	_test_a_missing_mod_keeps_its_place_and_cables()
+	_test_a_bad_or_old_file_is_handled_and_never_a_crash()
+	await _test_an_autosave_is_written_after_a_pause_and_reloads_in_a_fresh_rack()
+	await _test_a_studio_saves_the_host_rack_and_opens_with_it()
 	_test_plugins_are_described_by_the_registry()
 	_test_a_rack_catalogue_is_the_engines_own_description()
 	_test_a_rack_patch_checks_every_verb()
@@ -44601,7 +44608,7 @@ func _test_a_rack_patch_checks_every_verb() -> void:
 	var dirty := {"modules": {"x": {"type": "evil", "knobs": {}}, "vco": {"type": "builtin.vco", "at": [99, -4], "knobs": {"tune": 7, "zzz": 1}}, "bad id!": {"type": "builtin.vco"}},
 			"cables": [["vco.out", "nowhere.in"], ["vco.out", "vco.fm"], 5]}
 	var clean := RackPatch.sanitize(dirty)
-	check("a patch from anywhere keeps only what is real", clean["modules"].keys() == ["vco"] and clean["cables"].is_empty())
+	check("a patch from anywhere keeps what is real, and a module nobody provides as a plate", clean["modules"].keys() == ["x", "vco"] and RackPatch.is_missing(clean, "x") and clean["cables"].is_empty())
 	check("and clamps what it keeps", clean["modules"]["vco"]["at"] == [RackLayout.COLS - RackLayout.width_of("builtin.vco"), 0] and clean["modules"]["vco"]["knobs"]["tune"] == 1.0)
 	check("garbage is an empty patch", RackPatch.sanitize("nope")["modules"].is_empty())
 	for name in RackPatch.presets():
@@ -45653,6 +45660,29 @@ func _test_the_mod_roots_come_from_the_data_home_and_the_environment() -> void:
 
 func _test_builtin_types_are_prefixed_and_the_engine_keeps_its_names() -> void:
 	RackModTests.new(self).builtin_types_are_prefixed_and_the_engine_keeps_its_names()
+
+
+const RackPatchFileTests := preload("res://tests/rack_patch_file_tests.gd")
+
+
+func _test_a_patch_file_round_trips() -> void:
+	RackPatchFileTests.new(self).a_patch_file_round_trips()
+
+
+func _test_a_missing_mod_keeps_its_place_and_cables() -> void:
+	RackPatchFileTests.new(self).a_missing_mod_keeps_its_place_and_cables()
+
+
+func _test_a_bad_or_old_file_is_handled_and_never_a_crash() -> void:
+	RackPatchFileTests.new(self).a_bad_or_old_file_is_handled_and_never_a_crash()
+
+
+func _test_an_autosave_is_written_after_a_pause_and_reloads_in_a_fresh_rack() -> void:
+	await RackPatchFileTests.new(self).an_autosave_is_written_after_a_pause_and_reloads_in_a_fresh_rack()
+
+
+func _test_a_studio_saves_the_host_rack_and_opens_with_it() -> void:
+	await RackPatchFileTests.new(self).a_studio_saves_the_host_rack_and_opens_with_it()
 
 
 func _test_plugins_are_described_by_the_registry() -> void:

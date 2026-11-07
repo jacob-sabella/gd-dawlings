@@ -77,7 +77,7 @@ func running() -> bool:
 ## The room's patch, sent to the engine as the difference from what it has: modules added or taken out,
 ## cables and knobs changed, so a sounding tail is not cut by turning a knob.
 func set_patch(p: Dictionary) -> void:
-	patch = RackPatch.sanitize(p)
+	patch = RackPatch.playable(RackPatch.sanitize(p))
 	_sync_patch()
 	changed.emit()
 

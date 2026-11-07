@@ -258,6 +258,8 @@ var looper_length := Looper.LENGTH_DEFAULT
 ## engine), the room's row `rack` {patch, track} (RackPatch), and the computer keys as its keys.
 var rack_wall: RackWall
 var rack_voice: RackVoice
+## Loads the host's saved rack when the wall is built and saves it a moment after each change.
+var rack_files := RackAutosave.new()
 ## What the weather, the rings and the venue's instrument play into the rack's WORLD module.
 var modular_world: ModularWorld
 var modular_annex: ModularAnnex
@@ -4672,6 +4674,8 @@ var _modular_seats_venue := 0
 ## The rack, its voice and its computer keys, made once with the surfaces; hung at the venue's spot
 ## (`_stand_the_modular`). None in AR.
 func _build_rack() -> void:
+	add_child(rack_files)
+	rack_files.restore(rack_row)
 	rack_wall = RackWall.new()
 	rack_wall.name = "RackWall"
 	rack_wall.parks = false
@@ -4830,6 +4834,7 @@ func _turn_knob(id: String, k: String, v: float) -> bool:
 	if not RackPatch.set_knob(patch, id, k, v):
 		return false
 	v = RackPatch.knob_of(patch, id, k)
+	rack_files.note(rack_row)
 	if rack_wall != null and is_instance_valid(rack_wall):
 		rack_wall.show_knob(id, k, v)
 	if Session.is_authority():
@@ -4875,6 +4880,7 @@ func _answer_rack(op: String, args: Array, from: int) -> void:
 ## turning kept where the hand has it. On the host it wakes the engine for any edit.
 func _show_rack(row: Dictionary) -> void:
 	rack_row = {"patch": RackPatch.sanitize(row.get("patch", {})), "track": int(row.get("track", 0))}
+	rack_files.note(rack_row)
 	var turning := rack_wall.turning() if rack_wall != null and is_instance_valid(rack_wall) else {}
 	var patch: Dictionary = rack_row["patch"]
 	for key: String in turning:

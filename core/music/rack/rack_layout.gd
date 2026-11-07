@@ -26,31 +26,40 @@ static func width_of(type: String) -> int:
 	return maxi(1, maxi(ceili(float(knobs) / KNOBS_PER_COLUMN), ceili(float(jacks) / JACKS_PER_COLUMN)))
 
 
+## How many columns module `id` of `p` takes: its stored `w` where no mod here provides its type, else
+## `width_of`.
+static func width_in(p: Dictionary, id: String) -> int:
+	var m: Dictionary = p["modules"][id]
+	return int(m["w"]) if m.get("missing", false) else width_of(m["type"])
+
+
 static func _spot(p: Dictionary, id: String) -> Vector2i:
 	var at: Array = p["modules"][id]["at"]
 	return Vector2i(int(at[0]), int(at[1]))
 
 
-## Whether a module of `type` fits with its left edge at `at`, ignoring module `ignore`.
-static func fits(p: Dictionary, type: String, at: Vector2i, ignore := "") -> bool:
-	var w := width_of(type)
+## Whether a module of `type` fits with its left edge at `at`, ignoring module `ignore`. `wide` is its
+## width where the type is no one's (a module kept for a missing mod); the ignored module's own width
+## counts when it is one of `p`'s.
+static func fits(p: Dictionary, type: String, at: Vector2i, ignore := "", wide := -1) -> bool:
+	var w := wide if wide > 0 else (width_in(p, ignore) if (p["modules"] as Dictionary).has(ignore) else width_of(type))
 	if at.x < 0 or at.y < 0 or at.y >= ROWS or at.x + w > COLS:
 		return false
 	for id in p["modules"]:
 		if id == ignore:
 			continue
 		var o := _spot(p, id)
-		var ow := width_of(p["modules"][id]["type"])
+		var ow := width_in(p, id)
 		if o.y == at.y and at.x < o.x + ow and o.x < at.x + w:
 			return false
 	return true
 
 
 ## The first place a `type` fits, scanning along each row; (-1, -1) when the case is full.
-static func free_slot(p: Dictionary, type: String) -> Vector2i:
+static func free_slot(p: Dictionary, type: String, wide := -1) -> Vector2i:
 	for row in ROWS:
 		for col in COLS:
-			if fits(p, type, Vector2i(col, row)):
+			if fits(p, type, Vector2i(col, row), "", wide):
 				return Vector2i(col, row)
 	return Vector2i(-1, -1)
 
@@ -61,12 +70,13 @@ static func tidy(p: Dictionary) -> void:
 	var placed := {"modules": {}, "cables": []}
 	for id in (p["modules"] as Dictionary).keys():
 		var type: String = p["modules"][id]["type"]
+		var wide := width_in(p, id)
 		var at := _spot(p, id)
-		if not fits(placed, type, at):
-			at = free_slot(placed, type)
+		if not fits(placed, type, at, "", wide):
+			at = free_slot(placed, type, wide)
 		if at.x < 0:
 			continue
-		placed["modules"][id] = {"type": type, "at": [at.x, at.y]}
+		placed["modules"][id] = {"type": type, "at": [at.x, at.y], "w": wide, "missing": p["modules"][id].get("missing", false)}
 		p["modules"][id]["at"] = [at.x, at.y]
 	for id in (p["modules"] as Dictionary).keys():
 		if not placed["modules"].has(id):
@@ -133,7 +143,7 @@ static func flow(p: Dictionary) -> bool:
 			var chunk := members.slice(at, at + ROWS)
 			var band := {"ids": chunk, "wide": 0}
 			for n in chunk.size():
-				band["wide"] = maxi(int(band["wide"]), width_of(p["modules"][chunk[n]]["type"]))
+				band["wide"] = maxi(int(band["wide"]), width_in(p, chunk[n]))
 				row_of[chunk[n]] = n
 			bands.append(band)
 			at += ROWS
