@@ -84,6 +84,20 @@ Made by the owner, 2026-11-07. They override anything above that reads otherwise
    hears the host's sound. No transfer, no refusal.
 4. **The 800-line limit applies to `studio.gd`, `venue.gd` and every file the refactor touches**, not to
    the whole repo.
+5. **Design sign-off (2026-11-07).** Built-in manifests live in `res://mods/builtin/`, pointing at
+   `vendor/` by pin. The native rack engine is built for Linux, macOS and Windows; Android/Quest native
+   support is dropped. Shell geometry stays in code (only placements, zones and wiring are data).
+   Piece positions are per room. Editing is host-only. The rack stays room-scale (no single-item rack).
+   A made room may have any subset of zones. Room sizes: small, standard and large offered by the
+   maker (each size needs its own shell and placement tests; settle the shell form in slice 8).
+6. **Mods.** Builtin types are renamed to `builtin.<name>` with no alias table (nothing is in use yet).
+   Patches live in `user://patches/` only and the host loads them. User models: 2 MB / 20k triangles,
+   decorative only, textures allowed (counted in the 2 MB). Under Reaper, unavailable plugin slots are
+   Reaper's business. Packaging (.zip/.pck) comes after the sample-mod proof. A composite counts as its
+   expanded modules against `MAX_MODULES`.
+7. **Layouts.** `OLD_FLOOR_DEFAULTS`, `OLD_FIT_LINES` and `OLD_EQ_WALL` are dropped after one import step;
+   the mixing neighbourhood's banner moves into the control-room fragment. Limits: 64 pieces and a 16 kB
+   delta per room.
 
 ## Running things
 
@@ -118,7 +132,7 @@ Do the first unchecked item. Break it down in the log if it is too big for one p
 
 - [x] 1. **State map**: how a mod and a venue are represented today, with file and line counts
       (`docs/refactor_state_map.md`).
-- [ ] 2. **Design on paper**: the mod manifest, the registry, the layout file format and the piece
+- [x] 2. **Design on paper** (signed off 2026-11-07; docs/mods.md and docs/layouts.md need the Decisions 5-7 folded in): the mod manifest, the registry, the layout file format and the piece
       kinds (single item vs room-scale mod), in `docs/mods.md` and `docs/layouts.md`. The owner reads
       them before any code (stop the loop and ask).
 - [ ] 3. Registry and manifest loader beside the old path, with bad-mod degradation; move one rack
