@@ -129,6 +129,8 @@ func piece(p: Variant, where: String) -> void:
 		bad(where, "must be an object")
 		return
 	unknown_keys(p, PIECE_KEYS, where)
+	if p.has("class"):
+		bad(where + ".class", "a piece's class is the piece's own (single or room-scale), not the layout's")
 	if not p.has("id"):
 		bad(where, "has no id")
 	else:
@@ -137,6 +139,8 @@ func piece(p: Variant, where: String) -> void:
 		text(p["piece"], _TYPE_RE, where + ".piece", "piece")
 	if p.has("mobility"):
 		one_of(p["mobility"], MOBILITIES, where + ".mobility")
+		if p["mobility"] == "wheeled" and PieceDef.room_scale(StringName(str(p.get("piece", "")))):
+			bad(where + ".mobility", "a room-scale mod takes a site of the building and cannot be wheeled")
 	if p.has("enabled") and not p["enabled"] is bool:
 		bad(where + ".enabled", "must be true or false")
 	if p.has("at"):

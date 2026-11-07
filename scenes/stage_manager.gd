@@ -132,7 +132,10 @@ func _venue_row() -> void:
 	label.add_theme_font_size_override("font_size", 13)
 	row.add_child(label)
 	var current := studio.venue.venue_id()
-	for id in Venue.IDS:
+	var ids: Array[StringName] = Venue.IDS.duplicate()
+	# The rooms players made follow the shipped ones; F4 makes another.
+	ids.append_array(MadeRooms.ids())
+	for id in ids:
 		var button := Button.new()
 		button.text = Venue.make_title(id).to_upper()
 		button.custom_minimum_size = Vector2(76, 0)

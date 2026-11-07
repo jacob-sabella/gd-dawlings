@@ -48,14 +48,14 @@ static func station(kind: StringName) -> Dictionary:
 
 ## The most of `kind` that may stand in one room, or 0 for no limit.
 static func limit(kind: StringName) -> int:
-	return 1 if kind == ANNEX else 0
+	return PieceDef.of(kind).limit if PieceDef.has(kind) else 0
 
 
 ## The claims of a room-scale piece whose edge anchor is at x = `edge`, or an empty dictionary for a
 ## single item: `{site (Rect2 of the ground it takes), door_z, door_width, door_walk (Rect2 kept clear
 ## in front of the doorway, on the live room's side)}`.
 static func claims(kind: StringName, edge: float) -> Dictionary:
-	if kind != ANNEX:
+	if not PieceDef.room_scale(kind):
 		return {}
 	var wide := ModularAnnex.DOOR_WIDE
 	return {"site": Rect2(edge, ModularAnnex.Z_FROM, ModularAnnex.GAP + ModularAnnex.WALL + ModularAnnex.DEEP,

@@ -281,6 +281,12 @@ func _ready() -> void:
 	editor.studio = studio
 	add_child(editor)
 
+	# The new-room maker: F4, the host only (RoomMaker).
+	var maker := RoomMaker.new()
+	maker.name = "RoomMaker"
+	maker.studio = studio
+	add_child(maker)
+
 	# The whole mix as a flat DAW: F2, or `--flat` to start in it.
 	var flat := FlatView.new()
 	flat.name = "FlatView"

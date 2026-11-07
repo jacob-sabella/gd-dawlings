@@ -86,8 +86,9 @@ func files_are_shipped_and_valid() -> void:
 	check("a venue stands none of the control room's furniture (the studio does, in the room's width)", rooftop.default_spot(&"mini_table") == null
 			and rooftop.default_spot(&"eq_wall") == null and rooftop.default_spot(&"hoop") != null)
 	rooftop.free()
-	check("15 builders are named, one for each file, and the table has no others (%d)" % shell_names.size(),
-			shell_names.size() == 15 and ShellBuilders.BY_NAME.size() == 15)
+	# The table also holds the one shell no shipped file names: the box a made room is built in (BoxVenue).
+	check("15 builders are named, one for each file, and the table has no others but the made-room box (%d)" % shell_names.size(),
+			shell_names.size() == 15 and ShellBuilders.BY_NAME.size() == 16 and ShellBuilders.BY_NAME.has("BoxVenue"))
 	check("the cycle is exactly the files with an order, and the roulette room has none", set.venue_ids() == Venue.IDS
 			and (set.layouts["roulette"] as LayoutData).order == -1)
 	check("only the studio's arrangements move a piece", (set.layouts["studio"] as LayoutData).variants[1].has("pieces")

@@ -21,7 +21,7 @@ enum Kind { SINGLE, ROOM_SCALE }
 ## the booth), which does not move and has no footprint of its own, the zone standing in for it in the
 ## validator; `VENUE` supplied by the shell (the venue's own instrument, its weather), whose spot the
 ## venue says and no layout does.
-enum Mount { WHEELED, ZONE, VENUE }
+enum Mount { WHEELED, ZONE, VENUE, SITE }
 
 ## What may ride with a piece (`followers`), each run by `PieceHost.carry` after the piece itself has
 ## moved: the venue's items rehomed on the shelf and hoop (`ITEMS`), the dart boards that hang on the
@@ -64,6 +64,10 @@ var venue_child := ""
 var node_in_set := false
 ## What rides with it (the constants above), in the order they run.
 var followers: Array[StringName] = []
+## The most of it one room holds, or 0 for no limit.
+var limit := 0
+## The class `PieceBuilders` builds its node with, or "" where the venue or the zone does.
+var builder := ""
 
 
 ## The definition of wheeled piece `piece`, or null for one that is not defined.
@@ -77,6 +81,20 @@ static func has(piece: StringName) -> bool:
 
 
 ## Every wheeled id, in the order the studio builds their trolleys (the same order as `LiveRoom.wheeled_ids`).
+## True for a room-scale mod (docs/layouts.md 4.3): a piece that takes a site of the building rather than
+## a spot of the floor. The class is the piece's own: a layout cannot say it (`LayoutCheck` refuses a
+## `class` key), nor give such a piece wheels.
+static func room_scale(piece: StringName) -> bool:
+	return has(piece) and of(piece).kind == Kind.ROOM_SCALE
+
+
+## The class of `piece` by name, "single" or "room_scale"; "" for a kind nothing is known of.
+static func class_of(piece: StringName) -> String:
+	if not has(piece):
+		return ""
+	return "room_scale" if room_scale(piece) else "single"
+
+
 static func ids() -> Array[StringName]:
 	var out: Array[StringName] = []
 	for k: StringName in _table():
@@ -122,12 +140,14 @@ static func _build() -> Dictionary:
 			[[Vector3(CassetteRack.FOOT.x * 2.0, 0.15, CassetteRack.FOOT.y * 2.0), Vector3(0, 0.075, 0)]])
 	rack.studio_node = &"cassette_rack"
 	rack.followers = [HOLD_RACK]
+	rack.builder = "CassetteRack"
 	out[rack.id] = rack
 
 	var sampler := _define(&"sampler", "SamplerTrolley", Sampler.FOOT, Sampler.TOP, 9.0,
 			[[Vector3(Sampler.FOOT.x * 2.0, 0.15, Sampler.FOOT.y * 2.0), Vector3(0, 0.075, 0)]])
 	sampler.studio_node = &"sampler"
 	sampler.needs = [&"synth"]
+	sampler.builder = "Sampler"
 	out[sampler.id] = sampler
 
 	# The case's bottom edge, a little proud of it: above that a click on the case knocks on it.
@@ -137,6 +157,7 @@ static func _build() -> Dictionary:
 	tour.studio_node = &"tour_case"
 	tour.node_in_set = true
 	tour.followers = [SPILLS]
+	tour.builder = "TourCase"
 	out[tour.id] = tour
 
 	# Its legs, under the lower tier the tablet and the percussion lie on.
@@ -160,6 +181,7 @@ static func _build() -> Dictionary:
 	hoop.body_half = Vector2.ONE * Hoop.POLE_RADIUS
 	hoop.venue_child = "Hoop"
 	hoop.followers = [HOOPS, ITEMS]
+	hoop.builder = "Hoop"
 	out[hoop.id] = hoop
 
 	# Mounted in a zone of the venue, placed by `common.live_room` (`wheel`..`looper`) or by the shell
@@ -172,4 +194,14 @@ static func _build() -> Dictionary:
 		zoned.mount = Mount.VENUE if row[0] in [&"venue", &"weather"] else Mount.ZONE
 		zoned.studio_node = row[1]
 		out[zoned.id] = zoned
+	# The one room-scale mod: the modular room built onto the live room's side. It takes a site (its claims
+	# are the `ModularAnnex` constants, `PieceFeet.claims`), is built by `PieceBuilders`, and a room has one.
+	var annex := PieceDef.new()
+	annex.id = PieceFeet.ANNEX
+	annex.kind = Kind.ROOM_SCALE
+	annex.mount = Mount.SITE
+	annex.limit = 1
+	annex.venue_child = "ModularAnnex"
+	annex.builder = "ModularAnnex"
+	out[annex.id] = annex
 	return out

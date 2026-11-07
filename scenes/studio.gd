@@ -2156,7 +2156,8 @@ func room_state() -> Dictionary:
 				placed[surface_id] = mount.studio_home(surface_id)
 	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0],
 			"variant": venue.variant if venue != null else 0, "tablets": out,
-			"layout": RoomFloor.row(self), "placed": placed, "items": items.state() if items != null else {},
+			"layout": RoomFloor.row(self), "made_room": MadeRooms.row_of(venue.venue_id()) if venue != null else {},
+			"placed": placed, "items": items.state() if items != null else {},
 			"made": items.made_ids() if items != null else [],
 			"patches": patches.duplicate(true), "on_air": on_air.duplicate(), "board": board_source,
 			"track_racks": pulled, "jacks": jacks.state() if jacks != null else {},
@@ -2291,6 +2292,8 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
 			&"place_surface": pending_place[p["args"][0]] = p["args"][1]
 
+	# A room the host made is a layout this guest has not got: held in memory, before the venue is asked for.
+	MadeRooms.adopt(state.get("made_room"))
 	room_deltas.adopt(state.get("layout"))
 	var id_wanted := StringName(state.get("venue", &""))
 	var variant_wanted := Venue.known_variant(id_wanted, int(state.get("variant", 0)))
@@ -2727,6 +2730,8 @@ func _put_back_own_room() -> void:
 	if medium != Presentation.Medium.AR and venue != null \
 			and (venue.venue_id() != own or venue.variant != own_variant):
 		set_venue(own, false, own_variant)
+	# The host's made room goes with the host's room: it was held for this guest in memory only.
+	MadeRooms.drop_adopted()
 	if floor_plan != null:
 		_restore_tablets()
 		_restore_track_racks()

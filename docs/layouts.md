@@ -634,6 +634,48 @@ shows the issue next to its tick. **Errors shown to the player** are `LayoutIssu
 from the shelf; they need 0.6 m." with the offending pair highlighted in the room and a "move to nearest clear
 spot" button using `fix`. Errors block saving; warnings (`unavailable_mod`, `group_spread`) do not.
 
+**Built (step 11)**: the maker, and the split of the pieces into two classes.
+
+- **Classes.** `PieceDef.Kind` is `SINGLE` or `ROOM_SCALE`, and the class is the piece's, never the layout's:
+  `LayoutCheck` refuses a `class` key on a piece entry, and refuses `mobility: wheeled` on a room-scale one.
+  `modular_annex` is the only room-scale piece. It has a `PieceDef` (new `Mount.SITE`, `limit` 1, `builder`
+  "ModularAnnex"); `PieceFeet.limit` and `PieceFeet.claims` read the def (the claims are still the
+  `ModularAnnex` constants) and `PieceDef.ids()` still answers the wheeled five. `PieceBuilders`
+  (`core/layouts/piece_builders.gd`) is the piece-side twin of `ShellBuilders`: a def's `builder` names the node
+  class (rack, sampler, hoop, Tour case, annex). `LayoutEdit` refuses to `add` a room-scale piece, and the
+  maker lists the singles (`PieceCatalogue.kinds()`) apart from the annex's own line.
+- **The shell.** `BoxVenue` (`core/venues/box_venue.gd`) is the one shell a made room has: a closed box round the
+  control room like the roulette room, in three sizes (small: the control room's width; standard: the live
+  room's; large: 3.2 m more each side), with the standard zones that were chosen *and* fit (small keeps only the
+  riser and the lattice), a look from `BoxStyle` (warm, cool, neon, daylight, dark) and three pendant lamps.
+  `ShellBuilders.make` sets it up from its layout (`shell.size`, `shell.style`, the keys of `zones`, whether the
+  annex is listed). `Venue.has_annex()` replaces the two roulette-id checks; `ZoneKit.solids` takes only the zones
+  it is given.
+- **The file.** `MadeRoom` turns a spec (`title, size, style, zones, pieces, annex`) into a layout file:
+  `extends` the two shared fragments, `shell {builder: BoxVenue, kit: box, size, style}`, a `mood` from the look,
+  the chosen `zones`, a piece the spec does not keep as `{id, enabled: false}` (taken out when the layout is
+  resolved, so the live room's pieces are the standard ones minus those; a piece whose zone is absent is skipped
+  as in the roulette room), and `modular_annex` in the `LayoutEdit.ANNEX` form when ticked. A small room moves the
+  Tour case and the hoop to the other wall (the shelf's neighbourhood runs into its riser). No `order`, so a made
+  room is not in `Venue.IDS`; `Venue.is_known` also accepts it. `MadeRoom.build` checks the spec, the 16 kB file
+  and the 64 pieces, parses it and runs the validator; only a room with no error is made.
+- **Storage.** `MadeRooms` (`core/layouts/made_rooms.gd`): `user://layouts/made/<slug>.layout.json` (slug
+  `[a-z0-9-]{1,40}`, a clash gets `-2`, atomic write with `.bak`), at most 24 of the player's own, scanned into the
+  same `LayoutSet` as the shipped rooms (`LiveRoom.layouts`, after them: a file cannot take a shipped id), so
+  `VenueCatalogue`, `ShellBuilders` and `Venue.make` find it with nothing else edited. `LiveRoom.reset/put/drop`
+  re-scan and forget the resolved rooms. A restart finds the room by the id `Session.layout.venue` holds.
+  `MadeRooms.disabled` and `dir_override` are the test hooks (the runner disables it).
+- **Sharing.** `room_state()` carries `made_room`, the layout file's content of the current room (within 16 kB,
+  `{}` for a shipped room). `apply_room` has `MadeRooms.adopt` check it (the same validation as a file, a
+  shipped id refused) and hold it in memory only, before it asks for the venue; the guest writes no file, and
+  `_put_back_own_room` calls `drop_adopted`.
+- **Panel.** `RoomMaker` (`core/layouts/room_maker.gd`, F4, host only): name, size, look, zones that fit,
+  singles (a piece whose zone is unticked is let go), the modular room on its own line, MAKE. The stage manager
+  lists made rooms after the shipped venues.
+- **Left over.** A made room is built from the standard zone positions (a zone is on or off, not moved); the
+  maker has no delete or rename button (`MadeRooms.remove` exists); an unticked piece is out of the layout, so
+  the F3 panel cannot add it back (add is for the catalogue pieces the room's layout has).
+
 ## 9. Storage
 
 | What | Where | Naming |
@@ -683,8 +725,7 @@ item 7, 11-12 item 8.
 8. **Room delta and the `layout` row**, import of `floor/*`, persistence in `user://layouts/rooms/`. **Done** (see 7 "Built (step 8)").
 9. **Edit ops** (`ask_layout`), edit mode, reset; validators in the loop. **Done** for the single items the catalogue lists (see 7 "Built (step 9)"); not done: other kinds of piece, the station-board and VR entry point.
 10. **Sharing**: guest apply, unavailable pieces, host-only rules; two-instance test. **Done** (see 7 "Built (step 10)").
-11. **`modular_annex` as a room-scale piece** (`claims`, `PieceBuilders`), `class` enforced.
-12. **The new-room maker.**
+11. **`modular_annex` as a room-scale piece** (`claims`, `PieceBuilders`), `class` enforced, and **the new-room maker** (steps 11 and 12 together; the commit says design step 11). **Done** (see 8 "Built (step 11)").
 
 `studio.gd` loses lines 619-1070, 1229-2055 and 3000-3320 (SM 3.1, about 2,000 lines) to `PieceHost`,
 `LayoutResolver` and the room-row code in steps 5-8; `venue.gd` loses its `*_spot` block (385-1100).
@@ -702,8 +743,8 @@ item 7, 11-12 item 8.
 | `_test_a_room_delta_applies_over_the_defaults_and_flags_what_it_cannot_place`, `_test_a_room_delta_file_is_atomic_and_refuses_the_bad_and_the_big`, `_test_pushed_furniture_is_saved_per_room_and_reloaded_by_a_fresh_studio`, `_test_a_bad_room_file_degrades_to_the_defaults`, `_test_a_guest_applies_the_hosts_layout_row_and_writes_nothing`, `_test_the_floor_import_moves_saved_spots_into_the_studio_room` (`tests/room_delta_tests.gd`) | step 8 (built) |
 | `_test_a_layout_op_is_done_or_refused_whole`, `_test_a_guest_is_told_host_only_but_may_push`, `_test_an_added_piece_is_built_a_removed_one_is_not_stood_and_reset_restores`, `_test_a_layout_edit_survives_a_reload_in_a_fresh_studio`, `_test_a_guest_sees_the_hosts_layout_edit_through_the_row`, `_test_the_edit_panel_shows_the_validators_words_and_is_shut_to_a_guest` (`tests/layout_edit_tests.gd`) | step 9 (built): ops, host only, add/remove/reset, restart, guest, panel. Replace the three brief-proof rows that were here |
 | `_test_a_guest_sees_the_hosts_layout_and_cannot_edit_it`, `_test_reset_returns_the_default`, `_test_zone_pieces_come_out_of_a_room_and_go_back`, `_test_a_piece_this_build_cannot_make_is_a_named_plate` (`tests/layout_share_tests.gd`) | step 10 (built): a host studio and a guest studio in the tree together; host only; reset; the zone-held pieces; the named plate |
-| `_test_deleting_and_adding_a_piece_survives_a_restart` | brief proof across venues (built: delete in one venue, add in another, restart, a guest sees both; still to do: make a room, step 12) |
-| `_test_a_made_room_validates_and_loads` | 8 |
+| `_test_deleting_and_adding_a_piece_survives_a_restart` | brief proof across venues (built: delete in one venue, add in another, restart, a guest sees both; the made-room half is `_test_a_made_room_persists_and_a_guest_sees_it`) |
+| `_test_a_made_room_validates_and_loads`, `_test_a_made_room_persists_and_a_guest_sees_it` (`tests/room_maker_tests.gd`) | 8 (built): every size by every zone subset validates and loads; the two classes; 64 pieces and 16 kB; the brief's proof: make a room, restart with a fresh Studio, a guest sees it |
 | existing `_test_every_venue_*`, neighbourhood and per-station tests | stay until replaced (6) |
 
 ## 13. Decisions (owner, 2026-11-07)

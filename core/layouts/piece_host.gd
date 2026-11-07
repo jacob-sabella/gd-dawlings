@@ -71,7 +71,11 @@ func stand(id: StringName) -> void:
 		spec = VenueInstrument.spec_of(venue) if id == VenueInstrument.STATION else Weather.spec_of(venue)
 		at = spec.get("spot")
 	else:
-		at = null if studio.room_deltas.delta.is_removed(id) else Stations.spot(venue, id)
+		# Not stood where the room's delta took it out, nor where the room's layout does without it (a made
+		# room that left it out).
+		var left_out: bool = studio.room_deltas.delta.is_removed(id) \
+				or (def.mount == PieceDef.Mount.WHEELED and venue.default_spot(id) == null)
+		at = null if left_out else Stations.spot(venue, id)
 	var node: Node3D = _make(id, at, spec, was) if at != null else null
 	if node != null:
 		studio.set(def.studio_node, node)

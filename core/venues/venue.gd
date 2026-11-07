@@ -118,7 +118,7 @@ static func next_after(id: StringName) -> StringName:
 
 
 static func is_known(id: StringName) -> bool:
-	return IDS.has(id) or id == ROULETTE_ID
+	return IDS.has(id) or id == ROULETTE_ID or MadeRooms.has(id)
 
 
 func venue_id() -> StringName:
@@ -413,7 +413,7 @@ func dart_spot(n: int) -> Transform3D:
 ## Where the mini hoop stands, in studio space: its foot, its board facing into the room. On its
 ## trolley (WHEELED), wherever that has been pushed; else where the venue stands it.
 func hoop_spot() -> Transform3D:
-	return _spot_of(&"hoop")
+	return _spot_or_home(&"hoop")
 
 
 ## Where the venue stands the hoop until it is pushed somewhere else: the layout's, across the
@@ -442,7 +442,7 @@ func rcplane_spot() -> Transform3D:
 ## Where the Tour case stands, in studio space. On its trolley (WHEELED), wherever that has been
 ## pushed; else where the venue stands it.
 func tour_case_spot() -> Transform3D:
-	return _spot_of(&"tour_case")
+	return _spot_or_home(&"tour_case")
 
 
 ## Where the venue stands the Tour case until it is pushed somewhere else: the layout's, beside
@@ -492,8 +492,14 @@ const MODULAR_BACK := 0.27
 const MODULAR_BOTTOM := 1.26
 
 
+## Whether the modular room can be built onto this venue's live room: every venue but the Rig Roulette
+## room, and a made room that was made without it.
+func has_annex() -> bool:
+	return venue_id() != ROULETTE_ID
+
+
 func modular_spot() -> Variant:
-	if venue_id() == ROULETTE_ID:
+	if not has_annex():
 		return null
 	return ModularAnnex.rack_spot(annex_edge())
 
@@ -502,7 +508,7 @@ func modular_spot() -> Variant:
 ## its doorway.
 func walk_rooms() -> Array[Rect2]:
 	var out := rooms()
-	if venue_id() != ROULETTE_ID:
+	if has_annex():
 		out.append_array(ModularAnnex.floors(annex_edge(), live_room_half()))
 	return out
 
@@ -537,7 +543,7 @@ func lyrics_spot() -> Variant:
 ## shelf's against the same wall and facing into the room the same way. So the clips the band pulls
 ## out of the timeline stand beside the toys, where everyone walks past.
 func cassette_rack_spot() -> Transform3D:
-	return _spot_of(&"cassette_rack")
+	return _spot_or_home(&"cassette_rack")
 
 
 ## Where the venue stands the cassette rack until it is pushed somewhere else: the layout's,
@@ -797,6 +803,16 @@ func _trolley_of(id: StringName) -> Trolley:
 		return null
 	var t: Trolley = studio.live_pieces.get(id)
 	return t if t != null and is_instance_valid(t) else null
+
+
+func _spot_or_home(id: StringName) -> Transform3D:
+	var at: Variant = _spot_of(id)
+	if at != null:
+		return at
+	# A made room that does without the piece: the venue's own pieces (the hoop on the wall) that still read
+	# a spot take the shared live room's.
+	var home := LayoutResolver.all(LiveRoom.layout(&"", 0), ShellFacts.anchors_of(self))
+	return home.get(id, Transform3D.IDENTITY)
 
 
 ## Where wheeled piece `id` stands, in studio space: where its trolley has been wheeled while it
@@ -1075,9 +1091,13 @@ func wheeled_solids() -> Array:
 	out.append({"c": Vector2(spot.origin.x, spot.origin.z),
 			"h": Vector2(ZoneKit.SHELF.x, ZoneKit.SHELF.z) * 0.5,
 			"a": spot.basis.get_euler().y, "top": ZoneKit.SHELF.y})
-	out.append_array(Hoop.solids(hoop_spot()))
-	out.append_array(TourCase.solids(tour_case_spot()))
-	out.append(CassetteRack.solid(cassette_rack_spot()))
+	# What a made room does without (its layout switched the piece off) has no solid.
+	if default_spot(&"hoop") != null:
+		out.append_array(Hoop.solids(hoop_spot()))
+	if default_spot(&"tour_case") != null:
+		out.append_array(TourCase.solids(tour_case_spot()))
+	if default_spot(&"cassette_rack") != null:
+		out.append(CassetteRack.solid(cassette_rack_spot()))
 	var sampler_at: Variant = sampler_spot()
 	if sampler_at != null:
 		out.append(Sampler.solid(sampler_at))

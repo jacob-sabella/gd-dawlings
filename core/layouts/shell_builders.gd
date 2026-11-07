@@ -22,6 +22,7 @@ static var BY_NAME: Dictionary = {
 	"GardenVenue": GardenVenue,
 	"DesertVenue": DesertVenue,
 	"RouletteRoom": RouletteRoom,
+	"BoxVenue": BoxVenue,
 }
 
 
@@ -29,4 +30,8 @@ static var BY_NAME: Dictionary = {
 ## builder, as `Venue.make` always fell back).
 static func make(id: StringName) -> Venue:
 	var script: GDScript = BY_NAME.get(VenueCatalogue.builder_of(id), StudioVenue)
-	return script.new()
+	var out: Venue = script.new()
+	# A made room is one class set up by its own file: its size, look and zones.
+	if out is BoxVenue:
+		(out as BoxVenue).from_layout(LiveRoom.layouts().layouts[String(id)])
+	return out

@@ -141,6 +141,8 @@ func _add(d: RoomDelta, args: Array) -> String:
 	if args.size() != 4 or not (args[0] is String or args[0] is StringName) or not _numbers(args.slice(1)) or not _near(args[1], args[2]):
 		return "Add needs a piece and where to: x, z and a turn."
 	var kind := StringName(args[0])
+	if PieceDef.room_scale(kind):
+		return "The %s is a room-scale mod: a room is made with it, not given it from the floor." % LayoutChecks.name_of(kind)
 	if kind not in PieceCatalogue.kinds():
 		return "The %s cannot be added to a room." % LayoutChecks.name_of(kind)
 	var yaw := wrapf(float(args[3]), -PI, PI)
@@ -287,9 +289,22 @@ func layout_of(d: RoomDelta) -> LayoutData:
 	out.body["pieces"] = applied["pieces"]
 	out.body["groups"] = applied["groups"]
 	out.body["wiring"] = applied["wiring"]
-	if d.base != Venue.ROULETTE_ID:
+	if _gets_the_annex(d.base, out.body["pieces"]):
 		out.body["pieces"].append(ANNEX.duplicate(true))
 	return out
+
+
+## True when the room is to have the modular room added: not the roulette room, and not a room that lists
+## the annex itself (a made room that chose it, or chose to go without).
+func _gets_the_annex(base: StringName, pieces: Array) -> bool:
+	if base == Venue.ROULETTE_ID:
+		return false
+	if MadeRooms.has(base):
+		return false
+	for p: Dictionary in pieces:
+		if p.get("piece") == String(PieceFeet.ANNEX):
+			return false
+	return true
 
 
 static func _numbers(values: Array) -> bool:

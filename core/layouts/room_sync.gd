@@ -23,7 +23,7 @@ static func venue_built(studio: Studio) -> void:
 		return
 	var delta := studio.room_deltas.delta
 	_copies(studio, delta)
-	_hoop(studio, not delta.is_removed(&"hoop"))
+	_hoop(studio, not delta.is_removed(&"hoop") and studio.venue.default_spot(&"hoop") != null)
 
 
 ## Everything of the delta: `venue_built`, then the rack and the sampler stood or taken down, the trolleys

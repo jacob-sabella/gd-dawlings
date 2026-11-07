@@ -24,6 +24,7 @@ func _ready() -> void:
 	RackAutosave.disabled = true
 	# Nor the player's saved rooms (RoomDeltas).
 	RoomDeltas.disabled = true
+	MadeRooms.disabled = true
 	# Rig Roulette is off in the game for now; its tests run with it on.
 	check("Rig Roulette is off unless asked for", not Studio.roulette_enabled)
 	Studio.roulette_enabled = true
@@ -777,6 +778,8 @@ func _ready() -> void:
 	_test_the_zone_mounted_pieces_stand_where_the_old_code_stood_them()
 	_test_a_piece_host_stands_each_piece_where_its_station_is()
 	_test_the_validator_names_each_seeded_violation()
+	_test_a_made_room_validates_and_loads()
+	await _test_a_made_room_persists_and_a_guest_sees_it()
 	_test_the_control_room_fragment_stands_the_furniture_where_the_old_code_did()
 	_test_the_groups_are_the_old_neighbourhoods()
 	_test_the_floor_import_forgets_old_defaults_once()
@@ -46029,6 +46032,20 @@ func _test_a_piece_this_build_cannot_make_is_a_named_plate() -> void:
 ## The brief's proof so far: delete in one venue, add in another, restart, a guest sees both.
 func _test_deleting_and_adding_a_piece_survives_a_restart() -> void:
 	await LayoutShareTests.new(self).deleting_and_adding_survives_a_restart()
+
+
+const RoomMakerTests := preload("res://tests/room_maker_tests.gd")
+
+
+## Section 11 step 11: a made room is layout data that validates in every size and zone subset and loads
+## through the catalogue; pieces are of two classes; a room holds 64 pieces and 16 kB.
+func _test_a_made_room_validates_and_loads() -> void:
+	RoomMakerTests.new(self).validates_and_loads()
+
+
+## The brief's proof: make a new room, restart with a fresh Studio and it persists, and a guest sees it.
+func _test_a_made_room_persists_and_a_guest_sees_it() -> void:
+	await RoomMakerTests.new(self).persists_and_a_guest_sees_it()
 
 
 const VenueFilesTests := preload("res://tests/venue_files_tests.gd")

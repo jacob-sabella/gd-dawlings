@@ -24,7 +24,37 @@ static func layouts() -> LayoutSet:
 	if _set == null:
 		_set = LayoutSet.new()
 		_set.scan(ROOTS)
+		MadeRooms.scan_into(_set)
 	return _set
+
+
+## Forgets the scanned layouts and every room resolved from them, so the next use scans the folders again:
+## what a restart of the game does (the made rooms are read back from their files), and what tests that
+## change a folder need.
+static func reset() -> void:
+	_set = null
+	_rooms.clear()
+
+
+## Adds the parsed layout `l` to the scanned set, in place of a layout of its id, and forgets the rooms
+## resolved from the old one.
+static func put(l: LayoutData) -> void:
+	layouts().layouts.erase(l.id)
+	layouts().add(l)
+	forget(StringName(l.id))
+
+
+## Takes the layout `id` out of the scanned set and forgets what was resolved from it.
+static func drop(id: StringName) -> void:
+	layouts().layouts.erase(String(id))
+	forget(id)
+
+
+## Forgets the resolved rooms of `id` (each of its arrangements).
+static func forget(id: StringName) -> void:
+	for key in _rooms.keys():
+		if str(key).begins_with("%s/" % id):
+			_rooms.erase(key)
 
 
 ## The resolved layout of venue `venue_id` in arrangement `variant`: its own file when it has one,
