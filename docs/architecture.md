@@ -2011,17 +2011,11 @@ transport as `GuestMidi.heard()` reports it and records each hit as a drum note,
 position. The take goes onto the first armed track through `DAW.insert_midi_take`. Other
 players' hits are only heard in the room, never in a personal mix.
 
-A tracked bare hand holds an item that says `InstrumentItem.held_in_fist` by closing round it,
-not only by a pinch (`XRInteractor.step_hold`, docs/spatial_loop.md slice 17; the shaker and the
-tambourine, the only two that did, were removed 2026-11-06, so no item asks for it today and the
-path is dormant, with no test):
-three fingers past `HandPose.HOLD_CURL` with the palm within 6 cm of the item's `grip_point`, taken
-as the hand closes. It lets go only after 0.1 s open on confident frames (`HandGestures.confident`:
-every joint seen, not inferred); a hand tracked with guessed joints goes on carrying it at the palm
-and playing it. It holds through a tracking loss where the hand was last seen for `LOST_HOLD`
-(0.4 s) and then sends it home, and throws only from the palm's speed over confident
-frames. Its strokes are the palm's (`shake_point`, levered by `shake_lever`), and none are felt
-while the hand is not tracked (`shake_tracked`). A hand carrying anything is not one of XRRig's two
+A tracked bare hand holds an item by a pinch, as a controller does by its grip. (Holding hand
+percussion by closing round it, `held_in_fist` and `XRInteractor.step_hold`, went with the shaker and
+the tambourine, the only two that did, on 2026-11-06.) A hand's strokes are the palm's
+(`shake_point`, levered by `shake_lever`), and none are felt while the hand is not tracked
+(`shake_tracked`). A hand carrying anything is not one of XRRig's two
 escape fists (`XRRig.escape_fist`). `HitRecorder.hit` snaps a hand percussion hit's recorded
 stamp, never its sound or its sent `at`, half way to the nearest sixteenth when within 35 ms
 (`snapped_at`), by its player's flag (`GuestMidi.snap_hits`, "Snap hand percussion" in the

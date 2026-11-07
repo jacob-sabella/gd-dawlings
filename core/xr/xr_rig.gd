@@ -489,8 +489,7 @@ func _watch_escape(delta: float) -> void:
 
 
 ## Whether a hand counts toward the two-fists escape: a tracked bare hand made into a fist, and
-## carrying nothing. Hand percussion held in a closed hand is a fist too (XRInteractor.step_hold), and
-## shaking it with both hands, or holding it in one while the other makes a fist, is not a way out.
+## carrying nothing.
 static func escape_fist(tracked: bool, fist: bool, hand: Interactor) -> bool:
 	return tracked and fist and not (hand != null and is_instance_valid(hand) and is_instance_valid(hand.carrying))
 

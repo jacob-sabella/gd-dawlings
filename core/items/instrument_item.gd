@@ -27,12 +27,6 @@ extends Item
 ## `song`). Whoever hears it elsewhere pitches it by that same position (`heard`), so a hit played
 ## just before a bar line rings the old chord's tone everywhere, however late it arrives.
 ##
-## Hand percussion (`held_in_fist`: none is today) is held in a closed bare hand as
-## well as a pinch or a controller (XRInteractor.step_hold, docs/spatial_loop.md slice 17), round
-## its `grip_point`, and its strokes are read off the palm then. Its recorded hits are snapped
-## gently to the beat (HitRecorder.snapped_at): the take's note moves, never the sound. Its card
-## says so while this player snaps, and in a headset how it is held (`tag_text`).
-##
 ## Every instrument has an output jack (`jack`, a JackSocket at `jack_point`, docs/spatial_loop.md
 ## slice 5). Unplugged, a hit does all of the above and nothing else; plugged into a track, the
 ## take it is recorded in goes onto that track instead of the armed one (Jacks, HitRecorder).
@@ -73,10 +67,7 @@ const LATENCY_MOST := 0.025
 ## HitRecorder's `stamp`, so this file still knows nothing of core/session/. Unset (or its owner
 ## gone), the playhead.
 static var clock: Callable = Callable()
-## Whether this player's hand percussion is snapped ("Snap hand percussion", GuestMidi.snap_hits),
-## for the shelf tag to say: set by the studio, as `clock` is. Unset, not said.
-static var snapping: Callable = Callable()
-## Whether this player is in a headset, so the shelf tag says how a hand holds it: set by the
+## Whether this player is in a headset, so the shelf tag says which way a hit is heard: set by the
 ## studio from its medium.
 static var hands_hint := false
 ## This player's own hits on the fast path (docs/spatial_loop.md part two, slice 39), set by the
@@ -91,8 +82,6 @@ static var fast_latency: Callable = Callable()
 ## How far a hit on the fast path is panned to the side of the hand that played it: a little, so
 ## two hands on one drum are two hands, and never so far that a hit is only in one ear.
 const HAND_PAN := 0.3
-## What the shelf tag says in a headset, under SNAP.
-const HANDS_HINT := "close your hand round it and shake\ncontrollers are steadier for fast parts"
 ## How often the shelf tag is read again (s): a setting changed shows within this.
 const RETAG := 0.25
 
@@ -140,7 +129,7 @@ func _ready() -> void:
 	if jack == null and has_own_jack():
 		jack = JackSocket.new(self)
 		add_child(jack)
-	if (held_in_fist() or fixed) and _tag == null:
+	if fixed and _tag == null:
 		_tag = Label3D.new()
 		_tag.name = "ShelfTag"
 		_tag.font_size = 48
@@ -164,34 +153,13 @@ func _ready() -> void:
 		add_child(again)
 
 
-## Whether a closed bare hand holds it (XRInteractor.step_hold), not only a pinch: hand
-## percussion. A bell is held by its handle, by a pinch.
-func held_in_fist() -> bool:
-	return false
-
-
-## Where a hand holds it, in global space: the point its held pose puts at the hand (`held_pose`),
-## wherever it lies. What a closed hand has to close round (HandPose.grips).
-func grip_point() -> Vector3:
-	return global_transform * held_pose().affine_inverse().origin
-
-
-## What its shelf tag would say: SNAP while this player snaps (or, in a bandmate's hand, while they
-## do), and in a headset how a hand holds it and which way its hits are heard (`path_tag`); "" for
-## nothing to say. Only hand percussion and the instruments that stand still have one. The card
-## says the same (`readout`, `hint`), and the tag itself is never shown (`_retag`).
+## What its shelf tag would say: in a headset, which way its hits are heard (`path_tag`); "" for
+## nothing to say. Only the instruments that stand still have one. The card says the same
+## (`readout`, `hint`), and the tag itself is never shown (`_retag`).
 func tag_text() -> String:
-	if not held_in_fist() and not fixed:
+	if not fixed:
 		return ""
-	var lines: PackedStringArray = []
-	var snaps := holder_snaps if is_held_elsewhere() else (snapping.is_valid() and bool(snapping.call()))
-	if snaps and held_in_fist():
-		lines.append("SNAP")
-	if hands_hint and state != State.HELD:
-		if held_in_fist():
-			lines.append(HANDS_HINT)
-		lines.append(path_tag())
-	return "\n".join(lines)
+	return path_tag() if hands_hint and state != State.HELD else ""
 
 
 func _retag() -> void:
@@ -377,14 +345,12 @@ static func side_of(hand: Interactor) -> int:
 	return 0
 
 
-## What its card says it is doing, whether its hits are snapped to the beat (hand percussion,
-## while they are), and which way its hits are heard (`path_words`): what its shelf tag said.
+## What its card says it is doing, and which way its hits are heard (`path_words`): what its shelf
+## tag said.
 func readout() -> String:
 	var said := super()
 	if fixed:
 		said = zone_words() if zone_words() != "" else "it stands here"
-	if held_in_fist() and tag_text().begins_with("SNAP"):
-		said += "  ·  snapped to the beat"
 	return "%s  ·  %s" % [said, path_words()]
 
 
@@ -416,16 +382,6 @@ func hint() -> String:
 	if fixed:
 		return STRIKE_HANDS if hands_hint else STRIKE_DESK
 	return super()
-
-
-## Item's, and in a headset, for hand percussion not in a hand, how a hand holds it: what its
-## shelf tag said.
-func _hint(loose: String) -> String:
-	var said := super(loose)
-	if not (held_in_fist() and hands_hint and state != State.HELD):
-		return said
-	var how := HANDS_HINT.replace("\n", " · ")
-	return how if said == "" else "%s · %s" % [said, how]
 
 
 ## Override: which of Foley's sounds (Foley.take_of) a hit rings, shaken or `struck`.

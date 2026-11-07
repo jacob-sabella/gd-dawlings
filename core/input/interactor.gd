@@ -53,16 +53,6 @@ var finger_chord := ""
 ## ray meets as a song time, a bandmate or a place in the room, not only a control, and bandmates'
 ## ghosts draw the ray. It presses nothing differently: pointing is shown, not done.
 var pointing := false
-## A tool this hand is using in place of pressing what it points at (docs/spatial_loop.md part two,
-## slice 48: an end of string off the spool, since removed): (hand, down) -> void, called on
-## each press and let-go of this hand's button, and while it is set the button grabs, uses and
-## catches nothing (a held control is let go). Unset (an invalid Callable), the hand presses as ever.
-var tool: Callable = Callable()
-## The stick, while `tool` is set and wants it (a block or tool in hand):
-## (hand, notches, fine) -> bool, true if it took them, asked by a headset hand's stick
-## (XRInteractor) before whatever it hovers or holds, as the studio sends a mouse's wheel to what the
-## mouse carries. The tool that sets it unsets it with itself.
-var tool_stick: Callable = Callable()
 ## Where on `hovered` the ray landed, in world space. For a control that is one thing to the
 ## hand and many to the eye -- a lane of items -- the readout depends on which part is under it.
 var hover_point := Vector3.ZERO
@@ -556,9 +546,6 @@ func _physics_process(_delta: float) -> void:
 	# Not `carrying != null`: a freed item compares equal to null (see _forget_freed).
 	if not is_instance_valid(carrying):
 		carrying = null
-	if tool.is_valid():
-		_use_tool(pressed)
-		return
 	_catch()
 	if pressed and not _was_pressed:
 		if hovered == null and carrying == null and worn != null and head_reach() > 0.0 \
@@ -602,22 +589,6 @@ func _physics_process(_delta: float) -> void:
 	_tick_dwell(hit["point"], _delta)
 	_show_rim()
 	_tend_bead(_delta)
-
-
-## This hand's button is its tool's (`tool`): whatever it held let go, each press and let-go the
-## tool's, and the rest of the frame (its glove, its rim) as ever.
-func _use_tool(pressed: bool) -> void:
-	if not pressed and held != null:
-		let_go()
-	if _using:
-		_end_use()
-	var was := _was_pressed
-	_was_pressed = pressed
-	if pressed != was and tool.is_valid():
-		tool.call(self, pressed)
-	_show_glove()
-	_show_finger_glove()
-	_show_rim()
 
 
 # --- a cassette onto a track (docs/spatial_loop.md part two, slice 24) ------------------------

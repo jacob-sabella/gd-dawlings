@@ -28,14 +28,12 @@ const PINCH_OUT := 0.030
 const TRAVEL_FROM := 0.09
 ## A finger curled less than this is open, for `is_open` (0 open to 1 curled tight).
 const OPEN_CURL := 0.3
-## A finger curled past this is closed round something, for `closed` and `grips`: a hand holding
+## A finger curled past this is closed round something, for `closed`: a hand holding
 ## an instrument, not a fist clenched tight (docs/spatial_loop.md slice 17).
 const HOLD_CURL := 0.6
 ## How many of the four fingers have to be past HOLD_CURL for the hand to be closed: three, so a
 ## little finger left out, or one the runtime reads wrong, still holds.
 const HOLD_FINGERS := 3
-## How near the middle of the palm a thing's grip has to be for a closed hand to hold it (m).
-const GRIP_REACH := 0.06
 ## The palm's normal within this of straight up is palm up (degrees).
 const PALM_UP_WITHIN := 35.0
 ## The palm's normal within this of the way to the eyes faces the head (degrees). On Quest the
@@ -206,12 +204,6 @@ static func closed(joints: PackedVector3Array) -> bool:
 		if curled[d] > HOLD_CURL:
 			past += 1
 	return past >= HOLD_FINGERS
-
-
-## Whether the hand is closed round a grip at `point` (same space): `closed`, with the middle of
-## the palm within GRIP_REACH of it.
-static func grips(joints: PackedVector3Array, point: Vector3) -> bool:
-	return closed(joints) and joints[PALM].distance_to(point) <= GRIP_REACH
 
 
 ## The hand's own frame, from its joints: +X across it to the little finger's side of a right

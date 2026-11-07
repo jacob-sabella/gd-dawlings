@@ -31842,8 +31842,8 @@ func _test_hand_percussion_is_snapped_gently_as_it_is_recorded() -> void:
 				ItemVoices.drum(56)[0] == &"cowbell" and ItemVoices.drum(76)[0] == &"woodblock" and loud > 0.01
 				and (split[0] as PackedFloat64Array).is_empty())
 
-	# The shelf tag's words belong to hand percussion held in a fist (`held_in_fist`), and no
-	# item is today: a cowbell carried or stood on its shelf says nothing, and never floats a tag.
+	# The shelf tag belongs to the instruments that stand still: a cowbell carried or on its shelf
+	# says nothing, and never floats a tag.
 	check("a hand-held cowbell has no shelf tag to say SNAP (%s)" % bell.tag_text(), bell.tag_text() == ""
 			and block.tag_text() == "")
 	gm.snap_hits = false
@@ -43598,18 +43598,6 @@ func _test_a_guests_ring_pull_asks_the_host() -> void:
 
 
 # --- the world into the rack (docs/spatial_loop.md part two, slice 53) ---------------------------
-
-## The 16-bit samples of the WAV at `path` (AudioTake's mono), as floats.
-func _wav_samples(path: String) -> PackedFloat32Array:
-	var bytes := FileAccess.get_file_as_bytes(path)
-	var out := PackedFloat32Array()
-	if bytes.size() < AudioTake.HEADER_BYTES:
-		return out
-	out.resize((bytes.size() - AudioTake.HEADER_BYTES) / 2)
-	for i in out.size():
-		out[i] = bytes.decode_s16(AudioTake.HEADER_BYTES + i * 2) / 32767.0
-	return out
-
 
 ## The loft's Thunderstorm plays its density into the weather's socket at every sixteenth and a gate
 ## each drop, the same read whole or in pieces; and the world's sockets are named for what they are.

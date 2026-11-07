@@ -4131,9 +4131,7 @@ func _build_items() -> void:
 	add_child(hit_recorder)
 	# Every hit's one song position is read from the take's own stamp (InstrumentItem.clock).
 	InstrumentItem.clock = hit_recorder.stamp
-	# The shelf tags of the hand percussion say SNAP while this player snaps, and in a headset how
-	# a bare hand holds one.
-	InstrumentItem.snapping = HitRecorder.snaps
+	# The shelf tags of the instruments that stand still say, in a headset, which way a hit is heard.
 	InstrumentItem.hands_hint = medium != Presentation.Medium.SCREEN
 	hit_recorder.unarmed.connect(func() -> void:
 		Session.notice.emit("Arm a track to record the percussion: hits are only heard until one is."))

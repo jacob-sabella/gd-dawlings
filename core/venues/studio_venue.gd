@@ -47,8 +47,7 @@ const HEAD := 2.15
 const JAMB := 0.04
 ## The side room at the base width. The riser by the window, 1.4 m off it so the drummer's
 ## seat and the looper are played from the floor between; the lattice behind it against the back
-## wall, its marble run on the face toward the riser, the way from the door to the booth between
-## them; and the booth in the far front corner, its door onto the nook between it and the riser.
+## wall, the way from the door to the booth between them; and the booth in the far front corner, its door onto the nook between it and the riser.
 const SIDE_ZONES := {
 	&"drums": AABB(Vector3(-9.6, 0.0, -3.4), Vector3(2.6, 2.8, 2.6)),
 	&"matrix": AABB(Vector3(-11.0, 0.0, 0.45), Vector3(3.4, 3.4, 3.4)),

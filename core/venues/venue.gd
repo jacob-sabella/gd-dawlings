@@ -559,7 +559,6 @@ static func _away(c: Vector3) -> float:
 ## and the modular wall over it: its middle SYNTH_MIDDLE out from the zone's middle into the room;
 ## the sampler on the side away from the control room, SAMPLER_RING from the middle, facing it.
 const SYNTH_MIDDLE := 1.7
-const SYNTH_RING := 1.3
 const SAMPLER_RING := 1.1
 
 

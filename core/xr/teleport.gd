@@ -69,7 +69,7 @@ func _physics_process(delta: float) -> void:
 		var pressed := bare and (hand.is_pressing() or (g.pinched & HandPose.INDEX) != 0)
 		if pressed and not aim["was"]:
 			aim["armed"] = hand.hovered == null and hand.held == null and not is_instance_valid(hand.carrying) \
-					and not hand.tool.is_valid() and not hand.fingers_play
+					and not hand.fingers_play
 			aim["for"] = 0.0
 			aim["ok"] = false
 		if pressed and aim["armed"]:

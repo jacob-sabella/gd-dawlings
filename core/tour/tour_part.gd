@@ -19,18 +19,11 @@ var id: StringName
 var instrument: StringName
 ## What the band is told.
 var line: String = ""
-## The channels items record on, 0-based: 9 the hand percussion's (HitRecorder.CHANNEL) and 10
-## the pitched items' (InstrumentItem.MELODIC_CHANNEL, the venue instruments' bars). Mirrored here rather than
-## referenced, because Tour code knows nothing of core/items/; a suite check keeps them equal.
-const ITEM_CHANNELS: Array[int] = [9, 10]
-
 ## A note's MIDI channel, 0-based as HitRecorder/GuestMidi write it: 9 is the hand percussion's
 ## channel (HitRecorder.CHANNEL, not referenced directly -- Tour code knows nothing of
-## core/items/). -1 means any channel but the items' (ITEM_CHANNELS): keys, wherever
-## they come from.
+## core/items/).
 var channel: int = 9
-## Which General MIDI pitches count; empty means any pitch counts (a keys part's stabs, whose chord
-## is the player's call).
+## Which General MIDI pitches count; empty means any pitch counts.
 var pitches: PackedInt32Array = PackedInt32Array()
 ## Bar positions in beats this part is judged against (0 = the one); empty means use `grid`.
 var beats: PackedFloat64Array = PackedFloat64Array()

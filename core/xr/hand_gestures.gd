@@ -126,14 +126,6 @@ func palm() -> Vector3:
 	return joints[HandPose.PALM] if tracked else Vector3.INF
 
 
-## The palm as a pose, global space, while it is tracked: at its middle, faced as HandPose.frame
-## (+Y out of the back of the hand, -Z along it). Where a closed hand carries what it holds.
-func palm_pose() -> Transform3D:
-	if not tracked:
-		return Transform3D.IDENTITY
-	return Transform3D(HandPose.frame(joints, side), joints[HandPose.PALM])
-
-
 ## This hand's index and middle fingertips, global space, while it is tracked: {&"index",
 ## &"middle"}. What it plucks a string with.
 func tips() -> Dictionary:
