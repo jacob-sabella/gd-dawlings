@@ -28,7 +28,7 @@ const ALL := [
 	{"id": &"rhythm", "title": "RHYTHM", "colour": Color(1.0, 0.62, 0.42),
 			"stations": [&"drums", &"looper"], "pieces": []},
 	{"id": &"harmony", "title": "HARMONY", "colour": Color(0.62, 0.86, 1.0),
-			"stations": [&"bells", &"wheel", &"sections"], "pieces": [],
+			"stations": [&"wheel", &"sections"], "pieces": [],
 			"lift": -0.4},
 	{"id": &"synth", "title": "SYNTH & SOUND DESIGN", "colour": Color(0.78, 0.66, 1.0),
 			"stations": [&"sampler"], "pieces": [], "lift": 0.25},

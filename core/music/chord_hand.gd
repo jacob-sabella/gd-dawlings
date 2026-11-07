@@ -3,7 +3,7 @@ extends Node
 
 ## Chord shapes on one hand (docs/spatial_loop.md part two, slice 32; idea #28): the chord hand
 ## holds up a number of fingers and that degree of the key is this player's chord, for everything
-## they play, while the other hand strums. Paired with the bells, there are no wrong chords.
+## they play, while the other hand strums. There are no wrong chords.
 ##
 ## One for this player (`mine`), made by the studio. The chord hand is the left, or the right for
 ## a left-handed player (Ergonomics.handedness): `hand`, its pinch ray, and `gestures`, its
@@ -34,7 +34,7 @@ extends Node
 ## Each degree is the key's chord there (`chord_for`, in Harmony.at's key at that moment), so a
 ## latched IV is F in C major and Dm in A minor, and follows the song into a new key. While a
 ## shape is held it is this player's chord (`at`), and only theirs: the
-## fingertips, the wheel's follow-ups and the bells they hold (InstrumentItem.harmony_at)
+## fingertips, the wheel's follow-ups (InstrumentItem.harmony_at)
 ## all read it, on this machine. A note already ringing keeps its pitch, and the notes played go
 ## out as notes, with their pitches, as ever: nothing about a hand's shape crosses the wire, but
 ## down a jack.
@@ -42,7 +42,7 @@ extends Node
 ## A bandmate's chord hand (part two, slice 33; idea #33): plugged into this player, `chord:P`
 ## sends the chord P's hand holds on each change (Jacks.send_chord), and it is taken here as a
 ## chord from them (`take`): while P holds it, it is this player's chord, so their
-## fingertips and the bells they hold play P's chord (`IV from ADA`, `crown_text`). This player's own shape wins over it while they hold one.
+## fingertips play P's chord (`IV from ADA`, `crown_text`). This player's own shape wins over it while they hold one.
 ## Unplugged, or P gone, it is let go (`let_go`), and so is P opening their hand (quality 0).
 ## The latest taken wins while two bandmates send at once. What this player holds of their own,
 ## not a bandmate's, is what goes out of their own jack (`own_chord`), so two players plugged into

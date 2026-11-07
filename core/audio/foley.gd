@@ -514,8 +514,8 @@ static func pad(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
-## The note a handbell's sound (`handbell`) rings as it is: C5. A bell is pitched to its note
-## from here (HandbellItem.sound_pitch), as a sample is.
+## The note the pitched bell's sound (`handbell`) rings as it is: C5. A bell is pitched to its note
+## from here (what ItemVoices rings a pitched note as), as a sample is.
 const HANDBELL_NOTE := 72
 
 

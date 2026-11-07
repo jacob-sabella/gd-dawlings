@@ -4,7 +4,7 @@ extends Node3D
 ## The cassette rack (docs/spatial_loop.md part two, slice 23): a visible clipboard beside the prop
 ## shelf, the clips the band has pulled out of the timeline standing face out on twelve ledges,
 ## three columns of four. A station (Stations.ALL, `cassette_rack`): it is gone to by name, and it
-## stands clear of everything else the way the bells do.
+## stands clear of everything else.
 ##
 ## Its slots are ItemRoom holder RACK (12, top left first, along each row): a made item let go
 ## within ItemRoom.SLOT_REACH of a free one goes into it, Q aimed at it puts it there, and a click

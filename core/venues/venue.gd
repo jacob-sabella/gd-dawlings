@@ -562,72 +562,14 @@ func default_tour_case_spot() -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(x, 0, shelf.origin.z + TOUR_CASE_ALONG))
 
 
-## The harmony neighbourhood (Neighbourhoods) round the bricks table: the row's middle HARMONY_AISLE
-## out from its long side toward the middle of the room, facing the table across the aisle its
-## player stands in; the handbells' stand across the table's far end, facing back along it. So the
-## table is the middle, and whoever stands at any of them has the rest round them.
+## The harmony neighbourhood (Neighbourhoods): HARMONY_AISLE is the aisle the venues keep out from
+## the bricks table's long side toward the middle of the room.
 const HARMONY_AISLE := 1.75
-## The footprint the row's middle keeps from the removed chord harp (half its size, and how far along
-## Z its middle was), so the row, the bells' stand and the pieces beside it stand where they did.
-const HARMONY_FOOT := Vector2(0.35, 0.2)
-const HARMONY_FOOT_Z := -0.06
-## How far past the table's far end the bells' stand's middle is.
-const BELL_BEYOND := 1.25
-
-
-## The middle of the harmony row, on the floor, facing the bricks table. In a room with no
-## table (the Rig Roulette room), against the back wall on the right, facing it.
-func harmony_middle() -> Transform3D:
-	var at := zones()
-	if not at.has(&"bricks"):
-		var x := live_room_half() - 2.5
-		var z := LIVE_ROOM_BACK - 0.05 - 0.08 - (HARMONY_FOOT.y - HARMONY_FOOT_Z)
-		return Transform3D(Basis(Vector3.UP, PI), Vector3(x, 0, z))
-	var c := (at[&"bricks"] as AABB).get_center()
-	var side := _table_side(c)
-	var x := c.x - side * (ZoneKit.TABLE_TOP.x * 0.5 + HARMONY_AISLE)
-	return Transform3D(Basis(Vector3.UP, side * PI * 0.5), Vector3(x, 0, c.z))
-
-
-## Which way across the room the bricks table at `c` stands from its middle: +1 on the right.
-func _table_side(c: Vector3) -> float:
-	return 1.0 if c.x >= 0.0 else -1.0
 
 
 ## Which way along the table is away from the control room: +1 back (+Z).
 static func _away(c: Vector3) -> float:
 	return 1.0 if c.z >= Studio.MIX_POSITION_Z else -1.0
-
-
-## Where the handbells' stand stands (HandbellItem.stand), in studio space: on its trolley (WHEELED)
-## wherever that has been pushed, else across the bricks table's far end from the control room,
-## facing back along it, so the bells are in reach of whoever is at the table.
-const BELL_SIDE := 1.0
-const BELL_GAP := 0.65
-
-
-func bell_stand_spot() -> Transform3D:
-	return _spot_of(&"bells")
-
-
-## Where the venue stands the bells' stand until it is pushed somewhere else. Beside the harmony row's middle where
-## there is no table (the Rig Roulette room), BELL_GAP clear of it.
-func default_bell_stand_spot() -> Transform3D:
-	var at := zones()
-	if not at.has(&"bricks"):
-		var along := HARMONY_FOOT.x + BELL_GAP + HandbellItem.STAND.x * 0.5
-		var back := HARMONY_FOOT_Z - HARMONY_FOOT.y + HandbellItem.STAND.y * 0.5
-		return harmony_middle() * Transform3D(Basis.IDENTITY, Vector3(BELL_SIDE * along, 0, back))
-	var c := (at[&"bricks"] as AABB).get_center()
-	var away := _away(c)
-	return Transform3D(Basis(Vector3.UP, PI if away > 0.0 else 0.0),
-			Vector3(c.x, 0, c.z + away * (ZoneKit.TABLE_TOP.z * 0.5 + BELL_BEYOND)))
-
-
-## Where handbell `n` (1 to 4) lives, in studio space: on its seat on the stand, mouth down, its
-## tab toward the room (HandbellItem.seat).
-func bell_spot(n: int) -> Transform3D:
-	return bell_stand_spot() * HandbellItem.seat(n)
 
 
 ## The synth and sound design neighbourhood (Neighbourhoods) round the synth zone's keyboard stand
@@ -895,8 +837,7 @@ const INSTRUMENT_BESIDE_LATTICE := 2.1
 ## cave's crystals, the grid's neon bars, the chalk zone's xylophone, the station's hull panels, the
 ## greenhouse's pots, the stage's cymbals and gong and the desert's ringing stones stand (the
 ## speakeasy's piano stands in the same place, by ClubVenue.piano_case's own reckoning). Clear of
-## both zones' boxes, of the bells' stand on the far side of the lattice, and of the
-## walk between.
+## both zones' boxes and of the walk between.
 func back_wall_instrument(depth: float) -> Transform3D:
 	var at := zones()
 	var x := (ZONES[&"drums"] as AABB).get_center().x
@@ -963,7 +904,7 @@ func floor_at(p: Vector2) -> float:
 ## only where each stands until somebody moves it (`default_spot`), and null where it has no room
 ## for it at all. The fifths wheel is not here: it is mounted on the bricks table, which is the
 ## venue's and does not move.
-const WHEELED: Array[StringName] = [&"bells", &"cassette_rack", &"sampler", &"tour_case",
+const WHEELED: Array[StringName] = [&"cassette_rack", &"sampler", &"tour_case",
 		&"prop_shelf", &"hoop"]
 
 
@@ -971,8 +912,6 @@ const WHEELED: Array[StringName] = [&"bells", &"cassette_rack", &"sampler", &"to
 ## studio space; null where the venue has no room for it.
 func default_spot(id: StringName) -> Variant:
 	match id:
-		&"bells":
-			return default_bell_stand_spot()
 		&"cassette_rack":
 			return default_cassette_rack_spot()
 		&"sampler":
@@ -1237,8 +1176,8 @@ func mic_spot() -> Variant:
 
 
 ## Everything the venue puts on the floor that stops a person: the zones' dressing, the prop
-## shelf and what stands about the room with it (the door, the hoop, the Tour case, the
-## bells' stand and the cassette rack).
+## shelf and what stands about the room with it (the door, the hoop, the Tour case
+## and the cassette rack).
 ## What the walker is given.
 ##
 ## In a studio the free-standing ones (WHEELED) are left out: they stand on trolleys there, and the
@@ -1274,7 +1213,6 @@ func wheeled_solids() -> Array:
 			"a": spot.basis.get_euler().y, "top": ZoneKit.SHELF.y})
 	out.append_array(Hoop.solids(hoop_spot()))
 	out.append_array(TourCase.solids(tour_case_spot()))
-	out.append(HandbellItem.stand_solid(bell_stand_spot()))
 	out.append(CassetteRack.solid(cassette_rack_spot()))
 	var sampler_at: Variant = sampler_spot()
 	if sampler_at != null:

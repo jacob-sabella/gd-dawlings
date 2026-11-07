@@ -243,7 +243,7 @@ instruments out of the desk's effect chain.
 Notes on the hand percussion's channel (9) and the pitched items' (10) are not the tine's:
 `ItemVoices` (core/built_in/item_voices.gd) rings them from Foley's own synthesis (`Foley.samples`),
 channel 9 as General MIDI drums (each of the room's items' notes as that item's sound) and channel
-10 as the handbell at the note's pitch, each note's take seeded by its time. `render_midi` splits
+10 as the bell tone at the note's pitch (the venue instruments' bars), each note's take seeded by its time. `render_midi` splits
 an item by channel and sums the two; an item with neither is the tine's alone, to the sample. On
 Reaper the track's own instrument plays them, as any MIDI.
 
@@ -472,7 +472,7 @@ floor without inventing a plugin to justify its legs.
 
 The room grew one station at a time, each put in whatever gap was left, until twenty stations,
 thirty-six items and forty footprints stood in one 8 x 6 m control room and a 14 x 4.5 m strip of
-live room behind it: thirteen pairs of pieces closer than 0.6 m, the harp (since removed), the bells and the music
+live room behind it: thirteen pairs of pieces closer than 0.6 m, the harp (since removed), the handbells (since removed) and the music
 box 12 cm apart, the sampler 3 cm off the booth's wall, and with a 0.9 m walkway the harp, the
 modular and the lyric board could not be reached at all (2026-10-28: "EVERYTHING is
 way too cramped"). The layout is now a rule rather than a residue, in three parts.
@@ -495,7 +495,7 @@ not colour, says which is which). Where each station stands is still the venue's
 | --- | --- | --- |
 | MIXING | the control room, a ring round the seat | desk, timeline, rack, deck and platter, patch stand, patch wall, EQ wall, stage table, station board |
 | RHYTHM | straight ahead turned round from the desk | drum riser with the hand drums and the looper; the open lattice floor; the venue's instrument on the back wall behind the riser |
-| HARMONY | front right | the bricks table (fifths wheel, section blocks); handbells across its far end |
+| HARMONY | front right | the bricks table (fifths wheel, section blocks) |
 | SYNTH & SOUND DESIGN | back right | the keyboard stand and modular rack; the sampler round a middle in front of it |
 | VOCALS | back left | the booth (3.4 x 3.1 m, a 1.2 m door), the lyric board, room for a talk box |
 | TAPE & TOYS | front left | prop shelf and cassette rack on the wall, hoop and Tour case across the middle from them; the items' homes |
@@ -2310,16 +2310,16 @@ The toast on arriving at a station names its area in words (`Stations.where`, `A
 the control room", "in this venue"), not the card page's title.
 
 Pitched items are instruments of the same kind whose note is a function of song position
-(`InstrumentItem.note_at`, `channel`, `note_seconds`). The four handbells (`HandbellItem`,
-`bell1`..`bell4`, on a stand at `Venue.bell_spot`) ring their number's
-chord tone, voiced at 72, on `InstrumentItem.MELODIC_CHANNEL` (10, 0-based), 0.8 s long. Each hit
+(`InstrumentItem.note_at`, `channel`, `note_seconds`). (The four handbells, `bell1`..`bell4`, were removed 2026-11-06; the venue
+instruments' bars are the pitched sound now, on `InstrumentItem.MELODIC_CHANNEL`
+(10, 0-based), 0.8 s long.) Each hit
 reads `InstrumentItem.clock` (the studio's `HitRecorder.stamp`) once: that one position pitches
 the sound, which is started before `play` returns, is what HitRecorder records it at (`hit`'s
 `at`, no second stamp), and goes out with it (`Session.item_hit`'s `song`). Whoever hears it
 pitches it by that `song` (`heard`), not by their own position when it arrives, so a ring just
-before a bar line is the old chord's tone everywhere. A click on a bell is sent as a hit as well
+before a bar line is the old chord's tone everywhere. A click on a pitched item is sent as a hit as well
 as a use, and a bandmate's use of a pitched item rings nothing, so it rings once. Tour's keys
-parts ignore both item channels (`TourPart.ITEM_CHANNELS`). The bells sound through Godot's
+parts ignore both item channels (`TourPart.ITEM_CHANNELS`). Pitched sounds go through Godot's
 mixer like the percussion; the session panel shows that path's latency beside the keys', and over
 25 ms they are to get a `MonitorSynth` voice. docs/spatial_loop.md slice 4 has the decisions.
 
@@ -2390,8 +2390,12 @@ they hold the keytar (`Presence._on_note_played`), play out of it on a `MonitorS
 
 The chord harp (`ChordHarp`, station `harp`, jack source `harp`) was removed on 2026-11-06, with its
 model and Blender script. What it did for the room lives on elsewhere: the song's chord is read
-through `ChordHand.at` and `Harmony.at`, and the harmony row's footprint it left is kept as
-`Venue.HARMONY_FOOT`. docs/spatial_loop.md keeps its slices, marked removed.
+through `ChordHand.at` and `Harmony.at`. docs/spatial_loop.md keeps its slices, marked removed.
+
+The handbells (`HandbellItem`, `bell1`..`bell4`, station `bells` and `bells_held`, the bell stand
+and `Venue.bell_spot`, the harmony row's `HARMONY_FOOT`) were removed on 2026-11-06, with their
+models and Blender script. The pitched channel and the bell tone (`Foley.HANDBELL_NOTE`) stay: the
+venue instruments' bars ring on them. docs/spatial_loop.md keeps the slices, marked removed.
 
 Everything that stands somewhere to be played is a station, and the stations are one list:
 `Stations` (`core/music/stations.gd`, static). A row is `id`, `title`, `area` (control, live or
@@ -2405,7 +2409,7 @@ fit 1600x900 less margins), the desktop's go-to (`Studio.cycle_stations` on I an
 `go_to_station`, which eases the walker to `Stations.seat` facing the station, looking where
 `Stations.look_from` holds its `frame` (its controls' top first) in view from that seat, and moves
 the body so Esc walks home), each station's plaque (`Stations.plaque`: title and hands line at 30 mm), and
-the suite's clearance loop, in two kinds: free-standing rows take the bells' checks, zone-mounted
+the suite's clearance loop, in two kinds: free-standing rows take the stand checks, zone-mounted
 ones are checked inside their zone. The help card holds the keyboard focus while open, so the
 walker stands still; F2 still opens the 2D view, which puts the card away. docs/spatial_loop.md part two, slice 10.
 
@@ -2837,7 +2841,7 @@ take (`Item.heard_use`, Presence). The host's sampler writes `Foley.take_of(kind
 its 16-bit samples after a header at Foley's rate (`Sampler.write`, `AudioTake.header(frames,
 rate)`). The file is the very stream the player heard. A take's own tuning (the duck's squeaks, the
 ball's bounces) is baked into the stream rather than played as a pitch. What the room does play as
-a pitch, an instrument's second voice (`VOICE_PITCH`), a Tour curse and a handbell's chord tone
+a pitch, an instrument's second voice (`VOICE_PITCH`), a Tour curse and a pitched item's chord tone
 (`InstrumentItem.tune_at`, `Item.use_pitch`), reaches `Sampler.heard` as its `pitch`, and the take is
 resampled to it before it is written (`Foley.resampled`). The kind is the item's (`Item.use_kind`,
 `InstrumentItem.sound_kind`): a click or squeeze is a use; a shake reaches the host as a hit and is

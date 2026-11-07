@@ -29,7 +29,7 @@ const DIM := Color(0.62, 0.64, 0.68)
 const ACCENT := Color(0.88, 0.74, 0.44)
 ## Where each kind of thing carried is kept, as PLAY · HELD says under its heading: not all on
 ## the shelf, so a desktop player looking for a bell does not look there.
-const HELD_HOMES := "Carried, not stood anywhere. The keytar, shaker and tambourine: on the prop shelf by the left wall. The handbells: on their stand by the bricks table. The fingertips and the jacks: always on you."
+const HELD_HOMES := "Carried, not stood anywhere. The keytar, shaker and tambourine: on the prop shelf by the left wall. The fingertips and the jacks: always on you."
 ## The most a page may measure: a 1600x900 window less a 28 px margin on every side.
 const FIT := Vector2(1600 - 2 * 28, 900 - 2 * 28)
 ## How wide a line's words run before they wrap (px at text scale 1).

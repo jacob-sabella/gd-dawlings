@@ -3,7 +3,7 @@ extends RefCounted
 
 ## The built-in engine's voices for what the room's items record: a MIDI item's drum notes
 ## (channel 9, General MIDI's percussion) as drums, and its pitched items' notes (channel 10, the
-## handbells) as bells, where the engine's instrument (DawKitTine) would play both as tines.
+## venue instruments' bars) as bells, where the engine's instrument (DawKitTine) would play both as tines.
 ##
 ## A hit recorded off a shaker plays back as the shaker that was heard when it was played: every
 ## sound is Foley's own synthesis (`Foley.samples`), the one the item rings in the room, and the
@@ -121,7 +121,7 @@ static func add_to(out: PackedVector2Array, notes: PackedFloat64Array, seconds: 
 			kind = d[0]
 			ratio = d[1]
 		else:
-			# A bell rung at its note, from the C5 its sound rings (HandbellItem.sound_pitch).
+			# A bell rung at its note, from the C5 its sound rings (Foley.HANDBELL_NOTE).
 			kind = &"handbell"
 			ratio = pow(2.0, float(note - Foley.HANDBELL_NOTE) / 12.0)
 		_ring(out, Foley.samples(kind, take_at(on)), int(round(maxf(on, 0.0) * rate)),

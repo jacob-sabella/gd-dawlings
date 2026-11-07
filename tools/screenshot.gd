@@ -61,11 +61,11 @@ var _plug := ""
 ## of that mask's fingers held down (HandPose's bits: 1 J, 2 K, 4 L, 8 ;), for a shot of the glove
 ## playing them (docs/spatial_loop.md slice 8).
 var _fingertips := -1
-## `--chords 4`: at frame 10 the bells gone to, the chord layer turned on as C turns it, and that
+## `--chords 4`: at frame 10 the fifths wheel gone to, the chord layer turned on as C turns it, and that
 ## key of the number row pressed (1 to 7 the degrees, 0 the song's chord), for a shot of the
-## desktop's chord glove over the bells (docs/spatial_loop.md part two, slice 32).
+## desktop's chord glove at the wheel (docs/spatial_loop.md part two, slice 32).
 var _chords := -1
-## `--chord-from 4`: at frame 10 the bells gone to, and Lin's (peer 7) chord hand plugged into this
+## `--chord-from 4`: at frame 10 the fifths wheel gone to, and Lin's (peer 7) chord hand plugged into this
 ## player holding that degree of the song's key (1 to 7), taken as it comes down the jack
 ## (Jacks.received), for a shot of the sender named (part two, slice 33). Lin is
 ## in the room from then, standing where --visitor puts them if it is given.
@@ -1032,7 +1032,7 @@ func _process(_delta: float) -> void:
 	if _frames == 10 and _chords >= 0:
 		var chords_at := get_tree().current_scene.get_node_or_null("Studio") as Studio
 		if chords_at != null and chords_at.chord_hand != null:
-			chords_at.go_to_station(&"bells")
+			chords_at.go_to_station(&"wheel")
 			chords_at.toggle_chords()
 			chords_at.chord_hand.pick(_chords - 1)
 			print("SHOT_CHORDS ", chords_at.chord_hand.hud_text())
@@ -1046,7 +1046,7 @@ func _process(_delta: float) -> void:
 				lin.colour_index = 2
 				Session.participants[7] = lin
 				Session.roster_changed.emit()
-			from_studio.go_to_station(&"bells")
+			from_studio.go_to_station(&"wheel")
 			var source := Jack.chord_source(7)
 			from_studio.jacks.plug(source, Jack.player_sink(Session.local_peer_id))
 			var key := Harmony.at(DAW.state, DAW.state.position_seconds)

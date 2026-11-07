@@ -638,7 +638,7 @@ static func sink_name(sink: StringName) -> String:
 	return "unplugged"
 
 
-## What a source is called in a notice: `shaker`, `handbell 2`, `your keys`,
+## What a source is called in a notice: `shaker`, `cowbell 2`, `your keys`,
 ## `Ada's chord hand`.
 static func source_name(source: StringName, item: Item = null) -> String:
 	if item is InstrumentItem:

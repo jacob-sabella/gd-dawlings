@@ -117,7 +117,7 @@ signal item_used(item: StringName, down: bool, from: int, take: int)
 signal note_played(kind: int, pitch: int, velocity: int, from: int, song: float, source: StringName)
 ## An instrument in `from`'s hand shaken into a hit (InstrumentItem), `velocity` 1 to 127: for
 ## everyone else to hear from their hand. A click on percussion is a use (`item_used`), not this;
-## a click on a pitched item (a handbell) is this too. `song`: the song position they played it
+## a click on a pitched item is this too. `song`: the song position they played it
 ## to (the hit's one stamp, InstrumentItem.played's `at`), or -1 when not known, so a pitched item
 ## rings here the note it rang there, whenever it arrives. `snap`: whether its player snaps their
 ## hand percussion (GuestMidi.snap_hits), so whoever takes the hit down snaps it by their choice,

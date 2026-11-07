@@ -373,8 +373,6 @@ var spectra: Spectra
 ## once and the same in every venue, as the rack is; a venue with no room for one hides it
 ## (`_wheel_in_live_pieces`). Empty in AR.
 var live_pieces := {}
-## The handbells' stand, a child of the venue at `bell_stand_spot` (HandbellItem.stand).
-var _bell_stand: Node3D
 ## Clap to mute (Clap, docs/spatial_loop.md slice 19): the two hands' palms or grips, and K held at
 ## a desk. Two of them, so a key and the hands never let go of each other's press.
 var clap := Clap.new()
@@ -655,7 +653,6 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_hang_the_roulette_door()
 	# Before anything stands at its spot: the spots of what is wheeled about are its trolley's.
 	_wheel_in_live_pieces()
-	_stand_the_bell_stand()
 	_stand_the_wheel()
 	_stand_the_sections()
 	_stand_the_cassette_rack()
@@ -703,14 +700,6 @@ func _hang_the_roulette_door() -> void:
 	door.transform = venue.rig_roulette_door()
 	door.used.connect(_on_roulette_door_used)
 	venue.add_child(door)
-
-
-## The handbells' stand, in the venue's own frame at its spot: a child of the venue, so it goes with
-## it (the bells themselves are items: their homes are its seats).
-func _stand_the_bell_stand() -> void:
-	_bell_stand = HandbellItem.stand()
-	_bell_stand.transform = Stations.spot(venue, &"bells")
-	venue.add_child(_bell_stand)
 
 
 ## The fifths wheel, in the venue's own frame on the bricks table: a child of the venue, so it
@@ -1785,7 +1774,7 @@ func _build_patch_stand() -> void:
 
 # --- what stands out in the venue on its own ------------------------------------------------
 #
-# The bells' stand, the cassette rack, the sampler, the Tour case, the prop shelf and
+# The cassette rack, the sampler, the Tour case, the prop shelf and
 # the hoop stand on the floor by themselves, the way the rack and the deck's cart do, so they are
 # pushed about the same way: a trolley each, saved where it was left (`floor/<id>`) and shared
 # with the room like the rest. What is built into a venue -- its walls and doors, the riser, the
@@ -1795,7 +1784,7 @@ func _build_patch_stand() -> void:
 # The things themselves are still the venue's children, built with each venue in its own
 # materials; their trolley is the studio's and says where they stand (Venue._spot_of), so moving
 # it moves them (`_carry_live`), and everything that is measured from them -- a station's seat
-# and the board's rows, the items' homes on the shelf and the bells' seats, the rack's slots, the
+# and the board's rows, the items' homes on the shelf, the rack's slots, the
 # baskets a ball goes through, the dartboard on the shelf's posts -- goes with them.
 
 ## Each wheeled piece's trolley: its node's name, the footprint in its own frame (centre, half
@@ -1803,8 +1792,6 @@ func _build_patch_stand() -> void:
 ## grips it is taken hold of by: boxes [size, centre] of its own lowest structure -- a plinth,
 ## feet, a base -- under whatever on it is played or picked up.
 const LIVE_TROLLEYS := {
-	&"bells": ["BellStandTrolley", Vector2.ZERO, HandbellItem.STAND * 0.5, 10.0,
-			[[Vector3(HandbellItem.STAND.x, 0.3, HandbellItem.STAND.y), Vector3(0, 0.15, 0)]]],
 	&"cassette_rack": ["CassetteRackTrolley", Vector2.ZERO, CassetteRack.FOOT, 9.0,
 			[[Vector3(CassetteRack.FOOT.x * 2.0, 0.15, CassetteRack.FOOT.y * 2.0), Vector3(0, 0.075, 0)]]],
 	&"sampler": ["SamplerTrolley", Vector2.ZERO, Sampler.FOOT, 9.0,
@@ -1960,10 +1947,6 @@ func _carry_live(id: StringName) -> void:
 	match id:
 		&"mini_table":
 			_rehome_items()
-		&"bells":
-			if _bell_stand != null and is_instance_valid(_bell_stand):
-				_bell_stand.transform = venue.bell_stand_spot()
-			_rehome_items()
 		&"cassette_rack":
 			if cassette_rack != null and is_instance_valid(cassette_rack):
 				cassette_rack.transform = venue.cassette_rack_spot()
@@ -2032,7 +2015,7 @@ func _place_hood_signs() -> void:
 			sign.transform = at
 
 
-## The items' homes from where the shelf, the hoop and the bells' stand now are: one at home goes
+## The items' homes from where the shelf and the hoop now are: one at home goes
 ## to its new spot (ItemRoom.set_spots).
 func _rehome_items() -> void:
 	if items != null and venue != null:
@@ -3598,7 +3581,7 @@ func toggle_chords() -> void:
 	chord_hand.set_layer(not chord_hand.layer)
 	if chord_hand.layer and not _told_chords:
 		_told_chords = true
-		Session.notice.emit("Chords: 1 to 7 play the key's I to vii° on the fingertips (J K L ;) and the bells you hold; Shift adds the seventh, 0 the song's own. C or Esc ends it.")
+		Session.notice.emit("Chords: 1 to 7 play the key's I to vii° on the fingertips (J K L ;); Shift adds the seventh, 0 the song's own. C or Esc ends it.")
 
 
 ## T on a desktop: the fingertips' keys on, or back to the studio. Said the first time.
@@ -4013,8 +3996,7 @@ func _refresh_looms_if_moved(delta: float) -> void:
 
 # --- desktop camera -----------------------------------------------------------------------
 
-## The items' homes off the shelf: the headphones on their hook under it, the handbells on their
-## stand by the bricks table, the mic in the booth's stand, where the venue has one, the session in
+## The items' homes off the shelf: the headphones on their hook under it, the mic in the booth's stand, where the venue has one, the session in
 ## miniature on the side table by the seat, the hand drums in their ring on the drum riser, and the venue's
 ## instrument's bars on its mount.
 func _item_homes() -> Dictionary:
@@ -4027,8 +4009,6 @@ func _item_homes() -> Dictionary:
 			&"rcplane": venue.rcplane_spot()}
 	for n in 3:
 		out[StringName("dart%d" % (n + 1))] = venue.dart_spot(n)
-	for n in HandbellItem.COUNT:
-		out[StringName("bell%d" % (n + 1))] = venue.bell_spot(n + 1)
 	var mic_at: Variant = venue.mic_spot()
 	if mic_at != null:
 		out[&"mic"] = mic_at
@@ -5024,7 +5004,7 @@ func _modular_play(on: bool) -> void:
 
 ## Whether this player is at the rack: with it visited or brought, or standing in front of the
 ## stand (MODULAR_NEAR to MODULAR_FAR out, MODULAR_SIDE either side) where the rack's own seat is
-## the nearest station's, so standing at the bells beside it plays them
+## the nearest station's, so standing at a station beside it plays it
 ## and not the patch.
 func at_modular() -> bool:
 	if rack_wall == null or not is_instance_valid(rack_wall) or not rack_wall.visible \
@@ -5246,7 +5226,7 @@ func _on_someones_use(id: StringName, down: bool, from: int, take := -1) -> void
 
 
 ## Somebody else's shake: heard here as shaken (Presence: `heard`, not struck), and caught so, at
-## the pitch it rang for them (their song position `song` pitches a bell). Their strike on one that
+## the pitch it rang for them (their song position `song` pitches a bar). Their strike on one that
 ## stands still is nobody's to hold: caught struck, on its zone.
 func _on_someones_hit(id: StringName, velocity: int, from: int, song := -1.0, _snap := false, take := -1,
 		zone := &"") -> void:
@@ -6462,9 +6442,9 @@ static func plugged_text(source: StringName, item: Item, was: StringName, sink: 
 	var the := "Your keys" if Jack.keys_player(source) > 0 else "The " + Jacks.source_name(source, item)
 	var player := Jack.player_of(sink)
 	if Jack.chord_player(source) > 0:
-		# A chord hand (part two, slice 33): no notes, a chord for their fingertips and bells.
+		# A chord hand (part two, slice 33): no notes, a chord for their fingertips.
 		if player > 0:
-			return "Your chord hand goes into %s: the chord you hold is theirs, on their fingertips and bells." \
+			return "Your chord hand goes into %s: the chord you hold is theirs, on their fingertips." \
 					% Session.name_of(player)
 		return "Your chord hand is unplugged."
 	if player > 0:
@@ -6517,7 +6497,7 @@ func _tell_plugged(source: StringName, was: StringName, sink: StringName, by: in
 			plays = "what they play plays"
 		var said := "%s on your keys" % plays
 		if Jack.chord_player(source) > 0:
-			said = "the chord they hold is yours, on your fingertips and your bells, while you hold none"
+			said = "the chord they hold is yours, on your fingertips, while you hold none"
 		Session.tell(into, "%s plugged %s into you: %s. %s"
 				% [Session.name_of(by), what, said, unplug_how(_medium_of(into), Jack.own_player(source) == 0)])
 	var out := Jack.player_of(was)

@@ -20,7 +20,7 @@ extends Item
 ## Anyone else's hit is heard in the room, from their hand or where it stands (`heard`), always
 ## through Godot: a sound placed in the room is Godot's to place.
 ##
-## A pitched instrument (a handbell, docs/spatial_loop.md slice 4) plays a note that is a function
+## A pitched instrument (a venue instrument's bar) plays a note that is a function
 ## of song position (`note_at`). Each hit takes ONE song position, read from `clock` as it is
 ## played: that one position pitches what is heard here, is what the take records it at
 ## (HitRecorder.hit), and is what it is sent with (`played`'s `at`, Session.send_item_hit's
@@ -208,7 +208,7 @@ func _retag() -> void:
 ## Where its jack is, in its own frame: out of the end on your right as you face it (-X), at its
 ## middle's height, just past its grip, so a ray aimed at the socket finds it before the
 ## instrument. From the mix position the shelf is seen along its length from that end. Override
-## for an instrument with a better place (HandbellItem).
+## for an instrument with a better place.
 func jack_point() -> Vector3:
 	var half := Vector3(0.05, 0.05, 0.05)
 	var s := _shape.shape
@@ -255,7 +255,7 @@ func pitch() -> int:
 
 
 ## The note a hit played to song position `seconds` is: `pitch()` for percussion, whatever the
-## song is doing. A pitched item asks the song (HandbellItem: its chord tone there).
+## song is doing. A pitched item asks the song (a bar: its scale tone there).
 func note_at(_seconds: float) -> int:
 	return pitch()
 

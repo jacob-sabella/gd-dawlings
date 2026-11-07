@@ -242,13 +242,13 @@ func resume() -> void:
 	w.global_position = Vector3(1.25, 0.0, 2.5)
 	w.yaw = 0.8
 	w.pitch = -0.3
-	studio.station = &"bells"
+	studio.station = &"wheel"
 	DAW.transport_stop()
 	DAW.seek(12.0)
 	await t.get_tree().process_frame
 	var data := WorkshopResume.snapshot(studio, [{"id": "x", "status": Workshop.READY, "text": "t"}], "a summary")
 	check("resume: the snapshot says the venue, the walker, the station, the song (%s)" % [data],
-			data["venue"] == "loft" and is_equal_approx(float(data["walker"]["x"]), 1.25) and data["station"] == "bells"
+			data["venue"] == "loft" and is_equal_approx(float(data["walker"]["x"]), 1.25) and data["station"] == "wheel"
 			and is_equal_approx(float(data["transport"]["seconds"]), 12.0) and data["medium"] == Presentation.Medium.SCREEN)
 	var path := "user://test_workshop_resume.json"
 	check("resume: saved and read back the same", WorkshopResume.save(data, path)
@@ -275,7 +275,7 @@ func resume() -> void:
 	check("resume: restored, the venue is the loft again", again.venue.venue_id() == &"loft")
 	check("resume: the player is back where they stood, facing the same way (%s yaw %.2f)" % [w2.global_position, w2.yaw],
 			Vector2(w2.global_position.x, w2.global_position.z).distance_to(Vector2(1.25, 2.5)) < 0.05
-			and is_equal_approx(w2.yaw, 0.8) and is_equal_approx(w2.pitch, -0.3) and again.station == &"bells")
+			and is_equal_approx(w2.yaw, 0.8) and is_equal_approx(w2.pitch, -0.3) and again.station == &"wheel")
 	check("resume: the song is back where it was (%.2f)" % DAW.state.position_seconds, absf(DAW.state.position_seconds - 12.0) < 0.05)
 	again.queue_free()
 	await t.get_tree().process_frame
@@ -318,11 +318,11 @@ func journal() -> void:
 	await t.get_tree().process_frame
 	j.tick()
 	var first_trail := j.trail.size()
-	studio.go_to_station(&"bells")
+	studio.go_to_station(&"wheel")
 	j.tick()
 	var visit: Array = j.events.filter(func(e: Dictionary) -> bool: return e["kind"] == &"station")
 	check("journal: a station visit is an event with its id (%s)" % [visit],
-			not visit.is_empty() and visit[-1]["data"]["id"] == "bells" and str(visit[-1]["text"]).contains("HANDBELLS"))
+			not visit.is_empty() and visit[-1]["data"]["id"] == "wheel" and str(visit[-1]["text"]).contains("FIFTHS WHEEL"))
 	var c: ControlAffordance = null
 	for n in t.get_tree().get_nodes_in_group(ControlAffordance.GROUP):
 		if n is Fader and studio.is_ancestor_of(n):

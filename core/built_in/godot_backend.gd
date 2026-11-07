@@ -42,7 +42,7 @@ extends OfflineBackend
 ##   - a demo song (DemoSong), one synthesised part per instrument, played through the
 ##     timeline's items: an item is a window in which its track's part sounds;
 ##   - MIDI items played through the built-in instrument (DawKitTine), rendered per item; their
-##     drum and handbell notes (channels 9 and 10) as drums and bells (ItemVoices).
+##     drum and pitched-item notes (channels 9 and 10) as drums and bells (ItemVoices).
 ##
 ## It is driven from the state's own signals rather than by overriding each command, so undo,
 ## redo, a guest's intent and a local hand all reach the speakers by the one path. Automation too:

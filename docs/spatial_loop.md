@@ -282,7 +282,7 @@ What is built is the NOTE path a chord hand would use.
    writes `[D minor: Dm]` at the playhead's bar, the guest strums at 41 s and the host at 43 s, and
    each hears the other's eight strings as D minor's, each let go. shots/spatial3.png, and
    shots/spatial3_crown.png for the crown.
-4. [x] **Instruments as items, and handbells.** InstrumentItem gains `note_at(seconds)` (default
+4. [x] **Instruments as items, and handbells.** (The handbells, `HandbellItem`, `bell1`..`bell4`, their stand, station and models, are [removed 2026-11-06] with the simple toys; this is their history, and the InstrumentItem channel and note changes stay.) InstrumentItem gains `note_at(seconds)` (default
    `pitch()`), `channel()` (default 9), `note_seconds()` (default NOTE_SECONDS), `MELODIC_CHANNEL`
    (10) and a static `clock` (a Callable, set by the studio to HitRecorder.stamp, so
    InstrumentItem still knows nothing of core/session/). `play()` reads `clock` once into `at`,
@@ -3302,7 +3302,7 @@ none.
     and the slice adds no wire; slice 33's `chord:P` is what tells the room the shape.
     shots/spatial32.png is the desktop's chord glove holding up iv over the harp, its strings in Dm.
 
-33. [x] **Your chord hand drives their harp.** (The harp is [removed 2026-11-06]; the chord hand's jack stays and drives their fingertips and bells.) #33 finished. A `chord:P` jack source has a socket on
+33. [x] **Your chord hand drives their harp.** (The harp is [removed 2026-11-06]; the chord hand's jack stays and drives their fingertips; the handbells are [removed 2026-11-06] too.) #33 finished. A `chord:P` jack source has a socket on
     the chord hand's wrist, beside keys:P (`wrist_mount`), and at a desk P steps it while the chord
     layer is on. `Jack.Kind.CHORD` goes down Session.send_jack on each shape's change: `pitch` the
     chord's root pitch class, `velocity` its quality's index in Harmony's qualities, 0 for none, and

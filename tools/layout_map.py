@@ -211,7 +211,7 @@ def gameplay_dressing(x):
         return False
     cls = x.get("class") or ""
     name = x["name"]
-    if name in ("PropShelf", "BellStand", "DrumCircle", "Mirror", "PatchWall", "RouletteDoor", "VenueInstrument"):
+    if name in ("PropShelf", "DrumCircle", "Mirror", "PatchWall", "RouletteDoor", "VenueInstrument"):
         return True
     if name.startswith("Zone_"):
         return True

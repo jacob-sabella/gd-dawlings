@@ -290,7 +290,7 @@ func tones(from_pitch: int, count: int) -> PackedInt32Array:
 ## The chord voiced around `centre`: its root at the one pitch of its class in `centre - 6 ..
 ## centre + 5`, and the other tones on up from it in chord order (third, fifth, then the seventh
 ## in a four-note chord, else the octave) until there are `count`. A voicing that jumps with the
-## root keeps each note's job the same in every chord: bells at 72 ring A4 C5 E5 A5 in Am and
+## root keeps each note's job the same in every chord: voiced at 72 they ring A4 C5 E5 A5 in Am and
 ## F5 A5 C6 F6 in F.
 static func voiced(h: Harmony, centre: int, count: int) -> PackedInt32Array:
 	var r := h.chord[0] if not h.chord.is_empty() else h.root

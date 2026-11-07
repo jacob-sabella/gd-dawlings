@@ -94,7 +94,7 @@ var _midi_button: Button
 var _play_into: OptionButton
 var _monitor: CheckButton
 var _monitor_volume: HSlider
-## How late the hand percussion and the handbells are, beside how late the keys are: they sound
+## How late the hand percussion is, beside how late the keys are: they sound
 ## through Godot's mixer, not the keys' own node (InstrumentItem).
 var _item_latency: Label
 ## A host's: its keys heard through their track, or straight out (GuestMidi.through_track).
@@ -748,8 +748,8 @@ func _build_midi(box: VBoxContainer) -> void:
 	monitor_row.add_child(_monitor_volume)
 	_item_latency = _label("", 12, DIM)
 	_item_latency.mouse_filter = Control.MOUSE_FILTER_PASS
-	_item_latency.tooltip_text = ("The handbells and the hand percussion you play sound through the app's mixer, not your keys' own node, so they are this late.\n"
-			+ "Over %d ms, the bells are to get a voice of their own, as your keys have." % roundi(InstrumentItem.LATENCY_MOST * 1000.0))
+	_item_latency.tooltip_text = ("The hand percussion you play sound through the app's mixer, not your keys' own node, so they are this late.\n"
+			+ "Over %d ms, the items are to get a voice of their own, as your keys have." % roundi(InstrumentItem.LATENCY_MOST * 1000.0))
 	monitor_row.add_child(_item_latency)
 
 	_through_track = _toggle("Hear my keys through the track")
@@ -1264,13 +1264,13 @@ func _refresh_take() -> void:
 		_take_status.text = "Ready. Your keys go onto %s when %s." % [_track_name(gm.take_track()), when]
 
 
-## The item path's lateness, said beside the keys': "Bells  ·  12 ms", and over
+## The item path's lateness, said beside the keys': "Hand percussion  ·  12 ms", and over
 ## InstrumentItem.LATENCY_MOST, that it is (in words, not only by colour).
 static func item_latency_text(seconds: float) -> String:
 	var ms := seconds * 1000.0
 	if seconds > InstrumentItem.LATENCY_MOST:
-		return "Bells  ·  %.0f ms, over %d" % [ms, roundi(InstrumentItem.LATENCY_MOST * 1000.0)]
-	return "Bells  ·  %.0f ms" % ms
+		return "Hand percussion  ·  %.0f ms, over %d" % [ms, roundi(InstrumentItem.LATENCY_MOST * 1000.0)]
+	return "Hand percussion  ·  %.0f ms" % ms
 
 
 static func _track_name(index: int) -> String:
@@ -1866,7 +1866,7 @@ func _build_song_key(column: VBoxContainer) -> void:
 	column.add_child(row)
 	var said := _label("Song key", 14, INK)
 	said.mouse_filter = Control.MOUSE_FILTER_PASS
-	said.tooltip_text = ("The key the room plays in: the bells, the strings, "
+	said.tooltip_text = ("The key the room plays in: the strings, "
 			+ "the pads in scale mode, and your keys when they are locked. From bar 1; a key change on the timeline changes it from there.")
 	row.add_child(said)
 	_key_root = _choice()

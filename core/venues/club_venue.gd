@@ -751,7 +751,7 @@ func _build_walls() -> void:
 	red.position = Vector3(door_x, 2.4, face + 0.3)
 	add_child(red)
 	# Sconces on the brick, a warm pool each, high on the side walls of the back of house: over the
-	# prop shelf and the cassette rack on the left, the bricks table and the bells on the right,
+	# prop shelf and the cassette rack on the left, the bricks table on the right,
 	# clear of the booth and the modular wall at the back.
 	for side in [-1.0, 1.0]:
 		for z in SCONCES:

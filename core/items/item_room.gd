@@ -30,7 +30,7 @@ extends Node3D
 ## slice 41), fixed on the console's front rail wherever there is a console, AR too.
 const KINDS: Array[StringName] = [&"duck", &"ball", &"plane", &"mic", &"headphones", &"glasses", &"tablet", &"shaker",
 		&"tambourine", &"keytar", &"chips", &"cards", &"dart1", &"dart2", &"dart3",
-		&"cradle", &"yoyo", &"toy", &"rcplane", &"bell1", &"bell2", &"bell3", &"bell4", &"miniature",
+		&"cradle", &"yoyo", &"toy", &"rcplane", &"miniature",
 		&"djembe", &"conga_hi", &"conga_lo", &"cajon",
 		&"venue1", &"venue2", &"venue3", &"venue4", &"venue5", &"venue6", &"venue7", &"venue8", &"kit"]
 ## The kinds an AR room makes (`only`): the room is the player's own real one, with none of the
@@ -201,14 +201,6 @@ static func make(kind: StringName) -> Item:
 			return DartItem.new(1)
 		&"dart3":
 			return DartItem.new(2)
-		&"bell1":
-			return HandbellItem.new(1)
-		&"bell2":
-			return HandbellItem.new(2)
-		&"bell3":
-			return HandbellItem.new(3)
-		&"bell4":
-			return HandbellItem.new(4)
 		&"cowbell":
 			return CowbellItem.new()
 		&"woodblock":
@@ -240,7 +232,7 @@ static func make(kind: StringName) -> Item:
 
 ## The kind a spilled instance's own id names, its voice number stripped off: "cowbell2" ->
 ## "cowbell", "cowbell" -> "cowbell". An id the shelf itself holds is its own kind, digits and
-## all -- the darts are "dart1".."dart3" and the handbells "bell1".."bell4", and `make` answers to
+## all -- the darts are "dart1".."dart3", and `make` answers to
 ## exactly those -- so KINDS is checked first rather than trusting that no shelf id ends in a
 ## number.
 static func kind_of(id: StringName) -> StringName:

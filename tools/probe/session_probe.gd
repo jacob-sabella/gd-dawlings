@@ -31,8 +31,6 @@ const AUDIO_TRACK := 8
 ## Where the guest's files from its own machine go, and from when: a second of tone as a WAV,
 ## then a FLAC, one after the other.
 const SENT_TRACK := 12
-## The track the host plugs bell 1 into, for the guest to see in the room.
-const PLUG_TRACK := 5
 ## Cables (docs/spatial_loop.md slice 6): the chord tones the guest's four shaker hits play on the
 ## host's keys: D minor's, voiced at Jacks.TRIGGER_CENTRE.
 const CABLE_TONES := [62, 65, 69, 74]
@@ -309,7 +307,7 @@ var _sourced: Array = []
 ## The other half's item hits, as Session.item_hit gives them: [item, velocity, from, song, snap,
 ## take, zone].
 var _item_hits: Array = []
-## Each half's room of items, as the studio keeps one: the four handbells are in it.
+## Each half's room of items, as the studio keeps one.
 var _room: ItemRoom = null
 ## Who the host's table said had the duck when the guest's put-down reached it.
 var _duck_holder_at_put := -1
@@ -321,7 +319,7 @@ var _plane_holders: Array = []
 var _jacks: Jacks = null
 var _jacked: Array = []
 var _cabled: Array = []
-## The head this half publishes (`_keep_publishing`), until the guest travels (`_travel_to_the_bells`).
+## The head this half publishes (`_keep_publishing`), until the guest travels (`_travel_to_the_wheel`).
 var _head := Transform3D.IDENTITY
 ## What this half publishes it points at, and where (`_keep_publishing`); the guest's ruler time
 ## from 60.82 (slice 35).
@@ -687,35 +685,22 @@ func _host(port: int) -> void:
 		await _until(39.0 if _reaper_resource != "" else 17.5)
 		_check_sent_files()
 
-	# The song put in D minor from the playhead's bar, for the bells to ring from.
+	# The song put in D minor from the playhead's bar, for the cables' chord tones.
 	await _until(40.0)
 	var bar := floorf(DAW.state.bar_at(DAW.state.position_seconds) + Harmony.BAR_SLACK)
 	DAW.add_marker(DAW.state.bar_to_seconds(bar + 1.0), KEY_MARKER)
-	_check_bells()
+	_make_room()
 
-	# The guest rings bell 2 at 44 (docs/spatial_loop.md slice 4): its hit arrives with the song
-	# position it was played to, and my bell 2 rings D minor's third there, as the guest's did.
 	await _until(46.0)
-	var rings := _item_hits.filter(func(h: Array) -> bool: return h[0] == &"bell2")
-	var song: float = rings[0][3] if rings.size() == 1 else -1.0
-	check("the guest's ring of bell 2 reached me with its song position (%s)" % [rings],
-			rings.size() == 1 and rings[0][2] == _other_id() and is_equal_approx(song, _ring_song()))
-	var bell := _room.items.get(&"bell2") as HandbellItem
-	check("and my bell 2 rings it as D minor's third, F5 (%d)" % (bell.note_at(song) if bell != null else -1),
-			bell != null and bell.note_at(song) == 77)
 
 	# Jacks (docs/spatial_loop.md slice 5): the guest plugged the shaker on its shelf into track
-	# 3 at 44.5, and the host's rule let it; the host plugs bell 1 into track 5 for the guest to see.
+	# 3 at 44.5, and the host's rule let it.
 	var plugs := _room_asks.filter(func(a: Array) -> bool: return a[0] == &"plug")
 	check("the guest's plug reached me, from the guest (%s)" % [plugs], plugs.size() == 1
 			and plugs[0][1] == [&"shaker", &"track_3"] and plugs[0][2] == _other_id())
 	check("and is in my room's state (%s)" % [Session.room.get("jacks")],
 			Session.room.get("jacks", {}) == {"shaker": "track_3"})
-	var mine: Dictionary = Session.room.duplicate(true)
-	var rows: Dictionary = mine.get("jacks", {})
-	rows["bell1"] = String(Jack.track_sink(PLUG_TRACK))
-	mine["jacks"] = rows
-	Session.publish_room(mine)
+	var rows: Dictionary = Session.room.get("jacks", {}).duplicate(true)
 
 	# Cables (docs/spatial_loop.md slice 6): jacks of my own, playing what comes into my keys, and
 	# my word on every event down one, as the studio's (Session.jack_check).
@@ -727,20 +712,6 @@ func _host(port: int) -> void:
 		var item: Item = _room.items.get(source)
 		var holder := Session.holder_of(item.network_key()) if item != null else 0
 		return Jacks.send_refusal(Session.room.get("jacks", {}), source, to, from, holder)
-	# Bell 1, in my hand, into the guest: its note, D minor's root D5, and its off there.
-	await _until(48.6)
-	var bell1 := _room.items.get(&"bell1") as HandbellItem
-	Session.claim_hold(bell1.network_key())
-	mine = Session.room.duplicate(true)
-	rows = mine.get("jacks", {})
-	rows["bell1"] = String(Jack.player_sink(_other_id()))
-	mine["jacks"] = rows
-	Session.publish_room(mine)
-	_jacks.set_patch(rows)
-	await _until(49.0)
-	InstrumentItem.clock = func() -> float: return _ring_song() + 2.0
-	bell1.play(90)
-	InstrumentItem.clock = Callable()
 	# The guest's shaker, in its hand and plugged into me at 48.3, hit four times at 48.8.
 	await _until(49.6)
 	var hits := _jacked.filter(func(j: Array) -> bool: return j[0] == &"shaker")
@@ -752,7 +723,6 @@ func _host(port: int) -> void:
 			== hits.map(func(j: Array) -> float: return j[4]))
 	check("each let go (%d)" % _cabled.filter(func(c: Array) -> bool: return c[0] == Session.Note.OFF).size(),
 			_cabled.filter(func(c: Array) -> bool: return c[0] == Session.Note.OFF).size() == 4)
-	Session.release_hold(bell1.network_key())
 
 	# Slice 12: where history is before the guest's two-value drag, and my own fader in the middle
 	# of it, as another player's write between the edit's.
@@ -769,13 +739,13 @@ func _host(port: int) -> void:
 	check("the guest's SET reached me as an ask with its bar (%s)" % [sets], sets.size() == 1
 			and sets[0][1] == [WHEEL_BAR, WHEEL_INSIDE] and sets[0][2] == _other_id())
 	_check_wheel("my")
-	# The guest travelled to the bells at 53.8, in a headset (slice 11): its head, which its ghost
-	# stands at, is at the bells' seat in my room's venue.
-	var seat: Variant = _bells_seat()
+	# The guest travelled to the wheel at 53.8, in a headset (slice 11): its head, which its ghost
+	# stands at, is at the wheel's seat in my room's venue.
+	var seat: Variant = _wheel_seat()
 	var guest_head: Transform3D = Session.participants[_other_id()].head if Session.participants.has(_other_id()) \
 			else Transform3D.IDENTITY
 	var wanted: Vector3 = (seat as Transform3D) * TRAVEL_OFFSET if seat != null else Vector3.INF
-	check("the guest's travel put its ghost at the bells' seat (%.3f m off)" % guest_head.origin.distance_to(wanted),
+	check("the guest's travel put its ghost at the wheel's seat (%.3f m off)" % guest_head.origin.distance_to(wanted),
 			guest_head.origin.distance_to(wanted) < 0.05)
 
 	# One undo step per gesture (slice 12): the guest's two-value drag, 54.55 to about 54.9,
@@ -2543,30 +2513,21 @@ func _guest(port: int) -> void:
 				not DAW.project_title().is_empty() and DAW.project_file_name() == "dawlings_probe_%d.dawproject" % _port)
 
 	await _until(40.0)
-	_check_bells()
-	# A bell rung, as the studio sends one: its one song position goes with it.
+	_make_room()
 	await _until(44.0)
 	_room.played.connect(func(item: InstrumentItem, velocity: int, _struck: bool, at: float, zone: StringName) -> void:
 		Session.send_item_hit(item.id, velocity, at, false, -1, zone))
-	InstrumentItem.clock = _ring_song
-	var bell := _room.items.get(&"bell2") as HandbellItem
-	if bell != null:
-		bell.play(96)
-	InstrumentItem.clock = Callable()
-	check("I rang bell 2 as D minor's third, F5 (%d)" % (bell.last_note if bell != null else -1),
-			bell != null and bell.last_note == 77)
 	# My shaker, on its shelf, into track 3: asked as the studio asks (Jacks).
 	await _until(44.5)
 	Session.ask_room(&"plug", [&"shaker", &"track_3"])
 
-	# The host's room says where both jacks go: mine, and the bell the host plugged at 46.
+	# The host's room says where my jack goes.
 	await _until(47.5)
 	var jacks := Jacks.new()
 	add_child(jacks)
 	jacks.set_patch(Session.room.get("jacks", {}))
-	check("my plug is in the host's room, and the host's beside it (%s)" % [Session.room.get("jacks")],
-			jacks.sink_of(&"shaker") == &"track_3" and jacks.sink_of(&"bell1") == Jack.track_sink(PLUG_TRACK)
-			and jacks.patch.size() == 2)
+	check("my plug is in the host's room (%s)" % [Session.room.get("jacks")],
+			jacks.sink_of(&"shaker") == &"track_3" and jacks.patch.size() == 1)
 	jacks.free()
 
 	# Cables (docs/spatial_loop.md slice 6): my shaker in my hand into the host's keys; my jacks follow the host's room, as the studio's do.
@@ -2584,21 +2545,13 @@ func _guest(port: int) -> void:
 			_jacks.sink_of(&"shaker") == Jack.player_sink(1))
 	for i in 4:
 		_jacks.hit(shaker, 90, _ring_song() + 1.0 + i * 0.1)
-	# The host's bell 1, rung at 49 into me: its own note on my keys, and its off.
-	await _until(50.0)
-	var rung := _cabled.filter(func(c: Array) -> bool: return c[1] == 74)
-	check("the host's bell came down its jack and played its own note, D5, on my keys, and its off (%s)" % [rung],
-			rung.size() == 2 and rung[0][0] == Session.Note.ON and rung[1][0] == Session.Note.OFF
-			and is_equal_approx(rung[0][2], _ring_song() + 2.0)
-			and absf(rung[1][2] - (_ring_song() + 2.0 + HandbellItem.RING_SECONDS)) < 0.001)
-	check("and the cable is in my keys' reach while it is plugged into me", Session.guest_midi.instruments.has(Jacks.CABLE))
 	# The fifths wheel's SET, as the wheel sends a guest's (docs/spatial_loop.md slice 9): a room
 	# ask carrying the bar I chose.
 	await _until(53.7)
 	Session.ask_room(FifthsWheel.VERB, [WHEEL_BAR, WHEEL_INSIDE])
-	# And to the bells, in a headset: the host sees my ghost there by 55.
+	# And to the wheel, in a headset: the host sees my ghost there by 55.
 	await _until(53.8)
-	await _travel_to_the_bells()
+	await _travel_to_the_wheel()
 
 	# While the session is still on: once the host leaves, my own project is back.
 	await _until(54.5)
@@ -3026,21 +2979,21 @@ func _keep_publishing(head: Transform3D, pointing: String) -> void:
 	add_child(timer)
 
 
-## The bells' seat in the room's venue (Session.room), in the session's frame, as both halves
+## The wheel's seat in the room's venue (Session.room), in the session's frame, as both halves
 ## stand it: Stations.seat with nothing to say where a person fits, since neither half here stands
-## a studio's furniture round it. Null where the venue stands no bells.
-func _bells_seat() -> Variant:
+## a studio's furniture round it. Null where the venue stands no wheel.
+func _wheel_seat() -> Variant:
 	var venue := Venue.make(Session.room.get("venue", Venue.IDS[0]))
-	var seat: Variant = Stations.seat(venue, &"bells")
+	var seat: Variant = Stations.seat(venue, &"wheel")
 	venue.free()
 	return seat
 
 
 ## Going to a station in a headset (docs/spatial_loop.md slice 11), as the studio does it: a
-## simulated rig in the session's frame (RoomAnchor, handed over whole) travels to the bells'
+## simulated rig in the session's frame (RoomAnchor, handed over whole) travels to the wheel's
 ## seat, and from then on the head this half publishes is the one Presence would, wherever the
 ## travel put it.
-func _travel_to_the_bells() -> void:
+func _travel_to_the_wheel() -> void:
 	var anchor := RoomAnchor.new()
 	add_child(anchor)
 	anchor.adopt_virtual_frame(1.2)
@@ -3048,8 +3001,8 @@ func _travel_to_the_bells() -> void:
 	rig.simulated = true
 	add_child(rig)
 	rig.head.position = TRAVEL_OFFSET
-	var seat: Variant = _bells_seat()
-	check("the room's venue stands bells to go to", seat != null)
+	var seat: Variant = _wheel_seat()
+	check("the room's venue stands a wheel to go to", seat != null)
 	if seat == null:
 		return
 	rig.travel(seat as Transform3D)
@@ -3060,7 +3013,7 @@ func _travel_to_the_bells() -> void:
 	_head = presence.head_in_session()
 	presence.free()
 	var wanted := (seat as Transform3D) * TRAVEL_OFFSET
-	check("my travel put my head at the bells' seat, as I stood in my play space (%.3f m)" % _head.origin.distance_to(wanted),
+	check("my travel put my head at the wheel's seat, as I stood in my play space (%.3f m)" % _head.origin.distance_to(wanted),
 			_head.origin.distance_to(wanted) < 0.05 and rig.away and rig.veil() == 0.0)
 
 
@@ -3151,8 +3104,8 @@ func _on_note_played(kind: int, pitch: int, velocity: int, from: int, song: floa
 		_sourced.append([kind, pitch, from, source])
 
 
-## A room of items, as the studio keeps one, and the four handbells in it.
-func _check_bells() -> void:
+## A room of items, as the studio keeps one.
+func _make_room() -> void:
 	_room = ItemRoom.new()
 	add_child(_room)
 	# Made items' rows are the session's, as the studio shares them (slice 23).
@@ -3165,9 +3118,6 @@ func _check_bells() -> void:
 		_sampler.local_peer = func() -> int: return Session.local_peer_id
 		_sampler.name_of = Session.name_of
 		add_child(_sampler)
-	var bells := ["bell1", "bell2", "bell3", "bell4"].filter(func(id: String) -> bool:
-		return _room.items.get(StringName(id)) is HandbellItem)
-	check("the four handbells are in my room's items (%s)" % [bells], bells.size() == HandbellItem.COUNT)
 
 
 ## The host's answer to a plug, as the studio's: the host's rule (Jacks.refusal), and the room
@@ -3697,7 +3647,7 @@ func _given_clock(from_seconds: float, recording: bool) -> Callable:
 				"recording": recording, "valid": true}
 
 
-## Where the guest rings its bell: a quarter second past the host's D minor marker.
+## A quarter second past the host's D minor marker.
 func _ring_song() -> float:
 	for t in DAW.state.markers:
 		if str(DAW.state.markers[t]) == KEY_MARKER:

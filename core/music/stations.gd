@@ -13,7 +13,7 @@ extends RefCounted
 ## (a Transform3D, or null where the venue has no room for it); `at`, the point in that frame a
 ## player looks at while playing it; and two lines of help, `desk` (mouse and keys) and `hands`
 ## (hands and buttons); and `frame`, what of it a player should see from where they stand, its
-## top and its foot (two points in its frame, its controls' top first: the bells' handles, the wheel board's top edge; then its plaque's bottom, under
+## top and its foot (two points in its frame, its controls' top first: the wheel board's top edge; then its plaque's bottom, under
 ## its keys, Stations.plaque_bottom). Every station's front is its frame's +Z: whoever plays it
 ## stands there, facing back along -Z.
 ##
@@ -43,8 +43,8 @@ extends RefCounted
 ## (`weather`, slice 44, Weather.row_for), on a window's sill or a post, in the arrangements that have
 ## weather.
 ##
-## Things carried, not stood anywhere (the keytar, the shaker, the tambourine, the bells in a
-## hand, the fingertips, the session in miniature, the jacks), the drum pads (on the desk and on
+## Things carried, not stood anywhere (the keytar, the shaker, the tambourine, the
+## fingertips, the session in miniature, the jacks), the drum pads (on the desk and on
 ## whatever real surface a headset marks, slice 41), and what the hands do anywhere (clapping to mute, leaning in),
 ## are `HELD`: help lines only, on PLAY · HELD.
 
@@ -55,7 +55,7 @@ const HELD_AREA := &"held"
 ## The areas in the order the card pages them.
 const AREAS: Array[StringName] = [CONTROL, LIVE, VENUE]
 const AREA_TITLES := {&"held": "HELD", &"control": "CONTROL ROOM", &"live": "LIVE ROOM", &"venue": "THIS VENUE"}
-## Where each area is, as a toast says a station is there ("THE HANDBELLS, in the live room: ..."):
+## Where each area is, as a toast says a station is there ("THE FIFTHS WHEEL, in the live room: ..."):
 ## not the page's title lowered, which would say "in the this venue".
 const AREA_WHERE := {&"held": "in hand", &"control": "in the control room", &"live": "in the live room",
 		&"venue": "in this venue"}
@@ -75,14 +75,6 @@ const PLAQUE_KEY_WIDE := 0.24
 const PLAQUE_KEYS_ROW := PLAQUE_KEY + 0.02
 
 const ALL := [
-	{
-		"id": &"bells", "title": "HANDBELLS", "area": LIVE, "zone": &"", "air": 0.5,
-		"spot": &"bell_stand_spot", "at": Vector3(0, 0.85, 0),
-		"frame": [Vector3(0, 1.0, 0), Vector3(0, 0.41, 0.13)],
-		"foot": Vector2(0.27, 0.12), "foot_z": 0.0, "top": 0.8,
-		"desk": "click a bell to pick it up · swing the mouse or click to ring its chord tone",
-		"hands": "pick a bell up and swing it · bells 1 to 4 ring the chord's root, third, fifth, top",
-	},
 	{
 		"id": &"wheel", "title": "FIFTHS WHEEL", "area": LIVE, "zone": &"bricks", "air": 0.5,
 		"spot": &"wheel_spot", "at": Vector3(0, 0.45, -0.2),
@@ -261,18 +253,13 @@ const HELD := [
 		"hands": "close your hand round the bare hoop and shake · the trigger strikes it · controllers are steadier for fast parts",
 	},
 	{
-		"id": &"bells_held", "title": "A HANDBELL", "area": HELD_AREA,
-		"desk": "carried: swing the mouse or click to ring · 1 to 3 pocket it · Q puts it down",
-		"hands": "carried: swing it down to ring · its tab says the note it rings now",
-	},
-	{
 		"id": &"fingertips", "title": "FINGERTIPS", "area": HELD_AREA,
 		"desk": "T, then J K L ; play the chord's root, third, fifth and top · T or Esc gives them back · wiggle the mouse to wobble · Alt + mouse up or down bends",
 		"hands": "hold an empty hand open, palm up, to turn them on · thumb to each fingertip plays · tilt to bend · shake to wobble",
 	},
 	{
 		"id": &"chord_hand", "title": "CHORD SHAPES", "area": HELD_AREA,
-		"desk": "C turns the chord layer on · 1 to 7 pick the key's I to vii° for the fingertips and a bell you carry · Shift adds the seventh · 0 the song's own · a click still strums · C or Esc ends it",
+		"desk": "C turns the chord layer on · 1 to 7 pick the key's I to vii° for the fingertips · Shift adds the seventh · 0 the song's own · a click still strums · C or Esc ends it",
 		"hands": "hold your chord hand up (the left, or the right if left-handed), palm out: fingers up count I to IV, the thumb too V · palm up, one or two: vi, vii° · open flat or lowered: the song's · controller: click the stick, then push it toward a chord, up is I",
 	},
 	{
