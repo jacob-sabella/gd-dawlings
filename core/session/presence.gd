@@ -135,6 +135,8 @@ func _make_reflection() -> void:
 	reflection.name = "Reflection"
 	add_child(reflection)
 	reflection.only_in_mirrors()
+	# Posed every frame from the interpolated head; interpolating it again would lag it.
+	reflection.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 
 
 func _physics_process(delta: float) -> void:
@@ -156,7 +158,9 @@ func _physics_process(delta: float) -> void:
 func _process(delta: float) -> void:
 	var eye := head_node.global_position if head_node != null else Vector3(0, 1e6, 0)
 	if reflection != null and head_node != null:
-		reflection.snap(head_node.global_transform)
+		# Where the head is drawn this frame (interpolated), so the ghost in a mirror moves with
+		# the view rather than stepping at the physics tick rate.
+		reflection.snap(head_node.get_global_transform_interpolated())
 		var mine := _my_pointing()
 		reflection.point_at(mine["control"], mine["point"], mine["holding"])
 		var carried := _my_carried()

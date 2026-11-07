@@ -90,6 +90,9 @@ func _ready() -> void:
 	_camera.projection = Camera3D.PROJECTION_FRUSTUM
 	_camera.keep_aspect = Camera3D.KEEP_HEIGHT
 	_camera.cull_mask = REFLECTION_MASK
+	# Placed afresh every frame from the interpolated eye; physics interpolation would only
+	# blend it with where it stood a physics tick (a thirtieth of a second) ago.
+	_camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	_camera.far = 400.0
 	_viewport.add_child(_camera)
 	_camera.current = true
@@ -118,7 +121,10 @@ func _process(delta: float) -> void:
 	var eye := get_viewport().get_camera_3d()
 	var setup := {}
 	if eye != null and in_view(eye):
-		setup = reflection(global_transform, glass_size, eye.global_position)
+		# Where the eye is drawn this frame, not where it stood at the last physics tick: the
+		# screen shows the interpolated camera, and a glass that follows the raw tick steps at
+		# the tick rate, which reads as the reflection shaking.
+		setup = reflection(global_transform, glass_size, eye.get_global_transform_interpolated().origin)
 	if setup.is_empty():
 		_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		return
