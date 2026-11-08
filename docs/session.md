@@ -53,6 +53,30 @@ kind of traffic never queues behind another.
 Other flows follow the same shape with their own verb tables and rows: the tour (`TOUR_VERBS`, `publish_tour`), the
 roulette roll (`publish_roll`), made items (`made_changed`), the project state (`SessionState`, DAW intents).
 
+## What a guest sees move (meters, clock, the modular room, the lights)
+
+A guest's DAW is an `OfflineBackend` holding the replicated cache (`is_authority` false), never a link to the host's
+engine. Everything that moves on a guest's screen comes from the host's volatile stream, `SessionState.broadcast_state`
+at 20 Hz, unreliable: `/master/vu/*`, `/track/N/vu/*`, `/time`, `/beat/str`, and `/rack/live`.
+
+- **Meters and clock.** The stand-in's own meter generator runs only where `is_authority` (solo, the host's stand-in).
+  A guest used to run it too, which overwrote the host's meters every frame with a canned pattern (and drove the
+  lights from it); now `OfflineBackend._drive_meters` on a guest only runs the playhead on between the host's `/time`.
+- **The modular room.** The rack engine is a process on the host, so a guest's `RackVoice` never runs. The host's
+  `RackHost` records `/rack/live` (`RackLive`: each module's meter as a byte, each sequencer's step, the scopes as
+  bytes every other tick, the glow's level and hit; `[false]` once when the engine stops) from its 30 Hz follow; it
+  lands in `MixState.rack_live`, and a guest's `RackHost._show_live_rack` feeds the wall (step lights, pillars,
+  scopes, glow) and the annex from it. A reading older than `RackLive.STALE_MSEC` counts as quiet. About 150 to
+  600 bytes a tick per guest, nothing at all with nobody connected.
+- **The lights.** `ViewHost` pulses the venue with the larger of the master meter and `RackHost.rack_level()` (the
+  engine's level on the host, the replicated one on a guest), so a rack that sounds on a monitor bus instead of a
+  track still moves the room.
+- **The audio patchbay** (`PatchWallSurface`) is the machine's own graph and stays local; the one exception is the
+  `dawlings_mix` stream on a guest that is not playing the host's mix here (same machine), which reads the
+  replicated master level instead of its own silent bus.
+
+Tests: `tests/guest_live_tests.gd`.
+
 ## How to add an rpc verb (a thing a guest may ask of the room)
 
 1. Add the verb and its argument types to `SessionBase.ROOM_VERBS`. Strings, numbers, `StringName`, `Vector3`,
@@ -71,5 +95,5 @@ addresses, which is the autoload), and a doc comment saying who may call it. A n
 ## Tests
 
 `tests/run_tests.gd` (the `_test_a_guest_*`, `_test_the_host_*` groups), `tests/layout_share_tests.gd` (two studios in
-one tree), `tests/fake_noray.gd` (a noray in-process), `tools/session_probe.sh` (a headless host and guest on one
+one tree), `tests/guest_live_tests.gd` (a guest follows the host's meters, clock and rack), `tests/fake_noray.gd` (a noray in-process), `tools/session_probe.sh` (a headless host and guest on one
 timeline), `tools/pair_probe.gd`. See `docs/testing.md`.

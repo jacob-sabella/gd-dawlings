@@ -42,6 +42,10 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			_apply_track(state, p, args)
 		"master":
 			_apply_master(state, p, args)
+		"rack":
+			# dawlings's own: the host's modular room as it plays (`RackLive`), `/rack/live`.
+			if p.size() == 2 and p[1] == "live":
+				state.rack_live = RackLive.unpack(args, state.rack_live)
 		"vca":
 			# dawlings's own: a group's trim in dB, `/vca/N`.
 			if p.size() == 2 and not args.is_empty() and typeof(args[0]) in [TYPE_INT, TYPE_FLOAT] \

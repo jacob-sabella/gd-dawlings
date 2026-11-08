@@ -766,6 +766,9 @@ func _ready() -> void:
 	await _t("_test_a_dangling_cable_is_kept_stubbed_and_not_sounded")
 	await _t("_test_the_room_row_says_which_mod_each_type_needs")
 	await _t("_test_a_guest_without_the_mod_sees_a_named_plate_and_hears_the_host")
+	await _t("_test_the_rack_state_survives_the_wire_and_bad_input_is_ignored")
+	await _t("_test_a_guest_keeps_the_hosts_meters_and_the_stand_in_still_makes_its_own_solo")
+	await _t("_test_the_host_sends_the_rack_and_a_guest_shows_its_steps_meters_and_light")
 	await _t("_test_plugins_are_described_by_the_registry")
 	await _t("_test_composite_fixtures_load")
 	await _t("_test_a_composite_has_its_own_interface")
@@ -45874,6 +45877,21 @@ func _test_the_room_row_says_which_mod_each_type_needs() -> void:
 
 func _test_a_guest_without_the_mod_sees_a_named_plate_and_hears_the_host() -> void:
 	await RackGapsTests.new(self).a_guest_without_the_mod_sees_a_named_plate_and_hears_the_host()
+
+
+const GuestLiveTests := preload("res://tests/guest_live_tests.gd")
+
+
+func _test_the_rack_state_survives_the_wire_and_bad_input_is_ignored() -> void:
+	GuestLiveTests.new(self).the_rack_state_survives_the_wire_and_bad_input_is_ignored()
+
+
+func _test_a_guest_keeps_the_hosts_meters_and_the_stand_in_still_makes_its_own_solo() -> void:
+	GuestLiveTests.new(self).a_guest_keeps_the_hosts_meters_and_the_stand_in_still_makes_its_own_solo()
+
+
+func _test_the_host_sends_the_rack_and_a_guest_shows_its_steps_meters_and_light() -> void:
+	await GuestLiveTests.new(self).the_host_sends_the_rack_and_a_guest_shows_its_steps_meters_and_light()
 
 
 func _test_plugins_are_described_by_the_registry() -> void:

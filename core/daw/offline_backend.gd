@@ -531,6 +531,12 @@ func _drive_meters(delta: float) -> void:
 					state.loop_end - state.loop_start)
 	var beats := state.beat_at(state.position_seconds)
 	state.position_string = state.bar_beat(state.position_seconds)
+	if not is_authority:
+		# A guest's copy of the host's project: the host's meters and playhead string are what it holds, and they
+		# arrive on their own. Made up here as well they would overwrite the host's with a stand-in's pattern
+		# every frame (the lights and every meter would follow a fake song, not the host's).
+		state.transport_changed.emit()
+		return
 	# Solo is exclusive: while anything is soloed, everything that is not is silent. A meter that
 	# kept moving on a track you cannot hear is a meter that does not read true.
 	var any_solo := false

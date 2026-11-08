@@ -10,6 +10,9 @@ var _modular_last := -1
 
 ## Whether the rack's take under way began with the song's recording (and so ends with it).
 var _rack_auto_take := false
+## Whether guests were last sent a running rack, and how many sends there have been (every other one has the scopes).
+var _live_sent := false
+var _live_ticks := 0
 
 # --- the modular room's rack (docs/architecture.md, "The modular room") ----------------------
 #
@@ -508,6 +511,10 @@ func _follow_modular() -> void:
 	_follow_world_sockets()
 	if studio.rack_voice == null or not is_instance_valid(studio.rack_voice):
 		return
+	if Session.role == Session.Role.GUEST:
+		# The engine is the host's: a guest's wall shows what the host sends of it (RackLive).
+		_show_live_rack()
+		return
 	if engaged and Session.is_authority():
 		_rack_wake()
 	if studio.rack_voice.running():
@@ -520,6 +527,7 @@ func _follow_modular() -> void:
 			studio.modular_annex.show_levels(studio.rack_wall.module_levels(studio.rack_voice.meters))
 			studio.modular_annex.show_scope(studio.rack_voice.scopes)
 		studio.rack_wall.set_recording(studio.rack_voice.recording())
+		_publish_live_rack(true)
 		# The song recording catches the rack: begun at the take's start, kept where it ends.
 		if DAW.state != null and int(studio.rack_row["track"]) > 0:
 			if DAW.state.recording and not studio.rack_voice.recording() and DAW.state.playing:
@@ -528,6 +536,58 @@ func _follow_modular() -> void:
 				studio.rack_voice.record_stop()
 				_rack_auto_take = false
 	else:
+		_publish_live_rack(false)
 		studio.rack_wall.glow_with(0.0, 0.0)
 		if studio.modular_annex != null and is_instance_valid(studio.modular_annex):
 			studio.modular_annex.glow_with(0.0, 0.0)
+
+
+## The host's rack to the guests, as the volatile entry `/rack/live` (`RackLive`): every follow while it runs, once
+## when it stops. Nothing is built when nobody is here to be sent it.
+func _publish_live_rack(running: bool) -> void:
+	if not Session.is_authority() or Session.participants.size() <= 1 or DAW.backend == null:
+		return
+	if not running:
+		if _live_sent:
+			_live_sent = false
+			DAW.backend.record_for_replication(RackLive.ADDRESS, [false])
+		return
+	_live_sent = true
+	_live_ticks += 1
+	var voice := studio.rack_voice
+	DAW.backend.record_for_replication(RackLive.ADDRESS, RackLive.pack(voice.level, voice.hit, voice.meters,
+			voice.steps, voice.scopes, _live_ticks % 2 == 0))
+
+
+## A guest's wall, its annex and its lights from what the host sent of the rack: the meters, the sequencer's step,
+## the scopes and the glow.
+func _show_live_rack() -> void:
+	var live := live_rack()
+	if studio.rack_wall == null or not is_instance_valid(studio.rack_wall):
+		return
+	studio.rack_wall.show_meters(live.get("meters", {}))
+	studio.rack_wall.show_scopes(live.get("scopes", {}))
+	studio.rack_wall.show_steps(live.get("steps", {}))
+	studio.rack_wall.glow_with(float(live.get("level", 0.0)), float(live.get("hit", 0.0)))
+	if studio.modular_annex != null and is_instance_valid(studio.modular_annex):
+		studio.modular_annex.glow_with(float(live.get("level", 0.0)), float(live.get("hit", 0.0)))
+		studio.modular_annex.show_levels(studio.rack_wall.module_levels(live.get("meters", {})))
+		studio.modular_annex.show_scope(live.get("scopes", {}))
+
+
+## What the host's rack is doing as a guest has it (`RackLive`), `{}` for none: nothing heard lately, or the rack
+## is not running.
+func live_rack() -> Dictionary:
+	return RackLive.fresh(DAW.state.rack_live) if DAW.state != null else {}
+
+
+## How loud the modular room is now, 0..1: the engine's own level on the host, the host's as sent on a guest.
+## The room's lights follow it as well as the mix, for a rack that sounds where the mix does not hear it.
+func rack_level() -> float:
+	if Session.role == Session.Role.GUEST:
+		return float(live_rack().get("level", 0.0))
+	var voice := studio.rack_voice
+	if voice == null or not is_instance_valid(voice) or not voice.running():
+		return 0.0
+	return voice.level
+
