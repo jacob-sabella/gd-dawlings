@@ -753,6 +753,8 @@ func _ready() -> void:
 	await _t("_test_a_bad_mod_is_a_problem_and_never_a_crash")
 	await _t("_test_the_mod_roots_come_from_the_data_home_and_the_environment")
 	await _t("_test_the_manifests_equal_the_old_tables")
+	await _t("_test_a_rack_preset_renders_clean")
+	await _t("_test_the_rack_direct_feed_takes_the_whole_stream")
 	await _t("_test_a_preset_with_a_bad_file_is_empty_and_never_a_crash")
 	await _t("_test_builtin_types_are_prefixed_and_the_engine_keeps_its_names")
 	await _t("_test_a_patch_file_round_trips")
@@ -45760,6 +45762,15 @@ func _test_the_manifests_equal_the_old_tables() -> void:
 
 
 func _test_a_preset_with_a_bad_file_is_empty_and_never_a_crash() -> void:
+const RackStreamTests := preload("res://tests/rack_stream_tests.gd")
+
+
+func _test_a_rack_preset_renders_clean() -> void:
+	RackStreamTests.new(self).a_preset_renders_clean()
+
+
+func _test_the_rack_direct_feed_takes_the_whole_stream() -> void:
+	RackStreamTests.new(self).the_direct_feed_takes_the_whole_stream()
 	RackModTests.new(self).a_preset_with_a_bad_file_is_empty_and_never_a_crash()
 
 

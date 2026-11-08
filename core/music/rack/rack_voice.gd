@@ -45,6 +45,11 @@ var _held := {}
 ## bus, fed from the engine's stream a frame at a time.
 var _player: AudioStreamPlayer
 var _playback: AudioStreamGeneratorPlayback
+## What the reader thread has taken from the engine and the main thread has not yet pushed.
+var _queue := PackedVector2Array()
+var _queue_lock := Mutex.new()
+var _reader: Thread
+var _reading := false
 
 
 func _ready() -> void:
@@ -230,14 +235,59 @@ func _direct() -> bool:
 
 
 func _stop_direct() -> void:
+	_stop_reader()
 	if _player != null and is_instance_valid(_player):
 		_player.queue_free()
 	_player = null
 	_playback = null
 
 
+## Takes the engine's stream off its pipe every few milliseconds, on a thread of its own. The pipe
+## holds 4 kB (about 10 ms) and a frame is 16 ms, so reading once a frame got under a third of the
+## sound (15k of 48k frames a second): a stutter that sounded like crushed audio.
+func _start_reader() -> void:
+	if _reader != null:
+		return
+	_reading = true
+	_reader = Thread.new()
+	_reader.start(_read_loop)
+
+
+func _read_loop() -> void:
+	while _reading:
+		var got := source.read()
+		if got.is_empty():
+			OS.delay_msec(3)
+			continue
+		_queue_lock.lock()
+		_queue.append_array(got)
+		# A listener that stopped taking it must not make the queue grow without end: keep the last half second.
+		if _queue.size() > RackEngine.RATE / 2:
+			_queue = _queue.slice(_queue.size() - RackEngine.RATE / 2)
+		_queue_lock.unlock()
+
+
+func _stop_reader() -> void:
+	_reading = false
+	if _reader != null:
+		_reader.wait_to_finish()
+		_reader = null
+	_queue = PackedVector2Array()
+
+
+## The frames the reader has taken so far, at most `most` of them, oldest first.
+func take_direct(most: int) -> PackedVector2Array:
+	_queue_lock.lock()
+	var n := mini(most, _queue.size())
+	var out := _queue.slice(0, n)
+	_queue = _queue.slice(n)
+	_queue_lock.unlock()
+	return out
+
+
 ## The engine's sound to the speakers, the frames the generator has room for.
 func _pump_direct() -> void:
+	_start_reader()
 	if _player == null:
 		var stream := AudioStreamGenerator.new()
 		stream.mix_rate = RackEngine.RATE
@@ -251,10 +301,7 @@ func _pump_direct() -> void:
 		_playback = _player.get_stream_playback() as AudioStreamGeneratorPlayback
 	if _playback == null:
 		return
-	var frames := source.read()
-	var room := _playback.get_frames_available()
-	if frames.size() > room:
-		frames = frames.slice(frames.size() - room)
+	var frames := take_direct(_playback.get_frames_available())
 	if not frames.is_empty():
 		_playback.push_buffer(frames)
 
