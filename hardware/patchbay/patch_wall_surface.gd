@@ -272,11 +272,6 @@ func port_level(key: String) -> Vector3:
 	var group := key.begins_with(GROUP)
 	var node := key.trim_prefix(GROUP) if group else PipeGraph.node_of(key)
 	var side := 0 if group else _side_of(PipeGraph.label_of(key))
-	if node == "dawlings_mix" and Session.role == Session.Role.GUEST and not Session.hear_mix and DAW.state != null:
-		# A guest that is not playing the host's mix here (same machine, or it asked not to) has silence on its own
-		# Mix stream; the stream stands for the session's mix, which is the master's replicated level.
-		var vu := DAW.state.master.vu_l if side < 0 else (DAW.state.master.vu_r if side > 0 else maxf(DAW.state.master.vu_l, DAW.state.master.vu_r))
-		return Vector3(FaderLaw.to_db(vu), NAN, SignalGraph.MEASURED)
 	if OWN_STREAMS.has(node) or node == "dawlings" or node == "Godot Engine":
 		var bus := AudioServer.get_bus_index(AudioPorts.bus(OWN_STREAMS[node])) if OWN_STREAMS.has(node) else 0
 		if bus < 0:

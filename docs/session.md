@@ -71,9 +71,9 @@ at 20 Hz, unreliable: `/master/vu/*`, `/track/N/vu/*`, `/time`, `/beat/str`, and
 - **The lights.** `ViewHost` pulses the venue with the larger of the master meter and `RackHost.rack_level()` (the
   engine's level on the host, the replicated one on a guest), so a rack that sounds on a monitor bus instead of a
   track still moves the room.
-- **The audio patchbay** (`PatchWallSurface`) is the machine's own graph and stays local; the one exception is the
-  `dawlings_mix` stream on a guest that is not playing the host's mix here (same machine), which reads the
-  replicated master level instead of its own silent bus.
+- **The audio patchbay** (`PatchWallSurface`) is the machine's own graph and stays local (a surface may not ask the
+  session who is the host, `_test_a_surface_cannot_ask_what_it_is_looking_through`): its meters read this machine's
+  buses, so on a guest that is not playing the host's mix (same machine) they stay dark. Not changed here.
 
 Tests: `tests/guest_live_tests.gd`.
 
