@@ -69,7 +69,9 @@ func stand(id: StringName) -> void:
 	var at: Variant = null
 	if def.mount == PieceDef.Mount.VENUE:
 		spec = VenueInstrument.spec_of(venue) if id == VenueInstrument.STATION else Weather.spec_of(venue)
-		at = spec.get("spot")
+		var out: bool = studio.room_deltas.delta.is_removed(id)
+		at = null if out else spec.get("spot")
+		_shell_says(id, out)
 	else:
 		# Not stood where the room's delta took it out, nor where the room's layout does without it (a made
 		# room that left it out).
@@ -88,6 +90,25 @@ func stand(id: StringName) -> void:
 		studio.venue_switch._dress_venue_bars()
 
 
+## Whether the venue's shell supplies shell piece `id` (`PieceCatalogue.SHELL_PIECES`): its spec says where.
+static func shell_has(venue: Venue, id: StringName) -> bool:
+	if venue == null:
+		return false
+	var spec := VenueInstrument.spec_of(venue) if id == VenueInstrument.STATION else Weather.spec_of(venue)
+	return spec.get("spot") is Transform3D
+
+
+## The venue is told whether the room does without shell piece `id`, for the solids it gives the walker.
+func _shell_says(id: StringName, out: bool) -> void:
+	var venue := studio.venue
+	if venue == null:
+		return
+	if out and id not in venue.without:
+		venue.without.append(id)
+	elif not out:
+		venue.without.erase(id)
+
+
 ## Take piece `id`'s node down (a room that does without it): freed, the studio's variable null as where
 ## a venue has no room for it, and what rode on it let go of (the rack's slots, the shelf's toys).
 func unstand(id: StringName) -> void:
@@ -100,6 +121,8 @@ func unstand(id: StringName) -> void:
 		(held as Node).get_parent().remove_child(held)
 		(held as Node).queue_free()
 	studio.set(def.studio_node, null)
+	if def.mount == PieceDef.Mount.VENUE:
+		_shell_says(id, true)
 	hold_the_rack()
 	rehome_items()
 

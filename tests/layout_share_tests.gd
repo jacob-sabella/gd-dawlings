@@ -158,7 +158,7 @@ func zone_pieces_come_out_and_go_back() -> void:
 	var rig: Dictionary = t._floor_studio()
 	var s: Studio = rig["studio"]
 	var stood := {&"wheel": "wheel", &"sections": "sections", &"looper": "looper", &"lyrics": "lyric_board"}
-	check("the catalogue lists the seven removable kinds, each titled", PieceCatalogue.kinds().size() == 7 and PieceCatalogue.kinds().all(func(k: StringName) -> bool: return PieceCatalogue.title(k) != ""))
+	check("the catalogue lists the ten removable kinds, each titled", PieceCatalogue.kinds().size() == 10 and PieceCatalogue.kinds().all(func(k: StringName) -> bool: return PieceCatalogue.title(k) != ""))
 	for kind: StringName in stood:
 		check("%s stands in the studio" % kind, s.get(stood[kind]) != null)
 		check("%s is taken out" % kind, s.rack_host.ask_layout("remove", [String(kind)]) == "" and s.get(stood[kind]) == null and s.room_deltas.delta.is_removed(kind))

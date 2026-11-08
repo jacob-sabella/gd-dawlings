@@ -139,7 +139,7 @@ func rebuild() -> void:
 			func(z: StringName) -> Vector2: return _spec_place(z),
 			func(z: StringName, dx: float, dz: float) -> void: move_spec_zone(z, dx, dz),
 			func(z: StringName) -> void: reset_spec_zone(z))
-	_row("pieces", PieceCatalogue.kinds().map(func(k: StringName) -> Array:
+	_row("pieces", PieceCatalogue.maker_kinds().map(func(k: StringName) -> Array:
 		return [PieceCatalogue.title(k), String(k) in spec["pieces"], func() -> void: set_piece(k, String(k) not in spec["pieces"])]))
 	_row("room-scale", [["MODULAR ROOM", bool(spec["annex"]), func() -> void: spec["annex"] = not spec["annex"]; rebuild()]])
 	var go := HBoxContainer.new()

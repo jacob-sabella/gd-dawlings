@@ -4,7 +4,7 @@ extends RefCounted
 ## What a player asks of the new-room maker (docs/layouts.md 8) and the layout file that makes of it.
 ## A spec is `{title, size, style, zones, pieces, annex}`: a `size` of `SIZES`, a `style` of
 ## `BoxStyle.IDS`, any subset of the five zones that fit that size, the single items kept
-## (`PieceCatalogue.kinds()`: the pieces the maker offers one by one) and whether the room-scale mod,
+## (`PieceCatalogue.maker_kinds()`: the pieces the maker offers one by one) and whether the room-scale mod,
 ## the modular annex, is built onto it. Pieces are of two classes (`PieceDef.Kind`): singles are chosen
 ## here by name; the annex is a room-scale mod, offered on its own line and never among the singles.
 ##
@@ -23,7 +23,7 @@ const MAX_TITLE := 40
 const EXTENDS := ["common.control_room", "common.live_room"]
 ## The zone each zoned piece stands in; a piece asked for without its zone is an error, and one the room
 ## has the zone for but was not asked for is switched off.
-const NEEDS := {&"wheel": &"bricks", &"sections": &"bricks", &"looper": &"drums", &"lyrics": &"vocals",
+const NEEDS := {&"wheel": &"bricks", &"sections": &"bricks", &"looper": &"drums", &"drums": &"drums", &"lyrics": &"vocals",
 		&"sampler": &"synth"}
 ## The grid a zone's place is on, in metres (every standard place is on it), and how far one nudge in the panel
 ## moves it.
@@ -85,7 +85,7 @@ static func zones_fitting(size: StringName) -> Array[StringName]:
 static func default_spec(size: StringName = &"standard") -> Dictionary:
 	var zones := zones_fitting(size)
 	var pieces: Array = []
-	for kind in PieceCatalogue.kinds():
+	for kind in PieceCatalogue.maker_kinds():
 		if not NEEDS.has(kind) or NEEDS[kind] in zones:
 			pieces.append(String(kind))
 	return {"title": "New room", "size": String(size), "style": "warm", "zones": zones.map(func(z: StringName) -> String: return String(z)),
@@ -133,7 +133,7 @@ static func problems(spec: Dictionary) -> Array[String]:
 		var kind := StringName(str(p))
 		if PieceDef.room_scale(kind):
 			out.append("The %s is a room-scale mod: it is ticked on its own, not among the pieces." % LayoutChecks.name_of(kind))
-		elif kind not in PieceCatalogue.kinds():
+		elif kind not in PieceCatalogue.maker_kinds():
 			out.append("The %s is not a piece a room is made with." % LayoutChecks.name_of(kind))
 		elif NEEDS.has(kind) and NEEDS[kind] not in kept:
 			out.append("The %s needs the %s." % [LayoutChecks.name_of(kind), ZONE_TITLES[NEEDS[kind]].to_lower()])
@@ -151,7 +151,7 @@ static func layout_dict(spec: Dictionary, id: String) -> Dictionary:
 		zones[str(z)] = {"min": [box.position.x, box.position.y, box.position.z], "size": [box.size.x, box.size.y, box.size.z]}
 	var pieces: Array = []
 	# A single the room was not asked for is switched off, so the shared live room's own is out of it.
-	for kind in PieceCatalogue.kinds():
+	for kind in PieceCatalogue.maker_kinds():
 		if String(kind) not in kept:
 			pieces.append({"id": String(kind), "enabled": false})
 	# In the small room the shelf's neighbourhood runs into the middle of the room, where the riser is: the

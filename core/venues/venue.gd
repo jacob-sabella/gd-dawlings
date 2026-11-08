@@ -21,6 +21,10 @@ extends Node3D
 ## (`VenueCatalogue`), so adding a venue is adding a file.
 static var IDS: Array[StringName] = VenueCatalogue.ids()
 
+## The shell's own pieces the room's delta has taken out (`&"venue"`, `&"weather"`): the instrument's and the
+## weather post's walker solids go with them. Set by `PieceHost`, empty on a venue just built.
+var without: Array[StringName] = []
+
 ## The Rig Roulette room's id. A place the band is taken to, not one of the venues (`IDS`).
 const ROULETTE_ID := &"roulette"
 

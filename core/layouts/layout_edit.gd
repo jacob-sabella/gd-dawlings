@@ -211,6 +211,8 @@ func _left_out(d: RoomDelta, kind: StringName) -> bool:
 
 ## Whether the shell has a place to stand `kind` where the layout puts it: for a zoned piece, the zone it hangs on.
 func _has_place(d: RoomDelta, kind: StringName) -> bool:
+	if kind in PieceCatalogue.SHELL_PIECES:
+		return PieceHost.shell_has(studio.venue, kind)
 	var layout := LiveRoom.with_restored(LiveRoom.layout(d.base, d.variant), [kind])
 	return LayoutResolver.all(layout, ShellFacts.of(studio.venue)).has(kind)
 

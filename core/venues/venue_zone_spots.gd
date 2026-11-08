@@ -165,7 +165,7 @@ func side_wall_instrument(side: float, along: float, depth: float) -> Transform3
 ## walks up to it rather than through it, and a throw bounces off it.
 func instrument_solids() -> Array:
 	var spec := VenueInstrument.spec_of(venue)
-	if spec.is_empty() or not venue.prop_shelf_solid():
+	if spec.is_empty() or not venue.prop_shelf_solid() or &"venue" in venue.without:
 		return []
 	return [VenueInstrument.solid(spec)]
 
@@ -180,7 +180,7 @@ func weather_spot() -> Variant:
 ## The weather's switch's post as a walker solid, where it stands on one and the room is solid.
 func weather_solids() -> Array:
 	var post := Weather.solid(Weather.spec_of(venue))
-	if post.is_empty() or not venue.prop_shelf_solid():
+	if post.is_empty() or not venue.prop_shelf_solid() or &"weather" in venue.without:
 		return []
 	return [post]
 

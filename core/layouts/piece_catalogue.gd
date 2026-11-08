@@ -14,9 +14,13 @@ extends RefCounted
 ## many times as its `limit`, each a copy built by the same builder the venue uses (`ADDABLE`): the basketball
 ## hoop, `Hoop.new`, on a trolley of the hoop's `PieceDef`. All are built or taken down by `RoomSync`.
 ##
-## Not here, and why: the drum circle's plaque (the hand drums round it are items whose homes read the
-## venue's ring, so taking the plaque down leaves them standing about it), the venue's instrument and
-## weather (the shell supplies them), the Tour case and the prop shelf (see above), the control room's
+## The drum circle, the venue's instrument and the weather switch are removable too (a room may do without
+## them; `ZONED`, as the shell or a zone is what stands them). Taking the circle down puts the hand drums
+## away (`ItemHost._item_homes` reads the delta), taking the instrument down puts its bars away and drops its
+## walker solid, and the weather's post likewise (`Venue.without`). The two the shell supplies (`SHELL_PIECES`)
+## are not offered by the new-room maker: a made room's box has neither.
+##
+## Not here, and why: the Tour case and the prop shelf (see above), the control room's
 ## furniture (the MIXING neighbourhood and its wires are built once), and every item -- toys, small
 ## instruments, tablets: they are the room's replicated `ItemRoom.KINDS`, each with an id the session knows,
 ## so a second one is a new item kind and not a piece; a layout does not place items, their shelf is placed.
@@ -27,12 +31,16 @@ extends RefCounted
 ## Kinds that can be added as copies, and the most of them in one room (the room's own included).
 const ADDABLE := {&"hoop": {"title": "BASKETBALL HOOP", "limit": 4}}
 ## What the player sees for the pieces a zone holds.
-const ZONED_TITLES := {&"wheel": "FIFTHS WHEEL", &"sections": "SECTION BLOCKS", &"looper": "LOOPER", &"lyrics": "LYRIC BOARD"}
+const ZONED_TITLES := {&"wheel": "FIFTHS WHEEL", &"sections": "SECTION BLOCKS", &"looper": "LOOPER", &"lyrics": "LYRIC BOARD",
+		&"drums": "DRUM CIRCLE", &"venue": "VENUE INSTRUMENT", &"weather": "WEATHER SWITCH"}
 ## Layout pieces a room may do without. Each can be put back with `add`.
-const REMOVABLE: Array[StringName] = [&"cassette_rack", &"sampler", &"hoop", &"wheel", &"sections", &"looper", &"lyrics"]
+const REMOVABLE: Array[StringName] = [&"cassette_rack", &"sampler", &"hoop", &"wheel", &"sections", &"looper", &"lyrics",
+		&"drums", &"venue", &"weather"]
 ## The removable pieces a zone holds: no trolley, no spot to choose; the studio stands them where the venue's
 ## zone has room (`PieceHost.stand`).
-const ZONED: Array[StringName] = [&"wheel", &"sections", &"looper", &"lyrics"]
+const ZONED: Array[StringName] = [&"wheel", &"sections", &"looper", &"lyrics", &"drums", &"venue", &"weather"]
+## The removable pieces the venue's shell supplies (its spec says where, if it has one): not the maker's to offer.
+const SHELL_PIECES: Array[StringName] = [&"venue", &"weather"]
 
 
 ## Every kind the ADD list offers, in the order it shows them.
@@ -41,6 +49,11 @@ static func kinds() -> Array[StringName]:
 	for k in REMOVABLE:
 		out.append(k)
 	return out
+
+
+## The kinds the new-room maker offers one by one: `kinds` without what the shell supplies.
+static func maker_kinds() -> Array[StringName]:
+	return kinds().filter(func(k: StringName) -> bool: return k not in SHELL_PIECES)
 
 
 ## Whether `kind` may be added as another copy.

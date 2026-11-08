@@ -81,7 +81,7 @@ func files_are_shipped_and_valid() -> void:
 			var room := set.resolve(String(id), v)
 			check("%s/%d: it resolves, with the wheeled five and the control room's furniture" % [id, v],
 					room.status == LayoutData.STATUS_OK and room.piece(&"hoop") != {} and room.piece(&"eq_wall") != {}
-					and room.pieces().size() == 22)
+					and room.pieces().size() == 24)
 	var rooftop := Venue.make(&"rooftop")
 	check("a venue stands none of the control room's furniture (the studio does, in the room's width)", rooftop.default_spot(&"mini_table") == null
 			and rooftop.default_spot(&"eq_wall") == null and rooftop.default_spot(&"hoop") != null)

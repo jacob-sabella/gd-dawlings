@@ -804,6 +804,9 @@ func _ready() -> void:
 	await _t("_test_the_panel_lists_what_can_be_put_back")
 	await _t("_test_the_delta_carries_what_is_restored")
 	await _t("_test_a_zone_moves_on_the_grid_and_is_checked")
+	await _t("_test_the_drum_circle_comes_out_and_the_drums_are_put_away")
+	await _t("_test_the_venue_instrument_and_weather_come_out_with_their_solids")
+	await _t("_test_removed_shell_pieces_are_kept_and_a_guest_sees_them")
 	await _t("_test_the_zone_nudge_is_kept_and_a_guest_builds_it")
 	await _t("_test_the_control_room_fragment_stands_the_furniture_where_the_old_code_did")
 	await _t("_test_the_groups_are_the_old_neighbourhoods")
@@ -46250,3 +46253,23 @@ func _test_a_zone_moves_on_the_grid_and_is_checked() -> void:
 func _test_the_zone_nudge_is_kept_and_a_guest_builds_it() -> void:
 	RoomZoneTests.new(self).the_panel_nudges_and_a_restart_keeps_it()
 	RoomZoneTests.new(self).a_guest_builds_the_moved_zone()
+
+
+const RoomPiecesTests := preload("res://tests/room_pieces_tests.gd")
+
+
+## Section 7: the drum circle comes out, the hand drums are put away, and it goes back.
+func _test_the_drum_circle_comes_out_and_the_drums_are_put_away() -> void:
+	RoomPiecesTests.new(self).the_drum_circle_comes_out_and_the_drums_are_put_away()
+
+
+## Section 7: the venue's instrument and the weather switch come out with their walker solids and go back.
+func _test_the_venue_instrument_and_weather_come_out_with_their_solids() -> void:
+	RoomPiecesTests.new(self).a_shell_piece_comes_out_with_its_solid()
+	RoomPiecesTests.new(self).a_shell_without_the_piece_refuses()
+
+
+## Section 7: the removed pieces survive a restart, and a guest sees them out and back.
+func _test_removed_shell_pieces_are_kept_and_a_guest_sees_them() -> void:
+	RoomPiecesTests.new(self).a_restart_keeps_them_out()
+	RoomPiecesTests.new(self).a_guest_sees_the_pieces_out_and_back()

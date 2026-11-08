@@ -63,7 +63,7 @@ func _subsets(ids: Array[StringName]) -> Array:
 ## A spec keeping `zones`, every single that has its zone, and the annex or not.
 func _spec(size: StringName, zones: Array, annex := true, title := "Test room") -> Dictionary:
 	var pieces: Array = []
-	for kind in PieceCatalogue.kinds():
+	for kind in PieceCatalogue.maker_kinds():
 		if not MadeRoom.NEEDS.has(kind) or String(MadeRoom.NEEDS[kind]) in zones:
 			pieces.append(String(kind))
 	return {"title": title, "size": String(size), "style": "warm", "zones": zones, "pieces": pieces, "annex": annex}

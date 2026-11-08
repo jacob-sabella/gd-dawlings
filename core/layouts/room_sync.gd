@@ -55,10 +55,23 @@ static func sync(studio: Studio) -> void:
 static func _zoned(studio: Studio, id: StringName) -> void:
 	var stands := PieceHost._stands(studio.get(PieceDef.of(id).studio_node))
 	var wanted: bool = not studio.room_deltas.delta.is_removed(id) and _in_the_room(studio, id)
+	if id in PieceCatalogue.SHELL_PIECES and not PieceHost.shell_has(studio.venue, id):
+		return
 	if stands and not wanted:
 		studio.pieces.unstand(id)
+		_walls(studio)
 	elif wanted and not stands:
 		studio.pieces.stand(id)
+		_walls(studio)
+		studio.pieces.rehome_items()
+
+
+## The walker and the seat finder given the venue's solids again (a shell piece's solid came or went).
+static func _walls(studio: Studio) -> void:
+	if studio.walker != null:
+		studio.walker.fixed = studio.venue.solids()
+	if studio._seat_finder != null:
+		studio._seat_finder.fixed = studio.venue.solids()
 
 
 ## Whether the room's layout, with the delta over it, has piece `id` (a made room that left it out has not, until it

@@ -35,8 +35,9 @@ func _item_homes() -> Dictionary:
 	if mini_at != null:
 		out[MiniatureItem.KIND] = mini_at
 	# The hand drums round their ring on the drum riser (slice 40); none where there is no riser.
+	var circle_out: bool = studio.room_deltas.delta.is_removed(&"drums")
 	for n in HandDrum.KINDS.size():
-		var drum_at: Variant = studio.venue.drum_circle_spot(n)
+		var drum_at: Variant = null if circle_out else studio.venue.drum_circle_spot(n)
 		if drum_at != null:
 			out[HandDrum.KINDS[n]] = drum_at
 	# The venue's instrument's bars on its mount (slice 42); past its count, or with none, put away.

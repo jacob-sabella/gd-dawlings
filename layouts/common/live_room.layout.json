@@ -13,7 +13,9 @@
     {"id": "sections", "piece": "sections", "at": {"anchor": {"x": "zone.bricks.cx", "z": "zone.bricks.cz"}, "pos": [0.3, 0.29], "up": "height.table", "yaw": -1.5707963267948966}},
     {"id": "drums", "piece": "drums", "at": {"anchor": {"x": "zone.drums.cx", "z": "zone.drums.cz"}, "up": "zone.drums.floor", "yaw": {"toward": "mix", "snap": 1.5707963267948966}}},
     {"id": "looper", "piece": "looper", "at": {"frame": "authored:drums", "local": [-0.98, 0.98], "yaw": 0.0}},
-    {"id": "lyrics", "piece": "lyrics"}
+    {"id": "lyrics", "piece": "lyrics"},
+    {"id": "venue", "piece": "venue"},
+    {"id": "weather", "piece": "weather"}
   ],
   "groups": [
     {"id": "rhythm", "title": "RHYTHM", "colour": "#FF9E6B", "members": ["drums", "looper"]},
