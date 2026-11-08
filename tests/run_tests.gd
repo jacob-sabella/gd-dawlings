@@ -14810,6 +14810,8 @@ func _as_session(role: int, me: int) -> void:
 	Session.local_peer_id = me
 	Session.participants.clear()
 	Session.holds.clear()
+	# The autoload's GuestMidi outlives every test, and some leave it not recording with the host: a session starts with it on.
+	Session.guest_midi.record_with_host = true
 
 
 func _test_the_roster_is_the_hosts_word() -> void:
