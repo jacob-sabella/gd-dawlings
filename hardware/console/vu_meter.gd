@@ -72,6 +72,10 @@ func _ready() -> void:
 	_multi = MultiMeshInstance3D.new()
 	_multi.multimesh = _mesh
 	_multi.material_override = _lamp_material()
+	# Painted from `_process` and never moved by physics, so not interpolated (as `MeshBank`): with the
+	# project's 30 Hz physics interpolation on, every repaint of the ladder invalidated the shadow maps
+	# of every light near the console, about 1,000 draw calls a frame in the studio.
+	_multi.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	add_child(_multi)
 	_paint(0, -1)
 
