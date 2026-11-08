@@ -175,6 +175,10 @@ func _process_framing() -> void:
 
 
 func _process_scenes() -> void:
+	if shot._frames == 3 and shot._make_room != "":
+		shot.scenes._make_a_room()
+	if shot._frames == 6 and shot._panel != "":
+		shot.scenes._open_panel()
 	# Later than the camera, so a visit the studio makes on its own at startup has landed first.
 	if shot._frames == 8 and shot._walk_mirror > 0.0:
 		var mirrors := shot.get_tree().current_scene.find_children("*", "Mirror", true, false)
@@ -183,6 +187,20 @@ func _process_scenes() -> void:
 			var front := Vector3(m.basis.z.x, 0, m.basis.z.z).normalized()
 			var at := m.origin + front * shot._walk_mirror
 			shot._walk = [at.x, at.z, atan2(front.x, front.z), -0.05]
+	if shot._frames == 8 and shot._walk_rack_on:
+		# Along the wall's own normal: the wall leans back, so "in front of it" is not a level step away.
+		var studio_for_rack := shot.get_tree().current_scene.get_node("Studio") as Studio
+		var wall := studio_for_rack.rack_wall
+		if wall != null:
+			var m := wall.global_transform
+			var far: float = shot._walk_rack[0] if shot._walk_rack.size() > 0 else 1.6
+			var across: float = shot._walk_rack[1] if shot._walk_rack.size() > 1 else 0.0
+			var up: float = shot._walk_rack[2] if shot._walk_rack.size() > 2 else 0.0
+			var turn: float = shot._walk_rack[3] if shot._walk_rack.size() > 3 else 0.0
+			var at := m * Vector3(across, up, far)
+			var f := -m.basis.z.normalized()
+			shot._walk = [at.x, at.z, atan2(-f.x, -f.z) + turn, asin(f.y), at.y - studio_for_rack.walker.standing_eye]
+			print("SHOT_RACK_WALL origin=", m.origin, " walk=", shot._walk)
 	if shot._frames == 8 and shot._walk.size() >= 4:
 		var studio := shot.get_tree().current_scene.get_node_or_null("Studio")
 		if studio and studio.get("walker") != null:

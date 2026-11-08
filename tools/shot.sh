@@ -6,6 +6,7 @@
 #   SHOT_CAM="0.5,-0.3,2.6,0,0.95,0" tools/shot.sh shots/wide.png
 #   SHOT_RES=2560x1440 tools/shot.sh shots/hero.png
 #   SHOT_ARGS="--reaper" tools/shot.sh          # photograph a live Reaper instead of the stand-in
+#   SHOT_DATA_HOME=/tmp/x tools/shot.sh         # saved data (user://) in /tmp/x, the player's untouched
 #
 # A real window and not --headless: the point is to see what the engine renders, which for this
 # project is almost entirely glow, shadow and metal -- none of which headless produces. Falls back
@@ -45,6 +46,15 @@ fi
 RUNNER=(godot --path . --resolution "$SHOT_RES" --
   --shot "$ABS" --shot-frame "$FRAME" --quit-after "$QUIT" --shot-res "$SHOT_RES"
   "${CAM_ARGS[@]}" "${EXTRA[@]}")
+
+# SHOT_DATA_HOME=dir: the run's saved data (user://: layouts, rooms, patches, mods, scratch layout) lives
+# under dir and not in the player's ~/.local/share. Needed by --rack-patch, --delta, --mod and --make-room,
+# which write there. `env` is part of the command because the window is started by the compositor, which
+# does not hand on this shell's variables.
+if [ -n "${SHOT_DATA_HOME:-}" ]; then
+  mkdir -p "$SHOT_DATA_HOME"
+  RUNNER=(env "XDG_DATA_HOME=$SHOT_DATA_HOME" "${RUNNER[@]}")
+fi
 
 # A shot runs the real studio, sound and all: a held instrument plays, the transport may be rolling.
 # Into the null sink, not whatever the desktop is playing through (SHOT_SINK= to choose another).

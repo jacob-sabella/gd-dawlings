@@ -142,6 +142,11 @@ func _ready() -> void:
 				if i + 1 < args.size() and args[i + 1].begins_with("mirror"):
 					var parts := args[i + 1].split(",")
 					shot._walk_mirror = float(parts[1]) if parts.size() > 1 else 1.4
+				# "rack[,distance[,sideways[,height[,turn]]]]": stood in front of the modular rack wall, facing it square on (along its normal; it leans back),
+				# `sideways` and `height` metres along the wall (height from its middle), turned `turn` radians.
+				elif i + 1 < args.size() and args[i + 1].begins_with("rack"):
+					shot._walk_rack = Array(args[i + 1].split(",")).slice(1).map(func(s): return float(s))
+					shot._walk_rack_on = true
 				elif i + 1 < args.size(): shot._walk = Array(args[i + 1].split(",")).map(func(s): return float(s))
 			"--quit-tick":
 				if i + 1 < args.size(): shot._quit_tick = int(args[i + 1])
@@ -227,6 +232,17 @@ func _ready() -> void:
 				if i + 1 < args.size(): shot._ear = int(args[i + 1])
 			"--tour-band":
 				if i + 1 < args.size(): shot._tour_band = int(args[i + 1])
+			"--panel":
+				if i + 1 < args.size(): shot._panel = args[i + 1]
+			"--make-room":
+				if i + 1 < args.size(): shot._make_room = args[i + 1]
+			"--rack-patch":
+				if i + 1 < args.size(): shot._rack_patch = args[i + 1]
+			"--delta":
+				if i + 1 < args.size(): shot._delta = args[i + 1]
+			"--mod":
+				if i + 1 < args.size(): shot._mods.append(args[i + 1])
+	shot.scenes.install_files()
 	if shot._shot_tick >= 0:
 		shot._shot_frame = -1
 		shot._quit_after = -1

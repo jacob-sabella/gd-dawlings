@@ -264,3 +264,78 @@ func _tie_the_rope() -> void:
 			var camera := shot.get_viewport().get_camera_3d()
 			print("SHOT_ROPE ducking %.1f dB, lifted %.3f m, its middle at %s on screen: %s" % [rope.ducking, rope.lifted,
 					camera.unproject_position(rope.global_position) if camera != null else Vector2.ZERO, rope.readout()])
+
+
+## `--rack-patch`, `--delta` and `--mod` (and the guard for `--make-room`, which writes a room file): files put into the user data before the studio reads it (the
+## autoload's `_ready` runs ahead of the main scene). Only into a data dir of the run's own: the player's
+## real one is never touched (`SHOT_DATA_HOME`, tools/shot.sh).
+func install_files() -> void:
+	if shot._rack_patch == "" and shot._delta == "" and shot._mods.is_empty() and shot._make_room == "":
+		return
+	var real := OS.get_environment("HOME").path_join(".local/share/godot/app_userdata").path_join(
+			str(ProjectSettings.get_setting("application/config/name")))
+	if OS.get_user_data_dir().simplify_path() == real.simplify_path():
+		push_error("SHOT_REFUSED --rack-patch/--delta/--mod would write into the real user data %s; set SHOT_DATA_HOME" % real)
+		shot.get_tree().quit(2)
+		return
+	if shot._rack_patch != "":
+		var path := RackPatchFile.current_path()
+		print("SHOT_INSTALL patch ", path, " ", _copy_file(shot._rack_patch, path))
+	if shot._delta != "":
+		var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(shot._delta))
+		var key := str(raw.get("room", "")) if raw is Dictionary else ""
+		var path := RoomDeltaFile.path_of(key) if key != "" else ""
+		print("SHOT_INSTALL delta ", path, " ", _copy_file(shot._delta, path) if path != "" else "no room key in the file")
+	for folder in shot._mods:
+		var to := DataHome.dir("mods") + folder.rstrip("/").get_file()
+		DirAccess.make_dir_recursive_absolute(to)
+		for f in DirAccess.get_files_at(folder):
+			_copy_file(folder.path_join(f), to.path_join(f))
+		print("SHOT_INSTALL mod ", to)
+
+
+func _copy_file(from: String, to: String) -> Error:
+	if DirAccess.make_dir_recursive_absolute(to.get_base_dir()) != OK and not DirAccess.dir_exists_absolute(to.get_base_dir()):
+		return ERR_CANT_CREATE
+	return DirAccess.copy_absolute(from, to)
+
+
+## `--make-room size[:zones[:title[:style]]]`: the room-maker's MAKE, asked for from the maker's own spec.
+func _make_a_room() -> void:
+	var maker := shot.get_tree().current_scene.find_child("RoomMaker", true, false) as RoomMaker
+	if maker == null:
+		print("SHOT_MAKE_ROOM no RoomMaker")
+		return
+	var words: PackedStringArray = shot._make_room.split(":")
+	maker.set_size(StringName(words[0]))
+	if words.size() > 1 and words[1] != "all":
+		var zones: Array = []
+		for z in words[1].split("+", false):
+			zones.append(z)
+		maker.spec["zones"] = zones
+		maker._drop_unneeded()
+	maker.spec["title"] = words[2].replace("_", " ") if words.size() > 2 and words[2] != "" else "%s shot room" % words[0]
+	if words.size() > 3:
+		maker.spec["style"] = words[3]
+	print("SHOT_MAKE_ROOM spec=", maker.spec, " said='", maker.make(), "' venue=", (shot.get_tree().current_scene.get_node("Studio") as Studio).venue.name)
+
+
+## `--panel layout|maker[:piece]`: the F3 or F4 panel open, as the key leaves it.
+func _open_panel() -> void:
+	var words: PackedStringArray = shot._panel.split(":")
+	var root := shot.get_tree().current_scene
+	if words[0] == "maker":
+		var maker := root.find_child("RoomMaker", true, false) as RoomMaker
+		if maker != null and not maker.is_open():
+			maker.toggle()
+	else:
+		var editor := root.find_child("LayoutEditor", true, false) as LayoutEditor
+		if editor != null:
+			if not editor.is_open():
+				editor.toggle()
+			if words.size() > 1:
+				editor._pick(StringName(words[1]))
+			# `layout:hoop:nudge`: and pressed once, so the panel's status line says what it did.
+			if words.size() > 2 and words[2] == "nudge":
+				editor._nudge(0.4, 0.0)
+	print("SHOT_PANEL ", shot._panel)

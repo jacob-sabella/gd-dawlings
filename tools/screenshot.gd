@@ -24,6 +24,9 @@ var _cam: Array = []
 ## is the floor you stand on, when it is not the ground: a gallery, a riser.
 var _walk: Array = []
 var _walk_mirror := 0.0
+## `--walk rack[,distance[,sideways[,height]]]`: stand facing the modular rack wall (see ShotArgs).
+var _walk_rack_on := false
+var _walk_rack: Array = []
 ## `--carry duck`: that item in the mouse's hand from frame 9, as if it had been picked up.
 ## `--carry duck:squeeze` holds it squeezed. `--carry headphones:wear` puts them on. For a
 ## personal kind (`ItemRoom.PERSONAL_KINDS`) this takes a copy of your own, as a real grab would,
@@ -133,6 +136,20 @@ var _lob_tick := -1
 ## that point (studio space), to see a flight from the side rather than from behind it.
 var _spectate: Array = []
 var _shot_res := Vector2i.ZERO
+## `--panel layout|maker[:piece]`: the F3 layout edit panel or the F4 room-maker panel open from frame 6,
+## as the key opens them; `layout:hoop` also picks that piece in the list, `layout:hoop:nudge` and moves it one step (ShotScenes._open_panel).
+var _panel := ""
+## `--make-room small|standard|large[:zone+zone...[:Title[:style]]]`: at frame 3 that room made by MadeRooms (the
+## maker's own MAKE), zones joined with `+` (`all`, the default, is every zone that fits) and the band taken
+## into it. Pair with `--walk` to stand in it.
+var _make_room := ""
+## `--rack-patch file.json`, `--delta file.json`, `--mod folder` (repeatable): put a rack patch (as
+## the host's autosave), a room delta (under the key it names in `room`) and a mod folder (under user://mods)
+## into the user data before the studio is built. They refuse to run against the real user data dir:
+## give the run its own `SHOT_DATA_HOME` (tools/shot.sh), or they exit with a message.
+var _rack_patch := ""
+var _delta := ""
+var _mods: PackedStringArray = []
 var _hover := Vector2(-1, -1)
 ## `--drag 400,600:900,640@20-70`: hold the left button at the first point on physics tick 20,
 ## move to the second by tick 70, let go. `--turn 2` adds that many wheel notches halfway through.
