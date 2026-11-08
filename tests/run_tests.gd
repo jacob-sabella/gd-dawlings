@@ -39546,7 +39546,7 @@ func _test_an_eq21_cuts_its_band_and_not_a_kilohertz() -> void:
 	check("a 90 Hz sine is cut (%.1f to %.1f dB)" % [low_flat, low_cut], low_flat > -40.0 and low_cut < low_flat - 4.0)
 	check("and a 1 kHz one is not (%.1f to %.1f dB)" % [high_flat, high_cut], high_flat > -40.0 and absf(high_cut - high_flat) < 1.0)
 	sine.queue_free()
-	await get_tree().process_frame
+	await _settle_audio()
 	_offline()
 
 
@@ -39860,6 +39860,16 @@ class SineInto extends AudioStreamPlayer:
 			pb.push_frame(Vector2(v, v))
 
 
+## Lets the mixer thread take a few steps (about 0.2 s) after a player that was on a backend's bus is
+## freed, and before the backend is closed and its buses removed. Removing a bus in the same instant
+## as the mixer is fading a just-stopped playback off it left the headless mixer thread spinning at
+## 100% inside the AudioServer's lock (about one shard run in three), and the next thing that took
+## that lock (an AudioStreamWAV's data, say) waited for ever.
+func _settle_audio() -> void:
+	await get_tree().process_frame
+	await _for_seconds(0.2)
+
+
 ## Real time passing, a frame at a time, so the mixer (headless, the dummy driver's own thread)
 ## runs and the backend's frame drives what it reads.
 func _for_seconds(seconds: float) -> void:
@@ -39927,7 +39937,7 @@ func _test_a_tracks_spectrum_is_read_at_the_end_of_its_bus() -> void:
 	DAW.set_track_solo(7, false)
 	check("soloed off, it is back", backend.track_spectrum(3)[top] > was - 13.0)
 	sine.queue_free()
-	await get_tree().process_frame
+	await _settle_audio()
 	_offline()
 
 

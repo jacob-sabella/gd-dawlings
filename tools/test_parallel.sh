@@ -25,9 +25,11 @@ for i in $(seq 1 "$n"); do
     export XDG_DATA_HOME="$d/data" XDG_CACHE_HOME="$d/cache" XDG_CONFIG_HOME="$d/config" CLAUDE_JOB_DIR="$d/job"
     export DAWLINGS_SHARD="$i/$n"
     [ -n "${DAWLINGS_TIMES:-}" ] && export DAWLINGS_TIMES="$d/times.txt"
-    # A shard takes ~2 minutes. Once in a few runs one spins at 100% CPU for ever early in
-    # _test_a_fixed_instrument_is_struck_never_carried (cause not found; the test passes alone), so a
-    # shard that outlives SHARD_TIMEOUT is killed and run once more from scratch.
+    # A shard takes ~2 minutes. Once in a few runs one used to spin at 100% CPU for ever: a test freed a
+    # player on a backend's bus and closed the backend in the same instant, the headless mixer thread
+    # spun inside the AudioServer's lock, and the next AudioStreamWAV data write waited on it (the two
+    # tests that did it now `_settle_audio`). A shard that outlives SHARD_TIMEOUT is still killed and run
+    # once more from scratch, in case another test has the same race.
     for attempt in 1 2; do
       rm -f "$d/times.txt"
       timeout "${SHARD_TIMEOUT:-600}" godot --headless --path . tests/tests.tscn >"$d/out.txt" 2>&1
