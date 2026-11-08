@@ -41,11 +41,20 @@ func _studio_piece(node_of: Callable) -> Variant:
 ## space; null where the venue has no room for it. Read from the layout against this venue's anchors;
 ## kept while its arrangement and width stay as they are.
 func default_spot(id: StringName) -> Variant:
-	var key := [venue.variant, venue.room_width]
+	var restored := _restored()
+	var key := [venue.variant, venue.room_width, restored]
 	if _spots_for != key:
-		_spots = LiveRoom.spots(ShellFacts.anchors_of(venue))
+		_spots = LiveRoom.spots(ShellFacts.anchors_of(venue), restored)
 		_spots_for = key
 	return _spots.get(id)
+
+
+## The pieces the room's delta has back that its layout left out, or none in no studio.
+func _restored() -> Array:
+	var studio := _studio()
+	if studio == null or studio.room_deltas == null:
+		return []
+	return studio.room_deltas.delta.restored.duplicate()
 
 
 ## The trolley that wheeled piece `id` stands on, in the studio this venue stands in; null in no

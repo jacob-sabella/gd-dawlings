@@ -75,6 +75,7 @@ func resolve(id: String, variant: int = 0) -> LayoutData:
 		var over: Dictionary = root.variants[variant].duplicate(true)
 		over.erase("title")
 		body = LayoutMerge.merge(body, over)
+	out.left_out = LayoutMerge.left_out(body)
 	LayoutMerge.settle(body)
 	out.body = body
 	_check_whole(out)

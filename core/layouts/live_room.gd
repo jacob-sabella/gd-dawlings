@@ -70,6 +70,20 @@ static func layout(venue_id: StringName, variant: int) -> LayoutData:
 	return _rooms[key]
 
 
+## `l` with the pieces `restored` (ids its layout left out) stood back in it: `l` itself when there are none.
+static func with_restored(l: LayoutData, restored: Array) -> LayoutData:
+	if restored.is_empty() or l.left_out.is_empty():
+		return l
+	var out := LayoutData.new()
+	out.id = l.id
+	out.variant = l.variant
+	out.chain = l.chain
+	out.status = l.status
+	out.body = l.body.duplicate(true)
+	LayoutMerge.restore(out.body, l.left_out, restored)
+	return out
+
+
 ## The ids of the pieces the live room wheels about, in the order the studio builds their trolleys.
 static func wheeled_ids() -> Array[StringName]:
 	var out: Array[StringName] = []
@@ -84,8 +98,8 @@ static func wheeled_ids() -> Array[StringName]:
 ## no synth zone) is absent. The control room's furniture, which the venue files extend too, is not
 ## the venue's to stand (`ControlRoom` does, in the room's width), so it is left out: `Venue.default_spot`
 ## answers null for it, as it always did.
-static func spots(facts: ShellFacts) -> Dictionary:
-	var out := LayoutResolver.all(layout(facts.venue_id, facts.variant), facts)
+static func spots(facts: ShellFacts, restored: Array = []) -> Dictionary:
+	var out := LayoutResolver.all(with_restored(layout(facts.venue_id, facts.variant), restored), facts)
 	for p: Dictionary in ControlRoom.layout().pieces():
 		out.erase(StringName(p["id"]))
 	return out

@@ -69,6 +69,73 @@ static func settle(body: Dictionary) -> Array[String]:
 	return gone
 
 
+## What `settle` is about to take out of `body`, kept so a room can have a piece back that its layout left out (a
+## made room that did without it): `{pieces, wiring, members}` with the switched-off pieces (without the switch),
+## the wires that ran to them and, by group id, the members they were. Empty where nothing is switched off. Called
+## on the merged body, before `settle`.
+static func left_out(body: Dictionary) -> Dictionary:
+	var gone := {}
+	var pieces: Array = []
+	for p: Dictionary in body.get("pieces", []):
+		if p.get("enabled", true) == false and p.get("piece") is String:
+			var kept := p.duplicate(true)
+			kept.erase("enabled")
+			gone[str(p.get("id", ""))] = true
+			pieces.append(kept)
+	if pieces.is_empty():
+		return {}
+	var wiring: Array = []
+	for w: Dictionary in body.get("wiring", []):
+		if w.get("enabled", true) != false and (gone.has(str(w.get("from", ""))) or gone.has(str(w.get("to", "")))):
+			wiring.append(w.duplicate(true))
+	var members := {}
+	for g: Dictionary in body.get("groups", []):
+		if g.get("members") is Array:
+			var was: Array = (g["members"] as Array).filter(func(m: Variant) -> bool: return gone.has(str(m)))
+			if not was.is_empty():
+				members[str(g.get("id", ""))] = was
+	return {"pieces": pieces, "wiring": wiring, "members": members}
+
+
+## Puts the pieces `ids` that `left` (`left_out`) holds back into the settled `body`, with their wires (where the
+## other end is there) and their places in their groups. Returns the ids `left` has no piece for or `body`
+## already has.
+static func restore(body: Dictionary, left: Dictionary, ids: Array) -> Array[String]:
+	var missing: Array[String] = []
+	var have := {}
+	for p: Dictionary in body.get("pieces", []):
+		have[str(p.get("id", ""))] = true
+	var back := {}
+	for id in ids:
+		var found: Variant = null
+		for p: Dictionary in left.get("pieces", []):
+			if str(p.get("id", "")) == str(id):
+				found = p
+		if found == null or have.has(str(id)):
+			missing.append(str(id))
+			continue
+		back[str(id)] = true
+		have[str(id)] = true
+		if not body.has("pieces"):
+			body["pieces"] = []
+		(body["pieces"] as Array).append((found as Dictionary).duplicate(true))
+	for w: Dictionary in left.get("wiring", []):
+		var ends_there: bool = true
+		for end in ["from", "to"]:
+			var at := str(w.get(end, ""))
+			ends_there = ends_there and (have.has(at) or at in WIRE_AREAS)
+		if ends_there and (back.has(str(w.get("from", ""))) or back.has(str(w.get("to", "")))):
+			if not body.has("wiring"):
+				body["wiring"] = []
+			(body["wiring"] as Array).append(w.duplicate(true))
+	for g: Dictionary in body.get("groups", []):
+		var was: Array = (left.get("members", {}) as Dictionary).get(str(g.get("id", "")), [])
+		for m in was:
+			if back.has(str(m)) and g.get("members") is Array and m not in g["members"]:
+				(g["members"] as Array).append(m)
+	return missing
+
+
 static func _merge_list(key: String, a: Array, b: Array) -> Array:
 	var out := a.duplicate(true)
 	var at := {}

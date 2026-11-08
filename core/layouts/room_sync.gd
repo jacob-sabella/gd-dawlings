@@ -51,14 +51,23 @@ static func sync(studio: Studio) -> void:
 
 
 ## A piece a zone holds, stood or taken down to match the delta: taken down when the room did without it,
-## stood again when it is back (and the venue has the zone).
+## stood again when it is back (and the venue has the zone, and its layout has the piece or the room has it restored).
 static func _zoned(studio: Studio, id: StringName) -> void:
 	var stands := PieceHost._stands(studio.get(PieceDef.of(id).studio_node))
-	var wanted: bool = not studio.room_deltas.delta.is_removed(id)
+	var wanted: bool = not studio.room_deltas.delta.is_removed(id) and _in_the_room(studio, id)
 	if stands and not wanted:
 		studio.pieces.unstand(id)
 	elif wanted and not stands:
 		studio.pieces.stand(id)
+
+
+## Whether the room's layout, with the delta over it, has piece `id` (a made room that left it out has not, until it
+## is put back). True while no layout has been resolved yet.
+static func _in_the_room(studio: Studio, id: StringName) -> bool:
+	var applied: Dictionary = studio.room_deltas.applied
+	if applied.is_empty():
+		return true
+	return (applied["pieces"] as Array).any(func(p: Dictionary) -> bool: return p.get("id") == String(id))
 
 
 ## Copy `id`'s node moved to where its trolley is, and the baskets told. False for an id that is no copy.

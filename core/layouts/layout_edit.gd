@@ -3,7 +3,11 @@ extends RefCounted
 
 ## The edits of a room's layout, as one verb (docs/layouts.md 7): `ask_layout(op, args)` with
 ##
-##   move(id, x, z[, yaw])   rotate(id, yaw)   add(piece, x, z, yaw)   remove(id)   reset(id | "all")
+##   move(id, x, z[, yaw])   rotate(id, yaw)   add(piece[, x, z, yaw])   remove(id)   reset(id | "all")
+##
+## `add` of a piece the room lacks (taken out by a delta, or left out by its layout, as a made room does) puts it
+## back where the layout stands it, and `add(piece, x, z, yaw)` where the host says; either way the validator
+## has the last word, and a spot that is not clear is moved to the nearest one that is.
 ##
 ## The host is the authority. An op is tried on a copy of the room's `RoomDelta`; the copy is laid over
 ## the room's layout and checked by `LayoutValidator` against the room's shell, and only if it brings no
@@ -103,11 +107,18 @@ func _nudged(d: RoomDelta, why: String) -> String:
 	var layout := layout_of(d)
 	if id == &"" or layout == null:
 		return why
-	var wanted := Vector2(float(d.transform_of(id).origin.x), float(d.transform_of(id).origin.z))
-	var clear: Variant = LayoutValidator.nearest_clear(layout, id, wanted, ShellFacts.of(studio.venue))
+	var facts := ShellFacts.of(studio.venue)
+	var at: Variant = d.transform_of(id)
+	if at == null:
+		# Put back where the layout stands it: the nearest clear spot to that.
+		at = LayoutResolver.all(layout, facts).get(id)
+	if at == null:
+		return why
+	var wanted := Vector2(float((at as Transform3D).origin.x), float((at as Transform3D).origin.z))
+	var clear: Variant = LayoutValidator.nearest_clear(layout, id, wanted, facts)
 	if not clear is Vector2:
 		return why
-	d.move(id, clear.x, clear.y, d.transform_of(id).basis.get_euler().y)
+	d.move(id, clear.x, clear.y, (at as Transform3D).basis.get_euler().y)
 	return refusal(d)
 
 
@@ -136,24 +147,32 @@ func _rotate(d: RoomDelta, args: Array) -> String:
 
 
 func _add(d: RoomDelta, args: Array) -> String:
-	if args.size() != 4 or not (args[0] is String or args[0] is StringName) or not _numbers(args.slice(1)) or not _near(args[1], args[2]):
-		return "Add needs a piece and where to: x, z and a turn."
+	var stated := args.size() == 4
+	if (args.size() != 1 and not stated) or not (args[0] is String or args[0] is StringName) \
+			or (stated and (not _numbers(args.slice(1)) or not _near(args[1], args[2]))):
+		return "Add needs a piece, and where to if you choose: x, z and a turn."
 	var kind := StringName(args[0])
 	if PieceDef.room_scale(kind):
 		return "The %s is a room-scale mod: a room is made with it, not given it from the floor." % LayoutChecks.name_of(kind)
 	if kind not in PieceCatalogue.kinds():
 		return "The %s cannot be added to a room." % LayoutChecks.name_of(kind)
-	var yaw := wrapf(float(args[3]), -PI, PI)
-	if d.is_removed(kind):
+	var yaw := wrapf(float(args[3]), -PI, PI) if stated else 0.0
+	var out := d.is_removed(kind)
+	if out or _left_out(d, kind):
 		if PieceCatalogue.zoned(kind):
 			# A zone holds it: no spot to choose, only a zone to have in the room.
-			if Stations.spot(studio.venue, kind) == null:
+			if not _has_place(d, kind):
 				return "This room has no place for the %s." % LayoutChecks.name_of(kind)
+		elif not _has_place(d, kind):
+			return "This room has no place for the %s." % LayoutChecks.name_of(kind)
+		if out:
 			d.put_back(kind)
-			return ""
-		d.put_back(kind)
-		d.move(kind, float(args[1]), float(args[2]), yaw)
-		_placing = kind
+		else:
+			d.restore(kind)
+		if stated and not PieceCatalogue.zoned(kind):
+			d.move(kind, float(args[1]), float(args[2]), yaw)
+		if not PieceCatalogue.zoned(kind):
+			_placing = kind
 		return ""
 	var have := _count(d, kind)
 	if have >= PieceCatalogue.limit(kind):
@@ -161,12 +180,59 @@ func _add(d: RoomDelta, args: Array) -> String:
 				else "%d %ss, the most it holds" % [have, LayoutChecks.name_of(kind)])
 	if not PieceCatalogue.copies(kind):
 		return "The room already has the %s." % LayoutChecks.name_of(kind)
+	var at := Vector2(float(args[1]), float(args[2])) if stated else Vector2.ZERO
+	if not stated:
+		# No spot given: where the room's own would stand, and the nearest clear one to it.
+		var home: Variant = studio.venue.default_spot(kind) if studio.venue != null else null
+		if home == null:
+			home = LayoutResolver.all(LiveRoom.with_restored(LiveRoom.layout(d.base, d.variant), [kind]), ShellFacts.of(studio.venue)).get(kind)
+		if home == null:
+			return "This room has no place for the %s." % LayoutChecks.name_of(kind)
+		var set_spot: Vector3 = studio.venue_switch._venue_to_set(home).origin
+		at = Vector2(set_spot.x, set_spot.z)
 	var def := PieceDef.of(kind)
 	var taken: Array = _ids(d)
 	_placing = PieceCatalogue.next_id(kind, taken)
 	d.add_piece({"id": String(_placing), "piece": String(kind),
-			"at": {"pos": [float(args[1]), float(args[2])], "yaw": yaw}, "footprint": [def.foot_half.x, def.foot_half.y]})
+			"at": {"pos": [at.x, at.y], "yaw": yaw}, "footprint": [def.foot_half.x, def.foot_half.y]})
 	return ""
+
+
+## Whether the room's layout left out piece `kind` (a made room that did without it) and the room has not put it back.
+func _left_out(d: RoomDelta, kind: StringName) -> bool:
+	if d.is_restored(kind):
+		return false
+	var left := LiveRoom.layout(d.base, d.variant).left_out
+	for p: Dictionary in left.get("pieces", []):
+		if p.get("id") == String(kind):
+			return not _in_layout(d, kind)
+	return false
+
+
+## Whether the shell has a place to stand `kind` where the layout puts it: for a zoned piece, the zone it hangs on.
+func _has_place(d: RoomDelta, kind: StringName) -> bool:
+	var layout := LiveRoom.with_restored(LiveRoom.layout(d.base, d.variant), [kind])
+	return LayoutResolver.all(layout, ShellFacts.of(studio.venue)).has(kind)
+
+
+## The kinds `add` would take for the room `d` now: each it lacks that it has a place for, and each copy under its
+## limit. In the order of `PieceCatalogue.kinds`.
+func addable(d: RoomDelta = null) -> Array[StringName]:
+	var room := d if d != null else studio.room_deltas.delta
+	var out: Array[StringName] = []
+	for kind in PieceCatalogue.kinds():
+		var have := _count(room, kind)
+		if have == 0 and (room.is_removed(kind) or _left_out(room, kind)) and _has_place(room, kind):
+			out.append(kind)
+		elif have > 0 and have < PieceCatalogue.limit(kind) and PieceCatalogue.copies(kind):
+			out.append(kind)
+	return out
+
+
+## The kinds the room lacks and could have back (`addable` that it has none of).
+func missing(d: RoomDelta = null) -> Array[StringName]:
+	var room := d if d != null else studio.room_deltas.delta
+	return addable(room).filter(func(k: StringName) -> bool: return _count(room, k) == 0)
 
 
 func _remove(d: RoomDelta, args: Array) -> String:
@@ -175,6 +241,9 @@ func _remove(d: RoomDelta, args: Array) -> String:
 	var id := StringName(args[0])
 	if d.added_index(id) >= 0:
 		d.drop_added(id)
+		return ""
+	if d.is_restored(id):
+		d.unrestore(id)
 		return ""
 	if not PieceCatalogue.removable(id):
 		return "The %s is part of the room; it stays." % LayoutChecks.name_of(id) if _in_layout(d, id) \
@@ -225,13 +294,13 @@ func _spot(id: StringName) -> Array:
 
 
 func _in_layout(d: RoomDelta, id: StringName) -> bool:
-	return not LiveRoom.layout(d.base, d.variant).piece(id).is_empty() or not ControlRoom.layout().piece(id).is_empty()
+	return d.is_restored(id) or not LiveRoom.layout(d.base, d.variant).piece(id).is_empty() or not ControlRoom.layout().piece(id).is_empty()
 
 
 ## How many of `kind` the room holds with `d` applied: the layout's (unless taken out) and the copies added.
 func _count(d: RoomDelta, kind: StringName) -> int:
 	var n := 0
-	for p: Dictionary in d.apply(LiveRoom.layout(d.base, d.variant).body)["pieces"]:
+	for p: Dictionary in _applied(d)["pieces"]:
 		if p.get("piece") == String(kind) and p.get("enabled", true):
 			n += 1
 	return n
@@ -239,7 +308,13 @@ func _count(d: RoomDelta, kind: StringName) -> int:
 
 ## Every piece id of the room with `d` applied.
 func _ids(d: RoomDelta) -> Array:
-	return d.apply(LiveRoom.layout(d.base, d.variant).body)["pieces"].map(func(p: Dictionary) -> String: return p["id"])
+	return _applied(d)["pieces"].map(func(p: Dictionary) -> String: return p["id"])
+
+
+## The room's layout with `d` laid over it (`RoomDelta.apply`).
+func _applied(d: RoomDelta) -> Dictionary:
+	var base := LiveRoom.layout(d.base, d.variant)
+	return d.apply(base.body, base.left_out)
 
 
 ## The first error that `candidate` has and the room as it is does not, as a sentence; "" if it has none. The
@@ -275,7 +350,7 @@ func _errors(d: RoomDelta, facts: ShellFacts) -> Dictionary:
 ## the result is more than a room may hold.
 func layout_of(d: RoomDelta) -> LayoutData:
 	var base := LiveRoom.layout(d.base, d.variant)
-	var applied := d.apply(base.body)
+	var applied := d.apply(base.body, base.left_out)
 	if not applied["ok"]:
 		return null
 	var out := LayoutData.new()

@@ -33,6 +33,9 @@ var moved: Dictionary = {}
 var added: Array[Dictionary] = []
 ## Ids of layout pieces this room does without.
 var removed: Array[String] = []
+## Ids of pieces the layout left out (a made room that did without one) that this room has back, where the layout
+## would have stood them (or at their `moved` spot).
+var restored: Array[String] = []
 
 
 ## The key of the room venue `venue_id` in arrangement `variant`.
@@ -61,7 +64,7 @@ static func empty(venue_id: StringName, arrangement: int) -> RoomDelta:
 
 
 func is_empty() -> bool:
-	return moved.is_empty() and added.is_empty() and removed.is_empty()
+	return moved.is_empty() and added.is_empty() and removed.is_empty() and restored.is_empty()
 
 
 ## Piece `id` stands at (x, z) turned `yaw`. Rounded to a tenth of a millimetre: the text stays short
@@ -138,6 +141,30 @@ func take_out(id: StringName) -> bool:
 	return true
 
 
+## Whether the room has back the piece `id` its layout left out.
+func is_restored(id: StringName) -> bool:
+	return String(id) in restored
+
+
+## The piece `id`, which the layout left out, is in the room. True if it was not already.
+func restore(id: StringName) -> bool:
+	if is_restored(id):
+		return false
+	restored.append(String(id))
+	rev += 1
+	return true
+
+
+## The restored piece `id` is left out again, wherever it was moved to forgotten. True if it was in.
+func unrestore(id: StringName) -> bool:
+	if not restored.has(String(id)):
+		return false
+	restored.erase(String(id))
+	moved.erase(String(id))
+	rev += 1
+	return true
+
+
 ## Layout piece `id` is in the room again. True if it was out.
 func put_back(id: StringName) -> bool:
 	if removed.has(String(id)):
@@ -164,6 +191,7 @@ func clear() -> bool:
 	moved.clear()
 	added.clear()
 	removed.clear()
+	restored.clear()
 	rev += 1
 	return true
 
@@ -172,6 +200,9 @@ func clear() -> bool:
 func to_dict(with_format := true) -> Dictionary:
 	var out := {"room": room, "base": String(base), "variant": variant, "rev": rev,
 			"moved": moved.duplicate(true), "added": added.duplicate(true), "removed": removed.duplicate()}
+	# Only a room that has one says so: the file of a room without any stays as the first version wrote it.
+	if not restored.is_empty():
+		out["restored"] = restored.duplicate()
 	if with_format:
 		out["format"] = FORMAT
 		out["version"] = VERSION
@@ -199,7 +230,7 @@ static func problem(raw: Variant) -> String:
 		return "made by a newer game (version %s)" % str(raw["version"])
 	if raw.get("moved") is Dictionary and (raw["moved"] as Dictionary).size() > MAX_ENTRIES:
 		return "too many moved pieces"
-	for key in ["added", "removed"]:
+	for key in ["added", "removed", "restored"]:
 		if raw.get(key) is Array and (raw[key] as Array).size() > LayoutData.MAX_PIECES:
 			return "more than %d %s pieces" % [LayoutData.MAX_PIECES, key]
 	return ""
@@ -231,6 +262,10 @@ static func from_dict(raw: Variant) -> RoomDelta:
 		for id in raw["removed"]:
 			if _is_id(id) and String(id) not in d.removed:
 				d.removed.append(String(id))
+	if raw.get("restored") is Array:
+		for id in raw["restored"]:
+			if _is_id(id) and String(id) not in d.restored:
+				d.restored.append(String(id))
 	return d
 
 
@@ -240,9 +275,15 @@ static func from_dict(raw: Variant) -> RoomDelta:
 ## piece definition is installed for it). `flagged` lists `{id, code, why}` for every entry the room cannot
 ## make sense of: `unknown_piece`, `duplicate_piece`, `unavailable_piece`, `over_limit`. A result with more
 ## than `LayoutData.MAX_PIECES` pieces is refused: `ok` is false and the pieces are the defaults.
-func apply(body: Dictionary) -> Dictionary:
+func apply(body: Dictionary, left_out := {}) -> Dictionary:
 	var pieces: Array = (body.get("pieces", []) as Array).duplicate(true)
 	var flagged: Array[Dictionary] = []
+	var wiring: Array = (body.get("wiring", []) as Array).duplicate(true)
+	var groups: Array = (body.get("groups", []) as Array).duplicate(true)
+	if not restored.is_empty():
+		var back := {"pieces": pieces, "wiring": wiring, "groups": groups}
+		for id in LayoutMerge.restore(back, left_out, restored):
+			flagged.append(_flag(id, &"unknown_piece", "this room's layout has no piece '%s' to have put back" % id))
 	var at_index := {}
 	for i in pieces.size():
 		at_index[str(pieces[i].get("id"))] = i
@@ -273,8 +314,7 @@ func apply(body: Dictionary) -> Dictionary:
 			flagged.append(_flag(id, &"unavailable_piece", "'%s' is not installed here" % a["piece"]))
 		at_index[id] = pieces.size()
 		pieces.append(p)
-	var out := {"ok": true, "pieces": pieces, "wiring": (body.get("wiring", []) as Array).duplicate(true),
-			"groups": (body.get("groups", []) as Array).duplicate(true), "flagged": flagged}
+	var out := {"ok": true, "pieces": pieces, "wiring": wiring, "groups": groups, "flagged": flagged}
 	LayoutMerge.settle(out)
 	if (out["pieces"] as Array).size() > LayoutData.MAX_PIECES:
 		flagged.append(_flag("", &"over_limit", "%d pieces; a room holds at most %d" % [(out["pieces"] as Array).size(), LayoutData.MAX_PIECES]))

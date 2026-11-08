@@ -30,6 +30,8 @@ var order := -1
 var extends_ids: Array[String] = []
 ## shell, mood, zones, pieces, groups, wiring: the parts that were present, as written.
 var body: Dictionary = {}
+## What `enabled: false` took out of the resolved `body` (`LayoutMerge.left_out`), so a room can have it back.
+var left_out: Dictionary = {}
 ## The variants as written: each `{title, zones?, pieces?, groups?, wiring?}`.
 var variants: Array[Dictionary] = []
 ## STATUS_OK or STATUS_INVALID (a body is only kept when the layout is ok).

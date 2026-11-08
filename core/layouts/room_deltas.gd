@@ -156,7 +156,8 @@ func reset(id: StringName) -> bool:
 ## The delta over the room's default layout again (after a change, a load or an adopted row).
 func _resolve() -> void:
 	var id := delta.base if delta.base != &"" else Venue.IDS[0]
-	applied = delta.apply(LiveRoom.layout(id, delta.variant).body)
+	var base := LiveRoom.layout(id, delta.variant)
+	applied = delta.apply(base.body, base.left_out)
 	if not (applied["flagged"] as Array).is_empty():
 		last_problem = "; ".join((applied["flagged"] as Array).map(func(f: Dictionary) -> String: return f["why"]))
 

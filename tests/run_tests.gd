@@ -798,6 +798,11 @@ func _ready() -> void:
 	await _t("_test_a_made_room_persists_and_a_guest_sees_it")
 	await _t("_test_a_made_room_can_be_renamed")
 	await _t("_test_a_made_room_can_be_deleted")
+	await _t("_test_a_taken_out_piece_goes_back_by_default_or_where_asked")
+	await _t("_test_a_left_out_piece_of_a_made_room_comes_back")
+	await _t("_test_a_guest_sees_the_piece_put_back")
+	await _t("_test_the_panel_lists_what_can_be_put_back")
+	await _t("_test_the_delta_carries_what_is_restored")
 	await _t("_test_the_control_room_fragment_stands_the_furniture_where_the_old_code_did")
 	await _t("_test_the_groups_are_the_old_neighbourhoods")
 	await _t("_test_the_floor_import_forgets_old_defaults_once")
@@ -46161,6 +46166,34 @@ func _test_a_made_room_can_be_renamed() -> void:
 ## Section 8: the F4 panel's two-step delete removes the files and leads host and guest out.
 func _test_a_made_room_can_be_deleted() -> void:
 	RoomManageTests.new(self).delete_asks_twice_and_leads_everyone_out()
+
+
+const RoomRestoreTests := preload("res://tests/room_restore_tests.gd")
+
+
+## Section 8: a piece a delta took out goes back at the layout's spot or a stated one.
+func _test_a_taken_out_piece_goes_back_by_default_or_where_asked() -> void:
+	RoomRestoreTests.new(self).a_taken_out_piece_goes_back_by_default_or_where_asked()
+
+
+## Section 8: a piece a made room left out is listed and comes back, and survives a restart.
+func _test_a_left_out_piece_of_a_made_room_comes_back() -> void:
+	await RoomRestoreTests.new(self).a_left_out_piece_of_a_made_room_comes_back()
+
+
+## Section 8: a guest sees the host put a piece back, and cannot do it.
+func _test_a_guest_sees_the_piece_put_back() -> void:
+	RoomRestoreTests.new(self).a_guest_sees_the_piece_put_back()
+
+
+## Section 8: the F3 panel lists the missing pieces and each button puts one back.
+func _test_the_panel_lists_what_can_be_put_back() -> void:
+	RoomRestoreTests.new(self).the_panel_lists_what_can_be_put_back()
+
+
+## Section 8: the delta's `restored` list in the file, the row and `apply`.
+func _test_the_delta_carries_what_is_restored() -> void:
+	RoomRestoreTests.new(self).the_delta_carries_what_is_restored()
 
 
 const VenueFilesTests := preload("res://tests/venue_files_tests.gd")

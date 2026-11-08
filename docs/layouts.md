@@ -553,7 +553,7 @@ it must not clash with `Stations` keys). In it each movable piece shows a handle
 operations, all one verb as `ask_rack` is for the rack (SM 1.6):
 
 ```
-ask_layout(op, args):  move(id, x, z)  rotate(id, yaw)  add(piece, x, z, yaw)  remove(id)  reset(id | "all")
+ask_layout(op, args):  move(id, x, z)  rotate(id, yaw)  add(piece[, x, z, yaw])  remove(id)  reset(id | "all")
 ```
 
 Authority applies the op to the room delta, runs `validate_piece`, and either commits (a new `rev`,
@@ -608,7 +608,7 @@ entry (`footprint` copied from the definition at add time), so the guest's valid
 * **Validated, never half done.** The op is applied to a `copy()` of the room's `RoomDelta`; the copy is laid over the room's layout (`LayoutEdit.layout_of`, the modular annex appended outside the roulette room) and `LayoutValidator` is run with the room's `ShellFacts`. An error the room did not already have (compared by `code|piece|other`) refuses the op with that issue's own message; an `add` that does not fit is first tried at `LayoutValidator.nearest_clear`. Only then `RoomDeltas.commit(copy)` takes it (a no-op while following the host), `RoomFloor.follow` makes the studio match and the room is published. `reset all` is never refused. Arguments are checked first (types, finite, within 60 m).
 * **Which pieces.** `PieceCatalogue`: the cassette rack, the sampler and the hoop may be removed and put back (`add` of that kind, or `reset` of it); the hoop may also be added as copies up to 4 in all (`hoop_2`, `hoop_3`, ...). Not removable: the prop shelf (it carries the toys), the Tour case, and every piece a zone or the shell supplies. The control room's furniture moves but is not removed.
 * **Building.** `RoomSync` (`room_sync.gd`) is the studio's side of the delta: a copy is a trolley (`PieceHost.equip`, the `PieceDef` of its kind, a floor-plan piece) and a `Hoop` node `Copy_<id>` in the venue, built by `Hoop.new` as the venue does; a removed trolley is hidden (so the floor plan ignores it) and its node freed (`PieceHost.unstand`), put back it is `stand`ed again. `RoomFloor.follow` calls `RoomSync.sync`, so a reload, a venue change and a guest applying the host's row all build the same room. A pushed copy writes its spot into its own `added` entry. The old `Studio._wheel_in_live_pieces` moved to `RoomSync.wheel_in`.
-* **The panel.** `LayoutEditor` (`layout_editor.gd`, a CanvasLayer made in `bootstrap.gd` beside the StageManager): F3 opens it for the host (a guest is told the host arranges the room). Piece buttons, nudge 0.1 m and turn 15 degrees, REMOVE, RESET (the piece), RESET ROOM, and a `+` button per catalogue kind, which puts the piece 1.5 m ahead of the walker. One line shows the validator's words or "Done". Every button is one `ask_layout`.
+* **The panel.** `LayoutEditor` (`layout_editor.gd`, a CanvasLayer made in `bootstrap.gd` beside the StageManager): F3 opens it for the host (a guest is told the host arranges the room). Piece buttons, nudge 0.1 m and turn 15 degrees, REMOVE, RESET (the piece), RESET ROOM, and a `+` button per kind that can be added (a copy goes 1.5 m ahead of the walker) and a put back row for the pieces the room lacks (see section 8). One line shows the validator's words or "Done". Every button is one `ask_layout`.
 * Tests: `tests/layout_edit_tests.gd`, six wrappers (ops done or refused, guest told host only, add builds / remove un-stands / reset, reload in a fresh studio, a guest through the row, the panel).
 
 **Built (step 10)**: sharing, the unavailable plate, and a wider catalogue.
@@ -687,8 +687,25 @@ spot" button using `fix`. Errors block saving; warnings (`unavailable_mod`, `gro
   (`RoomDeltas.forget_room`, so a new room that gets the same slug starts empty), and `MadeRooms.remove` deletes the
   layout file and the room's `.delta.json` files (`RoomDeltaFile.remove_room`). Host only. Tests:
   `_test_a_made_room_can_be_renamed`, `_test_a_made_room_can_be_deleted` (`tests/room_manage_tests.gd`).
-- **Left over.** A made room is built from the standard zone positions (a zone is on or off, not moved); an unticked piece is out of the layout, so
-  the F3 panel cannot add it back (add is for the catalogue pieces the room's layout has).
+- **Putting back what a room lacks.** A piece a made room left out is `enabled: false` in its file, which
+  `LayoutMerge.settle` strips; `LayoutMerge.left_out` now keeps what it strips (the pieces, the wires to them, their
+  places in the groups) as `LayoutData.left_out` before it does. A delta's new `restored` list (file, row, `to_dict`,
+  `from_dict`; absent when empty, so an old file reads and writes as before; limit 64) names the left-out pieces the
+  room has back, and `RoomDelta.apply(body, left_out)` and `LiveRoom.with_restored` stand them in the layout again.
+  `VenueStations.default_spot` reads the studio's `restored` (its cache key has it), so the spot a restored piece
+  stands at is the layout's own, the zone's for a zoned one, and `PieceHost.stand`, `RoomSync` and `RoomFloor.follow`
+  need no other change. `ask_layout("add", [piece])` puts a piece the room lacks (taken out by the delta or left out by
+  its layout) where the layout stands it; `["add", piece, x, z, yaw]` where the host says (a restored piece's spot is
+  a `moved` entry). Both go through the validator, and a spot that is not clear goes to the nearest one that is
+  (`_nudged`, now also for the layout's own spot); a zoned piece needs the zone (`This room has no place for the ...`).
+  A copy (the second hoop) with no spot given stands at the hoop's layout spot, moved clear. `remove` of a restored
+  piece un-restores it; `reset(id)` of one puts it at its spot again; `reset("all")` leaves them out. The F3 panel has a
+  "put back" row of the pieces the room lacks (`LayoutEdit.missing`) above the "add" row (`addable`: copies under their
+  limit). Tests: `_test_a_taken_out_piece_goes_back_by_default_or_where_asked`,
+  `_test_a_left_out_piece_of_a_made_room_comes_back` (with a restart), `_test_a_guest_sees_the_piece_put_back`,
+  `_test_the_panel_lists_what_can_be_put_back`, `_test_the_delta_carries_what_is_restored`
+  (`tests/room_restore_tests.gd`).
+- **Left over.** A made room is built from the standard zone positions (a zone is on or off, not moved).
 
 ## 9. Storage
 

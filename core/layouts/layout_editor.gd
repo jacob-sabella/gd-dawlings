@@ -4,7 +4,8 @@ extends CanvasLayer
 ## The room's edit mode (docs/layouts.md 7): a small plain panel the host opens and closes with F3, beside
 ## the StageManager (Tab). Mouse and keys, so it is not VR-only; in a headset the same verb is `ask_layout`.
 ## It lists the pieces the room stands, nudges and turns the one picked, takes it out or resets it, adds a
-## piece from `PieceCatalogue` a little ahead of the walker, resets the whole room, and shows in one
+## piece from `PieceCatalogue` a little ahead of the walker (and lists the pieces the room lacks, to put each
+## back where the layout stands it), resets the whole room, and shows in one
 ## line what the host's validator said to the last thing asked. It holds nothing: every button is one
 ## `studio.ask_layout(...)`, and the room is saved by `RoomDeltas` as ever. A guest sees only that the
 ## host arranges the room.
@@ -91,12 +92,24 @@ func rebuild() -> void:
 		list.add_child(_button(LayoutChecks.name_of(t.piece_id).to_upper(), func() -> void: _pick(t.piece_id), t.piece_id == _picked))
 	if _picked != &"":
 		_controls()
+	var edit: LayoutEdit = studio.layout_edit
+	var back := edit.missing()
+	if not back.is_empty():
+		var puts := HFlowContainer.new()
+		puts.name = "PutBack"
+		_rows.add_child(puts)
+		var put_label := Label.new()
+		put_label.text = "put back"
+		puts.add_child(put_label)
+		for kind in back:
+			puts.add_child(_button("+ " + PieceCatalogue.title(kind), func() -> void: _put_back(kind)))
 	var adds := HFlowContainer.new()
+	adds.name = "Adds"
 	_rows.add_child(adds)
 	var label := Label.new()
 	label.text = "add"
 	adds.add_child(label)
-	for kind in PieceCatalogue.kinds():
+	for kind in edit.addable().filter(func(k: StringName) -> bool: return k not in back):
 		adds.add_child(_button("+ " + PieceCatalogue.title(kind), func() -> void: _add(kind)))
 	adds.add_child(_button("RESET ROOM", func() -> void: _ask("reset", ["all"])))
 
@@ -138,6 +151,11 @@ func _turn(degrees: float) -> void:
 	var t := studio.room_rows._floor_piece(_picked)
 	if t != null:
 		_ask("rotate", [String(_picked), t.rotation.y + deg_to_rad(degrees)])
+
+
+## A piece the room lacks goes back where the room's layout stands it.
+func _put_back(kind: StringName) -> void:
+	_ask("add", [String(kind)])
 
 
 func _add(kind: StringName) -> void:
