@@ -17,6 +17,10 @@ start=$(date +%s)
 pids=()
 for i in $(seq 1 "$n"); do
   d="$work/shard$i"; mkdir -p "$d/data" "$d/cache" "$d/config" "$d/job"
+  # The keys helper (native/keys.c) is compiled into user://bin on first use, ~30 s; start each shard with
+  # this machine's build (its mtime says whether it is current).
+  ud="${XDG_DATA_HOME:-$HOME/.local/share}/godot/app_userdata/dawlings"
+  if [ -x "$ud/bin/keys" ]; then mkdir -p "$d/data/godot/app_userdata/dawlings/bin"; cp -p "$ud/bin/keys" "$d/data/godot/app_userdata/dawlings/bin/"; fi
   (
     export XDG_DATA_HOME="$d/data" XDG_CACHE_HOME="$d/cache" XDG_CONFIG_HOME="$d/config" CLAUDE_JOB_DIR="$d/job"
     export DAWLINGS_SHARD="$i/$n"
