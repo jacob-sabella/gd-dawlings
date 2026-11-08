@@ -53,6 +53,13 @@ RUNNER=(godot --path . --resolution "$SHOT_RES" --
 # does not hand on this shell's variables.
 if [ -n "${SHOT_DATA_HOME:-}" ]; then
   mkdir -p "$SHOT_DATA_HOME"
+  # The player's plugin scan, so a fresh home does not scan every plugin again: yabridge's chainloaders
+  # each pop a "could not find libyabridge" desktop notification when the scanner opens them.
+  scan_home="$SHOT_DATA_HOME/godot/app_userdata/dawlings"
+  real_scan="${XDG_DATA_HOME:-$HOME/.local/share}/godot/app_userdata/dawlings/plugin_scan.json"
+  if [ ! -e "$scan_home/plugin_scan.json" ] && [ -f "$real_scan" ]; then
+    mkdir -p "$scan_home" && cp "$real_scan" "$scan_home/"
+  fi
   RUNNER=(env "XDG_DATA_HOME=$SHOT_DATA_HOME" "${RUNNER[@]}")
 fi
 
