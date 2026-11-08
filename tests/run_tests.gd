@@ -36,6 +36,8 @@ func _ready() -> void:
 	RoomDeltas.disabled = true
 	MadeRooms.disabled = true
 	_set_up_shard()
+	# Where the tests that run helper programs keep their pipes and captures (a shard has a cache dir of its own).
+	DirAccess.make_dir_recursive_absolute(OS.get_cache_dir().path_join("dawlings/tmp/ports"))
 	# Rig Roulette is off in the game for now; its tests run with it on.
 	if _shard == 1:
 		check("Rig Roulette is off unless asked for", not Studio.roulette_enabled)
