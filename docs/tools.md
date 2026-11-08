@@ -30,6 +30,7 @@ workspace 10 on Hyprland; never run a bare `godot --path .`.** The shot, budget 
 | Tool | What |
 |---|---|
 | `tools/quality_check.sh [--all] [--docs] [--limit N]` | files over 800 lines (substantively changed ones, decision 8), unreferenced public symbols, public signals and non-trivial funcs without a `##` comment and files without a class header; exit 1 when anything is reported. Rules at the top of `tools/quality_check.py`. |
+| `tools/rack_describe.sh [--json] [--user] [--strict]` | the mod registry headless, one row per mod folder (the MODS screen's rows), `--strict` exits 1 on an unavailable mod; `docs/mods.md` 12 |
 | `tools/verify.sh` | the headless suite, 90 s timeout, flags `SCRIPT ERROR`. Its timeout is stale: the full suite takes 20 to 40 minutes now (`docs/testing.md`). |
 | `godot --headless --path . --import` | the import check, prints `SCRIPT ERROR` / `Parse Error` for a script that does not compile |
 

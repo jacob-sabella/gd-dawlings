@@ -832,6 +832,7 @@ func _ready() -> void:
 	await _t("_test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates")
 	await _t("_test_the_mods_list_has_a_row_for_every_mod_and_every_failure")
 	await _t("_test_the_mods_screen_opens_with_f5_for_host_and_guest")
+	await _t("_test_rack_describe_prints_the_registry_headless")
 	await _t("_test_a_rack_catalogue_is_the_engines_own_description")
 	await _t("_test_a_rack_patch_checks_every_verb")
 	await _t("_test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input")
@@ -45937,6 +45938,10 @@ func _test_the_mods_list_has_a_row_for_every_mod_and_every_failure() -> void:
 
 func _test_the_mods_screen_opens_with_f5_for_host_and_guest() -> void:
 	ModsScreenTests.new(self).the_screen_lists_the_rows_for_host_and_guest()
+
+
+func _test_rack_describe_prints_the_registry_headless() -> void:
+	ModsScreenTests.new(self).the_describe_script_prints_the_rows()
 
 
 const LayoutDataTests := preload("res://tests/layout_data_tests.gd")

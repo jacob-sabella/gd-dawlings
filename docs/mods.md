@@ -442,14 +442,14 @@ submodules; the registry never loads DSP.
   not understand.
 * **Snapshot.** `core/music/rack/modules.json` remains committed, as the **engine snapshot** (the
   engine's own description, so the room can be drawn with no compiler, on Windows and Quest). Nobody
-  hand-edits it; `tools/rack_describe.sh` regenerates it.
+  hand-edits it; it is regenerated from `native/rack --describe` (the snapshot is not what `tools/rack_describe.sh` prints, section 12).
 * **Reconciling.** At scan: (a) every `sound.kind == "engine"` entry must name a snapshot type, else
   `engine_type_missing`; (b) every snapshot type should have an entry, else warning `engine_type_unclaimed`
   (the module exists in the engine but has no look: it appears with the default skin, not hidden); (c)
   when `RackEngine.available()`, the live `--describe` is compared with the snapshot and wins on
   difference (`snapshot_stale`).
 * **Adding native DSP** then means: C++ in `native/rack/`, the upstream as a submodule or versioned
-  binary, a notice row (generated), `rack_describe.sh`, and one manifest entry. No `studio.gd`, no
+  binary, a notice row (generated), the snapshot, and one manifest entry. No `studio.gd`, no
   `RackSkin`, no test edit.
 * **The existing test** `_test_a_rack_catalogue_is_the_engines_own_description` (`run_tests.gd`;
   compares `modules.json` with `--describe`, skipped without an engine) is kept unchanged as the
@@ -470,7 +470,8 @@ Built and held by tests (the steps of the old migration plan are in `docs/refact
 | Plugin overlays | Partly. `res://mods/builtin/effects` gives the ten built-in effects their titles; `plugin_title`/`plugin_display` serve scanned plugins. Not done: `display.skin`, `first_params`, `param_key` are accepted and ignored; the unavailable plugin slot; Reaper's own list; `plugin_not_found`. |
 | The proof | Built. `mods_examples/dawlings.sample.pluck/` (folder only, excluded from exports) and `tests/sample_mod_proof_tests.gd`: appears, plays, saves, reloads, replicates to a guest. |
 | MODS screen | Built. `ModListing` (rows), `ModsScreen` (F5, read-only, host and guest), section 11. |
-| Not built | `tools/mods_notices.py` and the notice/pin tests (3.6); `tools/rack_describe.sh` (the snapshot `core/music/rack/modules.json` is regenerated from `native/rack --describe` by hand, and `_test_a_rack_catalogue_is_the_engines_own_description` compares them when an engine exists). |
+| `tools/rack_describe.sh` | Built (section 12): the registry's rows headless. |
+| Not built | `tools/mods_notices.py` and the notice/pin tests (3.6); the snapshot regeneration script (the snapshot `core/music/rack/modules.json` is regenerated from `native/rack --describe` by hand, and `_test_a_rack_catalogue_is_the_engines_own_description` compares them when an engine exists). |
 
 ### How to add a mod (steps)
 
@@ -540,3 +541,13 @@ thing (`tools/rack_describe.sh`, section 12). Listed, never a crash:
 
 Tests: `tests/mods_screen_tests.gd` (a temporary root with a good mod, bad JSON, a schema failure, no manifest, a missing binary, a
 mod that needs it, and a present binary). Screenshot: `--panel mods` in `tools/shot.sh` with `--mod` folders.
+
+## 12. `tools/rack_describe.sh`
+
+Prints the registry headless, for scripts and CI: the rows of section 11, one per mod folder, tab separated (`status id version licence
+source provides reason`, a `#` header and a `# N mods, M unavailable` footer), or `--json` (`{roots, mods: [row...]}`). It reads the
+shipped folder and `$DAWLINGS_MODS` (colon-separated), and the player's `user://mods/` only with `--user`, so a CI run never reads or
+creates anything in a player's data. `--strict` exits 1 when any mod is unavailable; exit 2 means godot printed no listing (a script
+error). It runs `tools/rack_describe.gd` (a `SceneTree` script) over `ModListing.rows`, so the screen and the script cannot disagree.
+Test: `_test_rack_describe_prints_the_registry_headless` (runs the script on a root with a bad manifest and a missing binary).
+It does not print the engine snapshot; `core/music/rack/modules.json` is still regenerated from `native/rack --describe`.

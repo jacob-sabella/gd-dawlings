@@ -141,3 +141,25 @@ func the_screen_lists_the_rows_for_host_and_guest() -> void:
 		screen.queue_free()
 	Session.role = role
 	_clear(TMP)
+
+
+## `tools/rack_describe.sh` prints the same rows headless: the bad manifest and the missing binary are
+## lines with their reasons, `--strict` exits 1 for them, and a clean registry exits 0.
+func the_describe_script_prints_the_rows() -> void:
+	var root := ProjectSettings.globalize_path(_make_root())
+	var script := ProjectSettings.globalize_path("res://tools/rack_describe.sh")
+	var out: Array = []
+	var code := OS.execute("env", ["DAWLINGS_MODS=" + root, "bash", script, "--strict"], out, false)
+	var lines: PackedStringArray = str(out[0]).split("\n", false) if not out.is_empty() else PackedStringArray()
+	var by_id := {}
+	for l in lines:
+		if not l.begins_with("#"):
+			by_id[l.get_slice("\t", 1)] = l.split("\t")
+	check("--strict exits 1 when a mod is unavailable (%d)" % code, code == 1)
+	check("it prints the shipped mods, ok", by_id.has("builtin.daisysp") and by_id["builtin.daisysp"][0] == "ok" and by_id["builtin.daisysp"][4] == "submodule vendor/daisysp @ 2c72eaf")
+	check("the bad manifest is a line with the parser's reason", by_id.has("b_bad_json") and by_id["b_bad_json"][0] == "unavailable" and by_id["b_bad_json"][6].begins_with("bad_json"))
+	check("the missing binary is a line with its reason", by_id.has("test.tool") and by_id["test.tool"][0] == "unavailable" and by_id["test.tool"][6].begins_with("binary_missing"))
+	check("it ends with a count", lines[lines.size() - 1] == "# 12 mods, 5 unavailable")
+	code = OS.execute("bash", [script, "--strict"], out, false)
+	check("a clean registry exits 0 (%d)" % code, code == 0)
+	_clear(TMP)
