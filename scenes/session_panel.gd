@@ -1086,6 +1086,10 @@ func _recorder() -> GuestAudio:
 ## A guest's microphone sits in the guest's section; the host's, where the DAW does not record
 ## its own inputs, above the project. Nowhere when neither.
 func _place_mic() -> void:
+	# The glass the rows hang from can be freed (leaving the room, or a headset's session ending) while the
+	# panel itself waits to be: GuestMidi's `changed` still reaches it, with nothing left to place.
+	if not is_instance_valid(_mic_box) or not is_instance_valid(_keys_box) or not is_instance_valid(_hits_box):
+		return
 	var guest := Session.role == Session.Role.GUEST
 	var host_records := not guest and DAW.backend != null \
 			and not DAW.can(DAWBackend.Capability.RECORDS_OWN_INPUTS)
