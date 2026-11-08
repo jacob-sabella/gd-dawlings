@@ -755,6 +755,9 @@ func _ready() -> void:
 	await _t("_test_the_manifests_equal_the_old_tables")
 	await _t("_test_a_rack_preset_renders_clean")
 	await _t("_test_the_rack_direct_feed_takes_the_whole_stream")
+	await _t("_test_the_rack_cushion_fills_before_the_first_push")
+	await _t("_test_the_rack_cushion_refills_after_an_underrun")
+	await _t("_test_the_rack_cushion_drops_nothing_under_a_100_ms_stall")
 	await _t("_test_a_preset_with_a_bad_file_is_empty_and_never_a_crash")
 	await _t("_test_builtin_types_are_prefixed_and_the_engine_keeps_its_names")
 	await _t("_test_a_patch_file_round_trips")
@@ -45807,6 +45810,20 @@ func _test_a_rack_preset_renders_clean() -> void:
 
 func _test_the_rack_direct_feed_takes_the_whole_stream() -> void:
 	RackStreamTests.new(self).the_direct_feed_takes_the_whole_stream()
+
+
+func _test_the_rack_cushion_fills_before_the_first_push() -> void:
+	RackStreamTests.new(self).the_cushion_fills_before_the_first_push()
+
+
+func _test_the_rack_cushion_refills_after_an_underrun() -> void:
+	RackStreamTests.new(self).an_underrun_recovers()
+
+
+func _test_the_rack_cushion_drops_nothing_under_a_100_ms_stall() -> void:
+	RackStreamTests.new(self).nothing_is_dropped_under_a_stall()
+	RackStreamTests.new(self).hurrying_is_smooth()
+	RackStreamTests.new(self).the_cushion_deepens_after_a_stall_and_gives_it_back()
 
 
 func _test_a_preset_with_a_bad_file_is_empty_and_never_a_crash() -> void:

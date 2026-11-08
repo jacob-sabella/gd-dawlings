@@ -45,11 +45,13 @@ var _held := {}
 ## bus, fed from the engine's stream a frame at a time.
 var _player: AudioStreamPlayer
 var _playback: AudioStreamGeneratorPlayback
-## What the reader thread has taken from the engine and the main thread has not yet pushed.
-var _queue := PackedVector2Array()
-var _queue_lock := Mutex.new()
+## What the reader thread has taken from the engine and the main thread has not yet pushed, and the rule
+## for when it is (RackCushion: nothing plays until 60 ms are in hand).
+var cushion := RackCushion.new()
 var _reader: Thread
 var _reading := false
+## The generator's room when empty (a little over buffer_length, rounded up by Godot).
+var _capacity := 0
 
 
 func _ready() -> void:
@@ -259,12 +261,7 @@ func _read_loop() -> void:
 		if got.is_empty():
 			OS.delay_msec(3)
 			continue
-		_queue_lock.lock()
-		_queue.append_array(got)
-		# A listener that stopped taking it must not make the queue grow without end: keep the last half second.
-		if _queue.size() > RackEngine.RATE / 2:
-			_queue = _queue.slice(_queue.size() - RackEngine.RATE / 2)
-		_queue_lock.unlock()
+		cushion.put(got)
 
 
 func _stop_reader() -> void:
@@ -272,20 +269,28 @@ func _stop_reader() -> void:
 	if _reader != null:
 		_reader.wait_to_finish()
 		_reader = null
-	_queue = PackedVector2Array()
+	cushion.clear()
 
 
 ## The frames the reader has taken so far, at most `most` of them, oldest first.
 func take_direct(most: int) -> PackedVector2Array:
-	_queue_lock.lock()
-	var n := mini(most, _queue.size())
-	var out := _queue.slice(0, n)
-	_queue = _queue.slice(n)
-	_queue_lock.unlock()
-	return out
+	return cushion.take(most)
 
 
-## The engine's sound to the speakers, the frames the generator has room for.
+## How the direct feed is doing: frames in the generator, the times it ran dry (its own count of skips,
+## and the cushion's count of refills), frames played fast to shed a surplus, frames lost to the queue's
+## limit. For the probe (`tools/rack_pump_probe.gd`) and the tests.
+func direct_stats() -> Dictionary:
+	var fill := 0
+	var skips := 0
+	if _playback != null:
+		fill = _capacity - _playback.get_frames_available()
+		skips = _playback.get_skips()
+	return {"fill": fill, "skips": skips, "underruns": cushion.underruns, "hurried": cushion.hurried,
+			"dropped": cushion.dropped, "queued": cushion.queued()}
+
+
+## The engine's sound to the speakers: what the cushion gives the generator, the frames it has room for.
 func _pump_direct() -> void:
 	_start_reader()
 	if _player == null:
@@ -299,9 +304,11 @@ func _pump_direct() -> void:
 		add_child(_player)
 		_player.play()
 		_playback = _player.get_stream_playback() as AudioStreamGeneratorPlayback
+		_capacity = _playback.get_frames_available() if _playback != null else 0
 	if _playback == null:
 		return
-	var frames := take_direct(_playback.get_frames_available())
+	var space := _playback.get_frames_available()
+	var frames := cushion.pull(_capacity - space, space)
 	if not frames.is_empty():
 		_playback.push_buffer(frames)
 

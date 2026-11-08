@@ -12,7 +12,7 @@ Design history and the saved-patch rules are in `docs/mods.md` 6; the older desc
 | Mods | `mods/builtin/{core,daisysp,mutable,presets}/mod.json`, `core/mods/` | the 29 modules, their skins and 17 presets as manifests; the registry |
 | Description | `RackCatalogue`, `RackSkin`, `RackModuleDef`, `RackCurves`, `core/music/rack/modules.json` | what modules exist, their jacks and knobs (from the engine snapshot), how they look, composite resolution |
 | Patch (data) | `RackPatch`, `RackPatchFile`, `RackAutosave`, `RackGaps`, `RackExpansion`, `RackLayout`, `RackMood` | the patch as a dictionary `{modules, cables}` and every edit as one `answer(op, args)`; v2 file format; `user://patches/_current.patch.json`; what this machine cannot show; composites expanded to engine modules; where modules sit in the case (`COLS` x `ROWS`); the glow per venue |
-| Sound (host only) | `RackVoice`, `RackEngine`, `native/rack/` | the engine as a process (`rack` binary built from pinned `vendor/` submodules by `tools/rack_build.sh`), told the patch as text lines, heard back as stereo float32; played through a track of the song |
+| Sound (host only) | `RackVoice`, `RackCushion`, `RackEngine`, `native/rack/` | the engine as a process (`rack` binary built from pinned `vendor/` submodules by `tools/rack_build.sh`), told the patch as text lines, heard back as stereo float32; played through a track of the song |
 | The wall | `hardware/rack/rack_wall.gd` (459 lines) + `RackWallModules`, `RackWallDrag`, `RackWallKeys`, `RackWallShow`, `RackWallDressing`; `RackUnit`, `RackPad`, `RackJack`, `RackHandle`, `RackBars`, `RackStubs`, `ScopeScreen`, `ModularJack`, `ModularTouch` | the surface: the case, a plate per module with knobs and jacks, a palette under the modules, cables, touch keys, the unavailable-plate stubs |
 | The room | `ModularAnnex` + `AnnexSite` (`core/venues/`), `Modular` + `ModularWorld` + `WorldSocket` (`core/music/modular/`), `RackHost` (`core/room/`) | the room built onto the venue, the world (rain, the weather, the song clock) into the rack's sockets, the studio's rack section |
 
@@ -31,6 +31,36 @@ Design history and the saved-patch rules are in `docs/mods.md` 6; the older desc
   host uses sees an unavailable plate (`RackGaps`) naming it.
 - `RackWall.show_patch(patch)` builds, drops or moves only what changed.
 
+## The direct feed and its cushion
+
+When no track carries the rack (`RackVoice._direct()`: a launch without the built-in engine, or no track chosen), the
+rack plays through a player of its own: an `AudioStreamGenerator` on the MONITOR bus. A reader thread takes the
+engine's pipe every 3 ms into `RackCushion`; once a frame `_pump_direct` asks the cushion what the generator should be
+given. The rules, `core/music/rack/rack_cushion.gd`:
+
+- **Nothing is pushed until 60 ms (`TARGET`, 2880 frames) are in hand.** Godot's mixer takes a generator's sound 512
+  frames (10.7 ms) at a time; the first version pushed only what had arrived since the last frame and the generator
+  held 8 ms on average, so any frame that ran long ran it dry and the gap clicked. Measured with
+  `tools/rack_pump_probe.tscn` (real PulseAudio driver into a null sink, 60 fps): pluck_demo 60 s, 12 empty-generator
+  events before, 0 after; acid_line with a 40 ms main-thread stall each second (30 s), 8 underruns, 5 holes of up to
+  37 ms in the recording and a 0.31 sample jump before, 0 of each after. A smooth acid_line or big_rig for 60 s was
+  already nearly clean (0 to 3 events): the fault shows when a frame runs long, which the whole studio does.
+- **An underrun refills, and the cushion learns.** When the generator is found empty it is counted (`underruns`) and
+  nothing is pushed until the cushion is in hand again. The cushion is a jitter buffer: after the first 3 s (the
+  window opening stalls for 300 ms) an underrun deepens it to a little over the stall that caused it (at most 200 ms,
+  `DEEPEST`), and 5 s of calm gives 10 ms back, down to 60 ms. A 100 ms stall every second therefore costs a few
+  underruns while it learns, then none; a stall longer than the cushion is still heard as a gap, once.
+- **A surplus is played fast, not dropped.** The engine's clock and the sound card's differ; past the target plus
+  `SLACK` (20 ms) the next push is resampled up to 3 % faster (linear interpolation, no step) until the cushion is back.
+  Nothing is cut except by the safety limit (a listener that stopped taking sound: the last 0.5 s is kept, `dropped`;
+  0 in every run).
+- Latency: 60 ms in the generator by default (it was 8 ms on average), so about 52 ms more, on top of the engine's own
+  5 ms chunk and the sound card's buffer; up to 200 ms after a bad stall, back in a minute or so. A rack carried by a
+  track (the built-in engine with a track chosen) does not use this path. Lower `RackCushion.TARGET` to trade safety
+  for latency.
+- `RackVoice.direct_stats()` reports fill, skips, underruns, hurried and dropped frames. `tools/rack_pump_probe.tscn`
+  plays a preset to the real driver for a while and prints them (usage in its header, `docs/tools.md`).
+
 ## How to extend it
 
 - **A new module from existing ones (composite)**, **a skin**, **a preset**: a mod folder, `docs/mods.md` 9 "How to
@@ -46,7 +76,7 @@ Design history and the saved-patch rules are in `docs/mods.md` 6; the older desc
 
 ## Tests
 
-`tests/rack_mod_tests.gd`, `rack_composite_tests.gd`, `rack_gaps_tests.gd`, `rack_patch_file_tests.gd`,
+`tests/rack_stream_tests.gd` (the render stays clean, the reader takes the whole stream, the cushion), `tests/rack_mod_tests.gd`, `rack_composite_tests.gd`, `rack_gaps_tests.gd`, `rack_patch_file_tests.gd`,
 `sample_mod_proof_tests.gd`, and the `_test_*rack*` groups in `tests/run_tests.gd`. Known failure on this branch:
 RackWall "no two faces share a plane" (42 checks, `docs/refactor_loop.md`). `tools/rack_probe.sh` renders one Plaits
 note from the submodule; `tools/rack_build.sh` builds the engine; `tools/patchbay_stress.tscn` stresses the patch
