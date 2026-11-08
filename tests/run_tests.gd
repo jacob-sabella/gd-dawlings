@@ -803,6 +803,8 @@ func _ready() -> void:
 	await _t("_test_a_guest_sees_the_piece_put_back")
 	await _t("_test_the_panel_lists_what_can_be_put_back")
 	await _t("_test_the_delta_carries_what_is_restored")
+	await _t("_test_a_zone_moves_on_the_grid_and_is_checked")
+	await _t("_test_the_zone_nudge_is_kept_and_a_guest_builds_it")
 	await _t("_test_the_control_room_fragment_stands_the_furniture_where_the_old_code_did")
 	await _t("_test_the_groups_are_the_old_neighbourhoods")
 	await _t("_test_the_floor_import_forgets_old_defaults_once")
@@ -46233,3 +46235,18 @@ func _test_the_floor_import_forgets_old_defaults_once() -> void:
 	ControlRoomTests.new(self).classification()
 	ControlRoomTests.new(self).import_runs_once()
 
+
+
+const RoomZoneTests := preload("res://tests/room_zone_tests.gd")
+
+
+## Section 8: a zone of a made room moves on the grid, and a move that does not fit is refused.
+func _test_a_zone_moves_on_the_grid_and_is_checked() -> void:
+	RoomZoneTests.new(self).a_zone_moves_on_the_grid_and_is_checked()
+	RoomZoneTests.new(self).the_limits_still_hold()
+
+
+## Section 8: the panel's nudge is kept across a restart, and a guest builds the moved zone.
+func _test_the_zone_nudge_is_kept_and_a_guest_builds_it() -> void:
+	RoomZoneTests.new(self).the_panel_nudges_and_a_restart_keeps_it()
+	RoomZoneTests.new(self).a_guest_builds_the_moved_zone()

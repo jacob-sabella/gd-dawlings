@@ -27,6 +27,9 @@ var look := &"warm"
 var zone_ids: Array[StringName] = []
 ## Whether the modular room is built onto it.
 var annex := true
+## Where its layout puts each kept zone, at the base width (id -> AABB); a zone it does not say stands at the
+## standard place (`Venue.ZONES`).
+var zone_boxes: Dictionary = {}
 
 
 ## Configures the room from its layout (the resolved or the as-written one): the id, the title, `shell`
@@ -38,11 +41,27 @@ func from_layout(l: LayoutData) -> BoxVenue:
 	room_size = StringName(str(shell.get("size", "standard")))
 	look = StringName(str(shell.get("style", "warm")))
 	zone_ids.clear()
+	zone_boxes.clear()
 	for id in l.zones():
 		if StringName(id) in ZONE_IDS:
 			zone_ids.append(StringName(id))
+			var z: Dictionary = l.zones()[id]
+			if z.get("min") is Array and z.get("size") is Array and (z["min"] as Array).size() >= 3 and (z["size"] as Array).size() >= 3:
+				zone_boxes[StringName(id)] = AABB(Vector3(float(z["min"][0]), float(z["min"][1]), float(z["min"][2])),
+						Vector3(float(z["size"][0]), float(z["size"][1]), float(z["size"][2])))
 	annex = l.pieces().any(func(p: Dictionary) -> bool: return p.get("piece") == String(PieceFeet.ANNEX))
 	return self
+
+
+## Whether any zone of `zones` (a layout's `zones` table) is somewhere other than where this room built it.
+func stands_apart_from(zones: Dictionary) -> bool:
+	for id in zones:
+		var z: Dictionary = zones[id]
+		var box: Variant = zone_boxes.get(StringName(id))
+		if z.get("min") is Array and (z["min"] as Array).size() >= 3 and box != null \
+				and not (box as AABB).position.is_equal_approx(Vector3(float(z["min"][0]), float(z["min"][1]), float(z["min"][2]))):
+			return true
+	return false
 
 
 func venue_id() -> StringName:
@@ -66,14 +85,16 @@ func live_room_half() -> float:
 	return super()
 
 
-## The standard zones this room kept that fit inside it (a zone must clear the walls by a hand).
+## The zones this room kept that fit inside it (a zone must clear the walls by a hand), where its layout has them
+## (the standard places for a zone it does not place), stepped out with the desk as every venue's are.
 func zones() -> Dictionary:
 	var out := {}
 	var half := live_room_half() - 0.05
 	for id: StringName in zone_ids:
 		if not ZONES.has(id):
 			continue
-		var box: AABB = super()[id]
+		var base: AABB = zone_boxes.get(id, ZONES[id])
+		var box := AABB(base.position + Vector3(_grow() * signf(base.get_center().x), 0, 0), base.size)
 		if box.position.x >= -half and box.end.x <= half:
 			out[id] = box
 	return out

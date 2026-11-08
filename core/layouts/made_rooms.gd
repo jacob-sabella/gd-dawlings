@@ -142,17 +142,64 @@ static func rename(id: StringName, title: String) -> Dictionary:
 	elif name.is_empty() or name.length() > MadeRoom.MAX_TITLE:
 		out["errors"].append("A room needs a name of 1 to %d characters." % MadeRoom.MAX_TITLE)
 	else:
-		var dict: Dictionary = (LiveRoom.layouts().layouts[String(id)] as LayoutData).to_dict()
+		var dict := (LiveRoom.layouts().layouts[String(id)] as LayoutData).to_dict()
 		dict["title"] = name
-		var text := JSON.stringify(dict, "  ")
-		var d := dir()
-		if disabled or d == "":
-			out["errors"].append("There is nowhere to keep the room.")
-		elif RackPatchFile.write_text("%s%s%s" % [d, id, LayoutSet.SUFFIX], text) != OK:
-			out["errors"].append("The room's file could not be written.")
-		else:
-			LiveRoom.put(LayoutData.load_file("%s%s%s" % [d, id, LayoutSet.SUFFIX]))
-			out["ok"] = true
+		return _rewrite(id, dict, out)
+	return out
+
+
+## Where the made room `id` has each of its zones: zone id -> the Rect2 of its floor (x, z, width, depth) at the base
+## width. Empty for a room that is not made.
+static func zone_places(id: StringName) -> Dictionary:
+	var out := {}
+	if not has(id):
+		return out
+	var zones: Dictionary = (LiveRoom.layouts().layouts[String(id)] as LayoutData).zones()
+	for z in zones:
+		var box: Dictionary = zones[z]
+		if box.get("min") is Array and box.get("size") is Array:
+			out[StringName(z)] = Rect2(float(box["min"][0]), float(box["min"][2]), float(box["size"][0]), float(box["size"][2]))
+	return out
+
+
+## Puts the corner of the made room `id`'s zone `zone` at (`x`, `z`) on the zone grid (`MadeRoom.snap`). The room
+## as it would be is checked whole, as a made room is (it holds the room, the walls, no overlap, a walkway to every
+## zone and station), and nothing changes if it would not do. `{ok, errors}`, as `rename`.
+static func move_zone(id: StringName, zone: StringName, x: float, z: float) -> Dictionary:
+	var out := {"ok": false, "id": String(id), "errors": []}
+	if not has(id) or _adopted.has(id):
+		out["errors"].append("That is not one of your rooms.")
+		return out
+	var dict := (LiveRoom.layouts().layouts[String(id)] as LayoutData).to_dict()
+	var zones: Dictionary = dict.get("zones", {})
+	if not zones.has(String(zone)) or not is_finite(x) or not is_finite(z):
+		out["errors"].append("The room has no %s to move." % MadeRoom.ZONE_TITLES.get(zone, str(zone)).to_lower())
+		return out
+	var box: Dictionary = zones[String(zone)]
+	var size := StringName(str(dict.get("shell", {}).get("size", "standard")))
+	var at := AABB(Vector3(MadeRoom.snap(x), float(box["min"][1]), MadeRoom.snap(z)), Vector3(box["size"][0], box["size"][1], box["size"][2]))
+	if not MadeRoom.zone_fits(size, at):
+		out["errors"].append("The %s would stand outside the room." % MadeRoom.ZONE_TITLES.get(zone, str(zone)).to_lower())
+		return out
+	box["min"] = [at.position.x, at.position.y, at.position.z]
+	var wrong := MadeRoom.validate(dict)
+	if not wrong.is_empty():
+		out["errors"].append(wrong[0].get_slice(" [", 0))
+		return out
+	return _rewrite(id, dict, out)
+
+
+## Writes `dict` as the file of the made room `id` and takes it into the set; `out` says how it went.
+static func _rewrite(id: StringName, dict: Dictionary, out: Dictionary) -> Dictionary:
+	var d := dir()
+	var path := "%s%s%s" % [d, id, LayoutSet.SUFFIX]
+	if disabled or d == "":
+		out["errors"].append("There is nowhere to keep the room.")
+	elif RackPatchFile.write_text(path, JSON.stringify(dict, "  ")) != OK:
+		out["errors"].append("The room's file could not be written.")
+	else:
+		LiveRoom.put(LayoutData.load_file(path))
+		out["ok"] = true
 	return out
 
 

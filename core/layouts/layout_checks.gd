@@ -26,6 +26,24 @@ static func off_floor(p: Dictionary, floor: Array[Rect2]) -> LayoutIssue:
 	return null
 
 
+## `too_close` between zones: two zones' floors (each the activity's whole space, its walking room included) may touch
+## but not overlap. One issue for each pair, named `zone.<id>` and `zone.<other>`.
+static func zones_apart(facts: ShellFacts) -> Array[LayoutIssue]:
+	var out: Array[LayoutIssue] = []
+	var ids := facts.zones.keys()
+	ids.sort()
+	for i in ids.size():
+		for j in range(i + 1, ids.size()):
+			var a: AABB = facts.zones[ids[i]]
+			var b: AABB = facts.zones[ids[j]]
+			var ra := Rect2(a.position.x, a.position.z, a.size.x, a.size.z)
+			var rb := Rect2(b.position.x, b.position.z, b.size.x, b.size.z)
+			if ra.intersects(rb, false):
+				out.append(LayoutIssue.make(&"too_close", LayoutIssue.ERROR, StringName("zone.%s" % ids[i]), StringName("zone.%s" % ids[j]),
+						ra.intersection(rb).get_center(), "The %s space and the %s space overlap." % [ids[i], ids[j]]))
+	return out
+
+
 ## `hits_solid`: the footprint overlaps a shell solid, a zone's ground or the control room.
 static func hits_solid(p: Dictionary, facts: ShellFacts) -> LayoutIssue:
 	var quad: PackedVector2Array = p["quad"]

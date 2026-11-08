@@ -24,6 +24,7 @@ static func validate(layout: LayoutData, facts: ShellFacts, opts: Dictionary = {
 	if layout.status != LayoutData.STATUS_OK:
 		return out
 	out.append_array(_skipped(layout, facts))
+	out.append_array(LayoutChecks.zones_apart(facts))
 	var placed := _placed(layout, facts, out, opts)
 	var floor := walkable(layout, facts)
 	for p: Dictionary in placed:

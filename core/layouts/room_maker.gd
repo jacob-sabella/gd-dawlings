@@ -19,6 +19,8 @@ var _panel: PanelContainer
 var _rows: VBoxContainer
 var _status: Label
 var _name: LineEdit
+## The made room whose zones the list is showing, or "".
+var _zones_of: StringName = &""
 ## The made room whose DELETE has been pressed once and awaits the second press, or "".
 var _asked: StringName = &""
 ## The name being typed for each made room, by id (kept over a rebuild).
@@ -81,6 +83,9 @@ func set_size(size: StringName) -> void:
 	spec["size"] = String(size)
 	var fits := MadeRoom.zones_fitting(size)
 	spec["zones"] = (spec["zones"] as Array).filter(func(z: Variant) -> bool: return StringName(str(z)) in fits)
+	for z in (spec["zone_at"] as Dictionary).keys():
+		if StringName(str(z)) not in fits or not MadeRoom.zone_fits(size, MadeRoom.zone_box(spec, StringName(str(z)))):
+			(spec["zone_at"] as Dictionary).erase(z)
 	_drop_unneeded()
 	rebuild()
 
@@ -92,6 +97,7 @@ func set_zone(zone: StringName, on: bool) -> void:
 		zones.append(String(zone))
 	elif not on:
 		zones.erase(String(zone))
+		(spec["zone_at"] as Dictionary).erase(String(zone))
 	_drop_unneeded()
 	rebuild()
 
@@ -129,6 +135,10 @@ func rebuild() -> void:
 	var fits := MadeRoom.zones_fitting(size)
 	_row("zones", fits.map(func(z: StringName) -> Array:
 		return [String(MadeRoom.ZONE_TITLES[z]).to_upper(), String(z) in spec["zones"], func() -> void: set_zone(z, String(z) not in spec["zones"])]))
+	_zone_rows(spec["zones"].map(func(z: Variant) -> StringName: return StringName(str(z))), \
+			func(z: StringName) -> Vector2: return _spec_place(z),
+			func(z: StringName, dx: float, dz: float) -> void: move_spec_zone(z, dx, dz),
+			func(z: StringName) -> void: reset_spec_zone(z))
 	_row("pieces", PieceCatalogue.kinds().map(func(k: StringName) -> Array:
 		return [PieceCatalogue.title(k), String(k) in spec["pieces"], func() -> void: set_piece(k, String(k) not in spec["pieces"])]))
 	_row("room-scale", [["MODULAR ROOM", bool(spec["annex"]), func() -> void: spec["annex"] = not spec["annex"]; rebuild()]])
@@ -161,11 +171,19 @@ func _own_rooms() -> void:
 		edit.text_submitted.connect(func(_t: String) -> void: rename_room(id, str(_titles.get(id, ""))))
 		row.add_child(edit)
 		row.add_child(_plain("RENAME", func() -> void: rename_room(id, str(_titles.get(id, Venue.make_title(id))))))
+		row.add_child(_plain("ZONES", func() -> void: _zones_of = &"" if _zones_of == id else id; rebuild()))
 		if _asked == id:
 			row.add_child(_plain("REALLY DELETE?", func() -> void: delete_room(id)))
 			row.add_child(_plain("KEEP IT", func() -> void: ask_delete(id, false)))
 		else:
 			row.add_child(_plain("DELETE", func() -> void: ask_delete(id, true)))
+		if _zones_of == id:
+			var places := MadeRooms.zone_places(id)
+			var ids: Array = places.keys()
+			ids.sort_custom(func(a: StringName, b: StringName) -> bool: return Venue.ZONE_IDS.find(a) < Venue.ZONE_IDS.find(b))
+			_zone_rows(ids, func(z: StringName) -> Vector2: return (places[z] as Rect2).position,
+					func(z: StringName, dx: float, dz: float) -> void: move_room_zone(id, z, dx, dz),
+					func(z: StringName) -> void: reset_room_zone(id, z))
 
 
 func _plain(text: String, call: Callable) -> Button:
@@ -228,6 +246,80 @@ func _say(words: String) -> void:
 	if _status != null:
 		_status.text = words
 		_status.add_theme_color_override("font_color", Color(1.0, 0.6, 0.5))
+
+
+## Where zone `zone` stands in the spec: the x and z of its corner.
+func _spec_place(zone: StringName) -> Vector2:
+	var box := MadeRoom.zone_box(spec, zone)
+	return Vector2(box.position.x, box.position.z)
+
+
+## One row for each zone in `ids`: its name, where its corner is, and the buttons that move it a step each way
+## (`move(zone, dx, dz)`) or put it back (`reset(zone)`). `place` says where it stands.
+func _zone_rows(ids: Array, place: Callable, move: Callable, reset: Callable) -> void:
+	for zone: StringName in ids:
+		var at: Vector2 = place.call(zone)
+		var row := HFlowContainer.new()
+		row.name = "Zone_%s" % zone
+		_rows.add_child(row)
+		var l := Label.new()
+		l.text = "  %s  x %.1f z %.1f" % [MadeRoom.ZONE_TITLES[zone].to_lower(), at.x, at.y]
+		l.custom_minimum_size = Vector2(230, 0)
+		row.add_child(l)
+		var step := MadeRoom.ZONE_STEP
+		for b: Array in [["< left", -step, 0.0], ["right >", step, 0.0], ["^ back", 0.0, step], ["v front", 0.0, -step]]:
+			row.add_child(_plain(b[0], func() -> void: move.call(zone, b[1], b[2])))
+		row.add_child(_plain("RESET", func() -> void: reset.call(zone)))
+
+
+## Move zone `zone` of the room being asked for one step. The room as it would be is checked whole (the walls, no
+## overlap, a walkway to each zone); a move that would not do is not made, and the words say why.
+func move_spec_zone(zone: StringName, dx: float, dz: float) -> String:
+	var at := _spec_place(zone) + Vector2(dx, dz)
+	var tried := spec.duplicate(true)
+	tried["zone_at"][String(zone)] = [MadeRoom.snap(at.x), MadeRoom.snap(at.y)]
+	var built := MadeRoom.build(tried, "probe")
+	var said := "" if built["ok"] else str(built["errors"][0]).get_slice(" [", 0)
+	if said == "":
+		spec["zone_at"][String(zone)] = tried["zone_at"][String(zone)]
+		rebuild()
+	_say(said)
+	return said
+
+
+## Zone `zone` of the room being asked for goes back to its standard place.
+func reset_spec_zone(zone: StringName) -> void:
+	(spec["zone_at"] as Dictionary).erase(String(zone))
+	rebuild()
+
+
+## Move zone `zone` of the made room `id` one step. The room's file is rewritten and, where the band is in it, the
+## room built again; the guests are sent the new room. The words come back ("" when it was done).
+func move_room_zone(id: StringName, zone: StringName, dx: float, dz: float) -> String:
+	var said := HOST_ONLY
+	if studio != null and Session.is_authority():
+		var at: Rect2 = MadeRooms.zone_places(id).get(zone, Rect2())
+		var done := MadeRooms.move_zone(id, zone, at.position.x + dx, at.position.y + dz)
+		said = "" if done["ok"] else " ".join(done["errors"])
+		if done["ok"]:
+			_after_the_zones_moved(id)
+	_say(said)
+	return said
+
+
+## Put the made room `id`'s zone `zone` back at its standard place.
+func reset_room_zone(id: StringName, zone: StringName) -> String:
+	var home: AABB = Venue.ZONES[zone]
+	var at: Rect2 = MadeRooms.zone_places(id).get(zone, Rect2())
+	return move_room_zone(id, zone, home.position.x - at.position.x, home.position.z - at.position.y)
+
+
+func _after_the_zones_moved(id: StringName) -> void:
+	if studio.venue != null and studio.venue.venue_id() == id:
+		studio.venue_switch.set_venue(id, false, 0)
+		studio.player_host._publish_room_soon()
+	if _panel != null and _panel.visible:
+		rebuild()
 
 
 ## One labelled row of toggle buttons, each `[text, pressed, call]`.

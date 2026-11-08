@@ -185,12 +185,15 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			&"place_surface": pending_place[p["args"][0]] = p["args"][1]
 
 	# A room the host made is a layout this guest has not got: held in memory, before the venue is asked for.
+	var id_wanted := StringName(state.get("venue", &""))
 	MadeRooms.adopt(state.get("made_room"))
 	studio.room_deltas.adopt(state.get("layout"))
-	var id_wanted := StringName(state.get("venue", &""))
 	var variant_wanted := Venue.known_variant(id_wanted, int(state.get("variant", 0)))
+	# A made room whose zones the host moved is built again where it stands.
+	var zones_moved: bool = studio.venue is BoxVenue and studio.venue.venue_id() == id_wanted \
+			and (studio.venue as BoxVenue).stands_apart_from(MadeRooms.row_of(id_wanted).get("zones", {}))
 	if studio.venue != null and Venue.is_known(id_wanted) \
-			and (studio.venue.venue_id() != id_wanted or studio.venue.variant != variant_wanted):
+			and (studio.venue.venue_id() != id_wanted or studio.venue.variant != variant_wanted or zones_moved):
 		studio.venue_switch.set_venue(id_wanted, false, variant_wanted)
 	# A made room the host has deleted or left is not kept.
 	MadeRooms.drop_adopted(id_wanted)

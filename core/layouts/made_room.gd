@@ -25,6 +25,10 @@ const EXTENDS := ["common.control_room", "common.live_room"]
 ## has the zone for but was not asked for is switched off.
 const NEEDS := {&"wheel": &"bricks", &"sections": &"bricks", &"looper": &"drums", &"lyrics": &"vocals",
 		&"sampler": &"synth"}
+## The grid a zone's place is on, in metres (every standard place is on it), and how far one nudge in the panel
+## moves it.
+const ZONE_SNAP := 0.1
+const ZONE_STEP := 0.5
 ## The titles of the zones, for the panel.
 const ZONE_TITLES := {&"drums": "Drum riser", &"matrix": "Lattice", &"vocals": "Vocal booth", &"bricks": "Table",
 		&"synth": "Keyboard stand"}
@@ -38,6 +42,32 @@ static func half_of(size: StringName) -> float:
 		&"large":
 			return Venue.LIVE_ROOM_HALF + BoxVenue.LARGE_EXTRA
 	return Venue.LIVE_ROOM_HALF
+
+
+## `v` on the zone grid, as the number the file text gives back.
+static func snap(v: float) -> float:
+	return String.num(snappedf(v, ZONE_SNAP), 4).to_float()
+
+
+## The floor a zone's box may stand on in a room of `size`: the live room's, a hand clear of its walls.
+static func zone_floor(size: StringName) -> Rect2:
+	var half := half_of(size) - 0.05
+	return Rect2(-half, Studio.ROOM_BACK, half * 2.0, Venue.LIVE_ROOM_BACK - 0.05 - Studio.ROOM_BACK)
+
+
+## The box of zone `id` in `spec`: the standard one, with the place `spec["zone_at"]` gives it (the x and z of its
+## corner) where it says one.
+static func zone_box(spec: Dictionary, id: StringName) -> AABB:
+	var box: AABB = Venue.ZONES[id]
+	var at: Variant = (spec.get("zone_at", {}) as Dictionary).get(String(id))
+	if at is Array and (at as Array).size() >= 2:
+		box.position = Vector3(snap(float(at[0])), box.position.y, snap(float(at[1])))
+	return box
+
+
+## Whether `box` lies within the floor a zone may stand on in a room of `size`.
+static func zone_fits(size: StringName, box: AABB) -> bool:
+	return zone_floor(size).grow(1e-4).encloses(Rect2(box.position.x, box.position.z, box.size.x, box.size.z))
 
 
 ## The zones a room of `size` has room for, in the standard order.
@@ -59,7 +89,7 @@ static func default_spec(size: StringName = &"standard") -> Dictionary:
 		if not NEEDS.has(kind) or NEEDS[kind] in zones:
 			pieces.append(String(kind))
 	return {"title": "New room", "size": String(size), "style": "warm", "zones": zones.map(func(z: StringName) -> String: return String(z)),
-			"pieces": pieces, "annex": true}
+			"pieces": pieces, "annex": true, "zone_at": {}}
 
 
 ## What is wrong with `spec`, as sentences; empty when it is a room that can be made.
@@ -76,6 +106,10 @@ static func problems(spec: Dictionary) -> Array[String]:
 		out.append("There is no such look for a room.")
 	var kept: Array[StringName] = []
 	var fits := zones_fitting(size)
+	var placed: Variant = spec.get("zone_at", {})
+	if not placed is Dictionary:
+		out.append("The zones' places are not a list.")
+		placed = {}
 	for z in spec.get("zones", []):
 		var id := StringName(str(z))
 		if id not in Venue.ZONE_IDS:
@@ -86,6 +120,15 @@ static func problems(spec: Dictionary) -> Array[String]:
 			out.append("The %s is listed twice." % ZONE_TITLES[id])
 		else:
 			kept.append(id)
+	for z in placed:
+		var id := StringName(str(z))
+		var at: Variant = placed[z]
+		if id not in kept:
+			out.append("The %s has no place to move: the room does not have it." % ZONE_TITLES.get(id, str(id)))
+		elif not (at is Array and (at as Array).size() == 2 and (at as Array).all(func(v: Variant) -> bool: return (v is float or v is int) and is_finite(float(v)))):
+			out.append("The %s needs an x and a z." % ZONE_TITLES[id])
+		elif not zone_fits(size, zone_box(spec, id)):
+			out.append("The %s would stand outside the room." % ZONE_TITLES[id])
 	for p in spec.get("pieces", []):
 		var kind := StringName(str(p))
 		if PieceDef.room_scale(kind):
@@ -104,7 +147,7 @@ static func layout_dict(spec: Dictionary, id: String) -> Dictionary:
 	var kept: Array = spec.get("pieces", [])
 	var zones := {}
 	for z in spec.get("zones", []):
-		var box: AABB = Venue.ZONES[StringName(str(z))]
+		var box := zone_box(spec, StringName(str(z)))
 		zones[str(z)] = {"min": [box.position.x, box.position.y, box.position.z], "size": [box.size.x, box.size.y, box.size.z]}
 	var pieces: Array = []
 	# A single the room was not asked for is switched off, so the shared live room's own is out of it.

@@ -705,7 +705,24 @@ spot" button using `fix`. Errors block saving; warnings (`unavailable_mod`, `gro
   `_test_a_left_out_piece_of_a_made_room_comes_back` (with a restart), `_test_a_guest_sees_the_piece_put_back`,
   `_test_the_panel_lists_what_can_be_put_back`, `_test_the_delta_carries_what_is_restored`
   (`tests/room_restore_tests.gd`).
-- **Left over.** A made room is built from the standard zone positions (a zone is on or off, not moved).
+- **Moving zones.** A made room's zones can stand elsewhere than the standard places. The layout already held each
+  zone's `min`/`size`; `BoxVenue` now reads them (`zone_boxes`) instead of the standard `Venue.ZONES`, so `zones()`, the
+  stations that follow a zone (wheel and sections on the bricks, sampler on the synth, looper on the drums) and the
+  anchors all follow. A spec has `zone_at: {zone: [x, z]}` (the corner at the base width, on a `MadeRoom.ZONE_SNAP`
+  0.1 m grid, `snap`); `zone_fits` keeps a zone inside the room's width and between the control room and the back
+  wall, with the hand-width clear of the walls, and `MadeRoom.problems` refuses anything else. The validator gains
+  `LayoutChecks.zones_apart`: two zones may not overlap (the existing `too_close` code, pieces `zone.<a>`/`zone.<b>`),
+  and the existing `unreachable` check still needs a walkway to each zone from the middle. The 64-piece and 16 kB
+  limits are unchanged (a move changes numbers, not their count). `MadeRooms.move_zone(id, zone, x, z)` snaps, checks
+  the room whole and rewrites the file (nothing changes on a refusal); `zone_places(id)` reads them. F4: the new-room
+  form has an x/z row per zone with step buttons (`MadeRoom.ZONE_STEP` 0.5 m) and RESET, each step checked as a whole
+  room (the first reason is shown and the step not made); each own room has a ZONES toggle with the same rows
+  (`move_room_zone`, `reset_room_zone`), which rewrites the file, builds the room again where the band is in it and
+  sends it. A guest compares the venue's zone boxes with the `made_room` row (`BoxVenue.stands_apart_from`) and
+  builds the room again when the host moved one. Tests: `_test_a_zone_moves_on_the_grid_and_is_checked` (grid,
+  bounds, overlap, nothing changes on a refusal, the limits), `_test_the_zone_nudge_is_kept_and_a_guest_builds_it`
+  (panel, new-room form, restart, guest) (`tests/room_zone_tests.gd`).
+- **Left over.** Shipped venues keep their zones (their shells place them); a zone's size is fixed.
 
 ## 9. Storage
 
