@@ -94,17 +94,49 @@ static func scan(root: Node) -> Array:
 		for i in drawn:
 			faces.append_array(faces_of_mesh(bank.multimesh.mesh,
 					bank.global_transform * bank._transforms[i], [bank, i]))
-	faces.sort_custom(func(a, b): return a["d"] < b["d"])
-	var hits := []
+	# Sorted by plane distance. [d, index] pairs sort natively; a lambda per comparison was slow.
+	var keyed := []
+	keyed.resize(faces.size())
 	for i in faces.size():
+		keyed[i] = [faces[i]["d"], i]
+	keyed.sort()
+	var count := faces.size()
+	var ordered := []
+	ordered.resize(count)
+	# The pair loop below runs over tens of thousands of faces sharing a few planes, so what it tests
+	# first (plane distance, then normal) is read from packed arrays rather than dictionaries.
+	var ds := PackedFloat64Array()
+	var nxs := PackedFloat64Array()
+	var nys := PackedFloat64Array()
+	var nzs := PackedFloat64Array()
+	ds.resize(count)
+	nxs.resize(count)
+	nys.resize(count)
+	nzs.resize(count)
+	for i in count:
+		var f: Dictionary = faces[keyed[i][1]]
+		ordered[i] = f
+		ds[i] = f["d"]
+		var fn: Vector3 = f["n"]
+		nxs[i] = fn.x
+		nys[i] = fn.y
+		nzs[i] = fn.z
+	faces = ordered
+	var window := PLANE_TOLERANCE * 3.0 + 0.002
+	var hits := []
+	for i in count:
 		var a: Dictionary = faces[i]
-		for j in range(i + 1, faces.size()):
-			var b: Dictionary = faces[j]
-			if b["d"] - a["d"] > PLANE_TOLERANCE * 3.0 + 0.002:
+		var di := ds[i]
+		var ax := nxs[i]
+		var ay := nys[i]
+		var az := nzs[i]
+		for j in range(i + 1, count):
+			if ds[j] - di > window:
 				break
-			if typeof(a["who"]) == typeof(b["who"]) and a["who"] == b["who"]:
+			if ax * nxs[j] + ay * nys[j] + az * nzs[j] < 0.9999:
 				continue
-			if a["n"].dot(b["n"]) < 0.9999:
+			var b: Dictionary = faces[j]
+			if typeof(a["who"]) == typeof(b["who"]) and a["who"] == b["who"]:
 				continue
 			var gap: float = absf(a["n"].dot(b["c"][0]) - a["d"])
 			if gap > PLANE_TOLERANCE:
