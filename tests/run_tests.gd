@@ -796,6 +796,8 @@ func _ready() -> void:
 	await _t("_test_the_validator_names_each_seeded_violation")
 	await _t("_test_a_made_room_validates_and_loads")
 	await _t("_test_a_made_room_persists_and_a_guest_sees_it")
+	await _t("_test_a_made_room_can_be_renamed")
+	await _t("_test_a_made_room_can_be_deleted")
 	await _t("_test_the_control_room_fragment_stands_the_furniture_where_the_old_code_did")
 	await _t("_test_the_groups_are_the_old_neighbourhoods")
 	await _t("_test_the_floor_import_forgets_old_defaults_once")
@@ -46146,6 +46148,19 @@ func _test_a_made_room_validates_and_loads() -> void:
 ## The brief's proof: make a new room, restart with a fresh Studio and it persists, and a guest sees it.
 func _test_a_made_room_persists_and_a_guest_sees_it() -> void:
 	await RoomMakerTests.new(self).persists_and_a_guest_sees_it()
+
+
+const RoomManageTests := preload("res://tests/room_manage_tests.gd")
+
+
+## Section 8: a rename changes the title and nothing else (id, delta, guests, restart).
+func _test_a_made_room_can_be_renamed() -> void:
+	RoomManageTests.new(self).rename_keeps_the_id_and_the_delta()
+
+
+## Section 8: the F4 panel's two-step delete removes the files and leads host and guest out.
+func _test_a_made_room_can_be_deleted() -> void:
+	RoomManageTests.new(self).delete_asks_twice_and_leads_everyone_out()
 
 
 const VenueFilesTests := preload("res://tests/venue_files_tests.gd")

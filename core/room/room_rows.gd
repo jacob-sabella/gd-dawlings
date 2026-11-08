@@ -192,6 +192,8 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	if studio.venue != null and Venue.is_known(id_wanted) \
 			and (studio.venue.venue_id() != id_wanted or studio.venue.variant != variant_wanted):
 		studio.venue_switch.set_venue(id_wanted, false, variant_wanted)
+	# A made room the host has deleted or left is not kept.
+	MadeRooms.drop_adopted(id_wanted)
 
 	var wanted: Dictionary = state.get("tablets", {})
 	for id in studio.tablets.keys():

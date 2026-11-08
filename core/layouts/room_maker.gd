@@ -19,6 +19,10 @@ var _panel: PanelContainer
 var _rows: VBoxContainer
 var _status: Label
 var _name: LineEdit
+## The made room whose DELETE has been pressed once and awaits the second press, or "".
+var _asked: StringName = &""
+## The name being typed for each made room, by id (kept over a rebuild).
+var _titles: Dictionary = {}
 
 
 func _ready() -> void:
@@ -67,7 +71,7 @@ func toggle() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == TOGGLE_KEY \
-			and not (_name != null and _name.has_focus()):
+			and not (get_viewport().gui_get_focus_owner() is LineEdit):
 		toggle()
 		get_viewport().set_input_as_handled()
 
@@ -131,6 +135,99 @@ func rebuild() -> void:
 	var go := HBoxContainer.new()
 	_rows.add_child(go)
 	go.add_child(_button("MAKE THE ROOM", false, make))
+	_own_rooms()
+
+
+## The rooms the host has made, each with its name to change and a button to delete it. Deleting asks twice, in
+## the panel: the first press turns the button into the question, the second does it.
+func _own_rooms() -> void:
+	var own := MadeRooms.own_ids()
+	if own.is_empty():
+		return
+	_rows.add_child(HSeparator.new())
+	var head := Label.new()
+	head.text = "your rooms"
+	_rows.add_child(head)
+	for id in own:
+		var row := HBoxContainer.new()
+		row.name = "Room_%s" % id
+		row.add_theme_constant_override("separation", 4)
+		_rows.add_child(row)
+		var edit := LineEdit.new()
+		edit.text = str(_titles.get(id, Venue.make_title(id)))
+		edit.max_length = MadeRoom.MAX_TITLE
+		edit.custom_minimum_size = Vector2(190, 0)
+		edit.text_changed.connect(func(text: String) -> void: _titles[id] = text)
+		edit.text_submitted.connect(func(_t: String) -> void: rename_room(id, str(_titles.get(id, ""))))
+		row.add_child(edit)
+		row.add_child(_plain("RENAME", func() -> void: rename_room(id, str(_titles.get(id, Venue.make_title(id))))))
+		if _asked == id:
+			row.add_child(_plain("REALLY DELETE?", func() -> void: delete_room(id)))
+			row.add_child(_plain("KEEP IT", func() -> void: ask_delete(id, false)))
+		else:
+			row.add_child(_plain("DELETE", func() -> void: ask_delete(id, true)))
+
+
+func _plain(text: String, call: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.add_theme_font_size_override("font_size", 12)
+	PanelLook.button(b)
+	b.pressed.connect(call)
+	return b
+
+
+## The first press of DELETE (`on`) or the change of mind.
+func ask_delete(id: StringName, on: bool) -> void:
+	_asked = id if on else &""
+	rebuild()
+
+
+## Rename the made room `id`: only its title changes (its id, its delta and every guest's copy stay). The room is
+## told to the band again when it is the one they are in. The words come back (what was wrong, or "").
+func rename_room(id: StringName, title: String) -> String:
+	var said := HOST_ONLY
+	if studio != null and Session.is_authority():
+		var done := MadeRooms.rename(id, title)
+		said = "" if done["ok"] else " ".join(done["errors"])
+		if done["ok"]:
+			_titles.erase(id)
+			if studio.venue != null and studio.venue.venue_id() == id:
+				studio.player_host._publish_room_soon()
+			Session.notice.emit("Renamed the room %s." % title.strip_edges())
+	_say(said)
+	if said == "":
+		rebuild()
+	return said
+
+
+## Delete the made room `id` (the second press): the band, if it is in it, is taken to the first shipped room, then
+## the room's file and its delta files go. Guests follow the host out and let go of their copy.
+func delete_room(id: StringName) -> String:
+	var said := HOST_ONLY
+	if studio != null and Session.is_authority():
+		said = "That is not one of your rooms."
+		if id in MadeRooms.own_ids():
+			var name := Venue.make_title(id)
+			if studio.venue != null and studio.venue.venue_id() == id:
+				studio.venue_switch.choose_venue(Venue.IDS[0])
+			studio.room_deltas.forget_room(id)
+			MadeRooms.remove(id)
+			studio.player_host._publish_room_soon()
+			_titles.erase(id)
+			said = ""
+			Session.notice.emit("Deleted the room %s." % name)
+	_asked = &""
+	_say(said)
+	if _panel != null and _panel.visible:
+		rebuild()
+	return said
+
+
+func _say(words: String) -> void:
+	if _status != null:
+		_status.text = words
+		_status.add_theme_color_override("font_color", Color(1.0, 0.6, 0.5))
 
 
 ## One labelled row of toggle buttons, each `[text, pressed, call]`.

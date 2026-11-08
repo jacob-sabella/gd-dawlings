@@ -88,6 +88,15 @@ func enter_own(profile: LayoutProfile) -> void:
 	enter(id, Venue.known_variant(id, profile.venue_variant if profile != null else 0))
 
 
+## The made room `base` is deleted: every delta of it that this keeper remembers is forgotten, so a new room that
+## gets the same id starts empty. The room the studio is in is left alone (the caller has moved it out first).
+func forget_room(base: StringName) -> void:
+	for key: String in _rooms.keys():
+		if key.begins_with("%s." % base) and key != delta.room:
+			_rooms.erase(key)
+			_saved.erase(key)
+
+
 ## Where piece `id` is saved to stand in this room: the room's delta; for a stand or rack a player pulled out,
 ## their own `profile`. Null where nobody moved it.
 func saved(id: StringName, profile: LayoutProfile) -> Variant:

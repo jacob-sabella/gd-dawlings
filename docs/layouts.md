@@ -677,9 +677,17 @@ spot" button using `fix`. Errors block saving; warnings (`unavailable_mod`, `gro
   `_put_back_own_room` calls `drop_adopted`.
 - **Panel.** `RoomMaker` (`core/layouts/room_maker.gd`, F4, host only): name, size, look, zones that fit,
   singles (a piece whose zone is unticked is let go), the modular room on its own line, MAKE. The stage manager
-  lists made rooms after the shipped venues.
-- **Left over.** A made room is built from the standard zone positions (a zone is on or off, not moved); the
-  maker has no delete or rename button (`MadeRooms.remove` exists); an unticked piece is out of the layout, so
+  lists made rooms after the shipped venues. Under MAKE, "your rooms" lists the host's made rooms, each with its
+  name to edit, RENAME and DELETE.
+- **Rename and delete.** `MadeRooms.rename` changes the `title` in the file and nothing else: the id stays, so the
+  room's delta, the profile's venue and every guest's copy keep working (the guest gets the new title in the
+  `made_room` row). DELETE asks twice in the panel (the button becomes REALLY DELETE? / KEEP IT; no OS dialog).
+  `RoomMaker.delete_room` takes the band out first (`choose_venue` of the first shipped room, which the guests
+  follow; `apply_room` then `drop_adopted(wanted)` lets go of their copy), forgets the room's deltas in the keeper
+  (`RoomDeltas.forget_room`, so a new room that gets the same slug starts empty), and `MadeRooms.remove` deletes the
+  layout file and the room's `.delta.json` files (`RoomDeltaFile.remove_room`). Host only. Tests:
+  `_test_a_made_room_can_be_renamed`, `_test_a_made_room_can_be_deleted` (`tests/room_manage_tests.gd`).
+- **Left over.** A made room is built from the standard zone positions (a zone is on or off, not moved); an unticked piece is out of the layout, so
   the F3 panel cannot add it back (add is for the catalogue pieces the room's layout has).
 
 ## 9. Storage

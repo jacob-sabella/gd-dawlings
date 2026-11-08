@@ -115,7 +115,8 @@ static func make(spec: Dictionary) -> Dictionary:
 	return made
 
 
-## Deletes the made room `id`: its file and its place in the set. False for a room that is not the player's.
+## Deletes the made room `id`: its file, its room delta files and its place in the set. False for a room that is
+## not the player's. The caller moves everyone out of it first (`RoomMaker.delete_room`).
 static func remove(id: StringName) -> bool:
 	if not has(id) or _adopted.has(id):
 		return false
@@ -125,8 +126,34 @@ static func remove(id: StringName) -> bool:
 			var path := "%s%s%s%s" % [d, id, LayoutSet.SUFFIX, suffix]
 			if FileAccess.file_exists(path):
 				DirAccess.remove_absolute(path)
+	RoomDeltaFile.remove_room(id)
 	LiveRoom.drop(id)
 	return true
+
+
+## Renames the made room `id` to `title`: the title in its file is the only thing that changes, so the id (and with
+## it the room's delta and every guest that holds the room) stays. `{ok, errors}`; not ok for a room that is not
+## the player's, a name that is empty or over `MadeRoom.MAX_TITLE`, or a file that cannot be written.
+static func rename(id: StringName, title: String) -> Dictionary:
+	var out := {"ok": false, "id": String(id), "errors": []}
+	var name := title.strip_edges()
+	if not has(id) or _adopted.has(id):
+		out["errors"].append("That is not one of your rooms.")
+	elif name.is_empty() or name.length() > MadeRoom.MAX_TITLE:
+		out["errors"].append("A room needs a name of 1 to %d characters." % MadeRoom.MAX_TITLE)
+	else:
+		var dict: Dictionary = (LiveRoom.layouts().layouts[String(id)] as LayoutData).to_dict()
+		dict["title"] = name
+		var text := JSON.stringify(dict, "  ")
+		var d := dir()
+		if disabled or d == "":
+			out["errors"].append("There is nowhere to keep the room.")
+		elif RackPatchFile.write_text("%s%s%s" % [d, id, LayoutSet.SUFFIX], text) != OK:
+			out["errors"].append("The room's file could not be written.")
+		else:
+			LiveRoom.put(LayoutData.load_file("%s%s%s" % [d, id, LayoutSet.SUFFIX]))
+			out["ok"] = true
+	return out
 
 
 ## The room `id` as the row a host sends (the layout file's content), or empty for a room that is not made.
@@ -160,8 +187,9 @@ static func adopt(row: Variant) -> bool:
 	return true
 
 
-## Forgets the rooms a host sent.
-static func drop_adopted() -> void:
+## Forgets the rooms a host sent, but for `keep` (the room the guest is to stand in).
+static func drop_adopted(keep: StringName = &"") -> void:
 	for id: StringName in _adopted.keys():
-		LiveRoom.drop(id)
-	_adopted.clear()
+		if id != keep:
+			LiveRoom.drop(id)
+			_adopted.erase(id)

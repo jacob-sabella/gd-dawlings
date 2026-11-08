@@ -84,3 +84,14 @@ static func set_aside(path: String) -> void:
 	for p in [path, path + ".bak"]:
 		if FileAccess.file_exists(p):
 			DirAccess.rename_absolute(p, path + ".bad")
+
+
+## Deletes every delta file of the made room `base` (any arrangement, with its `.bak` and `.bad`): a room that is
+## gone leaves none behind for a new room of the same name to find.
+static func remove_room(base: StringName) -> void:
+	var d := dir()
+	if d == "":
+		return
+	for file in DirAccess.get_files_at(d):
+		if file.begins_with("%s." % base) and (SUFFIX in file):
+			DirAccess.remove_absolute(d + file)
