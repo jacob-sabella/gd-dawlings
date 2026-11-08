@@ -45771,7 +45771,6 @@ func _test_the_manifests_equal_the_old_tables() -> void:
 	RackModTests.new(self).manifests_equal_the_old_tables()
 
 
-func _test_a_preset_with_a_bad_file_is_empty_and_never_a_crash() -> void:
 const RackStreamTests := preload("res://tests/rack_stream_tests.gd")
 
 
@@ -45781,6 +45780,9 @@ func _test_a_rack_preset_renders_clean() -> void:
 
 func _test_the_rack_direct_feed_takes_the_whole_stream() -> void:
 	RackStreamTests.new(self).the_direct_feed_takes_the_whole_stream()
+
+
+func _test_a_preset_with_a_bad_file_is_empty_and_never_a_crash() -> void:
 	RackModTests.new(self).a_preset_with_a_bad_file_is_empty_and_never_a_crash()
 
 
