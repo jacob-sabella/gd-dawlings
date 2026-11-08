@@ -12,13 +12,17 @@ func _init() -> void:
 	var reg := ModRegistry.new()
 	reg.scan(roots)
 	var rows := ModListing.rows(reg)
+	var plugins := ModPluginListing.rows(reg)
 	print("@@begin")
 	if "--json" in args:
-		print(JSON.stringify({"roots": roots, "mods": rows}, "  "))
+		print(JSON.stringify({"roots": roots, "mods": rows, "plugins": plugins}, "  "))
 	else:
 		print("# status\tid\tversion\tlicence\tsource\tprovides\treason")
 		for line in ModListing.to_lines(rows):
 			print(line)
+		print("# plugin lines: plugin\tstatus\tmod\tformat\tid\ttitle\tskin\treason")
+		for line in ModPluginListing.to_lines(plugins):
+			print("plugin\t" + line)
 		print("# %d mods, %d unavailable" % [rows.size(), ModListing.unavailable_count(rows)])
 	print("@@end")
 	quit(1 if "--strict" in args and ModListing.unavailable_count(rows) > 0 else 0)

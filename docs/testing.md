@@ -11,7 +11,7 @@ prints `N checks, M failed` and each `FAIL`. Newer groups live in their own file
 |---|---|
 | `layout_data_tests`, `layout_resolver_tests`, `layout_validator_tests`, `shell_facts_tests`, `venue_files_tests` | the layout data model, resolving and validating files, venue shell facts, the venue JSON files |
 | `layout_edit_tests`, `room_delta_tests`, `room_maker_tests`, `layout_share_tests` | host edits, saved deltas, made rooms, two studios (host and guest) in one tree |
-| `rack_mod_tests`, `rack_composite_tests`, `rack_gaps_tests`, `rack_patch_file_tests`, `sample_mod_proof_tests`, `mods_screen_tests` | the registry and manifests, composites, unavailable plates, patch file v2, the sample mod, the MODS list and screen |
+| `rack_mod_tests`, `rack_composite_tests`, `rack_gaps_tests`, `rack_patch_file_tests`, `sample_mod_proof_tests`, `mods_screen_tests`, `plugin_dress_tests` | the registry and manifests, composites, unavailable plates, patch file v2, the sample mod, the MODS list and screen, plugin skins and the unavailable plugin plate |
 | `control_room_tests`, `signal_tests`, `workshop_tests` | the control room, the signal view, the Workshop |
 | `fake_noray.gd`, `fixtures/` | an in-process noray; JSON/jsonl inputs (`fixtures/layouts/`, legacy floor files, a workshop stream) |
 

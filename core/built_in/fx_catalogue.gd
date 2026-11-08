@@ -69,6 +69,11 @@ class Param:
 			effect.set(property, value_of(v))
 
 
+## The registry rescanned: build the kinds (and their titles) again.
+static func _forget() -> void:
+	_kinds.clear()
+
+
 ## Every effect kind the built-in engine can put on a track, in the order ADD PLUGIN lists them.
 static func kinds() -> Dictionary:
 	if not _kinds.is_empty():
@@ -155,7 +160,7 @@ static func kinds() -> Dictionary:
 	var reg := ModRegistry.ensure_current()
 	if reg != _watching:
 		_watching = reg
-		reg.changed.connect(func() -> void: _kinds.clear())
+		reg.changed.connect(_forget)
 	for k in _kinds:
 		_kinds[k]["name"] = reg.plugin_title("godot", String(k), String(k))
 	return _kinds

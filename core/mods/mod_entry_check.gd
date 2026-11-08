@@ -62,6 +62,14 @@ static func check(entry: Dictionary, i: int, mod_id: String) -> Array[ModProblem
 				if not str(p.get("format", "")) in PLUGIN_FORMATS:
 					errs.append("plugin.format must be one of %s" % ", ".join(PLUGIN_FORMATS))
 				_str(p, "id", errs, "plugin.")
+			var d: Variant = entry.get("display")
+			if d is Dictionary:
+				if (d as Dictionary).has("title"):
+					_str(d, "title", errs, "display.")
+				if (d as Dictionary).has("skin"):
+					_skin(d["skin"], errs, "display.skin")
+			elif entry.has("display"):
+				errs.append("display must be an object")
 		"skin":
 			_str(entry, "for", errs)
 			_skin(entry.get("skin"), errs, "skin")

@@ -16,13 +16,15 @@ const CODES: Array[StringName] = [
 	&"missing_dependency", &"dependency_cycle",
 	&"missing_file", &"bad_model", &"unsupported_sound_kind", &"unknown_group", &"composite_invalid",
 	&"binary_missing",
+	## Listed by ModPluginListing and never stored: it changes nothing in the game.
+	&"plugin_not_found",
 ]
 
 ## Codes from docs/mods.md section 5 that need machinery not built yet, so nothing raises them
 ## today: the engine snapshot (3), plugin scan (8), source pins (10).
 const LATER_CODES: Array[StringName] = [
 	&"engine_type_missing", &"engine_unavailable", &"snapshot_stale", &"binary_hash_mismatch",
-	&"unsupported_platform", &"plugin_not_found",
+	&"unsupported_platform",
 ]
 
 ## One of CODES (or LATER_CODES).

@@ -24,7 +24,7 @@ static func parse(argv: PackedStringArray) -> Dictionary:
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "perf": false, "play": false, "slap": false, "rings": 0, "lyrics": false, "modular": false, "rack_preset": "acid_line", "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
-		"ghost": {}, "tablets": [], "plugins": [], "welcome": false,
+		"ghost": {}, "tablets": [], "plugins": [], "lose_plugin": [], "welcome": false,
 	}
 	var i := 0
 	while i < argv.size():
@@ -54,6 +54,13 @@ static func parse(argv: PackedStringArray) -> Dictionary:
 				if i < argv.size() and argv[i].find(":") > 0:
 					var colon := argv[i].find(":")
 					out["plugins"].append([int(argv[i].left(colon)), argv[i].substr(colon + 1)])
+			"--lose-plugin":
+				# `--lose-plugin 2:1:vst3:org.example.synth` -- the plugin in track 2's slot 1 as a
+				# project that was saved with a plugin this machine lacks keeps it: for photographing the
+				# unavailable plate (RackUnitDress).
+				i += 1
+				if i < argv.size() and argv[i].count(":") >= 3:
+					out["lose_plugin"].append(argv[i])
 			"--tablet":
 				# `--tablet 2:1` -- this plugin, torn off onto a stand in front of the rack, as
 				# if it had been pulled. For photographing the tablet without a hand to pull it.

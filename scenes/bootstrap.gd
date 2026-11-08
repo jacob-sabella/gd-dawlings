@@ -215,6 +215,15 @@ func _ready() -> void:
 	_apply_cli_placement(args["place"])
 	for wanted in args["plugins"]:
 		_apply_cli_plugin(wanted)
+	for wanted: String in args["lose_plugin"]:
+		var w := wanted.split(":")
+		var lost := DAW.state.fx(int(w[0]), int(w[1]), false)
+		if lost != null:
+			lost.set_meta(&"unhosted", {"plugin_format": w[2], "plugin_id": w[3]})
+			lost.params.clear()
+			lost.param_names.clear()
+			lost.name = w[3].get_slice(".", w[3].count("."))
+			DAW.fx_changed.emit(int(w[0]), int(w[1]))
 	for wanted in args["tablets"]:
 		_apply_cli_tablet(wanted)
 	_apply_cli_focus(args["focus"])
@@ -363,6 +372,10 @@ func _apply_cli_placement(places: Dictionary) -> void:
 
 ## `--add-plugin T:NAME`: the installed plugin called NAME onto track T, where the engine hosts them.
 func _apply_cli_plugin(wanted: Array) -> void:
+	# A built-in effect by its kind (`--add-plugin 2:eq`), which needs no hosting.
+	if FXCatalogue.kinds().has(StringName(wanted[1])):
+		DAW.add_fx(wanted[0], wanted[1])
+		return
 	if not DAW.backend is GodotBackend or not HostedPlugins.available():
 		push_warning("bootstrap: --add-plugin needs the built-in engine, hosting plugins")
 		return

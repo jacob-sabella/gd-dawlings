@@ -48,6 +48,15 @@ static func of(type: String) -> Array:
 	return skin
 
 
+## The skin a mod gives a plugin (`display.skin` of its `plugin` entry, docs/mods.md 4.3) as `[face, accent,
+## pattern, tagline]`, or an empty Array when no available mod dresses `(format, id)`.
+static func of_plugin(format: String, id: String) -> Array:
+	var skin: Variant = ModRegistry.ensure_current().plugin_display(format.to_lower(), id).get("skin")
+	if not skin is Dictionary:
+		return []
+	return [Color.html(skin["face"]), Color.html(skin["accent"]), StringName(skin["pattern"]), skin["tagline"]]
+
+
 ## The face colour of module `type`, a shade lighter for the alternate.
 static func face(type: String, alt := false) -> Color:
 	var c: Color = of(type)[0]
@@ -69,10 +78,13 @@ static func tagline(type: String) -> String:
 ## The printed pattern: a strip of small accent marks `wide` metres across and `tall` high, as one
 ## MultiMesh so a wall of them is one draw each. Centred on the node's origin.
 static func print_pattern(type: String, wide: float, tall: float) -> MultiMeshInstance3D:
-	var kind := pattern(type)
+	return print_marks(pattern(type), accent(type), wide, tall)
+
+
+## The same strip for a pattern and accent given outright (a plugin's skin has no module type).
+static func print_marks(kind: StringName, acc: Color, wide: float, tall: float) -> MultiMeshInstance3D:
 	if kind == PATTERN_NONE:
 		return null
-	var acc := accent(type)
 	var marks: Array[Transform3D] = []
 	var step := 0.012
 	var n := maxi(3, int(wide / step))

@@ -287,10 +287,24 @@ data, and the sound would not change by moving them). `ModRegistry.plugin_displa
 serve the entries, and `PluginCatalogue.display_name(info)` gives a scanned plugin the title a mod
 gives it, else its own: used for its ADD PLUGIN label (`GodotBackend.fx_choices`) and its chain row name
 (`HostedPlugins.row`). No third-party plugin has a shipped entry, so nothing changes for them until a mod
-adds one. Not done: `display.skin`, `first_params` and `param_key` are accepted and ignored (the
-`RackUnit` and `PluginTablet` still look the same for every plugin); the unavailable slot for a plugin
-the machine lacks; the Reaper backend's own list (`ReaperBackend.fx_choices`, Reaper's stock FX); the
-`plugin_not_found` problem.
+adds one.
+
+Built (the MODS-screen branch): `display.skin` (validated like a module's skin; `{face, accent, pattern, tagline}`) dresses
+the plugin's `RackUnit`: the face is tinted, and an accent band, the printed pattern and the tagline are added
+(`RackSkin.of_plugin`, `RackUnitDress`). A slot whose plugin this machine lacks (the project kept it as it came, FXState meta
+`unhosted`) shows the **unavailable plate** in its place: dark red, `UNAVAILABLE` and `CLAP <TITLE> is not installed here` (the title
+a mod gives it, else the slot's name), keeping its power and remove keys so the project still saves it. `PluginRef.of(fx, backend)`
+names the plugin a slot holds (`{format, id, name, missing}`, formats lower case). `plugin_not_found` is a listing status, not a stored
+problem: `ModPluginListing.rows` marks each plugin entry `installed` or `missing` (with the reason) in the MODS screen and
+`tools/rack_describe.sh`. A user mod cannot skin the ten built-in effects: `builtin.effects` owns every `godot:*` id and the first mod wins.
+`--lose-plugin t:fx:format:id` in `tools/shot.sh` shows the plate offline.
+
+Not done, and why: `first_params` and `param_key` are still accepted and ignored. `PluginTablet` is not skinned
+(`plugin_tablet.gd` is already past the 800-line limit, so a skin there needs that file split first; the unit is the rack's
+face, the tablet a second view), and the unavailable plate is a `RackUnit` only. The Reaper backend's own list
+(`ReaperBackend.fx_choices` is Reaper's stock FX and an unavailable slot under Reaper is Reaper's business, open question 6)
+is untouched, and so are the rack marbles outputs. A guest sees no `unhosted` meta (it is not on the wire), so a guest's rack
+shows a missing plugin as an ordinary slot, not the plate.
 
 ## 5. Discovery, order, collisions, failures
 
@@ -329,7 +343,7 @@ never throws; every failure leaves the game running.
 | `composite_invalid` | unknown inner type, cycle, depth > 3, bad jack | entry unavailable, reason shown |
 | `unsupported_sound_kind` | reserved or unknown `sound.kind` | entry unavailable |
 | `licence_missing` | no `licence.spdx` | `bad_schema` |
-| `plugin_not_found` | `plugin` entry whose plugin is not scanned | listed as "plugin not installed"; no effect on the game |
+| `plugin_not_found` | `plugin` entry whose plugin is not scanned | listed as `missing` in the MODS screen and `rack_describe` (`ModPluginListing`, never stored); no effect on the game |
 | `unknown_group` | module group not declared | placed in "Other"; warning |
 | `unknown_key` | top-level key the format does not define | ignored; warning (3.1: forward compatibility) |
 
@@ -463,11 +477,11 @@ Built and held by tests (the steps of the old migration plan are in `docs/refact
 
 | Part | State |
 |---|---|
-| Parser, validator, registry, `DataHome.dir`, `mods/mod.schema.json`, fixtures in `tests/fixtures/mods/` | Built. Codes raised: `ModProblem.CODES`. Unreachable until the thing they check exists: `ModProblem.LATER_CODES` (`engine_*`, `snapshot_stale`, `binary_hash_mismatch`, `unsupported_platform`, `plugin_not_found`). |
+| Parser, validator, registry, `DataHome.dir`, `mods/mod.schema.json`, fixtures in `tests/fixtures/mods/` | Built. Codes raised: `ModProblem.CODES`. Unreachable until the thing they check exists: `ModProblem.LATER_CODES` (`engine_*`, `snapshot_stale`, `binary_hash_mismatch`, `unsupported_platform`). |
 | Rack modules and presets on the registry | Built. `res://mods/builtin/{core,daisysp,mutable}` hold the 29 modules, `presets` the 17 preset patches, all named `builtin.<name>` with no alias table (decision 2). The old tables (`RackSkin.SKINS`, `PAD_KNOBS`, `RackCatalogue.GROUPS`, preset bodies) are deleted. |
 | Patch file, keep-unknown, unavailable plate, guests | Built. `RackPatch` v2 (`format`, `version`, `uses`, `w`), `RackPatchFile` (atomic write, `.bak`, `.bad` set aside), `RackAutosave` (`user://patches/_current.patch.json`), `RackGaps`, `RackStubs`; the host row carries `uses`, a guest without the mod gets a named plate and no engine. |
 | Composites | Built. `RackModuleDef.resolve` at scan, `RackExpansion.expand` at play time; depth 3, cost counted on the expansion against `MAX_MODULES` (64). |
-| Plugin overlays | Partly. `res://mods/builtin/effects` gives the ten built-in effects their titles; `plugin_title`/`plugin_display` serve scanned plugins. Not done: `display.skin`, `first_params`, `param_key` are accepted and ignored; the unavailable plugin slot; Reaper's own list; `plugin_not_found`. |
+| Plugin overlays | Partly. `res://mods/builtin/effects` gives the ten built-in effects their titles; `plugin_title`/`plugin_display` serve scanned plugins. Built: `display.skin` on the `RackUnit`, the unavailable plugin slot, `plugin_not_found` as a listing status (4.3). Not done: `first_params`, `param_key`, the tablet skin, Reaper's own list, the rack marbles outputs. |
 | The proof | Built. `mods_examples/dawlings.sample.pluck/` (folder only, excluded from exports) and `tests/sample_mod_proof_tests.gd`: appears, plays, saves, reloads, replicates to a guest. |
 | MODS screen | Built. `ModListing` (rows), `ModsScreen` (F5, read-only, host and guest), section 11. |
 | `tools/rack_describe.sh` | Built (section 12): the registry's rows headless. |
@@ -527,7 +541,8 @@ folder the registry read, in registry order and then the folders it refused: sta
 source pin (`submodule vendor/daisysp @ 2c72eaf`, `in_tree core/built_in`, `binary file version sha 01234567`, `data`) and what
 it provides (`rack_module x14, rack_preset x1`). An unavailable mod has its reason in red under it (`code: sentence`); the
 warnings of an ok one (`unknown_key`, `missing_file`) and its dropped entries are in grey. The head says how many mods and how
-many are unavailable.
+many are unavailable. Under the mods, a PLUGINS block lists each `plugin` entry of an available mod (`OK` / `NOT HERE`, title,
+format, mod, plugin id, `skin`) with the reason in red for one this machine lacks (`ModPluginListing`, `core/mods/mod_plugin_listing.gd`).
 
 The rows are `ModListing.rows(registry)` (`core/mods/mod_listing.gd`), a pure function of a `ModRegistry`, so a script can print the same
 thing (`tools/rack_describe.sh`, section 12). Listed, never a crash:
@@ -539,13 +554,14 @@ thing (`tools/rack_describe.sh`, section 12). Listed, never a crash:
   recorded for it is the reason, and its entries are not in the game;
 * a valid manifest refused for a reserved or repeated id: a row for the refused folder, `reserved_id` / `id_collision`.
 
-Tests: `tests/mods_screen_tests.gd` (a temporary root with a good mod, bad JSON, a schema failure, no manifest, a missing binary, a
+Tests: `tests/plugin_dress_tests.gd` (skin validation, `RackSkin.of_plugin`, `PluginRef`, a unit's band and tagline, the unavailable plate, plugin rows) and `tests/mods_screen_tests.gd` (a temporary root with a good mod, bad JSON, a schema failure, no manifest, a missing binary, a
 mod that needs it, and a present binary). Screenshot: `--panel mods` in `tools/shot.sh` with `--mod` folders.
 
 ## 12. `tools/rack_describe.sh`
 
 Prints the registry headless, for scripts and CI: the rows of section 11, one per mod folder, tab separated (`status id version licence
-source provides reason`, a `#` header and a `# N mods, M unavailable` footer), or `--json` (`{roots, mods: [row...]}`). It reads the
+source provides reason`, a `#` header and a `# N mods, M unavailable` footer), then the plugin rows, each starting `plugin` (`plugin status mod
+format id title skin reason`), or `--json` (`{roots, mods: [row...], plugins: [row...]}`). It reads the
 shipped folder and `$DAWLINGS_MODS` (colon-separated), and the player's `user://mods/` only with `--user`, so a CI run never reads or
 creates anything in a player's data. `--strict` exits 1 when any mod is unavailable; exit 2 means godot printed no listing (a script
 error). It runs `tools/rack_describe.gd` (a `SceneTree` script) over `ModListing.rows`, so the screen and the script cannot disagree.

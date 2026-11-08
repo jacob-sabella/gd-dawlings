@@ -165,6 +165,10 @@ func _ready() -> void:
 	# on: the ends of a rack panel ARE its ears, with oblong holes through them, which is what
 	# the four raised plates this used to draw were getting wrong.
 	var panel: Node3D = null
+	# A mod's skin for the plugin in this slot, or the unavailable plate for one this machine lacks.
+	var ref := PluginRef.of(DAW.state.fx(track_index, fx_index, false), DAW.backend)
+	var skin := RackUnitDress.skin_of(ref)
+	var face_tint: Color = Color.WHITE.lerp(skin[0], 0.8) if not skin.is_empty() else Color.WHITE
 	if panel_bank != null:
 		panel = Node3D.new()
 		panel.name = "Panel"
@@ -180,7 +184,7 @@ func _ready() -> void:
 		panel.position = Vector3(0, 0, -0.006)
 		add_child(panel)
 		if panel_bank != null:
-			panel_bank.place(panel, Color.WHITE)
+			panel_bank.place(panel, face_tint)
 	else:
 		add_child(_stand_in(h))
 
@@ -282,6 +286,8 @@ func _ready() -> void:
 
 	_build_chain_controls(h)
 	_build_out(h)
+	if not skin.is_empty():
+		RackUnitDress.add_to(self, ref, skin, h)
 
 	# All eight now, used or not: a bank is sized once, so a knob made later -- when a plugin's
 	# parameters arrive after its name, as Reaper's do -- would have nowhere to be drawn.

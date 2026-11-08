@@ -153,7 +153,7 @@ func the_describe_script_prints_the_rows() -> void:
 	var lines: PackedStringArray = str(out[0]).split("\n", false) if not out.is_empty() else PackedStringArray()
 	var by_id := {}
 	for l in lines:
-		if not l.begins_with("#"):
+		if not l.begins_with("#") and not l.begins_with("plugin\t"):
 			by_id[l.get_slice("\t", 1)] = l.split("\t")
 	check("--strict exits 1 when a mod is unavailable (%d)" % code, code == 1)
 	check("it prints the shipped mods, ok", by_id.has("builtin.daisysp") and by_id["builtin.daisysp"][0] == "ok" and by_id["builtin.daisysp"][4] == "submodule vendor/daisysp @ 2c72eaf")

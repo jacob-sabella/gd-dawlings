@@ -88,6 +88,16 @@ func rebuild() -> void:
 			_note("      " + r["reason"], _BAD)
 		for n: String in r["notes"]:
 			_note("      " + n, _DIM)
+	var plugins := ModPluginListing.rows(reg)
+	if not plugins.is_empty():
+		_note("PLUGINS the mods dress or name (a missing one shows an unavailable plate in its slot)", _DIM)
+		for r in plugins:
+			var here: bool = r["status"] == ModPluginListing.INSTALLED
+			_line([[("OK" if here else "NOT HERE"), _COLUMNS[0][1], _OK if here else _BAD], [r["title"], _COLUMNS[1][1], _TEXT],
+					[r["format"].to_upper(), _COLUMNS[2][1], _TEXT], [r["mod"], _COLUMNS[3][1], _DIM],
+					[r["id"], _COLUMNS[4][1], _DIM], ["skin" if r["has_skin"] else "", _COLUMNS[5][1], _DIM]])
+			if not here:
+				_note("      " + r["reason"], _BAD)
 	_fit()
 
 

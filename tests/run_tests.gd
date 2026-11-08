@@ -833,6 +833,9 @@ func _ready() -> void:
 	await _t("_test_the_mods_list_has_a_row_for_every_mod_and_every_failure")
 	await _t("_test_the_mods_screen_opens_with_f5_for_host_and_guest")
 	await _t("_test_rack_describe_prints_the_registry_headless")
+	await _t("_test_a_plugin_skin_is_validated_and_resolved")
+	await _t("_test_a_rack_unit_wears_a_skin_and_a_lost_plugin_is_an_unavailable_plate")
+	await _t("_test_the_mods_list_has_a_row_for_each_plugin_entry")
 	await _t("_test_a_rack_catalogue_is_the_engines_own_description")
 	await _t("_test_a_rack_patch_checks_every_verb")
 	await _t("_test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input")
@@ -45942,6 +45945,23 @@ func _test_the_mods_screen_opens_with_f5_for_host_and_guest() -> void:
 
 func _test_rack_describe_prints_the_registry_headless() -> void:
 	ModsScreenTests.new(self).the_describe_script_prints_the_rows()
+
+
+const PluginDressTests := preload("res://tests/plugin_dress_tests.gd")
+
+
+## Docs/mods.md 4.3: display.skin is validated, reaches a rack unit, a lost plugin is an unavailable plate, and plugin rows are listed.
+func _test_a_plugin_skin_is_validated_and_resolved() -> void:
+	PluginDressTests.new(self).skins_are_validated()
+	PluginDressTests.new(self).skins_and_refs_resolve()
+
+
+func _test_a_rack_unit_wears_a_skin_and_a_lost_plugin_is_an_unavailable_plate() -> void:
+	PluginDressTests.new(self).rack_units_wear_the_skin_and_the_unavailable_plate()
+
+
+func _test_the_mods_list_has_a_row_for_each_plugin_entry() -> void:
+	PluginDressTests.new(self).plugin_rows_say_whether_each_is_here()
 
 
 const LayoutDataTests := preload("res://tests/layout_data_tests.gd")
