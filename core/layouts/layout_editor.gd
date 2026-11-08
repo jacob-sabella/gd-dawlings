@@ -29,6 +29,7 @@ func _ready() -> void:
 	_panel = PanelContainer.new()
 	_panel.position = Vector2(16, 44)
 	_panel.visible = false
+	PanelLook.solid(_panel)
 	add_child(_panel)
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
@@ -115,6 +116,7 @@ func _button(text: String, call: Callable, pressed := false) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.add_theme_font_size_override("font_size", 12)
+	PanelLook.button(b)
 	b.toggle_mode = pressed
 	b.button_pressed = pressed
 	b.pressed.connect(call)
