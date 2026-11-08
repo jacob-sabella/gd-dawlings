@@ -43,10 +43,11 @@ done
 if grep -qhE '^(SCRIPT ERROR|ERROR: Failed to load script)' "$work"/shard*/out.txt; then bad=1; fi
 
 known=tests/known_failures.txt
+grep -v '^#' "$known" 2>/dev/null | grep -v '^$' >"$work/patterns.txt" || true
 new=0; known_n=0
 : >"$work/new.txt"
 while IFS= read -r label; do
-  if [ -f "$known" ] && grep -v '^#' "$known" | grep -v '^$' | grep -qF -f - <<<"$label"; then known_n=$((known_n + 1))
+  if [ -s "$work/patterns.txt" ] && grep -qF -f "$work/patterns.txt" <<<"$label"; then known_n=$((known_n + 1))
   else echo "  NEW FAIL  $label" >>"$work/new.txt"; new=$((new + 1)); fi
 done <"$work/fails.txt"
 cat "$work/new.txt"

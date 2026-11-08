@@ -17553,6 +17553,7 @@ func _test_the_keys_helper_plays_the_monitor_synth_note_for_note() -> void:
 	if helper == "":
 		return
 	var file := OS.get_cache_dir().path_join("dawlings/tmp/ports/keys.raw")
+	DirAccess.make_dir_recursive_absolute(file.get_base_dir())
 	OS.execute("sh", ["-c", "printf 'on 60 100\\non 67 64\\noff 99\\n' | '%s' --render 9600 > '%s'" % [helper, file]])
 	var native := FileAccess.get_file_as_bytes(file).to_float32_array()
 	var synth := MonitorSynth.new()

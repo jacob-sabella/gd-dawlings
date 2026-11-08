@@ -1,0 +1,22 @@
+# Failures the suite is known to report, one substring of a FAIL label per line (tools/test_parallel.sh
+# matches with grep -F; a failure matching no line is NEW and makes the script exit non-zero).
+# Causes and history: docs/refactor_loop.md "Known failures". Not ours; do not fix inside a refactor slice.
+share a plane (
+all of it is in frame
+a rack wheeled somewhere else is visited
+from where the playhead stood
+every control names itself, not its node
+put down on the gear, it goes home instead
+and floats back onto its shelf
+the desk has a footprint to walk into
+the bench has fifteen controls
+and a take's chosen track follows its track
+and is none once its track is gone
+# Order-dependent: pass alone, fail when the tests run as a subset in a shard (GuestMidi/state left by an earlier test).
+K down over a voice mutes its track
+and says it is muted while held
+a tap latches the mute
+K over a console strip's fader latches that strip's track
+L held over a voice where the tracks are not played here says why
+L held over a voice on the built-in engine leans in to it
+pressed, it asks each out
