@@ -1264,22 +1264,30 @@ func _render_parts(at_once := false) -> void:
 	var fresh := {}
 	# All of a tempo's parts change over together. Swapped in one at a time, the drums would
 	# be at the new tempo while the bass was still at the old one.
-	DemoSong.render_async(roles, tempo, func(role: String, wav: AudioStreamWAV):
-		if not is_instance_valid(self) or _rendering_key != key:
-			return
-		fresh[role] = wav
-		if fresh.size() < roles.size():
-			return
-		_parts = fresh
-		_parts_key = key
-		for index in _players:
-			for p in _players[index]:
-				(p as AudioStreamPlayer).stop()
-		# NOT connection_changed: that rebuilds every surface in the room, which show nothing of
-		# the parts, and was a dropped frame at every tempo the knob passed through. The players
-		# pick the new parts up as they are driven, and the lanes by their key.
-		# The knob may have gone on turning while this rendered.
-		_on_transport_changed(), sig, at_once)
+	# A bound method and not a lambda: a lambda that uses `self` still ran when the backend had been freed
+	# while the part rendered (a test's studio, a closed project), and read a freed `self`
+	# ("Bad address index"); a method callable on a freed object is invalid, and render_async skips it.
+	DemoSong.render_async(roles, tempo, _part_rendered.bind(key, roles, fresh), sig, at_once)
+
+
+## One demo-song part came back from the workers (`_render_parts`): once every role of the render keyed
+## `key` is in `fresh`, the parts change over together. A render a newer tempo has replaced is dropped.
+func _part_rendered(role: String, wav: AudioStreamWAV, key: String, roles: Array, fresh: Dictionary) -> void:
+	if _rendering_key != key:
+		return
+	fresh[role] = wav
+	if fresh.size() < roles.size():
+		return
+	_parts = fresh
+	_parts_key = key
+	for index in _players:
+		for p in _players[index]:
+			(p as AudioStreamPlayer).stop()
+	# NOT connection_changed: that rebuilds every surface in the room, which show nothing of
+	# the parts, and was a dropped frame at every tempo the knob passed through. The players
+	# pick the new parts up as they are driven, and the lanes by their key.
+	# The knob may have gone on turning while this rendered.
+	_on_transport_changed()
 
 
 ## A new tempo or signature is a new render. The old parts go on playing until the new ones land,
