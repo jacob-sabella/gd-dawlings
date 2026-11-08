@@ -15,7 +15,6 @@ name: CI
 
 on:
   push:
-    branches-ignore: [master]
   workflow_call:
 
 concurrency:
