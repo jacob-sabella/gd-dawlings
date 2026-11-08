@@ -809,6 +809,7 @@ func _ready() -> void:
 	await _t("_test_a_layout_edit_survives_a_reload_in_a_fresh_studio")
 	await _t("_test_a_guest_sees_the_hosts_layout_edit_through_the_row")
 	await _t("_test_the_edit_panel_shows_the_validators_words_and_is_shut_to_a_guest")
+	await _t("_test_a_moved_piece_does_not_carry_its_banner_along")
 	await _t("_test_a_guest_sees_the_hosts_layout_and_cannot_edit_it")
 	await _t("_test_reset_returns_the_default")
 	await _t("_test_zone_pieces_come_out_of_a_room_and_go_back")
@@ -46072,6 +46073,11 @@ func _test_a_guest_sees_the_hosts_layout_edit_through_the_row() -> void:
 ## The F3 edit panel shows the validator's message and is shut to a guest.
 func _test_the_edit_panel_shows_the_validators_words_and_is_shut_to_a_guest() -> void:
 	LayoutEditTests.new(self).the_panel_shows_what_the_validator_said()
+
+
+## A moved piece leaves its neighbourhood's banner where the layout hangs it.
+func _test_a_moved_piece_does_not_carry_its_banner_along() -> void:
+	LayoutEditTests.new(self).a_moved_piece_leaves_its_banner()
 
 
 const LayoutShareTests := preload("res://tests/layout_share_tests.gd")

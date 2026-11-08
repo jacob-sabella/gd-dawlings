@@ -89,16 +89,32 @@ static func stations_in(venue: Venue, id: StringName) -> Array[StringName]:
 ## every other the middle of the box round its stations and pieces where they stand now. Null where
 ## none of it stands (the Rig Roulette room's synth and vocals).
 static func middle(venue: Venue, id: StringName) -> Variant:
+	return _middle(venue, id, false)
+
+
+## `middle` with every wheeled member (a trolley piece, however it has been pushed or nudged with the
+## F3 panel) counted where the layout puts it, so the middle that a banner hangs by stays put while
+## people rearrange the room (2026-11-07: nudging the hoop took TAPE & TOYS across the wall and over
+## RHYTHM). Members that stand where the venue puts them, never on a trolley, count as they stand.
+static func home_middle(venue: Venue, id: StringName) -> Variant:
+	return _middle(venue, id, true)
+
+
+static func _middle(venue: Venue, id: StringName, at_home: bool) -> Variant:
 	if id == &"mixing":
 		return Vector3(0, 0, Studio.MIX_POSITION_Z)
 	var points: Array[Vector2] = []
 	for s in stations_in(venue, id):
-		var at := (Stations.spot(venue, s) as Transform3D).origin
-		points.append(Vector2(at.x, at.z))
+		var at: Variant = venue.station_spots.default_spot(s) if at_home else null
+		if not at is Transform3D:
+			at = Stations.spot(venue, s)
+		points.append(Vector2((at as Transform3D).origin.x, (at as Transform3D).origin.z))
 	if points.is_empty():
 		return null
 	for p: StringName in row(id).get("pieces", []):
-		var at: Variant = venue._spot_of(p)
+		var at: Variant = venue.station_spots.default_spot(p) if at_home else null
+		if not at is Transform3D:
+			at = venue._spot_of(p)
 		if at is Transform3D:
 			points.append(Vector2((at as Transform3D).origin.x, (at as Transform3D).origin.z))
 	var box := Rect2(points[0], Vector2.ZERO)
@@ -116,8 +132,8 @@ const CORNER_CLEAR := 0.3
 
 
 ## Where neighbourhood `id`'s banner hangs in `venue` (studio space), as a frame whose +Z is the way
-## its face looks: flat on the wall nearest its middle, at the venue's sign height, as far along it
-## as the middle is, and facing back into the room; the mixing one on the live room's side of the
+## its face looks: flat on the wall nearest its middle (`home_middle`: the layout's, not where a piece has been moved
+## to), at the venue's sign height, as far along it as the middle is, and facing back into the room; the mixing one on the live room's side of the
 ## header over the control room's open rear, where anyone coming back from it looks for the desk.
 ## Null where the neighbourhood does not stand.
 ##
@@ -130,7 +146,7 @@ const CORNER_CLEAR := 0.3
 static func sign_spot(venue: Venue, id: StringName) -> Variant:
 	if not venue.has_walls():
 		return null
-	var m: Variant = middle(venue, id)
+	var m: Variant = home_middle(venue, id)
 	if m == null:
 		return null
 	var at: Vector3 = m

@@ -676,9 +676,9 @@ func _hang_hood_signs() -> void:
 	_place_hood_signs()
 
 
-## Each banner on its wall by its neighbourhood's middle as it stands now: a piece wheeled across
-## the room takes its neighbourhood's middle, and so its banner, some of the way along the wall with
-## it, or round to another wall.
+## Each banner on its wall by its neighbourhood's middle as the layout puts it (`Neighbourhoods.home_middle`):
+## a piece wheeled or nudged somewhere else leaves the banner where it was, so a moved hoop does not
+## carry TAPE & TOYS across the wall over RHYTHM. A banner follows the layout, not the edit.
 func _place_hood_signs() -> void:
 	if studio.venue == null or not is_instance_valid(studio.venue):
 		return

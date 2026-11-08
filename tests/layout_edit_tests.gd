@@ -210,3 +210,35 @@ func the_panel_shows_what_the_validator_said() -> void:
 	ed.free()
 	base._off()
 	t._drop_floor_studio(rig)
+
+
+## A piece moved with the F3 panel (or pushed) does not carry its neighbourhood's banner along: the hoop
+## belongs to TAPE & TOYS, and nudging it across the room left that banner over RHYTHM (2026-11-07).
+func a_moved_piece_leaves_its_banner() -> void:
+	base._off()
+	var rig: Dictionary = t._floor_studio()
+	var s: Studio = rig["studio"]
+	var hoop: Trolley = s.live_pieces[&"hoop"]
+	var before := {}
+	for r: Dictionary in Neighbourhoods.all():
+		before[r["id"]] = Neighbourhoods.sign_spot(s.venue, r["id"])
+	var mid_before: Variant = Neighbourhoods.middle(s.venue, &"tape")
+	check("the tape banner stands on a wall in the studio room", before[&"tape"] != null and s.venue.get_node_or_null("Sign_tape") != null)
+	var moved := false
+	for d: Vector2 in [Vector2(2.5, 0.0), Vector2(-2.5, 0.0), Vector2(0.0, 2.0), Vector2(0.0, -2.0), Vector2(1.2, 0.0), Vector2(-1.2, 0.0)]:
+		if s.rack_host.ask_layout("move", ["hoop", hoop.position.x + d.x, hoop.position.z + d.y, hoop.rotation.y]) == "":
+			moved = true
+			break
+	check("the hoop moved a good way", moved and (Neighbourhoods.middle(s.venue, &"tape") as Vector3).distance_to(mid_before as Vector3) > 0.3)
+	var same := true
+	for r: Dictionary in Neighbourhoods.all():
+		var now: Variant = Neighbourhoods.sign_spot(s.venue, r["id"])
+		var node := s.venue.get_node_or_null("Sign_%s" % r["id"]) as Node3D
+		if (now == null) != (before[r["id"]] == null) or (now != null and not (now as Transform3D).is_equal_approx(before[r["id"]])):
+			same = false
+		if node != null and now != null and not node.transform.is_equal_approx(now):
+			same = false
+	check("and no banner moved with it, nor did the tape one", same)
+	s.rack_host.ask_layout("reset", ["all"])
+	base._off()
+	t._drop_floor_studio(rig)

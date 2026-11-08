@@ -394,7 +394,7 @@ Shared fragment, `res://layouts/common/live_room.layout.json`:
 }
 ```
 
-The groups are the layouts' `groups` now (step 6 part 3): `Neighbourhoods.all()` reads them, `mixing` from the control-room fragment (with its `banner`: `{anchor: {z: control_rear}, pos: [0, 0.12], up: height.control_header}`) and the others from the live-room fragment; a member with a `Stations` row is a station of the neighbourhood, any other (`prop_shelf`, `tour_case`, `hoop`) a piece that helps place its middle. The hex colours are a byte a channel, up to 1/510 off the old floats.
+The groups are the layouts' `groups` now (step 6 part 3): `Neighbourhoods.all()` reads them, `mixing` from the control-room fragment (with its `banner`: `{anchor: {z: control_rear}, pos: [0, 0.12], up: height.control_header}`) and the others from the live-room fragment; a member with a `Stations` row is a station of the neighbourhood, any other (`prop_shelf`, `tour_case`, `hoop`) a piece that helps place its middle. The hex colours are a byte a channel, up to 1/510 off the old floats. A banner hangs by `Neighbourhoods.home_middle`, the middle with every wheeled member counted where the layout puts it, so moving a piece (F3 nudge, a push of its trolley) never carries the banner along; `middle` is where they stand now.
 The `feeds` wire is "one sample, a WAV and a cassette on the rack" (`stations.gd`, sampler row).
 
 The venue file, `res://layouts/venues/rooftop.layout.json`:
