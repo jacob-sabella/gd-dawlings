@@ -26,12 +26,15 @@ var _filtered: Array = []
 var _highlighted := 0
 
 
-## `choices` is DAW.state.fx_choices's own shape: Array of [id, label].
+## `choices` is DAW.state.fx_choices's own shape: Array of [id, label]. The picker goes with `parent`: one
+## left open over a strip or rack that has been freed would hold the keyboard for good (a search box
+## with focus swallows every room key, I included) and add to a track nobody is looking at.
 static func ask(parent: Node, title: String, choices: Array) -> PluginPicker:
 	var p := PluginPicker.new()
 	p.layer = 100
 	p._choices = choices
 	parent.get_tree().root.add_child(p)
+	parent.tree_exiting.connect(p.queue_free, CONNECT_ONE_SHOT)
 	p._build(title)
 	return p
 
