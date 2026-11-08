@@ -50,6 +50,17 @@ workspace 10 on Hyprland; never run a bare `godot --path .`.** The shot, budget 
 `tools/blender/`
 (model scripts), `tools/discord_bridge/`, `tools/mock/`.
 
+### Checking an export
+
+`godot --headless --path . --export-pack Linux /tmp/x.pck` needs no display and uses the installed templates. All three presets
+in `export_presets.cfg` use `export_filter="all_resources"`; Godot imports `.json` as a resource, so `mods/**/*.json`,
+`layouts/**/*.json` (schemas, `layouts/import/floor_v1.json`) and `core/music/rack/modules.json` ship without an
+`include_filter`. Only `tests/`, `mods_examples/`, `tools/probe/`, `shots/` and `docs/` are excluded. To list what is in a pack,
+call `ProjectSettings.load_resource_pack(pck)` from a `--script` and walk `DirAccess` over `res://mods` and `res://layouts`
+(checked 2026-11-07: all 43 JSON files present and parseable). If a preset's filter ever changes to `scenes_only` or
+`selected_resources`, add `include_filter="mods/*, layouts/*, core/music/rack/modules.json"`. Run `git checkout project.godot`
+afterwards.
+
 ## How to add a tool
 
 A script gets a header comment saying what it does, how to run it and what its exit status means; a game-window tool

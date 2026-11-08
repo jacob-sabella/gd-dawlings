@@ -73,8 +73,9 @@ where the draws are"), and the breakdown, 13 tracks, wide pose, fresh user data 
 | draws, shadows on (mean of 30 frames) | 6293, the same every frame | 6760: 7067 most frames, 6042 the rest |
 
 By subtree (`Studio/...`, meshes master to HEAD): Items 255 to 200 and the venue's showcase instruments (Theremin, MusicBox, MarbleRun,
-ChordHarp, BellStand, GrainCloud, StringSpool, ChordLedge: 0 at HEAD in a fresh-data run; why they are not built
-there was not traced, and it can only lower the counts), ModularAnnex 339 to 232, StationBoard 25 to 17, PropShelf 31 to 24; and
+ChordHarp, BellStand, GrainCloud, StringSpool, ChordLedge: 0 at HEAD because they were removed on purpose on
+2026-11-06, nine `remove ...` commits on this branch, `482ee7b` to `efdd4ae`, "only expressive instruments stay"; not a regression
+and not a budget-mode artefact: the classes no longer exist, so nothing builds them in any run. It is part of why HEAD draws less), ModularAnnex 339 to 232, StationBoard 25 to 17, PropShelf 31 to 24; and
 the two that grew on purpose: RackWall 757 to 775 (the second-face pads, `RackPad`) and Tv 31 to 46, hidden 9 to 78
 (`PadDeck`). Duplicated geometry (same mesh resource at the same place): 5 on both. So HEAD draws **less**, and with
 the shadows off the two builds draw the same number. The whole difference was in the shadow passes.
