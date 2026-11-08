@@ -33,6 +33,8 @@ var _roots: Array[String] = []
 var _mods: Array[ModManifest] = []
 var _by_id: Dictionary = {}
 var _problems: Array[ModProblem] = []
+## Folders read but not taken in, each `{manifest, code, reason}`: a bad manifest, a reserved or repeated id.
+var _rejected: Array[Dictionary] = []
 var _owner: Dictionary = {}
 var _rack_modules: Dictionary = {}
 var _plate_of_engine: Dictionary = {}
@@ -79,6 +81,7 @@ func scan(roots: Array[String]) -> void:
 	_mods.clear()
 	_by_id.clear()
 	_problems.clear()
+	_rejected.clear()
 	_owner.clear()
 	var found: Array[ModManifest] = []
 	for root in roots:
@@ -109,6 +112,14 @@ func roots() -> Array[String]:
 ## discovery order). Includes mods whose status is unavailable; excludes invalid ones.
 func mods() -> Array[ModManifest]:
 	return _mods
+
+
+## The folders that were read and not taken in, in the order found, each `{manifest, code, reason}`: a
+## manifest that did not parse (the `manifest` is whatever could be read of it, `id` the folder's name at
+## worst), or a valid one refused for a reserved or repeated id. The MODS screen lists them beside
+## `mods()`; a folder with no `mod.json` at all is here too.
+func rejected() -> Array[Dictionary]:
+	return _rejected
 
 
 ## The mod with this id, or null.
@@ -354,17 +365,39 @@ func _discover(root: String, found: Array[ModManifest]) -> void:
 		var m := ModManifest.load_folder(root.path_join(folder_name), game_version)
 		_problems.append_array(m.problems)
 		if m.status != ModManifest.STATUS_OK:
+			var errors := m.errors()
+			_rejected.append({"manifest": m, "code": errors[0].code if not errors.is_empty() else &"bad_schema",
+					"reason": "; ".join(errors.map(func(p: ModProblem) -> String: return p.message))})
 			continue
 		if not shipped and (m.id == "builtin" or m.id.begins_with("builtin.")):
-			_record(&"reserved_id", m.id, "'builtin' ids belong to the shipped mods")
+			_refuse(m, &"reserved_id", "'builtin' ids belong to the shipped mods")
 			continue
 		if _by_id.has(m.id):
-			_record(&"id_collision", m.id, "%s already used by %s" % [m.id, (_by_id[m.id] as ModManifest).folder])
+			_refuse(m, &"id_collision", "%s already used by %s" % [m.id, (_by_id[m.id] as ModManifest).folder])
 			continue
 		if not shipped:
 			_drop_unnamespaced(m)
 		_by_id[m.id] = m
 		found.append(m)
+
+
+## Records a valid manifest that is not taken in, as a problem and as a rejected folder.
+func _refuse(m: ModManifest, code: StringName, why: String) -> void:
+	_record(code, m.id, why)
+	_rejected.append({"manifest": m, "code": code, "reason": why})
+
+
+## A mod whose pinned binary (`source.kind` binary, `file` beside the manifest) is not there is
+## unavailable, with `binary_missing`; its entries are not indexed. A path that leaves the folder counts
+## as missing. The hash is not read here (docs/mods.md 3.6: `binary_hash_mismatch` is later).
+func _check_binaries() -> void:
+	for m in _mods:
+		if m.status != ModManifest.STATUS_OK or m.source.get("kind") != "binary":
+			continue
+		var rel := str(m.source.get("file", ""))
+		if rel.is_absolute_path() or ".." in rel.split("/") or not FileAccess.file_exists(m.folder.path_join(rel)):
+			m.status = ModManifest.STATUS_UNAVAILABLE
+			_record(&"binary_missing", m.id, "its binary %s is not in the mod's folder" % rel)
 
 
 func _is_shipped(root: String) -> bool:
@@ -390,6 +423,7 @@ func _order_and_check(found: Array[ModManifest]) -> void:
 	var path: Array[String] = []
 	for m in found:
 		_visit(m, state, cyclic, path)
+	_check_binaries()
 	for m in _mods:
 		if cyclic.has(m.id):
 			m.status = ModManifest.STATUS_UNAVAILABLE

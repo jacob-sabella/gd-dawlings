@@ -324,6 +324,7 @@ never throws; every failure leaves the game running.
 | `engine_type_missing` | `sound.type` not in the engine snapshot | unavailable plate "needs engine module X" |
 | `engine_unavailable` | no built engine (Windows, Quest, CI) | modules draw normally, the room is silent, as today (SM 1.2) |
 | `snapshot_stale` | snapshot differs from the live `--describe` | warning in the log; live description wins |
+| `binary_missing` | `source.kind` binary and `source.file` is not in the mod's folder (built) | mod unavailable, the reason is listed; mods that need it are unavailable too |
 | `binary_hash_mismatch`, `unsupported_platform` | pinned binary altered or not for this OS | entry unavailable |
 | `composite_invalid` | unknown inner type, cycle, depth > 3, bad jack | entry unavailable, reason shown |
 | `unsupported_sound_kind` | reserved or unknown `sound.kind` | entry unavailable |
@@ -333,8 +334,8 @@ never throws; every failure leaves the game running.
 | `unknown_key` | top-level key the format does not define | ignored; warning (3.1: forward compatibility) |
 
 On start the game shows one toast ("2 mods could not be loaded: see MODS") if any `error` problem
-exists, and writes all problems to the log. The MODS screen (a plate in the modular room, built in
-step 8) lists mods, versions, licences and problems. A mod removed after a patch used it is not a
+exists, and writes all problems to the log. The MODS screen (built: F5, `ModsScreen`, section 11)
+lists every mod folder with its version, licence, source pin, what it provides and, when unavailable, why. A mod removed after a patch used it is not a
 load error: it is handled by the patch (6).
 
 ## 6. Patch files, room row, guests
@@ -468,7 +469,8 @@ Built and held by tests (the steps of the old migration plan are in `docs/refact
 | Composites | Built. `RackModuleDef.resolve` at scan, `RackExpansion.expand` at play time; depth 3, cost counted on the expansion against `MAX_MODULES` (64). |
 | Plugin overlays | Partly. `res://mods/builtin/effects` gives the ten built-in effects their titles; `plugin_title`/`plugin_display` serve scanned plugins. Not done: `display.skin`, `first_params`, `param_key` are accepted and ignored; the unavailable plugin slot; Reaper's own list; `plugin_not_found`. |
 | The proof | Built. `mods_examples/dawlings.sample.pluck/` (folder only, excluded from exports) and `tests/sample_mod_proof_tests.gd`: appears, plays, saves, reloads, replicates to a guest. |
-| Not built | The MODS screen; `tools/mods_notices.py` and the notice/pin tests (3.6); `tools/rack_describe.sh` (the snapshot `core/music/rack/modules.json` is regenerated from `native/rack --describe` by hand, and `_test_a_rack_catalogue_is_the_engines_own_description` compares them when an engine exists). |
+| MODS screen | Built. `ModListing` (rows), `ModsScreen` (F5, read-only, host and guest), section 11. |
+| Not built | `tools/mods_notices.py` and the notice/pin tests (3.6); `tools/rack_describe.sh` (the snapshot `core/music/rack/modules.json` is regenerated from `native/rack --describe` by hand, and `_test_a_rack_catalogue_is_the_engines_own_description` compares them when an engine exists). |
 
 ### How to add a mod (steps)
 
@@ -516,3 +518,25 @@ Built and held by tests (the steps of the old migration plan are in `docs/refact
    Reaper's business.
 7. **Packaging.** Folders only until the sample-mod proof passes; `.zip`/`.pck` after.
 8. **Composite cost.** A composite counts as its expanded modules against `MAX_MODULES`.
+
+## 11. The MODS screen
+
+`F5` opens and closes it (`ModsScreen`, `core/mods/mods_screen.gd`), in the host's game and in a guest's: it only reads. One line per mod
+folder the registry read, in registry order and then the folders it refused: status (`OK` / `UNAVAILABLE`), id, version, licence (SPDX),
+source pin (`submodule vendor/daisysp @ 2c72eaf`, `in_tree core/built_in`, `binary file version sha 01234567`, `data`) and what
+it provides (`rack_module x14, rack_preset x1`). An unavailable mod has its reason in red under it (`code: sentence`); the
+warnings of an ok one (`unknown_key`, `missing_file`) and its dropped entries are in grey. The head says how many mods and how
+many are unavailable.
+
+The rows are `ModListing.rows(registry)` (`core/mods/mod_listing.gd`), a pure function of a `ModRegistry`, so a script can print the same
+thing (`tools/rack_describe.sh`, section 12). Listed, never a crash:
+
+* a manifest that is not JSON, fails the schema, or is for another format or api: `ModRegistry.rejected()` keeps what was read, the row
+  is named for its id (or the folder) and says the parser's sentence;
+* a folder with no `mod.json`: a row naming the folder, `no_manifest`;
+* a mod that parsed but cannot run (a missing dependency, a cycle, a pinned binary that is not there): unavailable, the problem
+  recorded for it is the reason, and its entries are not in the game;
+* a valid manifest refused for a reserved or repeated id: a row for the refused folder, `reserved_id` / `id_collision`.
+
+Tests: `tests/mods_screen_tests.gd` (a temporary root with a good mod, bad JSON, a schema failure, no manifest, a missing binary, a
+mod that needs it, and a present binary). Screenshot: `--panel mods` in `tools/shot.sh` with `--mod` folders.

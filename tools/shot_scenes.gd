@@ -320,11 +320,15 @@ func _make_a_room() -> void:
 	print("SHOT_MAKE_ROOM spec=", maker.spec, " said='", maker.make(), "' venue=", (shot.get_tree().current_scene.get_node("Studio") as Studio).venue.name)
 
 
-## `--panel layout|maker[:piece]`: the F3 or F4 panel open, as the key leaves it.
+## `--panel layout|maker|mods[:piece]`: the F3, F4 or F5 panel open, as the key leaves it.
 func _open_panel() -> void:
 	var words: PackedStringArray = shot._panel.split(":")
 	var root := shot.get_tree().current_scene
-	if words[0] == "maker":
+	if words[0] == "mods":
+		var mods_screen := root.find_child("ModsScreen", true, false) as ModsScreen
+		if mods_screen != null and not mods_screen.is_open():
+			mods_screen.toggle()
+	elif words[0] == "maker":
 		var maker := root.find_child("RoomMaker", true, false) as RoomMaker
 		if maker != null and not maker.is_open():
 			maker.toggle()

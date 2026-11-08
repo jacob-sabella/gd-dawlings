@@ -31,7 +31,7 @@ what lacks one.
 - `transport.md` - the DAW/Reaper wire.
 - `colocation.md` - the physical-room frame for AR.
 - `rack.md` - the modular room, rack wall, engine.
-- `mods.md` - the mod registry, manifests, composites, patch file; decisions; how to add a mod.
+- `mods.md` - the mod registry, manifests, composites, patch file, the MODS screen (F5); decisions; how to add a mod.
 - `layouts.md` - layout data, pieces, made rooms, deltas, sharing; decisions.
 - `venues.md` - the venues, their shells and light; how one is made and added.
 - `pad_deck.md` - the pad deck (the Tv surface and its pads).

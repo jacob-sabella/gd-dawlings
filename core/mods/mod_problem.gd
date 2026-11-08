@@ -15,6 +15,7 @@ const CODES: Array[StringName] = [
 	&"id_collision", &"type_collision", &"reserved_id",
 	&"missing_dependency", &"dependency_cycle",
 	&"missing_file", &"bad_model", &"unsupported_sound_kind", &"unknown_group", &"composite_invalid",
+	&"binary_missing",
 ]
 
 ## Codes from docs/mods.md section 5 that need machinery not built yet, so nothing raises them

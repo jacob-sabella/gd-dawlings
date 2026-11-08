@@ -285,6 +285,11 @@ func _ready() -> void:
 	maker.studio = studio
 	add_child(maker)
 
+	# The mods list: F5, read-only, host or guest (ModsScreen).
+	var mods_screen := ModsScreen.new()
+	mods_screen.name = "ModsScreen"
+	add_child(mods_screen)
+
 	# The whole mix as a flat DAW: F2, or `--flat` to start in it.
 	var flat := FlatView.new()
 	flat.name = "FlatView"

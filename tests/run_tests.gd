@@ -830,6 +830,8 @@ func _ready() -> void:
 	await _t("_test_a_piece_this_build_cannot_make_is_a_named_plate")
 	await _t("_test_deleting_and_adding_a_piece_survives_a_restart")
 	await _t("_test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates")
+	await _t("_test_the_mods_list_has_a_row_for_every_mod_and_every_failure")
+	await _t("_test_the_mods_screen_opens_with_f5_for_host_and_guest")
 	await _t("_test_a_rack_catalogue_is_the_engines_own_description")
 	await _t("_test_a_rack_patch_checks_every_verb")
 	await _t("_test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input")
@@ -45923,6 +45925,18 @@ const SampleModProofTests := preload("res://tests/sample_mod_proof_tests.gd")
 ## The proof of docs/mods.md step 9: a mod that is only a folder appears, plays, saves, reloads and replicates.
 func _test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates() -> void:
 	await SampleModProofTests.new(self).the_proof()
+
+
+const ModsScreenTests := preload("res://tests/mods_screen_tests.gd")
+
+
+## Docs/mods.md section 5: a bad manifest and a missing binary are rows with reasons, never a crash.
+func _test_the_mods_list_has_a_row_for_every_mod_and_every_failure() -> void:
+	ModsScreenTests.new(self).rows_list_every_mod_and_every_failure()
+
+
+func _test_the_mods_screen_opens_with_f5_for_host_and_guest() -> void:
+	ModsScreenTests.new(self).the_screen_lists_the_rows_for_host_and_guest()
 
 
 const LayoutDataTests := preload("res://tests/layout_data_tests.gd")
