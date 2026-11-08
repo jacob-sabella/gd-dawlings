@@ -20,3 +20,5 @@ K over a console strip's fader latches that strip's track
 L held over a voice where the tracks are not played here says why
 L held over a voice on the built-in engine leans in to it
 pressed, it asks each out
+and is in my take at the song it was played to, back at rest at the note-off
+Esc lets it go: Enter does nothing more

@@ -2,7 +2,7 @@
 
 ## Layout
 
-One headless scene, `tests/tests.tscn`, runs `tests/run_tests.gd` (about 46,000 lines, 17,900 checks): a node whose
+One headless scene, `tests/tests.tscn`, runs `tests/run_tests.gd` (about 46,000 lines, 20,300 checks): a node whose
 `_ready` calls every `_test_*` function in order, each making `check(name, bool)` / `close_to(name, a, b)` calls, then
 prints `N checks, M failed` and each `FAIL`. Newer groups live in their own files, preloaded and called from
 `run_tests.gd` (`const FooTests := preload(...)`, one `_test_*` that runs it):
@@ -35,7 +35,35 @@ A name picks one function; list several for a corner of the game (`grep -n "^fun
 **Import check** (a script that does not compile, with no test run; enough for a comment-only change):
 `timeout 200 godot --headless --path . --import 2>&1 | grep -E "SCRIPT ERROR|Parse Error"`.
 
-**Everything**: `tools/verify.sh` (builds the native core first, then runs the whole scene, non-zero on any failure or
+**Everything, in parallel (use this)**: `tools/test_parallel.sh [N]` (default 4 shards) runs the whole scene as N godot
+processes, merges their output and prints one line: `shards 4: 20289 checks, 50 failed (48 known, 2 new), 132s wall`.
+It exits non-zero on a failure that matches no line of `tests/known_failures.txt`, a shard that did not finish, or a
+`SCRIPT ERROR`. How it works:
+
+- `DAWLINGS_SHARD=i/n` (i from 1) makes `run_tests.gd` run only its share. Every `_test_*` call in `_ready` is
+  `await _t("name")`; `_t` skips the tests that are not this shard's and times the rest. The share is dealt longest
+  first onto the lightest shard by the seconds in `tests/test_times.txt` (regenerate it from a `DAWLINGS_TIMES` run:
+  `name seconds checks` per line), so the shards finish together. The source and that file decide the deal; every
+  shard computes the same one. A new test not in the file counts as the median.
+- `DAWLINGS_TIMES=path` appends `name seconds checks` for each test as it finishes (the script merges the shards'
+  files into one, slowest first). It works with `DAWLINGS_TESTS` too.
+- Each shard gets its own `XDG_DATA_HOME` (so its `user://`), `XDG_CACHE_HOME` (the helpers' pipes), `XDG_CONFIG_HOME`
+  and `CLAUDE_JOB_DIR`, and its own block of ports: the tests that open the stand-in noray and ENet ports add
+  `_port_shift` (100 per shard) to 18809, 18832-18836 and 18890. The keys helper is copied in from this machine's build
+  so no shard compiles it.
+- Anything a test writes to a fixed place must stay under `user://` or the cache dir, or take a shard-unique name.
+  `tests/workshop_tests.gd` writes `shots/tmp/workshop_test` and a throwaway repo under `user://`; nothing else
+  writes under the project.
+- The "Rig Roulette is off" check runs in shard 1 only, so the checks add up to the serial count.
+
+**Timings** (2026-11-07, 32 cores): 784 test functions, 20,289 checks. Serial CPU total 660 s before the trim, 481 s
+after (sum of the per-test seconds). Wall: 296 s on 6 shards before (the slowest test, the plane-sharing scan, took
+222 s and was the floor), 132 s on 4 shards after. Slowest now: the plane-sharing scan (55 s, 42 venue variants), the
+struck-sounds helper (31 s, it synthesises every sound), `every_venue_keeps_its_pieces_apart` (28 s), a rope ducking
+a render (19 s), the mix and stems render (13 s); the rest is a flat tail under 9 s each. Per-test numbers:
+`tests/test_times.txt`.
+
+**One process**: `tools/verify.sh` (builds the native core first, then runs the whole scene, non-zero on any failure or
 `SCRIPT ERROR`). The suite takes tens of minutes now; the "90 s" in the script's own comment is stale. The refactor
 loop runs it only at item 12 (`docs/refactor_loop.md`).
 
@@ -49,8 +77,9 @@ pull requests and master; `release-stable.yml` releases.
 
 ## Known failures
 
-Listed with their cause in `docs/refactor_loop.md` ("Known failures"): 46 of 17,880 at the last full run (42 are
-the RackWall "no two faces share a plane" scan). A new failure is yours until shown otherwise: check it against the
+Listed with their cause in `docs/refactor_loop.md` ("Known failures") and, as substrings `tools/test_parallel.sh`
+matches, in `tests/known_failures.txt`: 50 of 20,289 at the last sharded run (42 are the RackWall "no two faces share a
+plane" scan; 9 pass alone and fail only when the tests run as a subset, which sharding is). A new failure is yours until shown otherwise: check it against the
 pre-change code in a throwaway worktree.
 
 ## How to add a test
