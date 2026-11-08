@@ -143,6 +143,15 @@ func _build_rack() -> void:
 	if Session.guest_midi != null:
 		Session.guest_midi.key.connect(_on_modular_key)
 	_show_rack(studio.rack_row)
+	# A mod installed or removed (the MODS screen's reload, a mod a host shared): plates become modules and back.
+	var reg := ModRegistry.ensure_current()
+	var reshow := func() -> void:
+		if is_instance_valid(studio) and studio.rack_wall != null and is_instance_valid(studio.rack_wall):
+			_show_rack(studio.rack_row)
+	reg.changed.connect(reshow)
+	studio.tree_exiting.connect(func() -> void:
+		if reg.changed.is_connected(reshow):
+			reg.changed.disconnect(reshow), CONNECT_ONE_SHOT)
 
 
 ## The rack, hung at this venue's spot over the stand (Venue.modular_spot), the venue's rack giving way
@@ -329,6 +338,17 @@ func _show_rack(row: Dictionary) -> void:
 		studio.rack_voice.set_track(int(studio.rack_row["track"]))
 	elif studio.rack_voice != null and is_instance_valid(studio.rack_voice):
 		studio.rack_voice.patch = patch
+	_offer_the_mods_in_use(patch)
+
+
+## Host: the mods the patch uses are offered to guests who lack them (`ModSend`, docs/mods.md section 13).
+func _offer_the_mods_in_use(patch: Dictionary) -> void:
+	if Session.role != Session.Role.HOST or Session.mod_share == null or Session.participants.size() < 2:
+		return
+	var used: Array = []
+	for use: Dictionary in (RackPatch.to_dict(patch)["uses"] as Dictionary).values():
+		used.append(str(use.get("mod", "")))
+	Session.mod_share.offer_used(used)
 
 
 func _rack_track_name(index: int) -> String:

@@ -59,6 +59,8 @@ var _status: Label
 var _name_edit: LineEdit
 var _swatch: Panel
 var _roster: VBoxContainer
+## A guest's accept / decline cards for the mods the host offers.
+var _mod_offers: ModOfferPrompt
 var _solo_box: VBoxContainer
 var _host_box: VBoxContainer
 var _internet_button: Button
@@ -189,11 +191,20 @@ func _ready() -> void:
 	get_window().files_dropped.connect(_on_files_dropped)
 	DAW.audio_imported.connect(_on_audio_imported)
 	DAW.audio_import_done.connect(_on_audio_import_done)
+	Session.mod_share.changed.connect(_on_mod_offers)
+	Session.mod_share.installed.connect(func(id: String) -> void: toast("Installed the mod %s. Its plates are live." % id))
 	_refresh()
 
 
 func is_open() -> bool:
 	return _root.visible
+
+
+## A mod offer came, was answered or moved on: the cards are drawn again, and the panel opens for one waiting for an answer.
+func _on_mod_offers() -> void:
+	_mod_offers.refresh()
+	if _mod_offers.has_pending() and not is_open():
+		open()
 
 
 ## In a headset: the panel drawn on glass in `room` instead of over the screen, which nobody in it
@@ -409,6 +420,9 @@ func _build_panel() -> void:
 	_status = _label("", 13, DIM)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_status)
+	# Mods the host offers (ModSend): the prompt sits at the top, where a guest looks first.
+	_mod_offers = ModOfferPrompt.new(Session.mod_share)
+	column.add_child(_mod_offers)
 
 	column.add_child(_caption("YOUR NAME"))
 	var name_row := HBoxContainer.new()

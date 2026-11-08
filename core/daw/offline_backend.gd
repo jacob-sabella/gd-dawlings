@@ -940,6 +940,9 @@ func _write_fx(track_index: int, fx_index: int, row: Dictionary) -> void:
 				f.params.erase(param)
 	var writes := [["name", [row["name"]]], ["bypass", [1.0 if row["enabled"] else 0.0]],
 			["wet", [float(row["wet"])]], ["preset", [str(row["preset"])]]]
+	var marker := MixWire.plugin_marker(f, self)
+	if not marker.is_empty():
+		writes.append(["plugin", marker])
 	for param in row["params"]:
 		writes.append(["fxparam/%d/value" % param, [float(row["params"][param])]])
 	for param in row["param_names"]:
@@ -2113,7 +2116,7 @@ func transport_record() -> void:
 
 
 func snapshot() -> Array:
-	return MixWire.snapshot(state)
+	return MixWire.snapshot(state, self)
 
 
 func apply_replicated(batch: Array) -> void:

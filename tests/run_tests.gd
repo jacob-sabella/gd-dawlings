@@ -839,6 +839,10 @@ func _ready() -> void:
 	await _t("_test_a_plugin_skin_is_validated_and_resolved")
 	await _t("_test_a_rack_unit_wears_a_skin_and_a_lost_plugin_is_an_unavailable_plate")
 	await _t("_test_the_mods_list_has_a_row_for_each_plugin_entry")
+	await _t("_test_a_mod_is_offered_accepted_and_installed_and_its_plate_becomes_the_module")
+	await _t("_test_declining_a_mod_or_having_it_already_changes_nothing")
+	await _t("_test_a_shared_mod_with_a_bad_hash_path_kind_or_size_is_refused_whole")
+	await _t("_test_the_plugin_marker_reaches_a_guest_and_lacking_it_is_the_unavailable_plate")
 	await _t("_test_a_rack_catalogue_is_the_engines_own_description")
 	await _t("_test_a_rack_patch_checks_every_verb")
 	await _t("_test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input")
@@ -45980,6 +45984,31 @@ func _test_a_rack_unit_wears_a_skin_and_a_lost_plugin_is_an_unavailable_plate() 
 
 func _test_the_mods_list_has_a_row_for_each_plugin_entry() -> void:
 	PluginDressTests.new(self).plugin_rows_say_whether_each_is_here()
+
+
+const ModShareTests := preload("res://tests/mod_share_tests.gd")
+
+
+## Docs/mods.md section 13: a host's user mod is offered, accepted or declined, checked, installed and live on the guest; the plugin marker travels.
+func _test_a_mod_is_offered_accepted_and_installed_and_its_plate_becomes_the_module() -> void:
+	ModShareTests.new(self).offer_accept_install_and_the_plate_becomes_the_module()
+	ModShareTests.new(self).the_prompt_has_accept_and_decline()
+
+
+func _test_declining_a_mod_or_having_it_already_changes_nothing() -> void:
+	ModShareTests.new(self).declining_changes_nothing()
+	ModShareTests.new(self).a_guest_who_has_the_mod_is_not_asked()
+	ModShareTests.new(self).solo_is_unaffected()
+
+
+func _test_a_shared_mod_with_a_bad_hash_path_kind_or_size_is_refused_whole() -> void:
+	ModShareTests.new(self).bad_sets_are_refused_whole()
+	ModShareTests.new(self).a_wrong_hash_or_a_bad_file_installs_nothing()
+	ModShareTests.new(self).a_bad_offer_is_ignored()
+
+
+func _test_the_plugin_marker_reaches_a_guest_and_lacking_it_is_the_unavailable_plate() -> void:
+	ModShareTests.new(self).the_plugin_marker_reaches_a_guest()
 
 
 const LayoutDataTests := preload("res://tests/layout_data_tests.gd")

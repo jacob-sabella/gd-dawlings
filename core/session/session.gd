@@ -127,6 +127,8 @@ var guest_audio: GuestAudio = null
 var host_audio: GuestAudio = null
 ## Sound files from a guest's machine into the host's project. See core/session/file_send.gd.
 var files: FileSend = null
+## The host's user mods offered to guests, and a guest's inbox of offers (`ModSend`).
+var mod_share: ModSend = null
 ## This player's own sound into their Discord voice channel. See core/audio/discord_feed.gd.
 var discord: DiscordFeed = null
 var rooms_published := 0

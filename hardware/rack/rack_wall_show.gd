@@ -71,7 +71,8 @@ func show_patch(to: Dictionary) -> void:
 func _shape_of(p: Dictionary) -> String:
 	var parts: Array = []
 	for id in RackPatch.module_ids(p):
-		parts.append("%s:%s@%s,%s" % [id, p["modules"][id]["type"], p["modules"][id]["at"][0], p["modules"][id]["at"][1]])
+		parts.append("%s:%s@%s,%s%s" % [id, p["modules"][id]["type"], p["modules"][id]["at"][0], p["modules"][id]["at"][1],
+				"!" if RackPatch.is_missing(p, id) else ""])
 	return "|".join(parts)
 
 

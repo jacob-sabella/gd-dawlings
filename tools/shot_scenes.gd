@@ -320,6 +320,14 @@ func _make_a_room() -> void:
 	print("SHOT_MAKE_ROOM spec=", maker.spec, " said='", maker.make(), "' venue=", (shot.get_tree().current_scene.get_node("Studio") as Studio).venue.name)
 
 
+## `--mod-answer accept|decline`: presses that button on the first waiting offer in the session panel, as a click would.
+func _answer_mod_offer() -> void:
+	var button := shot.get_tree().current_scene.find_child("Accept" if shot._mod_answer == "accept" else "Decline", true, false) as Button
+	print("SHOT_MOD_ANSWER ", shot._mod_answer, " button=", button != null)
+	if button != null:
+		button.pressed.emit()
+
+
 ## `--panel layout|maker|mods[:piece]`: the F3, F4 or F5 panel open, as the key leaves it.
 func _open_panel() -> void:
 	var words: PackedStringArray = shot._panel.split(":")

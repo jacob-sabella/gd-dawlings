@@ -234,6 +234,12 @@ func _ready() -> void:
 				if i + 1 < args.size(): shot._tour_band = int(args[i + 1])
 			"--panel":
 				if i + 1 < args.size(): shot._panel = args[i + 1]
+			"--panel-frame":
+				if i + 1 < args.size(): shot._panel_frame = int(args[i + 1])
+			"--mod-answer":
+				if i + 1 < args.size(): shot._mod_answer = args[i + 1]
+			"--mod-answer-frame":
+				if i + 1 < args.size(): shot._mod_answer_frame = int(args[i + 1])
 			"--make-room":
 				if i + 1 < args.size(): shot._make_room = args[i + 1]
 			"--rack-patch":

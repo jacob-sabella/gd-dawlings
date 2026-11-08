@@ -725,6 +725,17 @@ static func unpack_item(d: Variant) -> MixState.ItemState:
 	return item
 
 
+## What a guest is told of the third-party plugin in slot `f`, for it to show an unavailable plate when it lacks
+## that plugin: `[format, id, name]` (docs/mods.md 4.3), or [] for a slot of the engine's own effects or one
+## that holds no plugin. Names and ids only, never a plugin file or its state. `backend` is the DAW's, which
+## knows what it hosts.
+static func plugin_marker(f: MixState.FXState, backend: Object) -> Array:
+	var ref := PluginRef.of(f, backend)
+	if ref.is_empty() or ref["format"] == "godot" or str(ref["id"]).is_empty():
+		return []
+	return [str(ref["format"]), str(ref["id"]), str(ref["name"])]
+
+
 static func _apply_fx(state: MixState, track_idx: int, p: PackedStringArray, args: Array) -> void:
 	if p.size() < 5 or not p[3].is_valid_int():
 		return
@@ -734,7 +745,14 @@ static func _apply_fx(state: MixState, track_idx: int, p: PackedStringArray, arg
 		"name":
 			f.name = MixState.FXState.bare_name(str(args[0]))
 			f.type = MixState.FXState.type_of(str(args[0]))
+			f.remove_meta(&"plugin_ref")
 			state.fx_changed.emit(track_idx, fx_idx)
+		# dawlings's own: which third-party plugin the slot holds (format, id, name), so a guest lacking it
+		# can say so. Always after the slot's `name`, which forgets it.
+		"plugin":
+			if p.size() == 5 and args.size() >= 3:
+				f.set_meta(&"plugin_ref", {"format": str(args[0]).left(16), "id": str(args[1]).left(200), "name": str(args[2]).left(120)})
+				state.fx_changed.emit(track_idx, fx_idx)
 		# dawlings's own: the plugin's real parameters, listed by the bridge.
 		"paramlist":
 			var listed: Array = args.map(func(a): return int(a))
@@ -861,7 +879,7 @@ static func _as_bool(args: Array) -> bool:
 ## That is the whole trick: a guest has exactly one code path for "state arrived", the host has
 ## one for "state left", and a field added to ReaperState is replicated the day it is parsed
 ## rather than the day someone remembers to add it to a serialiser.
-static func snapshot(state: MixState) -> Array:
+static func snapshot(state: MixState, backend: Object = null) -> Array:
 	# FIRST, before a single track message. A bank statement redefines what every index after
 	# it means, and applying one clears the cache -- so a snapshot that stated the bank at the
 	# end would deliver a full project and then throw it away, leaving a guest with an empty
@@ -912,6 +930,9 @@ static func snapshot(state: MixState) -> Array:
 			var f: MixState.FXState = t.fx[fx_index]
 			out.append(["/track/%d/fx/%d/name" % [index, fx_index],
 					[("%s: %s" % [f.type, f.name]) if f.type != "" else f.name]])
+			var marker := plugin_marker(f, backend)
+			if not marker.is_empty():
+				out.append(["/track/%d/fx/%d/plugin" % [index, fx_index], marker])
 			out.append(["/track/%d/fx/%d/bypass" % [index, fx_index], [1.0 if f.enabled else 0.0]])
 			out.append(["/track/%d/fx/%d/wet" % [index, fx_index], [f.wet]])
 			if f.preset != "":

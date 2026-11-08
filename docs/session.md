@@ -30,7 +30,7 @@ string or another file reaches):
 what they hold), `MixFeed`/`MixSource`/`JitterBuffer`/`HeardClock`/`SongClock` (the host's programme audio to guests
 on its own UDP socket, and which moment of the song a guest hears), `GuestMidi`/`GuestPlay`/`GuestAudio`/`GuestLive`/
 `MonitorSynth`/`TheirKeys` (a guest's keys and microphone), `FileSend` (sound files from a guest into the host's
-project), `NorayLink`/`InternetDoor` (join by code, UPnP), `Glove`/`GhostLook`/`PoseTrail` (how others look),
+project), `ModSend` (the host's user mods to a guest, accept/decline, `docs/mods.md` section 13), `NorayLink`/`InternetDoor` (join by code, UPnP), `Glove`/`GhostLook`/`PoseTrail` (how others look),
 `PatchHost` (jacks, `core/session/patch_host.gd`, a Studio helper).
 
 Channels (constants in `SessionBase`): game traffic on ENet's default; `AUDIO_TAKE_CHANNEL` 3, `MOTION_CHANNEL` 4,
@@ -92,8 +92,17 @@ its `@rpc("any_peer" | "authority", ...)` line to `session.gd` (an rpc must be d
 addresses, which is the autoload), and a doc comment saying who may call it. A new channel constant goes in
 `SessionBase`.
 
+## Sharing mods (`ModSend`)
+
+`ModSend` (`core/session/mod_send.gd`, the `Session.mod_share` child node, channel 6) offers the host's `user://mods` folders to a
+guest: on join (`participant_joined`) and whenever the rack patch uses a mod (`RackHost._offer_the_mods_in_use`). The guest's inbox
+shows in the session panel (`ModOfferPrompt`); ACCEPT asks the host, which sends the files in 32 KB slices (two a frame); the guest
+checks the hash and `ModShare.check`, installs and rescans its registry. Verbs: host to guest `offered`, `file_began`, `slice`,
+`ended`, `refused`; guest to host `accepted`, `declined`; each `_rpc_*` checks the sender's role. A host's `/track/N/fx/M/plugin`
+marker rides the mix feed. Rules, limits and the proof are in `docs/mods.md` section 13.
+
 ## Tests
 
 `tests/run_tests.gd` (the `_test_a_guest_*`, `_test_the_host_*` groups), `tests/layout_share_tests.gd` (two studios in
-one tree), `tests/guest_live_tests.gd` (a guest follows the host's meters, clock and rack), `tests/fake_noray.gd` (a noray in-process), `tools/session_probe.sh` (a headless host and guest on one
+one tree), `tests/mod_share_tests.gd` (a mod offered, accepted, declined, refused, installed; the plugin marker), `tests/guest_live_tests.gd` (a guest follows the host's meters, clock and rack), `tests/fake_noray.gd` (a noray in-process), `tools/session_probe.sh` (a headless host and guest on one
 timeline), `tools/pair_probe.gd`. See `docs/testing.md`.

@@ -177,8 +177,10 @@ func _process_framing() -> void:
 func _process_scenes() -> void:
 	if shot._frames == 3 and shot._make_room != "":
 		shot.scenes._make_a_room()
-	if shot._frames == 6 and shot._panel != "":
+	if shot._frames == shot._panel_frame and shot._panel != "":
 		shot.scenes._open_panel()
+	if shot._frames == shot._mod_answer_frame and shot._mod_answer != "":
+		shot.scenes._answer_mod_offer()
 	# Later than the camera, so a visit the studio makes on its own at startup has landed first.
 	if shot._frames == 8 and shot._walk_mirror > 0.0:
 		var mirrors := shot.get_tree().current_scene.find_children("*", "Mirror", true, false)

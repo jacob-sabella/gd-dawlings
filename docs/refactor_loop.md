@@ -81,7 +81,7 @@ Made by the owner, 2026-11-07. They override anything above that reads otherwise
 2. **The rack patch is saved to disk and loaded** (a patch is a file). A missing mod shows as a visible
    "unavailable" plate, and its place and connections are preserved, never dropped.
 3. **A guest who lacks a mod the host's room uses** sees an unavailable plate naming the mod and still
-   hears the host's sound. No transfer, no refusal.
+   hears the host's sound. *Superseded 2026-11-08 by decision 6 ("no transfer" no longer holds).*
 4. **The 800-line limit applies to `studio.gd`, `venue.gd` and every file the refactor touches**, not to
    the whole repo.
 5. **Design sign-off (2026-11-07).** Built-in manifests live in `res://mods/builtin/`, pointing at
@@ -106,6 +106,15 @@ Made by the owner, 2026-11-07. They override anything above that reads otherwise
    prints the lightly changed over-limit files in their own list, `tools/quality_check.sh --all` applies the
    limit to every changed file (the literal reading), and setting `SUBSTANTIVE = 0` makes that permanent.
    The unreferenced-symbol check is unchanged and still covers every changed file.
+
+6. **The host shares its user mods (owner, 2026-11-08, "Send all mods").** Supersedes "no transfer" in decision 3. The host
+   offers its `user://mods` mods to guests (on join, and when its patch uses one the guest lacks); the guest sees an
+   accept/decline prompt and, on accept, installs under its own `user://mods` and the plates become the live module. Safeguards:
+   SHA-256 over the file set, size and file-count caps, traversal and absolute paths rejected, only `json png jpg ogg wav glb txt md`,
+   anything else rejects the whole mod. Declining keeps the unavailable plate and the host's sound. Builtin mods are never
+   offered. Rule 1 holds: a mod never carries native code; VST/CLAP files, state and licences are never sent. The missing-plugin
+   marker (format, id, display name only) goes to guests so a guest lacking the plugin shows the unavailable plate. See
+   `docs/mods.md` section 13.
 
 ## Running things
 

@@ -139,6 +139,11 @@ var _shot_res := Vector2i.ZERO
 ## `--panel layout|maker[:piece]`: the F3 layout edit panel or the F4 room-maker panel open from frame 6,
 ## as the key opens them; `layout:hoop` also picks that piece in the list, `layout:hoop:nudge` and moves it one step (ShotScenes._open_panel).
 var _panel := ""
+## `--panel-frame N`: the frame `--panel` opens at (default 6). `--mod-answer accept|decline` presses that button of the session panel's
+## first waiting mod offer (the real ModOfferPrompt button) at `--mod-answer-frame N` (ShotScenes._answer_mod_offer).
+var _panel_frame := 6
+var _mod_answer := ""
+var _mod_answer_frame := 300
 ## `--make-room small|standard|large[:zone+zone...[:Title[:style]]]`: at frame 3 that room made by MadeRooms (the
 ## maker's own MAKE), zones joined with `+` (`all`, the default, is every zone that fits) and the band taken
 ## into it. Pair with `--walk` to stand in it.

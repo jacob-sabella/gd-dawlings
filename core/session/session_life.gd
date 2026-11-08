@@ -31,6 +31,9 @@ func ready() -> void:
 	session.files = FileSend.new()
 	session.files.name = "FileSend"
 	session.add_child(session.files)
+	session.mod_share = ModSend.new()
+	session.mod_share.name = "ModSend"
+	session.add_child(session.mod_share)
 	session.discord = DiscordFeed.new()
 	session.discord.name = "DiscordFeed"
 	session.add_child(session.discord)

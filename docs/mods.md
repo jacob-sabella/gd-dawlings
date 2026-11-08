@@ -28,7 +28,8 @@ Rules fixed by the owner (2026-11-07, `docs/refactor_loop.md` "Decisions"):
 2. **A patch is a file.** It is saved and loaded; a missing mod shows an unavailable plate and keeps
    its place and cables.
 3. **A guest without the host's mod** sees an unavailable plate naming the mod and still hears the
-   host's sound. No transfer, no refusal.
+   host's sound, unless the host SHARES the mod and the guest accepts it (section 13). This replaces
+   "no transfer" (owner, 2026-11-08, "Send all mods").
 4. The 800-line limit applies to `studio.gd`, `venue.gd` and every file the refactor touches.
 
 ## 2. Where things live
@@ -303,8 +304,9 @@ Not done, and why: `first_params` and `param_key` are still accepted and ignored
 (`plugin_tablet.gd` is already past the 800-line limit, so a skin there needs that file split first; the unit is the rack's
 face, the tablet a second view), and the unavailable plate is a `RackUnit` only. The Reaper backend's own list
 (`ReaperBackend.fx_choices` is Reaper's stock FX and an unavailable slot under Reaper is Reaper's business, open question 6)
-is untouched, and so are the rack marbles outputs. A guest sees no `unhosted` meta (it is not on the wire), so a guest's rack
-shows a missing plugin as an ordinary slot, not the plate.
+is untouched, and so are the rack marbles outputs. The `unhosted` meta is still not on the wire, but the host sends a **plugin
+marker** instead (section 13.4): `/track/N/fx/M/plugin` = `[format, id, name]`, which a guest stores as slot meta `plugin_ref`;
+`PluginRef.of` then says `missing` when the guest's own plugin scan lacks it, and the rack shows the same unavailable plate.
 
 ## 5. Discovery, order, collisions, failures
 
@@ -410,7 +412,8 @@ The `rack` row stays `{patch, track}` (`studio.gd`, `Session.ask_room` validatio
 `session.gd`); the patch inside gains `uses`. The host fills `uses` from its registry when it
 publishes. A guest's registry resolves `type` locally; if absent, the plate reads
 "PLUCK (dawlings.sample.pluck 0.1.0): not installed" from `uses`. The guest hears the host's sound
-exactly as today (the host runs the engine and feeds the track, SM 1.6); nothing is transferred. A guest
+exactly as today (the host runs the engine and feeds the track, SM 1.6). A mod the host shares may be
+offered and installed (section 13), after which the plate becomes the module. A guest
 cannot turn knobs on a missing module (nothing to drag) but may move or remove it by the usual
 `ask_rack` verbs, which the host validates. The guest's own prediction path (`_rack_apply`) uses the
 same `sanitize`, so predictions do not drop modules the host kept.
@@ -483,6 +486,7 @@ Built and held by tests (the steps of the old migration plan are in `docs/refact
 | Composites | Built. `RackModuleDef.resolve` at scan, `RackExpansion.expand` at play time; depth 3, cost counted on the expansion against `MAX_MODULES` (64). |
 | Plugin overlays | Partly. `res://mods/builtin/effects` gives the ten built-in effects their titles; `plugin_title`/`plugin_display` serve scanned plugins. Built: `display.skin` on the `RackUnit`, the unavailable plugin slot, `plugin_not_found` as a listing status (4.3). Not done: `first_params`, `param_key`, the tablet skin, Reaper's own list, the rack marbles outputs. |
 | The proof | Built. `mods_examples/dawlings.sample.pluck/` (folder only, excluded from exports) and `tests/sample_mod_proof_tests.gd`: appears, plays, saves, reloads, replicates to a guest. |
+| Mod sharing | Built (section 13). `ModShare` (checks, hash, install), `ModSend` (offer, chunked transfer), `ModOfferPrompt` (session panel), the plugin marker. |
 | MODS screen | Built. `ModListing` (rows), `ModsScreen` (F5, read-only, host and guest), section 11. |
 | `tools/rack_describe.sh` | Built (section 12): the registry's rows headless. |
 | Not built | `tools/mods_notices.py` and the notice/pin tests (3.6); the snapshot regeneration script (the snapshot `core/music/rack/modules.json` is regenerated from `native/rack --describe` by hand, and `_test_a_rack_catalogue_is_the_engines_own_description` compares them when an engine exists). |
@@ -517,6 +521,8 @@ Built and held by tests (the steps of the old migration plan are in `docs/refact
 | `_test_a_guest_without_the_mod_sees_a_named_plate_and_hears_the_host` | 6.3 (host feeds the track; guest plate text from `uses`) |
 | `_test_a_composite_expands_exactly`, `_test_a_composite_has_its_own_interface`, `_test_composite_knobs_are_routed_to_the_inner_modules`, `_test_composites_nest_three_deep`, `_test_a_bad_composite_is_an_unavailable_plate_and_never_a_crash`, `_test_the_module_cap_is_counted_on_the_expansion`, `_test_a_composite_plate_meters_its_inner_module`, `_test_a_patch_without_composites_is_unchanged`, `_test_composite_fixtures_load`, `_test_a_composite_plays` (built, `tests/rack_composite_tests.gd`) | 3.5: exact lines, interface, knob routing, nesting, depth/cycle limits, cap, meters; render equals the same modules patched by hand. The sample mod's own render is the proof test |
 | **`_test_a_sample_mod_dropped_in_a_folder_appears_plays_saves_reloads_and_replicates`** | the proof: copy `mods_examples/dawlings.sample.pluck` into a temp user root, `scan`, assert the module and preset are in the palette; load the preset, render audio from the engine; `to_dict` -> file -> `from_dict` equal; remove the folder, reload: plate unavailable, place and cables kept; host row -> guest `apply_room`: guest without the mod gets the named plate |
+
+| `_test_a_mod_is_offered_accepted_and_installed_and_its_plate_becomes_the_module`, `_test_declining_a_mod_or_having_it_already_changes_nothing`, `_test_a_shared_mod_with_a_bad_hash_path_kind_or_size_is_refused_whole`, `_test_the_plugin_marker_reaches_a_guest_and_lacking_it_is_the_unavailable_plate` (`tests/mod_share_tests.gd`) | 13: round trip, decline, hash, traversal, extension, program bytes, caps, binary source, builtin id, the plate becoming the module, the marker, solo |
 
 ## 11. Decisions (owner, 2026-11-07)
 
@@ -567,3 +573,58 @@ creates anything in a player's data. `--strict` exits 1 when any mod is unavaila
 error). It runs `tools/rack_describe.gd` (a `SceneTree` script) over `ModListing.rows`, so the screen and the script cannot disagree.
 Test: `_test_rack_describe_prints_the_registry_headless` (runs the script on a root with a bad manifest and a missing binary).
 It does not print the engine snapshot; `core/music/rack/modules.json` is still regenerated from `native/rack --describe`.
+
+
+## 13. Sharing mods with guests
+
+Owner, 2026-11-08 ("Send all mods"), superseding "no transfer" in rule 3 of section 1. Rule 1 stands: a mod never carries
+native code.
+
+### 13.1 What is offered
+
+The host offers its **user** mods (folders under `user://mods`, status ok) to a guest when the guest joins, and again when the
+host's rack patch uses a mod the guest has not been asked about (`RackHost._offer_the_mods_in_use`; the mods the room uses go first).
+Builtin mods (`builtin.*`, `res://`) are never offered, nor are VST/CLAP plugin files, their state or licences. A mod the guest
+already has is not offered. A mod the guest declined is not asked again this session. At most 8 offers wait per guest, and one
+offer is made per frame.
+
+### 13.2 The guest's prompt
+
+The session panel gains a block (`ModOfferPrompt`, `scenes/mod_offer_prompt.gd`): a card per offer naming the host, the mod, its
+version, licence, size and file count, with ACCEPT and DECLINE; a progress bar while receiving; "Installed" or "Not installed: why"
+after. The panel opens itself when an offer arrives. Declining or ignoring keeps today's behaviour: the unavailable plate and the
+host's sound.
+
+### 13.3 The transfer and its safeguards
+
+`ModSend` (`core/session/mod_send.gd`, a child of the Session autoload, channel 6 like `FileSend`) follows the `FileSend` pattern:
+reliable, chunked (32 KB slices, two per frame in all, so it never blocks audio or the frame loop), host-authoritative (the host
+sends only what a guest accepted, one mod at a time per guest). The offer carries `{id, name, version, licence, size, count, hash}`;
+`hash` is a SHA-256 over the sorted file set (`ModShare.digest`). The guest keeps the files in memory and writes nothing until
+the whole set has passed, then installs atomically (a hidden staging folder renamed into `user://mods/<id>`), then the registry
+rescans and the plates become the live module (`RackHost` shows the rack again on the registry's `changed`; the wall rebuilds a module whose
+`missing` flag flipped).
+
+`ModShare.check` runs on **both ends** (the host will not offer a set that fails it) and rejects the WHOLE mod for any of:
+
+| Rule | Limit |
+|---|---|
+| Extensions | only `json png jpg ogg wav glb txt md` |
+| Paths | relative and plain: no `..`, leading or doubled slash, backslash, drive colon, hidden segment or control character; at most 96 characters and 4 deep |
+| Program bytes | a file starting like ELF, PE, Mach-O or `#!` is refused whatever it is called |
+| Size | 4 MB a file, 8 MB in all, 64 files |
+| Manifest | must parse and be ok; its id must equal the offered id; not `builtin.*`; no `binary` source |
+| Hash | the received set must hash to the offer's `hash` |
+| Links, hidden files | the host does not read them; the mod is not offered |
+
+### 13.4 The plugin marker
+
+A hosted or kept third-party plugin in a chain slot is sent as `/track/N/fx/M/plugin` = `[format, id, name]` (in the snapshot and on
+every slot write; `MixWire.plugin_marker`, written in `OfflineBackend._write_fx`). Never a binary, a state blob or a licence. A
+guest stores it as slot meta `plugin_ref`; `PluginRef.of` sets `missing` from the guest's own plugin scan (`PluginRef.installed`), so a
+guest lacking the plugin sees the unavailable plate (4.3) and one that has it sees none. A rename of the slot forgets the marker.
+
+### 13.5 Proof
+
+`tests/mod_share_tests.gd` (section 10) and, with two real windows, a host with `dawlings.sample.pluck` and a guest with an empty
+`user://mods`: the guest's prompt, then the live module and its MODS row after ACCEPT, and the plate after DECLINE.

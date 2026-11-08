@@ -90,13 +90,13 @@ func _sync_modules() -> Dictionary:
 	var changed := {}
 	var now: Dictionary = wall.patch["modules"]
 	for id: String in wall._on_wall.keys():
-		if not now.has(id) or now[id]["type"] != wall._on_wall[id][0]:
+		if not now.has(id) or now[id]["type"] != wall._on_wall[id][0] or bool(now[id].get("missing", false)) != wall._on_wall[id][3]:
 			_remove_module(id)
 			wall._on_wall.erase(id)
 			changed[id] = true
 	for id: String in now:
 		var m: Dictionary = now[id]
-		var seen := [String(m["type"]), int(m["at"][0]), int(m["at"][1])]
+		var seen := [String(m["type"]), int(m["at"][0]), int(m["at"][1]), bool(m.get("missing", false))]
 		if not wall._on_wall.has(id):
 			_build_module(id)
 			changed[id] = true
