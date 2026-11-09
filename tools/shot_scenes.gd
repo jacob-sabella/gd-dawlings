@@ -336,6 +336,15 @@ func _open_panel() -> void:
 		var mods_screen := root.find_child("ModsScreen", true, false) as ModsScreen
 		if mods_screen != null and not mods_screen.is_open():
 			mods_screen.toggle()
+	elif words[0] == "finder":
+		var finder := root.find_child("RackFinder", true, false) as RackFinderScreen
+		if finder != null:
+			finder.open_finder(words[1] if words.size() > 1 else "")
+	elif words[0] == "help":
+		# help:<module id> opens that module's help card on the rack wall.
+		var studio := root.get_node_or_null("Studio") as Studio
+		if studio != null and studio.rack_help != null and words.size() > 1:
+			studio.rack_help.open_for(studio.rack_wall.patch, words[1])
 	elif words[0] == "maker":
 		var maker := root.find_child("RoomMaker", true, false) as RoomMaker
 		if maker != null and not maker.is_open():

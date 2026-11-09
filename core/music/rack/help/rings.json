@@ -1,0 +1,23 @@
+{
+  "what": "A ringing body: a virtual metal plate, bell or guitar-like string that you strike and then hear fade away. It can also make any sound you feed it ring like that body.",
+  "how": "Send it a strum (a short pulse meaning 'hit it now') and the internal exciter, a little burst of noise, rings the body at the pitch you choose. Or patch any sound into IN and the body rings along with it, as if you were holding that sound up to a bell. MODEL picks the kind of body. STRUCTURE, BRIGHT, DAMPING and POSITION change what it is made of, how bright it is, how long it rings and where it is struck.",
+  "ins": {
+    "in": "Optional audio (-1..1). With a cable here the module rings with that sound instead of its own noise burst, so a drum loop or noise turns into a tuned, resonant body. Without a cable it plays its own bursts.",
+    "pitch": "Which note to ring. Patch KEYS' pitch here. Each 1.0 is one octave up; with nothing patched, the note is set by the NOTE knob alone.",
+    "strum": "A pulse (0 to 1; above 0.5 counts) that hits the body. Patch KEYS' gate, a clock or a sequencer's gate. Nothing sounds without a strum unless audio is patched into IN."
+  },
+  "outs": {
+    "odd": "One of two output signals. In a many-voice setting the voices take turns between ODD and EVEN, and in each model they differ a little in tone. Patch either one, or both to the two sides of OUT for stereo.",
+    "even": "The other of the two output signals. Patch it next to ODD for width, or use it alone."
+  },
+  "knobs": {
+    "model": "The kind of body: MODAL (struck metal or wood), SYMPATH (strings that ring by sympathy), STRING (a plucked string), FM (a bell-like FM voice), SYMP-Q (sympathetic strings tuned into chords), STR+REV (string with a built-in reverb).",
+    "poly": "VOICES: how many notes can ring at once, 1, 2 or 4. Each new strum starts the next voice while older ones keep ringing.",
+    "structure": "What the body is like. Meaning depends on MODEL: in MODAL it shifts the material and the spacing of the overtones; in the string models it changes how the string behaves. Turn it and listen.",
+    "bright": "How bright the ring is: low is dull and wooden, high is shiny and metallic.",
+    "damping": "How quickly the ring fades away. Low means a long ring, high means a short thud.",
+    "position": "Where the body is struck. Different spots bring out different overtones, so the tone changes from hollow to full.",
+    "note": "Shifts the pitch up or down in semitones: from one octave below to three above."
+  },
+  "try": "Patch KEYS' pitch into RINGS' pitch, KEYS' gate into RINGS' strum, and RINGS' odd and even into OUT's left and right. Play notes and turn DAMPING and BRIGHT. Then switch MODEL to hear string and bell versions."
+}

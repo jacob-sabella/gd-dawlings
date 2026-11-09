@@ -221,6 +221,7 @@ func _build_module(id: String) -> void:
 	grip.drag_began.connect(wall._on_grip_began)
 	grip.drag_moved.connect(wall._on_grip_moved)
 	grip.drag_finished.connect(wall._on_grip_finished)
+	grip.clicked.connect(func(_h: RackHandle) -> void: wall.help_asked.emit(id))
 	holder.add_child(grip)
 	# Knobs, down from under the title, a row of 2*w.
 	var per := 2 * w

@@ -1,0 +1,24 @@
+{
+  "what": "The CV bench in the room as a source: fifteen controls you turn with your hand at the board, each giving a smooth steady signal you can patch anywhere. It is how you play the patch by touch.",
+  "how": "The board has five boxes. Each box has two knobs and one slider, which become three jacks: A and B (the knobs) and S (the slider). The box number is the number after the letter: a1, b1 and s1 are box 1, and so on to box 5. Each jack gives a level from 0 (all the way down) to 1 (all the way up), smoothed a little so moving it does not click. A level like this is a control signal (CV): patch it into CUTOFF to sweep a filter, a VCA's cv to fade a sound, or any other control input.",
+  "ins": {},
+  "outs": {
+    "a1": "Box 1, first knob: 0 to 1, as you turn it.",
+    "b1": "Box 1, second knob: 0 to 1, as you turn it.",
+    "s1": "Box 1, slider: 0 to 1, as you move it.",
+    "a2": "Box 2, first knob: 0 to 1.",
+    "b2": "Box 2, second knob: 0 to 1.",
+    "s2": "Box 2, slider: 0 to 1.",
+    "a3": "Box 3, first knob: 0 to 1.",
+    "b3": "Box 3, second knob: 0 to 1.",
+    "s3": "Box 3, slider: 0 to 1.",
+    "a4": "Box 4, first knob: 0 to 1.",
+    "b4": "Box 4, second knob: 0 to 1.",
+    "s4": "Box 4, slider: 0 to 1.",
+    "a5": "Box 5, first knob: 0 to 1.",
+    "b5": "Box 5, second knob: 0 to 1.",
+    "s5": "Box 5, slider: 0 to 1."
+  },
+  "knobs": {},
+  "try": "Patch HAND's a1 into a filter's cutoff (for example SVF, with VCO into its in and its lp into OUT), turn that filter's CV knob up, then go to the board and turn box 1's first knob: the sound should open and close as you turn it."
+}

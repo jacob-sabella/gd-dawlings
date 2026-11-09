@@ -1,0 +1,18 @@
+{
+  "what": "A slow wave that moves up and down by itself. You do not listen to it; you patch it into another module's input so that something (pitch, brightness, volume) keeps gently changing.",
+  "how": "LFO means low-frequency oscillator: it repeats a wave shape from 0.02 to 40 times a second, far too slow to hear as a tone. Its output is a control signal that swings between -1 and 1 (or 0 and 1 on UNI). Patched into the right input, it makes vibrato, wobble or a sweeping filter. SHAPE picks how the movement looks, and DEPTH scales how far it swings.",
+  "ins": {
+    "rate": "Speeds up or slows down the LFO. Each 1.0 on the cable doubles the speed, -1.0 halves it. The RATE knob is the starting point.",
+    "sync": "A pulse here restarts the wave from the beginning, so it lines up with a beat. Patch a CLOCK output here."
+  },
+  "outs": {
+    "out": "The wave, swinging from -DEPTH to +DEPTH around zero. Good for vibrato on a VCO's fm or a filter's cutoff input.",
+    "uni": "The same wave shifted to swing from 0 up to DEPTH (centred on a half). Use it where a signal should only go one way, such as a VCA's cv."
+  },
+  "knobs": {
+    "rate": "How fast it cycles, 0.02 to 40 times a second (Hz).",
+    "shape": "SINE: smooth. TRI: straight ramps up and down. SAW: ramps up, then drops. SQR: jumps between high and low. S&H: a new random level held for each cycle.",
+    "depth": "How far the wave swings. At 0 it is flat and does nothing; at 1 it is full size."
+  },
+  "try": "Patch LFO's out into VCO's fm (with VCO's FM knob turned up a little) while KEYS' pitch feeds the VCO. Set LFO SHAPE to SINE and RATE to about 5 Hz for vibrato, then try SQR for a trill."
+}

@@ -1,0 +1,19 @@
+{
+  "what": "Adds a sense of space to a sound, as if it were played in a hall or over a metal plate. It is a smooth, lush reverb that comes from the Clouds module.",
+  "how": "A reverb sends your sound through a dense web of tiny echoes so it keeps fading out after the sound stops. TIME is how long that tail lasts. DAMP decides how much high treble survives in the tail. DIFFUSE is how smeared the echoes are. MIX is the balance between your original sound and the reverb. Mono input works: if only L is patched, the same sound goes to both sides.",
+  "ins": {
+    "l": "The sound to add reverb to (audio -1..1). Patch a voice, filter or mixer here. If R is empty, this goes to both sides.",
+    "r": "Optional right side of a stereo sound. Leave empty for a mono source."
+  },
+  "outs": {
+    "l": "Left output: your sound with reverb mixed in. Patch to OUT's left.",
+    "r": "Right output: the reverb mixed in, a little different from the left so it sounds wide. Patch to OUT's right."
+  },
+  "knobs": {
+    "time": "How long the reverb tail rings: short for a small room, long for a big cavern. Turned all the way up it lasts a very long time.",
+    "damp": "Tone of the tail: lower is darker and softer, higher keeps more treble and sounds brighter.",
+    "diff": "How smooth the tail is. High is a soft, even wash; low lets you hear individual echoes.",
+    "mix": "Balance between your sound and the reverb: 0 is only your original sound, 1 is only the reverb."
+  },
+  "try": "Patch a VCO through a VCA (with ENV on its cv) into REVERB's l, REVERB's l and r into OUT's left and right, and play short notes. Raise TIME and MIX to hear the tail grow, then lower DAMP to darken it."
+}

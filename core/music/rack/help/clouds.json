@@ -1,0 +1,26 @@
+{
+  "what": "A cloud maker: it listens to the sound coming in and plays it back as a haze of tiny pieces called grains. It can turn a plain tone into shimmer, a texture or a drone.",
+  "how": "CLOUDS keeps recording the last second or so of what you give it. It then plays back many tiny pieces of that recording, each a few thousandths to a tenth of a second long, scattered over time. POSITION picks where in the recording they are taken from, SIZE how long each piece is, DENSITY how many play at once, and PITCH changes their pitch. Freeze stops the recording, so the cloud keeps playing the same moment forever. Without a sound going in, nothing comes out.",
+  "ins": {
+    "l": "The sound to granulate (audio -1..1). Patch a voice or a mixer. If R is empty this feeds both sides.",
+    "r": "Optional right side of a stereo sound. Leave empty for a mono source.",
+    "freeze": "A pulse or steady signal: above 0.5 freezes the recording, so the grains keep playing the sound that was in it when the freeze began. The FREEZE knob does the same by hand; either one freezes."
+  },
+  "outs": {
+    "l": "Left output: the mix of your dry sound and the grains, with reverb. Patch to OUT's left.",
+    "r": "Right output: patch to OUT's right. SPREAD sets how different the two sides are."
+  },
+  "knobs": {
+    "position": "Where in the recording the grains are taken from: left is the very latest sound, right is older sound further back.",
+    "size": "How long each grain is. Short grains sound grainy and glitchy; long grains blur together into a smooth wash.",
+    "pitch": "Shifts the pitch of the grains, in semitones, two octaves up or down.",
+    "density": "How many grains play. Near the middle few or none sound; moving away from the middle gives more and more overlapping grains. Left of the middle they are evenly spaced, right of it they are scattered at random.",
+    "texture": "The character of each grain: low is soft and rounded, higher is sharper and rougher, and the top adds a smearing, diffused wash.",
+    "mix": "Balance between your own sound and the grains: 0 is only your sound, 1 is only the cloud.",
+    "spread": "How widely the grains are scattered between the left and right outputs. Low is centred, high is wide.",
+    "feedback": "Sends the output back into the input, so the cloud grows, repeats and can build into a roar. Keep it low at first.",
+    "reverb": "How much reverb is added to the cloud.",
+    "freeze": "OFF records and plays normally; ON freezes the recording so the cloud holds one moment of the sound. The FREEZE input does the same."
+  },
+  "try": "Patch a VCO into CLOUDS' l, and CLOUDS' l and r into OUT's left and right. Play a note with KEYS, then turn SIZE and DENSITY and listen as the tone breaks into grains. Switch FREEZE to ON to hold the sound, then turn POSITION and PITCH."
+}

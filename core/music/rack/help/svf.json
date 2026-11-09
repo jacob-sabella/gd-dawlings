@@ -1,0 +1,22 @@
+{
+  "what": "A filter that removes part of a sound. It gives you four versions of the same input at once: lows only, a narrow middle band, highs only, and everything except a narrow band. Pick the one you want by which output you patch from.",
+  "how": "A filter lets some pitches through and turns others down. The CUTOFF is the pitch where that change happens, in Hz (vibrations per second; higher is brighter). RES (resonance) boosts a thin peak right at the cutoff, so the filter whistles or rings as you push it. The cutoff can also be moved by another module through the CUTOFF input, for sweeps that follow your playing or a slow wobble.",
+  "ins": {
+    "in": "The sound to filter. Patch a VCO, NOISE or a mix here (audio, -1..1).",
+    "cutoff": "A control signal that moves the cutoff while you play. Patch an ENV (opens on each note) or an LFO (slow wobble). How far it moves is set by the CV knob.",
+    "res": "A control signal that adds to the RES knob, so the ringing can swell and fade. Full signal (1.0) adds about a third of the knob's range."
+  },
+  "outs": {
+    "lp": "Low pass: keeps the low pitches, softens the highs. The classic warm, muffled sound. Patch this one first.",
+    "bp": "Band pass: keeps only a band around the cutoff. Thin and nasal, like a telephone or a wah pedal.",
+    "hp": "High pass: keeps the highs, removes the lows. Thin and airy; good for taking weight out.",
+    "notch": "Notch: everything except a narrow band around the cutoff. Mixed with the original it sounds like a slow phasing sweep."
+  },
+  "knobs": {
+    "cutoff": "The pitch where the filter acts, 20 Hz to 18000 Hz. For LP, turning it down darkens the sound; turning it up brightens it.",
+    "res": "Resonance: a boost right at the cutoff. Low is smooth; high rings and whistles. At the top the peak is very sharp.",
+    "drive": "Pushes the signal harder into the filter for a grittier, fuller tone. Zero is clean.",
+    "cv": "How much the CUTOFF input moves the cutoff. At zero the cable does nothing; at the top a full-size signal moves it four octaves, and at the middle two."
+  },
+  "try": "Patch VCO's out into SVF's in, SVF's lp into OUT's left, and play KEYS into the VCO's pitch. Then patch an ENV into SVF's cutoff, turn CV up to the middle and RES up a little, and listen for each note opening from dull to bright."
+}

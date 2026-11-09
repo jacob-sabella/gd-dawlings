@@ -1,0 +1,16 @@
+{
+  "what": "The end of the patch: whatever reaches here is what you hear from the speakers, and what leaves the room as a track.",
+  "how": "Patch the finished sound into L and R. If you only patch L, the same sound is played in both speakers. It takes out any steady offset (a constant push up or down that you cannot hear but that wastes headroom) and then softly rounds off peaks above 0.6 so that a very loud patch does not crack harshly: it never goes past 1. LEVEL sets the volume.",
+  "ins": {
+    "l": "The left speaker (audio, -1..1). Also feeds the right if R is not patched, so a single mono sound can go here.",
+    "r": "The right speaker. Leave it empty for mono; patch a stereo module's right output here for stereo."
+  },
+  "outs": {
+    "l": "The left output after volume and the soft limit. This is what goes out of the room; you rarely need to patch from it.",
+    "r": "The right output likewise."
+  },
+  "knobs": {
+    "level": "Master volume: 0 is silent, 0.7 is a safe start, 2 is double. If it sounds crushed or harsh, turn it down."
+  },
+  "try": "Patch KEYS' pitch into VCO's pitch, VCO's out into OUT's l, and play. Then try raising LEVEL until the loudest notes begin to sound squashed, and back off a little."
+}

@@ -113,6 +113,16 @@ func _build_rack() -> void:
 	studio.studio_set.add_child(studio.rack_wall)
 	studio.mount.register(studio.rack_wall)
 	studio.rack_wall.edit_asked.connect(ask_rack)
+	studio.rack_help = RackHelpScreen.new()
+	studio.rack_help.name = "RackHelp"
+	studio.add_child(studio.rack_help)
+	studio.rack_finder = RackFinderScreen.new()
+	studio.rack_finder.name = "RackFinder"
+	studio.add_child(studio.rack_finder)
+	studio.rack_wall.find_asked.connect(func(g: String) -> void: studio.rack_finder.open_finder(g))
+	studio.rack_finder.add_asked.connect(func(t: String) -> void: ask_rack("add", [t, -1, 0]))
+	studio.rack_wall.help_asked.connect(func(id: String) -> void: studio.rack_help.open_for(studio.rack_wall.patch, id))
+	studio.rack_help.knob_asked.connect(func(id: String, k: String, pos: float) -> void: ask_rack("knob", [id, k, pos]))
 	studio.rack_wall.knob_streamed.connect(func(id: String, k: String, v: float) -> void: ask_rack("knob", [id, k, v]))
 	studio.rack_wall.knob_set.connect(func(id: String, k: String, v: float) -> void: ask_rack("knob", [id, k, v]))
 	studio.rack_wall.told.connect(func(text: String) -> void: Session.notice.emit(text))

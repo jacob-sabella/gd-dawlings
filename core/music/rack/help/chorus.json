@@ -1,0 +1,19 @@
+{
+  "what": "An effect that thickens a sound by adding a slightly detuned, slowly moving copy of itself, as if several players were playing together.",
+  "how": "The sound is copied and each copy is delayed by a few milliseconds. A slow wobble (RATE) varies the delay a little, which shifts each copy's pitch up and down slightly, so it beats against the original with a swimming, shimmering motion. DEPTH sets how far it wobbles. The left and right outputs are different copies, so it also spreads the sound across the stereo field.",
+  "ins": {
+    "in": "The sound to thicken (audio, -1..1)."
+  },
+  "outs": {
+    "l": "Left side: the original blended with one moving copy (by MIX). Patch it to OUT's left.",
+    "r": "Right side: the original blended with another moving copy. Patch it to OUT's right."
+  },
+  "knobs": {
+    "rate": "How fast the wobble goes, 0.05 to 6 times a second. Slow is a gentle sway; fast is a warble.",
+    "depth": "How far the wobble swings: 0 is none, high is a seasick, strongly detuned sound.",
+    "delay": "The base delay of the copies in milliseconds, 1 to 30. Short is subtle thickening; long begins to sound like a separate voice.",
+    "fb": "Sends some of the copies back in: small values add a ringing, metallic colour.",
+    "mix": "Balance of dry and effect: 0 is only your sound, 1 is only the copies."
+  },
+  "try": "Patch VCO (SAW) into CHORUS's in, CHORUS's l and r into OUT's left and right, and hold a note. Compare MIX at 0 and 0.5, then raise DEPTH and RATE to hear the shimmer turn to a warble."
+}

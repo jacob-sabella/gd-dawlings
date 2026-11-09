@@ -1,0 +1,20 @@
+{
+  "what": "An echo. It repeats what you play after a short time, over and over, getting quieter, in stereo.",
+  "how": "The sound goes into a memory and comes back after a set time. FEEDBACK sends the echo back into the memory so it repeats; more feedback means more repeats. The echo time is either free (the TIME knob, in seconds) or locked to the tempo of the song (SYNC), so it stays in time. TONE dulls each repeat so it fades into the distance. In PING-PONG mode each repeat bounces to the other speaker.",
+  "ins": {
+    "in": "The sound to echo (audio, -1..1)."
+  },
+  "outs": {
+    "l": "Left side: the clean sound blended with the echo (by MIX). Patch it to OUT's left.",
+    "r": "Right side: the same, with the echo slightly different in time (or alternating in ping-pong). Patch it to OUT's right."
+  },
+  "knobs": {
+    "time": "Echo time in seconds, 0.01 to 1.9. Only used when SYNC is FREE.",
+    "sync": "FREE uses the TIME knob. The others lock the echo to the song's tempo: 1/16 is a sixteenth note, 1/8 an eighth, 1/8. a dotted eighth, 1/4 a quarter (one beat), 1/4. a dotted quarter, 1/2 a half note.",
+    "fb": "How much of the echo returns to be repeated: 0 is one repeat, high is many repeats that fade slowly; near the top they almost never fade.",
+    "tone": "How bright the echoes are, 200 Hz to 12000 Hz. Lower makes each repeat duller than the last.",
+    "mix": "Balance of dry and echo: 0 is only your sound, 1 is only the echo.",
+    "pp": "STEREO gives each speaker its own echo, the right one a touch later. PING-PONG sends each repeat to alternate speakers."
+  },
+  "try": "Patch VCO (with an ENV and a VCA so notes are short) into DELAY's in, DELAY's l and r into OUT's left and right. Set SYNC to 1/8, MODE to PING-PONG, raise FEEDBACK to about 0.5 and play single notes to hear them bounce from side to side."
+}

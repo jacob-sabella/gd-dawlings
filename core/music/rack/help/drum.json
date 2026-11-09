@@ -1,0 +1,18 @@
+{
+  "what": "A drum sound in a box: a kick, a snare or a hi-hat. Each time it receives a pulse it plays one hit.",
+  "how": "A trigger is a short pulse that says do it now. Each pulse at TRIG strikes the drum once. KIND picks which drum it is, and the other knobs change its pitch, brightness, length and loudness. All the sound is made inside; you only need to supply the rhythm and connect OUT to the speakers.",
+  "ins": {
+    "trig": "A pulse that strikes the drum. Patch CLOCK's beat for a kick on every beat, or its 8th or 16th for hats."
+  },
+  "outs": {
+    "out": "The drum sound. Patch it into OUT, or through a filter or DELAY first."
+  },
+  "knobs": {
+    "kind": "KICK: a low thump. SNARE: a crack with a rattle. HAT: a short bright tick. Changing it switches the sound immediately.",
+    "freq": "Tunes the drum (its base pitch). Its range is small and the change is subtle in this version.",
+    "tone": "The colour of the hit: low is darker and rounder, high is brighter and clickier.",
+    "decay": "How long the hit rings out. Low is short and tight; high is long and boomy (or open, for a hat).",
+    "accent": "How hard the drum is struck: louder and punchier at high settings."
+  },
+  "try": "Patch CLOCK's beat into DRUM's trig and DRUM's out into OUT's left, with KIND on KICK. Add a second DRUM on KIND HAT with CLOCK's 8th into its trig, and mix both through MIX."
+}

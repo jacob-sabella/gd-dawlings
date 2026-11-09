@@ -1,0 +1,16 @@
+{
+  "what": "A simple signal adjuster: make a signal bigger or smaller, flip it upside down, or move it up and down. Short for attenuverter.",
+  "how": "The output is the input multiplied by GAIN, then OFFSET is added. GAIN below 1 turns a signal down; negative GAIN flips it (high becomes low). OFFSET shifts the whole thing up or down. Use it to tame an LFO that is too strong, to reverse an envelope, or, with nothing patched in, as a steady knob that supplies a fixed value.",
+  "ins": {
+    "in": "The signal to adjust. If nothing is patched, the input is 0, so the outputs are just the OFFSET."
+  },
+  "outs": {
+    "out": "The adjusted signal: input times GAIN, plus OFFSET.",
+    "inv": "The same result turned upside down (positive becomes negative). Use it when you want the opposite movement as well."
+  },
+  "knobs": {
+    "gain": "How much of the signal passes, from -2 to +2. 1 leaves it unchanged, 0 silences it, below 0 flips it, above 1 makes it bigger.",
+    "offset": "A fixed amount added to the signal, from -1 to +1. It shifts the signal up or down without changing its shape."
+  },
+  "try": "Patch LFO's out into ATT's in, ATT's out into VCO's fm, and set GAIN low for a gentle wobble. Turn GAIN past the middle to negative to flip the wobble upside down."
+}

@@ -1,0 +1,15 @@
+{
+  "what": "Overdrive: it pushes a sound until it starts to distort, like a guitar amplifier turned up loud. It makes a sound warmer, thicker and rougher.",
+  "how": "The DRIVE knob amplifies the sound into a soft limiter that rounds the tops of the wave, which adds harmonics (extra overtones) and a feeling of loudness. Soft means the change is gradual: a little drive adds warmth, a lot is fuzzy and grainy. LEVEL sets the volume afterwards, since more drive usually means a louder result.",
+  "ins": {
+    "in": "The sound to overdrive (audio, -1..1)."
+  },
+  "outs": {
+    "out": "The overdriven sound, set by LEVEL. Patch it into a filter, an effect or OUT."
+  },
+  "knobs": {
+    "drive": "How much distortion: 0 is almost clean, 1 is heavy fuzz.",
+    "level": "Volume of the result: 0 is silent, 1 is full, 1.5 is louder. Turn it down if more drive makes it too loud."
+  },
+  "try": "Patch VCO (SAW) into DRIVE's in and DRIVE's out into OUT's left. Play a note and turn DRIVE up slowly: the tone gets thicker and grittier. Then turn LEVEL down to compare at the same loudness."
+}

@@ -1,0 +1,30 @@
+{
+  "what": "A shape maker. When a gate arrives, STAGES plays through up to four steps of rising, falling or holding at levels and times you set, and outputs the result as a control signal. It is used for envelopes (how a note swells and fades), looping ramps, step sequences, timers and slow waves.",
+  "how": "PRESET chooses what the four columns of knobs mean, since each preset uses only some of them (the knob entries list each). Every column has LEVEL (how high), TIME (how long) and SHAPE (the curve between points). TIME runs from about a millisecond at the left, half a second in the middle, to about sixteen seconds at the right. The output is a control signal from 0 to 1, patched into another module's control jack, for example a VCA's cv to make a note fade in and out.",
+  "ins": {
+    "gate": "A gate (0 or 1, high above 0.5) that starts the shape; the ENVELOPE-type presets keep going while it is held. Patch KEYS' gate here. In CYCLE, leave it empty and the shape just loops forever.",
+    "time": "A control signal that makes every time longer or shorter. Range -1..1; it moves the TIME knobs by about a third of their range.",
+    "level": "A control signal added to the LEVEL knobs that the chosen preset uses. Range -1..1.",
+    "reset": "A gate that sends SEQ back to its first step. Only used by the SEQ preset."
+  },
+  "outs": {
+    "out": "The shape, a control signal from 0 to 1. Patch it into a VCA's cv, a filter's cutoff, or any control jack.",
+    "end": "A gate that is high while the shape is finished or waiting and low while it runs. For TIMER it goes high once all four times have passed. In LFO it is a square wave at the LFO's speed; for CYCLE and SEQ it stays low."
+  },
+  "knobs": {
+    "preset": "What STAGES is: AD (rises, then falls), AHD (rises, holds, falls), ADSR (the usual note envelope: rise, fall to a held level, release), ASR (rises, holds while the gate is held, falls), CYCLE (rises and falls forever), SEQ (steps through three levels), TIMER (four levels, each for a set time), DECAY (a single fall), PULSE (a level for a set time), LFO (a slow repeating wave).",
+    "l1": "Only used by TIMER: the first of its four levels, held for TIME 1. Not used by the other presets.",
+    "t1": "AD, AHD, ADSR, ASR: how long the first rise (attack) takes. CYCLE: the rise time. DECAY: the fall time. LFO: the speed (middle is 2 times a second, left about 8 seconds a cycle, right about 32 times a second). TIMER: how long level 1 is held. Not used in SEQ and PULSE.",
+    "s1": "The curve of segment 1: low starts slowly then hurries, middle is a straight line, high starts fast then eases off. In LFO it changes the wave shape. In SEQ it sets the direction of the steps (up, down, up-and-down, alternating, random, random without repeats), and at the very top it stops advancing. Not used by TIMER and PULSE.",
+    "l2": "AHD and ASR: the level the rise reaches and holds at (the peak). PULSE: the level of the pulse. SEQ: the first step's level. TIMER: level 2. Not used in AD, ADSR, CYCLE, DECAY, LFO.",
+    "t2": "AD: the fall time. ADSR: how long the fall to the sustain level takes. AHD: how long it holds the peak. CYCLE: the fall time. PULSE: how long the pulse lasts. TIMER: how long level 2 is held. Not used by ASR, SEQ, DECAY, LFO.",
+    "s2": "The curve of segment 2 (as SHAPE 1): AD and CYCLE fall, ADSR fall to sustain. In SEQ it is the glide into step 1: left half jumps, then slides more slowly to the right. Not used by AHD, ASR, TIMER, PULSE, DECAY or LFO.",
+    "l3": "ADSR: the sustain level, held while the gate stays high. SEQ: the second step's level. TIMER: level 3. Not used by the others.",
+    "t3": "AHD: the fall time after the hold. ASR: the release time. TIMER: how long level 3 is held. Not used by the other presets.",
+    "s3": "AHD: the curve of the fall. ASR: the curve of the release. SEQ: the glide into step 2 (as S2). Not used by the others.",
+    "l4": "SEQ: the third step's level. TIMER: level 4, which is where the output stays afterwards. Not used by the others.",
+    "t4": "ADSR: the release time, how long the fall to zero takes after the gate ends. TIMER: how long level 4 is held before END goes high. Not used by the others.",
+    "s4": "ADSR: the curve of the release. SEQ: the glide into step 3 (as S2). Not used by the others."
+  },
+  "try": "Patch KEYS' gate into STAGES' gate, KEYS' pitch into VCO's pitch, VCO's out into VCA's in and STAGES' out into VCA's cv, then VCA's out into OUT's left. Leave PRESET on ADSR and play notes, then turn TIME 1 up for a slow fade-in and LEVEL 3 down for a note that drops to a quiet held level."
+}

@@ -1,0 +1,24 @@
+{
+  "what": "Mixes two sounds into one new sound. One sound is called the carrier, the other the modulator, and WARPS combines them in ways that range from a plain blend, through harsh metallic ring-modulation and folding, to a vocoder that makes one sound speak with the other's voice.",
+  "how": "The ALGORITHM knob chooses how the two sounds interact. Turned slowly from left to right it crossfades them, folds the wave over on itself, ring-modulates them (the result contains the sum and difference of their pitches, which sounds like bells or robots), then goes through three more harsh digital combinations (XOR, comparator) and finally into a vocoder. If you patch nothing into CARRIER, WARPS plays its own built-in oscillator as the carrier, so a single sound patched into MOD is enough to hear it work.",
+  "ins": {
+    "carrier": "The first sound, usually a steady tone from a VCO (audio, about -1..1). Leave it unpatched and WARPS uses its own internal oscillator instead.",
+    "mod": "The second sound that shapes the first: another oscillator, a voice, noise or a drum (audio, about -1..1).",
+    "algo": "A control signal that is added to the ALGORITHM knob, so another module can sweep through the algorithms. Range -1..1; the total stays between 0 and 1.",
+    "param": "A control signal added to the PARAMETER knob. Range -1..1; the total stays between 0 and 1.",
+    "pitch": "Pitch for the internal oscillator, in octaves from middle C (patch KEYS' pitch here). Does nothing while a cable is in CARRIER."
+  },
+  "outs": {
+    "out": "The combined sound. Patch it into a filter, a delay or straight to OUT.",
+    "aux": "A side output. With the internal oscillator it is that oscillator's own plain tone (handy to hear what is being modulated). With something patched into CARRIER it is a quiet mix of the two inputs."
+  },
+  "knobs": {
+    "algo": "Which way the two sounds are combined. Left is a simple crossfade, then folding, ring-modulation and harsher digital mixes up to about three-quarters; the last part is the vocoder. In between, the sound blends smoothly.",
+    "drive1": "How loud the carrier goes in. Turn it up for more bite and distortion, down for a softer sound. At zero the carrier is silent.",
+    "drive2": "How loud the modulator goes in. Turn it up for a stronger effect and more distortion. At zero the modulator is silent.",
+    "param": "A tweak whose meaning depends on ALGORITHM: it changes the character of the current mix. In the vocoder part of the range it shifts the vocoder's bands up or down, like changing the size of the speaker's throat.",
+    "osc": "Which wave the internal oscillator makes (only when CARRIER is empty). Each choice is two waves, one for the mixing algorithms and one for the vocoder: SINE/SAW (sine, then saw for the vocoder), TRI/PULSE (triangle, then pulse), SAW/NOISE (saw, then noise).",
+    "note": "Tunes the internal oscillator, in semitones, up or down two octaves from middle C. Does nothing while a cable is in CARRIER."
+  },
+  "try": "Patch KEYS' pitch into VCO's pitch and WARPS' pitch, VCO's out into WARPS' mod, and WARPS' out into OUT's left. Play a note, turn NOTE a few semitones away from zero, then slowly turn ALGORITHM from left to right and listen for the sound going from a blend, to metallic ringing, to a vocoder."
+}

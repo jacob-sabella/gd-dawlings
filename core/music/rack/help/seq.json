@@ -1,0 +1,34 @@
+{
+  "what": "A sixteen-step pattern player. Each step holds a note (or a rest), and every time it gets a pulse it moves to the next step and plays that note.",
+  "how": "Set each numbered knob to a note: the number is how many semitones (piano keys) above or below middle C, and REST means stay silent on that step. Each pulse arriving at CLK moves to the next step, and after the last step (set by LENGTH) it wraps back to the first. It sends out the pitch of the current step and a gate (a 1 while the note is on, 0 when off). All steps start on REST, so you hear nothing until you set some.",
+  "ins": {
+    "clk": "The pulse that moves to the next step. Patch CLOCK's 16th, 8th or beat here. Each rising pulse is one step.",
+    "rst": "A pulse here sends the sequence back to the start: the next clock pulse plays step 1."
+  },
+  "outs": {
+    "pitch": "The note of the current step, in octaves from middle C. Patch it into a VCO's pitch. On a rest it keeps the last note.",
+    "gate": "1 while a note sounds, 0 on rests and between notes. Its length is set by GATE. Patch it into an ENV's gate.",
+    "step": "Which step is playing, as a signal from 0 (step 1) to 1 (step 16). Patch it into a filter or something else to change the sound along the pattern."
+  },
+  "knobs": {
+    "s1": "Step 1: REST, or a note from -12 to +24 semitones from middle C (0 is middle C, +12 is an octave up).",
+    "s2": "Step 2: REST, or a note from -12 to +24 semitones from middle C.",
+    "s3": "Step 3: REST, or a note from -12 to +24 semitones from middle C.",
+    "s4": "Step 4: REST, or a note from -12 to +24 semitones from middle C.",
+    "s5": "Step 5: REST, or a note from -12 to +24 semitones from middle C.",
+    "s6": "Step 6: REST, or a note from -12 to +24 semitones from middle C.",
+    "s7": "Step 7: REST, or a note from -12 to +24 semitones from middle C.",
+    "s8": "Step 8: REST, or a note from -12 to +24 semitones from middle C.",
+    "s9": "Step 9: REST, or a note from -12 to +24 semitones from middle C.",
+    "s10": "Step 10: REST, or a note from -12 to +24 semitones from middle C.",
+    "s11": "Step 11: REST, or a note from -12 to +24 semitones from middle C.",
+    "s12": "Step 12: REST, or a note from -12 to +24 semitones from middle C.",
+    "s13": "Step 13: REST, or a note from -12 to +24 semitones from middle C.",
+    "s14": "Step 14: REST, or a note from -12 to +24 semitones from middle C.",
+    "s15": "Step 15: REST, or a note from -12 to +24 semitones from middle C.",
+    "s16": "Step 16: REST, or a note from -12 to +24 semitones from middle C.",
+    "len": "How many steps are used, 1 to 16. The sequence loops after this step.",
+    "gate": "How long each note stays on, as a fraction of the time between clock pulses. Low is short and staccato; high is long and connected."
+  },
+  "try": "Patch CLOCK's 16th into SEQ's clk. Patch SEQ's pitch into VCO's pitch, SEQ's gate into ENV's gate, and ENV's out into VCA's cv, with VCO into VCA and VCA into OUT. Set steps 1 to 4 to different notes, set LENGTH to 4, and listen to the loop."
+}

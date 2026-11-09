@@ -1,0 +1,21 @@
+{
+  "what": "A single oscillator (tone generator) that can make 47 different kinds of sound, from ordinary saw and square waves to digital filters, vowels, plucks, bells and drums. Almost every patch that wants one voice with many personalities can start here.",
+  "how": "It plays a tone at the pitch you give it and keeps playing. SHAPE picks the kind of sound; TIMBRE and COLOR are two knobs whose job changes with the shape (for example, brightness and pulse width on one shape, and a different pair on another), so turn them and listen. For the plucked, struck and drum shapes, a trigger (a short pulse meaning 'now') makes a new hit. Patching other modules into TIMBRE and COLOR moves them while you play.",
+  "ins": {
+    "pitch": "Which note to play. Patch KEYS' pitch here. Each 1.0 on the cable is one octave up; 0 is middle C.",
+    "trig": "A pulse (0 to 1; above 0.5 counts) that restarts the note. Needed for the plucked, struck and drum shapes to sound each hit; on drone shapes it is optional. Patch KEYS' gate.",
+    "timbre": "A signal (about 0..1) added to the TIMBRE knob. Patch an LFO or an envelope to sweep the tone while you play. The total is limited to 0..1.",
+    "color": "A signal (about 0..1) added to the COLOR knob; the total is limited to 0..1. Patch an LFO or an envelope for a changing sound."
+  },
+  "outs": {
+    "out": "The oscillator's sound. Patch it into a filter, an amplifier (VCA) or straight to OUT."
+  },
+  "knobs": {
+    "shape": "The kind of sound, 47 choices. First the wave families: CSAW, MORPH, SAW SQR, SIN TRI, BUZZ, SQR SUB, SAW SUB, SQR SYNC, SAW SYNC, TRI SAW, TRI SQR, TRI TRI, TRI SIN, TRI RING, SWARM, COMB, TOY. Then filters: FLT LP, PK, BP, HP; voices: VOSIM, VOWEL, FOF, HARM; FM: FM, FBK FM, CHAOS FM; physical: PLUCK, BOW, BLOWN, FLUTE, BELL; drums: DRUM, KICK, CYMBAL, SNARE; waves and noise: WTABLES, WMAP, WLINE, WPARA, F-NOISE, TWIN, CLK NOISE, GRANULAR, PARTICLE, DIGMOD.",
+    "timbre": "First shaping knob. Its job depends on SHAPE (often brightness or how much edge or filter opening). Turn it and listen.",
+    "color": "Second shaping knob. Its job depends on SHAPE (often a second wave setting, a vowel or a body size). Turn it and listen.",
+    "note": "Shifts the pitch in semitones, two octaves up or down.",
+    "fine": "A tiny pitch nudge, in cents (a hundredth of a semitone), plus or minus a semitone."
+  },
+  "try": "Patch KEYS' pitch into BRAIDS' pitch and BRAIDS' out into OUT's left, and play. Turn SHAPE through a few choices, then move TIMBRE and COLOR. For a pluck, set SHAPE to PLUCK and patch KEYS' gate into trig."
+}

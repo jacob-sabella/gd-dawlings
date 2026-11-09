@@ -848,6 +848,11 @@ func _ready() -> void:
 	await _t("_test_the_plugin_marker_reaches_a_guest_and_lacking_it_is_the_unavailable_plate")
 	await _t("_test_a_rack_catalogue_is_the_engines_own_description")
 	await _t("_test_airwindows_is_every_effect_in_one_module")
+	await _t("_test_every_engine_module_has_complete_help_and_the_card_is_put_together")
+	await _t("_test_the_airwindows_card_is_a_browser_that_sets_the_effect_and_its_knobs")
+	await _t("_test_every_airwindows_effect_is_a_module_of_its_own")
+	await _t("_test_the_finder_finds_by_name_kind_knob_and_group_and_adds")
+	await _t("_test_a_click_on_a_modules_name_asks_for_its_help_and_a_drag_does_not")
 	await _t("_test_a_rack_patch_checks_every_verb")
 	await _t("_test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input")
 	await _t("_test_a_rack_engine_makes_the_sound_the_patch_says")
@@ -44737,7 +44742,7 @@ func _test_the_panel_shows_the_join_code_and_what_went_wrong() -> void:
 func _test_a_rack_catalogue_is_the_engines_own_description() -> void:
 	check("the catalogue has the modules", RackCatalogue.types().size() >= 25)
 	check("every group the palette lists has modules", RackCatalogue.groups().all(func(g: String) -> bool: return not RackCatalogue.in_group(g).is_empty()))
-	check("every module is in a group the palette shows", RackCatalogue.types().all(func(t: String) -> bool: return RackCatalogue.spec(t)["group"] in RackCatalogue.groups()))
+	check("every module is in a group the palette shows", RackCatalogue.types().all(func(t: String) -> bool: return RackCatalogue.spec(t)["group"] in RackCatalogue.groups() or RackCatalogue.spec(t)["group"] == RackCatalogue.HIDDEN_GROUP))
 	var k := RackCatalogue.knob("builtin.vco", "wave")
 	check("a step knob reads out its name", RackCatalogue.readout(k, 0.0) == "SINE" and RackCatalogue.readout(k, 0.99) == "PULSE")
 	var cut := RackCatalogue.knob("builtin.ladder", "cutoff")
@@ -44784,6 +44789,129 @@ func _test_airwindows_is_every_effect_in_one_module() -> void:
 		loud[effect] = _rack_loudness(heard)
 		check("%s makes sound" % effect, loud[effect] > 0.001)
 	check("choosing another effect changes the sound", absf(loud["Galactic"] - loud["ClipOnly2"]) > 0.001)
+
+
+func _test_every_engine_module_has_complete_help_and_the_card_is_put_together() -> void:
+	var told := 0
+	for type in RackCatalogue.types():
+		if String(RackCatalogue.spec(type).get("engine", "")) == "":
+			continue
+		told += 1
+		var problems := RackHelp.problems(type)
+		check("%s: its help is complete and has nothing the module lacks %s" % [type, str(problems.slice(0, 3))], problems.is_empty())
+	check("the built-in modules were checked", told >= 38)
+	var c := RackHelp.card("builtin.vco")
+	check("a card has the module's jacks and knobs, each with a sentence and a range",
+			c["ins"].size() == 4 and c["outs"].size() == 2 and c["knobs"].size() == 5 and c["missing"].is_empty()
+			and c["knobs"][0]["range"] == "SINE / TRI / SAW / PULSE" and String(c["knobs"][1]["range"]).begins_with("-24 st to 24 st"))
+	var terms: Array = c["terms"].map(func(t: Array) -> String: return t[0])
+	check("it lists the glossary words its text uses, and only those", terms.has("pitch") and terms.has("FM") and not terms.has("resonance"))
+	check("an unknown type has no card", RackHelp.card("builtin.nonesuch").is_empty())
+	var text := RackHelpScreen.card_bbcode(c)
+	check("the card prints as text with its sections", text.contains("HOW IT WORKS") and text.contains("KNOBS") and text.contains("TRY THIS") and text.contains("WORDS USED HERE"))
+	check("a bracket in the text cannot be taken for markup", RackHelpScreen._e("a [b] c") == "a [lb]b] c")
+
+
+func _test_the_airwindows_card_is_a_browser_that_sets_the_effect_and_its_knobs() -> void:
+	var cats := RackHelp.airwindows_categories()
+	check("the effects are listed by kind, and all of them under All", cats.has("Reverb") and cats["Reverb"].has("Galactic") and cats["All"].size() > 500)
+	var g := RackHelp.airwindows("Galactic")
+	check("Galactic has Chris Johnson's text, its category and its parameters named",
+			g["text"].size() > 0 and g["categories"].has("Reverb") and g["params"].size() == 5 and g["params"][0]["letter"] == "A" and g["params"][0]["name"] == "Replace")
+	var bare := RackHelp.airwindows("WoodenChest")
+	check("an effect the Airwindopedia lacks still has its parameters", bare["text"].is_empty() and bare["known"] and bare["params"].size() > 0)
+	var card := RackHelp.card(RackHelp.AW_TYPE, "Galactic")
+	var page := RackHelpScreen.card_bbcode(card)
+	check("the card says what A is for the effect, and that an unused knob is not used", page.contains("Replace") and page.contains("Not used by"))
+	var patch := RackPatch.empty()
+	var id := RackPatch.add(patch, RackHelp.AW_TYPE)
+	var screen := RackHelpScreen.new()
+	add_child(screen)
+	var asked := []
+	screen.knob_asked.connect(func(m: String, k: String, pos: float) -> void: asked.append([m, k, pos]))
+	screen.open_for(patch, id)
+	check("opening the card shows it, with the browser", screen.is_open() and screen._browser.visible)
+	screen.choose_effect("Galactic")
+	check("choosing an effect sets the effect knob and all twelve parameters", asked.size() == 13 and asked[0][1] == "effect" and asked[1][1] == "a" and asked[12][1] == "l")
+	var names := String(RackCatalogue.knob(RackHelp.AW_TYPE, "effect")["names"]).split("|")
+	check("the effect knob is put where that effect is", int(asked[0][2] * names.size()) == names.find("Galactic"))
+	check("the parameters go to the effect's own starting values; the unused ones to the middle", is_equal_approx(asked[4][2], 1.0) and is_equal_approx(asked[6][2], 0.5))
+	screen.close_card()
+	check("it closes", not screen.is_open())
+	screen.queue_free()
+	if FileAccess.file_exists("res://vendor/airwindows/Airwindopedia.txt"):
+		var rc := OS.execute("python3", [ProjectSettings.globalize_path("res://tools/airwindows_help.py"), "--check"])
+		check("the committed Airwindows text is what the pinned Airwindopedia gives (run: tools/airwindows_help.py)", rc == 0)
+
+
+func _test_every_airwindows_effect_is_a_module_of_its_own() -> void:
+	var meta: Array = JSON.parse_string(FileAccess.get_file_as_string("res://core/music/rack/airwindows.json"))["effects"]
+	var own := RackCatalogue.in_group("Airwindows")
+	check("every effect has a module of its own in the Airwindows group", own.size() == meta.size())
+	var reg := ModRegistry.ensure_current()
+	var bad: Array = []
+	var ok_knobs := true
+	for e: Dictionary in meta:
+		var t := "builtin.aw." + String(e["id"]).to_lower()
+		var s := RackCatalogue.spec(t)
+		if s.is_empty() or not reg.is_composite(t):
+			bad.append(t)
+			continue
+		var n := mini((e["params"] as Array).size(), 12)
+		if (s["knobs"] as Array).size() != n or (n > 0 and s["knobs"][0]["label"] != String(e["params"][0]["name"]).to_upper()):
+			ok_knobs = false
+	check("each is a composite of the engine module", bad.is_empty())
+	check("its knobs are the effect's own parameters, named for them", ok_knobs)
+	var sound := reg.composite_sound("builtin.aw.galactic")
+	var names := String(RackCatalogue.knob("builtin.airwindows", "effect")["names"]).split("|")
+	check("Galactic's inner module is set to Galactic and to its own starting values",
+			int(sound["modules"]["fx"]["knobs"]["effect"] * names.size()) == names.find("Galactic") and is_equal_approx(sound["modules"]["fx"]["knobs"]["d"], 1.0))
+	check("the engine's own AIRWINDOWS is kept out of the palette", not "Internal" in RackCatalogue.groups())
+	var card := RackHelp.card("builtin.aw.galactic")
+	check("an effect's card is Chris Johnson's text and its knobs", card["airwindows"]["text"].size() > 0 and card["knobs"][0]["label"] == "REPLACE" and card["missing"].is_empty())
+	check("the committed modules are what the generator writes (run: tools/airwindows_mods.py)",
+			OS.execute("python3", [ProjectSettings.globalize_path("res://tools/airwindows_mods.py"), "--check"]) == 0)
+
+
+func _test_the_finder_finds_by_name_kind_knob_and_group_and_adds() -> void:
+	var by_name := RackFinder.search("galactic")
+	check("a name finds it first", not by_name.is_empty() and by_name[0] == "builtin.aw.galactic")
+	check("a word of several narrows to what has all of them", RackFinder.search("tape delay").size() > 0 and RackFinder.search("tape zzzzqq").is_empty())
+	var reverbs := RackFinder.search("", "", "Reverb")
+	check("a kind lists that kind's effects", reverbs.size() > 10 and "builtin.aw.galactic" in reverbs and not "builtin.vco" in reverbs)
+	check("a knob name finds modules that have it", "builtin.aw.galactic" in RackFinder.search("bigness"))
+	var core := RackFinder.search("", "Source")
+	check("a group lists its own modules", "builtin.vco" in core and not "builtin.aw.galactic" in core)
+	check("nothing is listed under the hidden group", not "builtin.airwindows" in RackFinder.search(""))
+	var screen := RackFinderScreen.new()
+	add_child(screen)
+	var asked := []
+	screen.add_asked.connect(func(t: String) -> void: asked.append(t))
+	screen.open_finder("Airwindows")
+	check("opened on a group, it lists that group", screen.is_open() and screen._found.size() == RackCatalogue.in_group("Airwindows").size())
+	screen._search.text = "galactic"
+	screen.refresh()
+	check("typing narrows it, and the first match is chosen", screen.chosen() == "builtin.aw.galactic")
+	screen._add_chosen()
+	check("adding asks the host for that module", asked == ["builtin.aw.galactic"])
+	screen.close_finder()
+	check("it closes", not screen.is_open())
+	screen.queue_free()
+
+
+func _test_a_click_on_a_modules_name_asks_for_its_help_and_a_drag_does_not() -> void:
+	var h := RackHandle.new()
+	add_child(h)
+	var clicks := [0]
+	h.clicked.connect(func(_h: RackHandle) -> void: clicks[0] += 1)
+	h._on_grab_begin(Vector3(0.1, 0.2, 0))
+	h._on_grab_end()
+	check("pressing and letting go in place is a click", clicks[0] == 1)
+	h._on_grab_begin(Vector3(0.1, 0.2, 0))
+	h._on_grab_move(Vector3(0.2, 0.2, 0))
+	h._on_grab_end()
+	check("dragging the module is not", clicks[0] == 1)
+	h.queue_free()
 
 
 func _test_a_rack_patch_checks_every_verb() -> void:

@@ -1,0 +1,16 @@
+{
+  "what": "A distortion that folds the wave back on itself instead of cutting it off. It makes simple tones into bright, glassy, harmonically rich ones.",
+  "how": "The sound is amplified by the FOLD knob; whenever the wave would go past a limit it bounces back instead of clipping, which adds new overtones (extra higher pitches layered on the note). More fold means more folds and a brighter, more complicated sound. A plain sine wave gives the most dramatic change. SYM shifts the wave up or down before folding, which makes the fold lopsided and the tone different.",
+  "ins": {
+    "in": "The sound to fold (audio, -1..1). A VCO's sine or triangle is a good start.",
+    "fold": "A control signal that adds to the FOLD amount while you play. Patch an ENV or an LFO. A full signal (1.0) adds 4 on the knob's scale of 1 to 12."
+  },
+  "outs": {
+    "out": "The folded sound. Patch it into a filter or OUT."
+  },
+  "knobs": {
+    "gain": "How much folding, from 1 (almost none) to 12 (a lot). Turn up slowly: the tone gets brighter and then buzzier.",
+    "offset": "Symmetry: shifts the wave off centre before folding. Away from the middle the folds are lopsided and the tone gets thinner and more nasal."
+  },
+  "try": "Patch VCO (set WAVE to SINE) into FOLD's in and FOLD's out into OUT's left. Turn FOLD slowly up from the bottom and listen to the pure tone turning bright and metallic. Then patch an LFO into FOLD's fold input for a moving sound."
+}
