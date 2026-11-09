@@ -9,7 +9,7 @@ Design history and the saved-patch rules are in `docs/mods.md` 6; the older desc
 
 | Layer | Files | What |
 |---|---|---|
-| Mods | `mods/builtin/{core,daisysp,mutable,presets}/mod.json`, `core/mods/` | the 29 modules, their skins and 17 presets as manifests; the registry |
+| Mods | `mods/builtin/{core,daisysp,mutable,airwindows,presets}/mod.json`, `core/mods/` | the 38 modules, their skins and 17 presets as manifests; the registry |
 | Description | `RackCatalogue`, `RackSkin`, `RackModuleDef`, `RackCurves`, `core/music/rack/modules.json` | what modules exist, their jacks and knobs (from the engine snapshot), how they look, composite resolution |
 | Patch (data) | `RackPatch`, `RackPatchFile`, `RackAutosave`, `RackGaps`, `RackExpansion`, `RackLayout`, `RackMood` | the patch as a dictionary `{modules, cables}` and every edit as one `answer(op, args)`; v2 file format; `user://patches/_current.patch.json`; what this machine cannot show; composites expanded to engine modules; where modules sit in the case (`COLS` x `ROWS`); the glow per venue |
 | Sound (host only) | `RackVoice`, `RackCushion`, `RackEngine`, `native/rack/` | the engine as a process (`rack` binary built from pinned `vendor/` submodules by `tools/rack_build.sh`), told the patch as text lines, heard back as stereo float32; played through a track of the song |
@@ -69,6 +69,17 @@ given. The rules, `core/music/rack/rack_cushion.gd`:
   regenerate `core/music/rack/modules.json` from `rack --describe`, add a manifest entry (`sound.kind: engine`) with
   a skin, add a notice to `THIRD_PARTY_NOTICES.md`. Run `_test_a_rack_catalogue_is_the_engines_own_description`
   (needs the built engine).
+  A module that needs vendored sources lists them in `native/rack/libs/<name>.txt` (globs under
+  `vendor/mutable-eurorack/`) and lives in `native/rack/modules_<name>.cc`, and `tools/rack_build.sh` picks both up
+  (`RACK_ONLY="warps braids"`, `RACK_BUILD_DIR` and `RACK_BIN` build a few modules into a private binary while
+  others are being written; a source named in two lists is compiled once).
+- **AIRWINDOWS** is one module for all of Airwindows' effects (`vendor/airwindows`, MIT). `tools/airwindows_gen.py`
+  writes, at build time, a wrapper per plugin that compiles it in its own namespace against `native/rack/aw/audioeffectx.h`
+  (a small host stand-in, not Steinberg's header) and the table the module reads; nothing of the plugins is copied.
+  The module has the effect knob and twelve parameters A..L (an effect with more takes the first twelve).
+  `core/music/rack/airwindows.json` (from `rack --describe-airwindows`) holds each effect's parameter names and
+  starting values; a test holds it to the engine. Moving to a new Airwindows commit: bump the submodule, check its
+  LICENSE and file headers, rebuild, regenerate that file and `modules.json` (the effect knob's names).
 - **A custom face** (`out`, `scope`, `seq` are built in): a `face` kind in the module entry, drawn by
   `RackWallModules`; user mods may only use `standard`.
 - **A new op on the patch**: add it to `RackPatch.answer`, handle it in `RackVoice` if it reaches the engine, and add

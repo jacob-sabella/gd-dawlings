@@ -51,6 +51,18 @@ static func describe() -> Dictionary:
 	return data if data is Dictionary else {}
 
 
+## The Airwindows effects as the engine lists them (--describe-airwindows): each one's name, title and its
+## parameters' names and starting values. `core/music/rack/airwindows.json` is this, committed.
+static func describe_airwindows() -> Dictionary:
+	if not available():
+		return {}
+	var out: Array = []
+	if OS.execute(binary(), ["--describe-airwindows"], out, true) != 0:
+		return {}
+	var data: Variant = JSON.parse_string(out[0])
+	return data if data is Dictionary else {}
+
+
 ## A patch rendered to stereo frames, offline. `play` is lines run in order after the patch, where
 ## `run S` renders S seconds: e.g. ["note_on 60 100", "run 1", "note_off 60", "run 0.5"].
 static func render(patch: Dictionary, play: PackedStringArray, bpm := 120.0) -> PackedVector2Array:

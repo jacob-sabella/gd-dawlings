@@ -7,3 +7,6 @@
 [submodule "vendor/daisysp"]
 	path = vendor/daisysp
 	url = https://github.com/electro-smith/DaisySP.git
+[submodule "vendor/airwindows"]
+	path = vendor/airwindows
+	url = https://github.com/airwindows/airwindows.git

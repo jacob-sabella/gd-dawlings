@@ -1,0 +1,14 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "builtin.airwindows",
+  "name": "Airwindows effects",
+  "version": "1.0.0",
+  "author": "Chris Johnson (Airwindows); wrapper by dawlings",
+  "description": "Every Airwindows effect in one rack module: pick one and the knobs are its parameters.",
+  "licence": {"spdx": "MIT", "copyright": "Copyright (c) 2018 Chris Johnson"},
+  "source": {"kind": "submodule", "path": "vendor/airwindows", "commit": "94cb679", "upstream": "https://github.com/airwindows/airwindows"},
+  "provides": [
+    {"kind": "rack_module", "type": "builtin.airwindows", "title": "AIRWINDOWS", "group": "Shape", "blurb": "Chris Johnson's Airwindows effects, all of them: reverbs, saturators, compressors, filters, dithers and more. Pick one and the knobs become its parameters.", "sound": {"kind": "engine", "type": "airwindows"}, "skin": {"face": "#262626", "accent": "#F2F2F2", "pattern": "stripes", "tagline": "ALL OF THEM"}, "pad_knobs": ["a", "b"]}
+  ]
+}

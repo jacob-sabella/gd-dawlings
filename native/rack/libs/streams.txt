@@ -1,0 +1,8 @@
+streams/processor.cc
+streams/envelope.cc
+streams/follower.cc
+streams/vactrol.cc
+streams/compressor.cc
+streams/lorenz_generator.cc
+streams/svf.cc
+streams/resources.cc

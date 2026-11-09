@@ -1,0 +1,3 @@
+tides2/poly_slope_generator.cc
+tides2/resources.cc
+tides2/ramp/ramp_extractor.cc
