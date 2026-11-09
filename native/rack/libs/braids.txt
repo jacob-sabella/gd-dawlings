@@ -1,0 +1,4 @@
+braids/analog_oscillator.cc
+braids/digital_oscillator.cc
+braids/macro_oscillator.cc
+braids/resources.cc

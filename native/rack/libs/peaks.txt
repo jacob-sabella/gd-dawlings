@@ -1,0 +1,4 @@
+peaks/drums/*.cc
+peaks/modulations/*.cc
+peaks/pulse_processor/*.cc
+peaks/resources.cc

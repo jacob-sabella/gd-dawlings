@@ -1,0 +1,3 @@
+stages/segment_generator.cc
+stages/resources.cc
+tides2/ramp/ramp_extractor.cc

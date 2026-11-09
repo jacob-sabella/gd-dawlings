@@ -1,0 +1,2 @@
+beads/dsp/*.cc
+beads/resources.cc

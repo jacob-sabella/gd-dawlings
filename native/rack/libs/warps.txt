@@ -1,0 +1,2 @@
+warps/dsp/*.cc
+warps/resources.cc

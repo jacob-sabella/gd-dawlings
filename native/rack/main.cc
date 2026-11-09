@@ -194,10 +194,13 @@ static int live(int chunk) {
   }
 }
 
+int aw_describe() __attribute__((weak));  // present when the Airwindows module is built in
+
 int main(int argc, char** argv) {
+  if (argc > 1 && std::string(argv[1]) == "--describe-airwindows" && aw_describe) return aw_describe();
   if (argc > 1 && std::string(argv[1]) == "--describe") return describe();
   if (argc > 2 && std::string(argv[1]) == "--render") return render(argv[2], argc > 3 ? argv[3] : nullptr);
   if (argc > 1 && std::string(argv[1]) == "--live") return live(argc > 2 ? atoi(argv[2]) : 240);
-  fprintf(stderr, "usage: rack --describe | --render OUT.wav < script | --live [frames]\n");
+  fprintf(stderr, "usage: rack --describe | --describe-airwindows | --render OUT.wav < script | --live [frames]\n");
   return 2;
 }

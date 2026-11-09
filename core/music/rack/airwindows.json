@@ -1,0 +1,11159 @@
+{
+ "effects": [
+  {
+   "id": "Acceleration",
+   "title": "Acceleration",
+   "params": [
+    {
+     "name": "Limit",
+     "default": 0.32
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Acceleration2",
+   "title": "Acceleration2",
+   "params": [
+    {
+     "name": "Limit",
+     "default": 0.32
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ADClip7",
+   "title": "ADClip7",
+   "params": [
+    {
+     "name": "Boost",
+     "default": 0.0
+    },
+    {
+     "name": "Soften",
+     "default": 0.5
+    },
+    {
+     "name": "Enhance",
+     "default": 0.5
+    },
+    {
+     "name": "Mode",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "ADClip8",
+   "title": "ADClip8",
+   "params": [
+    {
+     "name": "Boost",
+     "default": 0.0
+    },
+    {
+     "name": "Ceiling",
+     "default": 0.883
+    },
+    {
+     "name": "Mode",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "ADClip9",
+   "title": "ADClip9",
+   "params": [
+    {
+     "name": "Boost",
+     "default": 0.0
+    },
+    {
+     "name": "Match",
+     "default": 0.0
+    },
+    {
+     "name": "Noise",
+     "default": 0.7
+    },
+    {
+     "name": "Ceiling",
+     "default": 0.75
+    },
+    {
+     "name": "Mode",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "ADT",
+   "title": "ADT",
+   "params": [
+    {
+     "name": "Headrm",
+     "default": 0.5
+    },
+    {
+     "name": "A Delay",
+     "default": 0.5
+    },
+    {
+     "name": "A Level",
+     "default": 0.5
+    },
+    {
+     "name": "B Delay",
+     "default": 0.5
+    },
+    {
+     "name": "B Level",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Air",
+   "title": "Air",
+   "params": [
+    {
+     "name": "22K tap",
+     "default": 0.5
+    },
+    {
+     "name": "15K tap",
+     "default": 0.5
+    },
+    {
+     "name": "11K tap",
+     "default": 0.5
+    },
+    {
+     "name": "filters Q",
+     "default": 0.0
+    },
+    {
+     "name": "Output Level",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Air2",
+   "title": "Air2",
+   "params": [
+    {
+     "name": "Hiss",
+     "default": 0.5
+    },
+    {
+     "name": "Glitter",
+     "default": 0.5
+    },
+    {
+     "name": "Air",
+     "default": 0.5
+    },
+    {
+     "name": "Silk",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Air3",
+   "title": "Air3",
+   "params": [
+    {
+     "name": "Air",
+     "default": 0.5
+    },
+    {
+     "name": "Gnd",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Air4",
+   "title": "Air4",
+   "params": [
+    {
+     "name": "Air",
+     "default": 0.5
+    },
+    {
+     "name": "Gnd",
+     "default": 0.5
+    },
+    {
+     "name": "DarkF",
+     "default": 0.52
+    },
+    {
+     "name": "Ratio",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "AngleEQ",
+   "title": "AngleEQ",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.4
+    },
+    {
+     "name": "Low",
+     "default": 0.5
+    },
+    {
+     "name": "HiFreq",
+     "default": 0.8
+    },
+    {
+     "name": "MHiFreq",
+     "default": 0.8
+    },
+    {
+     "name": "MLoFreq",
+     "default": 0.2
+    },
+    {
+     "name": "LoFreq",
+     "default": 0.2
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "AngleFilter",
+   "title": "AngleFilter",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Hard",
+     "default": 0.5
+    },
+    {
+     "name": "Reso",
+     "default": 0.0
+    },
+    {
+     "name": "Poles",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Apicolypse",
+   "title": "Apicolypse",
+   "params": [
+    {
+     "name": "Hardns",
+     "default": 0.7
+    },
+    {
+     "name": "Persnlty",
+     "default": 0.3333
+    },
+    {
+     "name": "Drive",
+     "default": 0.3333
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "AQuickVoiceClip",
+   "title": "AQuickVoiceClip",
+   "params": [
+    {
+     "name": "Highpass",
+     "default": 0.42
+    }
+   ]
+  },
+  {
+   "id": "AtmosphereBuss",
+   "title": "AtmosphereBuss",
+   "params": [
+    {
+     "name": "Input",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "AtmosphereChannel",
+   "title": "AtmosphereChannel",
+   "params": [
+    {
+     "name": "Input",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Aura",
+   "title": "Aura",
+   "params": [
+    {
+     "name": "Voicing",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "AutoPan",
+   "title": "AutoPan",
+   "params": [
+    {
+     "name": "Rate",
+     "default": 0.1
+    },
+    {
+     "name": "Phase",
+     "default": 0.5
+    },
+    {
+     "name": "Wide",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Average",
+   "title": "Average",
+   "params": [
+    {
+     "name": "Average",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "AverMatrix",
+   "title": "AverMatrix",
+   "params": [
+    {
+     "name": "Average",
+     "default": 0.0
+    },
+    {
+     "name": "Depth",
+     "default": 0.0
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Balanced",
+   "title": "Balanced",
+   "params": [
+    {
+     "name": "BitShift",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "BassAmp",
+   "title": "BassAmp",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.75
+    },
+    {
+     "name": "Dry",
+     "default": 0.0
+    },
+    {
+     "name": "Dub",
+     "default": 0.75
+    },
+    {
+     "name": "Sub",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "BassDrive",
+   "title": "BassDrive",
+   "params": [
+    {
+     "name": "Presnce",
+     "default": 0.5
+    },
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Low",
+     "default": 0.5
+    },
+    {
+     "name": "Drive",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "BassKit",
+   "title": "BassKit",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.5
+    },
+    {
+     "name": "Voicing",
+     "default": 0.5
+    },
+    {
+     "name": "BassOut",
+     "default": 0.5
+    },
+    {
+     "name": "SubOut",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Baxandall",
+   "title": "Baxandall",
+   "params": [
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Baxandall2",
+   "title": "Baxandall2",
+   "params": [
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Baxandall3",
+   "title": "Baxandall3",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    },
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Beam",
+   "title": "Beam",
+   "params": [
+    {
+     "name": "Quant",
+     "default": 1.0
+    },
+    {
+     "name": "Focus",
+     "default": 0.5
+    },
+    {
+     "name": "DeRez",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "BezEQ",
+   "title": "BezEQ",
+   "params": [
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "x",
+     "default": 0.618
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "x",
+     "default": 0.382
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "BezEQ2",
+   "title": "BezEQ2",
+   "params": [
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "x",
+     "default": 0.75
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "x",
+     "default": 0.25
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "BezEQ3",
+   "title": "BezEQ3",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "HMid",
+     "default": 0.5
+    },
+    {
+     "name": "LMid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "HighF",
+     "default": 0.5
+    },
+    {
+     "name": "HMidF",
+     "default": 0.5
+    },
+    {
+     "name": "LMidF",
+     "default": 0.5
+    },
+    {
+     "name": "BassF",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "BezEQ4",
+   "title": "BezEQ4",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "HMid",
+     "default": 0.5
+    },
+    {
+     "name": "LMid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "HighF",
+     "default": 0.5
+    },
+    {
+     "name": "HMidF",
+     "default": 0.5
+    },
+    {
+     "name": "LMidF",
+     "default": 0.5
+    },
+    {
+     "name": "BassF",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "BeziComp",
+   "title": "BeziComp",
+   "params": [
+    {
+     "name": "Comp",
+     "default": 0.5
+    },
+    {
+     "name": "Speed",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "BigAmp",
+   "title": "BigAmp",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.5
+    },
+    {
+     "name": "Tone",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.8
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Biquad",
+   "title": "Biquad",
+   "params": [
+    {
+     "name": "Type",
+     "default": 1.0
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Q",
+     "default": 0.5
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Biquad2",
+   "title": "Biquad2",
+   "params": [
+    {
+     "name": "Type",
+     "default": 1.0
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Q",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "BiquadDouble",
+   "title": "BiquadDouble",
+   "params": [
+    {
+     "name": "Type",
+     "default": 1.0
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Q",
+     "default": 0.5
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "BiquadHiLo",
+   "title": "BiquadHiLo",
+   "params": [
+    {
+     "name": "Highpas",
+     "default": 0.0
+    },
+    {
+     "name": "Lowpass",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "BiquadNonLin",
+   "title": "BiquadNonLin",
+   "params": [
+    {
+     "name": "Type",
+     "default": 0.0
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Q",
+     "default": 0.7071
+    },
+    {
+     "name": "NonLin",
+     "default": 0.0
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "BiquadOneHalf",
+   "title": "BiquadOneHalf",
+   "params": [
+    {
+     "name": "Type",
+     "default": 0.0
+    },
+    {
+     "name": "Freq",
+     "default": 0.0
+    },
+    {
+     "name": "Q",
+     "default": 0.0
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "BiquadPlus",
+   "title": "BiquadPlus",
+   "params": [
+    {
+     "name": "Type",
+     "default": 1.0
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Q",
+     "default": 0.5
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "BiquadStack",
+   "title": "BiquadStack",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Level",
+     "default": 0.5
+    },
+    {
+     "name": "Reso",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "BiquadTriple",
+   "title": "BiquadTriple",
+   "params": [
+    {
+     "name": "Type",
+     "default": 1.0
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Q",
+     "default": 0.5
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "BitDualPan",
+   "title": "BitDualPan",
+   "params": [
+    {
+     "name": "L Vol",
+     "default": 0.5
+    },
+    {
+     "name": "L Pan",
+     "default": 0.0
+    },
+    {
+     "name": "R Vol",
+     "default": 0.5
+    },
+    {
+     "name": "R Pan",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Bite",
+   "title": "Bite",
+   "params": [
+    {
+     "name": "Bite",
+     "default": 0.5
+    },
+    {
+     "name": "Output Level",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "BitGlitter",
+   "title": "BitGlitter",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    },
+    {
+     "name": "Glitter",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "BitShiftGain",
+   "title": "BitShiftGain",
+   "params": [
+    {
+     "name": "BitShift",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "BitShiftPan",
+   "title": "BitShiftPan",
+   "params": [
+    {
+     "name": "Vol",
+     "default": 0.5
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "BlockParty",
+   "title": "BlockParty",
+   "params": [
+    {
+     "name": "Pound",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "BrassRider",
+   "title": "BrassRider",
+   "params": [
+    {
+     "name": "Thresh",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "BrightAmbience",
+   "title": "BrightAmbience",
+   "params": [
+    {
+     "name": "Dry/Wet",
+     "default": 0.0
+    },
+    {
+     "name": "Sustain",
+     "default": 0.0
+    },
+    {
+     "name": "Decay",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "BrightAmbience2",
+   "title": "BrightAmbience2",
+   "params": [
+    {
+     "name": "Start",
+     "default": 0.2
+    },
+    {
+     "name": "Length",
+     "default": 0.2
+    },
+    {
+     "name": "Feedbck",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "BrightAmbience3",
+   "title": "BrightAmbience3",
+   "params": [
+    {
+     "name": "Start",
+     "default": 1.0
+    },
+    {
+     "name": "Length",
+     "default": 0.0
+    },
+    {
+     "name": "Feedback",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "BuildATPDF",
+   "title": "BuildATPDF",
+   "params": [
+    {
+     "name": "First",
+     "default": 0.5
+    },
+    {
+     "name": "Second",
+     "default": 0.5
+    },
+    {
+     "name": "Third",
+     "default": 0.5
+    },
+    {
+     "name": "Fourth",
+     "default": 0.5
+    },
+    {
+     "name": "Fifth",
+     "default": 0.5
+    },
+    {
+     "name": "Sixth",
+     "default": 0.5
+    },
+    {
+     "name": "Seventh",
+     "default": 0.5
+    },
+    {
+     "name": "Eighth",
+     "default": 0.5
+    },
+    {
+     "name": "Ninth",
+     "default": 0.5
+    },
+    {
+     "name": "Tenth",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "BussColors4",
+   "title": "BussColors4",
+   "params": [
+    {
+     "name": "Color",
+     "default": 0.0
+    },
+    {
+     "name": "Input Trim",
+     "default": 0.5
+    },
+    {
+     "name": "Output Trim",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ButterComp",
+   "title": "ButterComp",
+   "params": [
+    {
+     "name": "Compress",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ButterComp2",
+   "title": "ButterComp2",
+   "params": [
+    {
+     "name": "Compress",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "C5RawBuss",
+   "title": "C5RawBuss",
+   "params": [
+    {
+     "name": "Center",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "C5RawChannel",
+   "title": "C5RawChannel",
+   "params": [
+    {
+     "name": "Center",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Cabs",
+   "title": "Cabs",
+   "params": [
+    {
+     "name": "CabType",
+     "default": 0.0
+    },
+    {
+     "name": "Intense",
+     "default": 0.66
+    },
+    {
+     "name": "Rm Loud",
+     "default": 0.33
+    },
+    {
+     "name": "CabSize",
+     "default": 0.66
+    },
+    {
+     "name": "OffAxis",
+     "default": 0.33
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Cabs2",
+   "title": "Cabs2",
+   "params": [
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "Hipass",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Calibre",
+   "title": "Calibre",
+   "params": [
+    {
+     "name": "Hardns",
+     "default": 0.74
+    },
+    {
+     "name": "Persnlty",
+     "default": 0.3333
+    },
+    {
+     "name": "Drive",
+     "default": 0.3333
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Cans",
+   "title": "Cans",
+   "params": [
+    {
+     "name": "Room",
+     "default": 0.5
+    },
+    {
+     "name": "Diffuse",
+     "default": 0.5
+    },
+    {
+     "name": "Damping",
+     "default": 0.5
+    },
+    {
+     "name": "Crossfd",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "CansAW",
+   "title": "CansAW",
+   "params": [
+    {
+     "name": "seatPos",
+     "default": 0.2
+    }
+   ]
+  },
+  {
+   "id": "Capacitor",
+   "title": "Capacitor",
+   "params": [
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "Highpass",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Capacitor2",
+   "title": "Capacitor2",
+   "params": [
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "Highpass",
+     "default": 0.0
+    },
+    {
+     "name": "NonLin",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Chamber",
+   "title": "Chamber",
+   "params": [
+    {
+     "name": "Bigness",
+     "default": 0.35
+    },
+    {
+     "name": "Longness",
+     "default": 0.35
+    },
+    {
+     "name": "Liteness",
+     "default": 0.35
+    },
+    {
+     "name": "Darkness",
+     "default": 0.35
+    },
+    {
+     "name": "Wetness",
+     "default": 0.35
+    }
+   ]
+  },
+  {
+   "id": "Chamber2",
+   "title": "Chamber2",
+   "params": [
+    {
+     "name": "Delay",
+     "default": 0.34
+    },
+    {
+     "name": "Regen",
+     "default": 0.31
+    },
+    {
+     "name": "Thick",
+     "default": 0.28
+    },
+    {
+     "name": "Wet",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "Channel4",
+   "title": "Channel4",
+   "params": [
+    {
+     "name": "Console Type",
+     "default": 0.0
+    },
+    {
+     "name": "Drive",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Channel5",
+   "title": "Channel5",
+   "params": [
+    {
+     "name": "Console Type",
+     "default": 0.0
+    },
+    {
+     "name": "Drive",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Channel6",
+   "title": "Channel6",
+   "params": [
+    {
+     "name": "Console Type",
+     "default": 0.0
+    },
+    {
+     "name": "Drive",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Channel7",
+   "title": "Channel7",
+   "params": [
+    {
+     "name": "Console Type",
+     "default": 0.0
+    },
+    {
+     "name": "Drive",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Channel8",
+   "title": "Channel8",
+   "params": [
+    {
+     "name": "Console Type",
+     "default": 0.0
+    },
+    {
+     "name": "Drive",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Channel9",
+   "title": "Channel9",
+   "params": [
+    {
+     "name": "Console Type",
+     "default": 0.0
+    },
+    {
+     "name": "Drive",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ChannelX",
+   "title": "ChannelX",
+   "params": [
+    {
+     "name": "Console Type",
+     "default": 0.0
+    },
+    {
+     "name": "Drive",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ChimeyDeluxe",
+   "title": "ChimeyDeluxe",
+   "params": [
+    {
+     "name": "Hell",
+     "default": 0.5
+    },
+    {
+     "name": "Fizz",
+     "default": 0.5
+    },
+    {
+     "name": "Pick",
+     "default": 0.5
+    },
+    {
+     "name": "Satan",
+     "default": 0.5
+    },
+    {
+     "name": "Danger",
+     "default": 0.5
+    },
+    {
+     "name": "Crtical",
+     "default": 0.5
+    },
+    {
+     "name": "H Meat",
+     "default": 0.5
+    },
+    {
+     "name": "L Meat",
+     "default": 0.5
+    },
+    {
+     "name": "Swing",
+     "default": 0.5
+    },
+    {
+     "name": "Rarely",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ChimeyGuitar",
+   "title": "ChimeyGuitar",
+   "params": [
+    {
+     "name": "Compres",
+     "default": 0.5
+    },
+    {
+     "name": "Presnce",
+     "default": 0.8
+    },
+    {
+     "name": "High",
+     "default": 0.7
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Low",
+     "default": 0.7
+    },
+    {
+     "name": "Sub",
+     "default": 0.4
+    },
+    {
+     "name": "HSpeakr",
+     "default": 0.8
+    },
+    {
+     "name": "LSpeakr",
+     "default": 0.4
+    },
+    {
+     "name": "Speed",
+     "default": 0.3
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ChimeyGuitar2",
+   "title": "ChimeyGuitar2",
+   "params": [
+    {
+     "name": "Compres",
+     "default": 0.6
+    },
+    {
+     "name": "Presnce",
+     "default": 0.8
+    },
+    {
+     "name": "High",
+     "default": 0.7
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Low",
+     "default": 0.7
+    },
+    {
+     "name": "Sub",
+     "default": 0.4
+    },
+    {
+     "name": "HSpeakr",
+     "default": 0.8
+    },
+    {
+     "name": "LSpeakr",
+     "default": 0.4
+    },
+    {
+     "name": "Speed",
+     "default": 0.8
+    },
+    {
+     "name": "Output",
+     "default": 0.8
+    }
+   ]
+  },
+  {
+   "id": "Chorus",
+   "title": "Chorus",
+   "params": [
+    {
+     "name": "Speed",
+     "default": 0.5
+    },
+    {
+     "name": "Range",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ChorusEnsemble",
+   "title": "ChorusEnsemble",
+   "params": [
+    {
+     "name": "Speed",
+     "default": 0.5
+    },
+    {
+     "name": "Range",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.8
+    }
+   ]
+  },
+  {
+   "id": "ChromeOxide",
+   "title": "ChromeOxide",
+   "params": [
+    {
+     "name": "Intense",
+     "default": 0.5
+    },
+    {
+     "name": "Bias",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Cider",
+   "title": "Cider",
+   "params": [
+    {
+     "name": "Hardns",
+     "default": 0.7
+    },
+    {
+     "name": "Persnlty",
+     "default": 0.3333
+    },
+    {
+     "name": "Drive",
+     "default": 0.3333
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ClearCoat",
+   "title": "ClearCoat",
+   "params": [
+    {
+     "name": "Select",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ClipOnly",
+   "title": "ClipOnly",
+   "params": []
+  },
+  {
+   "id": "ClipOnly2",
+   "title": "ClipOnly2",
+   "params": []
+  },
+  {
+   "id": "ClipOnly3",
+   "title": "ClipOnly3",
+   "params": []
+  },
+  {
+   "id": "ClipSoftly",
+   "title": "ClipSoftly",
+   "params": []
+  },
+  {
+   "id": "CloudCoat",
+   "title": "CloudCoat",
+   "params": [
+    {
+     "name": "Select",
+     "default": 0.5
+    },
+    {
+     "name": "Sustain",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Coils",
+   "title": "Coils",
+   "params": [
+    {
+     "name": "Saturat",
+     "default": 0.0
+    },
+    {
+     "name": "Core DC",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Coils2",
+   "title": "Coils2",
+   "params": [
+    {
+     "name": "Saturate",
+     "default": 0.0
+    },
+    {
+     "name": "Cheapness",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Cojones",
+   "title": "Cojones",
+   "params": [
+    {
+     "name": "Breathy",
+     "default": 0.5
+    },
+    {
+     "name": "Cojones",
+     "default": 0.5
+    },
+    {
+     "name": "Body",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Compresaturator",
+   "title": "Compresaturator",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.5
+    },
+    {
+     "name": "Clamp",
+     "default": 0.5
+    },
+    {
+     "name": "Expand",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Console0Buss",
+   "title": "Console0Buss",
+   "params": [
+    {
+     "name": "Vol",
+     "default": 0.5
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Console0Channel",
+   "title": "Console0Channel",
+   "params": [
+    {
+     "name": "Vol",
+     "default": 0.5
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Console4Buss",
+   "title": "Console4Buss",
+   "params": [
+    {
+     "name": "Trim",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Console4Channel",
+   "title": "Console4Channel",
+   "params": [
+    {
+     "name": "Trim",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Console5Buss",
+   "title": "Console5Buss",
+   "params": [
+    {
+     "name": "Input",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Console5Channel",
+   "title": "Console5Channel",
+   "params": [
+    {
+     "name": "Input",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Console5DarkCh",
+   "title": "Console5DarkCh",
+   "params": [
+    {
+     "name": "Input",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Console6Buss",
+   "title": "Console6Buss",
+   "params": [
+    {
+     "name": "Input",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Console6Channel",
+   "title": "Console6Channel",
+   "params": [
+    {
+     "name": "Input",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Console7Buss",
+   "title": "Console7Buss",
+   "params": [
+    {
+     "name": "Master",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Console7Cascade",
+   "title": "Console7Cascade",
+   "params": [
+    {
+     "name": "Cascade",
+     "default": 0.39
+    }
+   ]
+  },
+  {
+   "id": "Console7Channel",
+   "title": "Console7Channel",
+   "params": [
+    {
+     "name": "Fader",
+     "default": 0.772
+    }
+   ]
+  },
+  {
+   "id": "Console7Crunch",
+   "title": "Console7Crunch",
+   "params": [
+    {
+     "name": "Crunch",
+     "default": 0.39
+    }
+   ]
+  },
+  {
+   "id": "Console8BussHype",
+   "title": "Console8BussHype",
+   "params": []
+  },
+  {
+   "id": "Console8BussIn",
+   "title": "Console8BussIn",
+   "params": []
+  },
+  {
+   "id": "Console8BussOut",
+   "title": "Console8BussOut",
+   "params": [
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Console8ChannelHype",
+   "title": "Console8ChannelHype",
+   "params": []
+  },
+  {
+   "id": "Console8ChannelIn",
+   "title": "Console8ChannelIn",
+   "params": []
+  },
+  {
+   "id": "Console8ChannelOut",
+   "title": "Console8ChannelOut",
+   "params": [
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Console8LiteBuss",
+   "title": "Console8LiteBuss",
+   "params": [
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Console8LiteChannel",
+   "title": "Console8LiteChannel",
+   "params": [
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Console8SubHype",
+   "title": "Console8SubHype",
+   "params": []
+  },
+  {
+   "id": "Console8SubIn",
+   "title": "Console8SubIn",
+   "params": []
+  },
+  {
+   "id": "Console8SubOut",
+   "title": "Console8SubOut",
+   "params": [
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Console9Buss",
+   "title": "Console9Buss",
+   "params": [
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Console9Channel",
+   "title": "Console9Channel",
+   "params": [
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ConsoleHBuss",
+   "title": "ConsoleHBuss",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Low",
+     "default": 0.5
+    },
+    {
+     "name": "Thresh",
+     "default": 1.0
+    },
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "Hipass",
+     "default": 0.0
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ConsoleHChannel",
+   "title": "ConsoleHChannel",
+   "params": [
+    {
+     "name": "Trim",
+     "default": 0.25
+    },
+    {
+     "name": "More",
+     "default": 0.0
+    },
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Low",
+     "default": 0.5
+    },
+    {
+     "name": "CrossFd",
+     "default": 0.0
+    },
+    {
+     "name": "Tr Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Treble",
+     "default": 0.0
+    },
+    {
+     "name": "TrCrush",
+     "default": 0.5
+    },
+    {
+     "name": "HM Freq",
+     "default": 0.5
+    },
+    {
+     "name": "HighMid",
+     "default": 0.0
+    },
+    {
+     "name": "HMCrush",
+     "default": 0.5
+    },
+    {
+     "name": "LM Freq",
+     "default": 0.5
+    },
+    {
+     "name": "LowMid",
+     "default": 0.0
+    },
+    {
+     "name": "LMCrush",
+     "default": 0.5
+    },
+    {
+     "name": "Bs Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.0
+    },
+    {
+     "name": "BsCrush",
+     "default": 0.5
+    },
+    {
+     "name": "Thresh",
+     "default": 1.0
+    },
+    {
+     "name": "Attack",
+     "default": 0.5
+    },
+    {
+     "name": "Release",
+     "default": 0.5
+    },
+    {
+     "name": "Gate",
+     "default": 0.0
+    },
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "Hipass",
+     "default": 0.0
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ConsoleHPre",
+   "title": "ConsoleHPre",
+   "params": [
+    {
+     "name": "Trim",
+     "default": 0.25
+    },
+    {
+     "name": "More",
+     "default": 0.0
+    },
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Low",
+     "default": 0.5
+    },
+    {
+     "name": "CrossFd",
+     "default": 0.0
+    },
+    {
+     "name": "Tr Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Treble",
+     "default": 0.0
+    },
+    {
+     "name": "TrCrush",
+     "default": 0.5
+    },
+    {
+     "name": "HM Freq",
+     "default": 0.5
+    },
+    {
+     "name": "HighMid",
+     "default": 0.0
+    },
+    {
+     "name": "HMCrush",
+     "default": 0.5
+    },
+    {
+     "name": "LM Freq",
+     "default": 0.5
+    },
+    {
+     "name": "LowMid",
+     "default": 0.0
+    },
+    {
+     "name": "LMCrush",
+     "default": 0.5
+    },
+    {
+     "name": "Bs Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.0
+    },
+    {
+     "name": "BsCrush",
+     "default": 0.5
+    },
+    {
+     "name": "Thresh",
+     "default": 1.0
+    },
+    {
+     "name": "Attack",
+     "default": 0.5
+    },
+    {
+     "name": "Release",
+     "default": 0.5
+    },
+    {
+     "name": "Gate",
+     "default": 0.0
+    },
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "Hipass",
+     "default": 0.0
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ConsoleLABuss",
+   "title": "ConsoleLABuss",
+   "params": [
+    {
+     "name": "Master",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ConsoleLAChannel",
+   "title": "ConsoleLAChannel",
+   "params": [
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ConsoleMCBuss",
+   "title": "ConsoleMCBuss",
+   "params": [
+    {
+     "name": "Master",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ConsoleMCChannel",
+   "title": "ConsoleMCChannel",
+   "params": [
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "MidFreq",
+     "default": 0.25
+    },
+    {
+     "name": "MidPeak",
+     "default": 0.0
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ConsoleMDBuss",
+   "title": "ConsoleMDBuss",
+   "params": [
+    {
+     "name": "Master",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ConsoleMDChannel",
+   "title": "ConsoleMDChannel",
+   "params": [
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "MidFreq",
+     "default": 0.25
+    },
+    {
+     "name": "MidPeak",
+     "default": 0.0
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ConsoleX2Buss",
+   "title": "ConsoleX2Buss",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "HMid",
+     "default": 0.5
+    },
+    {
+     "name": "LMid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "HighF",
+     "default": 0.5
+    },
+    {
+     "name": "HMidF",
+     "default": 0.5
+    },
+    {
+     "name": "LMidF",
+     "default": 0.5
+    },
+    {
+     "name": "BassF",
+     "default": 0.5
+    },
+    {
+     "name": "Thresh",
+     "default": 1.0
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ConsoleX2Channel",
+   "title": "ConsoleX2Channel",
+   "params": [
+    {
+     "name": "Trim",
+     "default": 0.25
+    },
+    {
+     "name": "More",
+     "default": 0.0
+    },
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "HMid",
+     "default": 0.5
+    },
+    {
+     "name": "LMid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "HighF",
+     "default": 0.5
+    },
+    {
+     "name": "HMidF",
+     "default": 0.5
+    },
+    {
+     "name": "LMidF",
+     "default": 0.5
+    },
+    {
+     "name": "BassF",
+     "default": 0.5
+    },
+    {
+     "name": "Thresh",
+     "default": 1.0
+    },
+    {
+     "name": "Attack",
+     "default": 0.5
+    },
+    {
+     "name": "Release",
+     "default": 0.5
+    },
+    {
+     "name": "Gate",
+     "default": 0.0
+    },
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "Hipass",
+     "default": 0.0
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ConsoleX2Pre",
+   "title": "ConsoleX2Pre",
+   "params": [
+    {
+     "name": "Trim",
+     "default": 0.25
+    },
+    {
+     "name": "More",
+     "default": 0.0
+    },
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "HMid",
+     "default": 0.5
+    },
+    {
+     "name": "LMid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "HighF",
+     "default": 0.5
+    },
+    {
+     "name": "HMidF",
+     "default": 0.5
+    },
+    {
+     "name": "LMidF",
+     "default": 0.5
+    },
+    {
+     "name": "BassF",
+     "default": 0.5
+    },
+    {
+     "name": "Thresh",
+     "default": 1.0
+    },
+    {
+     "name": "Attack",
+     "default": 0.5
+    },
+    {
+     "name": "Release",
+     "default": 0.5
+    },
+    {
+     "name": "Gate",
+     "default": 0.0
+    },
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "Hipass",
+     "default": 0.0
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ConsoleX3",
+   "title": "ConsoleX3",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "HMid",
+     "default": 0.5
+    },
+    {
+     "name": "LMid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "HighF",
+     "default": 0.5
+    },
+    {
+     "name": "HMidF",
+     "default": 0.5
+    },
+    {
+     "name": "LMidF",
+     "default": 0.5
+    },
+    {
+     "name": "BassF",
+     "default": 0.5
+    },
+    {
+     "name": "Thresh",
+     "default": 1.0
+    },
+    {
+     "name": "Attack",
+     "default": 0.382
+    },
+    {
+     "name": "Release",
+     "default": 0.618
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    },
+    {
+     "name": "Input",
+     "default": 0.5
+    },
+    {
+     "name": "Cha/Bus",
+     "default": 0.0
+    },
+    {
+     "name": "Smooth",
+     "default": 0.5
+    },
+    {
+     "name": "More",
+     "default": 0.0
+    },
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "LowpasQ",
+     "default": 0.0
+    },
+    {
+     "name": "Hipass",
+     "default": 0.0
+    },
+    {
+     "name": "HipassQ",
+     "default": 0.0
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ConsoleXBuss",
+   "title": "ConsoleXBuss",
+   "params": [
+    {
+     "name": "Highpas",
+     "default": 0.0
+    },
+    {
+     "name": "Lowpass",
+     "default": 0.0
+    },
+    {
+     "name": "Air",
+     "default": 0.5
+    },
+    {
+     "name": "Fire",
+     "default": 0.5
+    },
+    {
+     "name": "Stone",
+     "default": 0.5
+    },
+    {
+     "name": "Range",
+     "default": 0.5
+    },
+    {
+     "name": "FC Thrs",
+     "default": 1.0
+    },
+    {
+     "name": "SC Thrs",
+     "default": 1.0
+    },
+    {
+     "name": "FC Rati",
+     "default": 1.0
+    },
+    {
+     "name": "SC Rati",
+     "default": 1.0
+    },
+    {
+     "name": "FC Atk",
+     "default": 0.5
+    },
+    {
+     "name": "SC Atk",
+     "default": 0.5
+    },
+    {
+     "name": "FC Rls",
+     "default": 0.5
+    },
+    {
+     "name": "SC Rls",
+     "default": 0.5
+    },
+    {
+     "name": "FG Thrs",
+     "default": 0.0
+    },
+    {
+     "name": "SG Thrs",
+     "default": 0.0
+    },
+    {
+     "name": "FG Rati",
+     "default": 1.0
+    },
+    {
+     "name": "SG Rati",
+     "default": 1.0
+    },
+    {
+     "name": "FG Sust",
+     "default": 0.5
+    },
+    {
+     "name": "SG Sust",
+     "default": 0.5
+    },
+    {
+     "name": "FG Rls",
+     "default": 0.5
+    },
+    {
+     "name": "SG Rls",
+     "default": 0.5
+    },
+    {
+     "name": "Tr Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Tr Reso",
+     "default": 0.5
+    },
+    {
+     "name": "HM Freq",
+     "default": 0.5
+    },
+    {
+     "name": "HighMid",
+     "default": 0.5
+    },
+    {
+     "name": "HM Reso",
+     "default": 0.5
+    },
+    {
+     "name": "LM Freq",
+     "default": 0.5
+    },
+    {
+     "name": "LowMid",
+     "default": 0.5
+    },
+    {
+     "name": "LM Reso",
+     "default": 0.5
+    },
+    {
+     "name": "Bs Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "Bs Reso",
+     "default": 0.5
+    },
+    {
+     "name": "Top dB",
+     "default": 0.5
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ConsoleXChannel",
+   "title": "ConsoleXChannel",
+   "params": [
+    {
+     "name": "Highpas",
+     "default": 0.0
+    },
+    {
+     "name": "Lowpass",
+     "default": 0.0
+    },
+    {
+     "name": "Air",
+     "default": 0.5
+    },
+    {
+     "name": "Fire",
+     "default": 0.5
+    },
+    {
+     "name": "Stone",
+     "default": 0.5
+    },
+    {
+     "name": "Range",
+     "default": 0.5
+    },
+    {
+     "name": "FC Thrs",
+     "default": 1.0
+    },
+    {
+     "name": "SC Thrs",
+     "default": 1.0
+    },
+    {
+     "name": "FC Rati",
+     "default": 1.0
+    },
+    {
+     "name": "SC Rati",
+     "default": 1.0
+    },
+    {
+     "name": "FC Atk",
+     "default": 0.5
+    },
+    {
+     "name": "SC Atk",
+     "default": 0.5
+    },
+    {
+     "name": "FC Rls",
+     "default": 0.5
+    },
+    {
+     "name": "SC Rls",
+     "default": 0.5
+    },
+    {
+     "name": "FG Thrs",
+     "default": 0.0
+    },
+    {
+     "name": "SG Thrs",
+     "default": 0.0
+    },
+    {
+     "name": "FG Rati",
+     "default": 1.0
+    },
+    {
+     "name": "SG Rati",
+     "default": 1.0
+    },
+    {
+     "name": "FG Sust",
+     "default": 0.5
+    },
+    {
+     "name": "SG Sust",
+     "default": 0.5
+    },
+    {
+     "name": "FG Rls",
+     "default": 0.5
+    },
+    {
+     "name": "SG Rls",
+     "default": 0.5
+    },
+    {
+     "name": "Tr Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Tr Reso",
+     "default": 0.5
+    },
+    {
+     "name": "HM Freq",
+     "default": 0.5
+    },
+    {
+     "name": "HighMid",
+     "default": 0.5
+    },
+    {
+     "name": "HM Reso",
+     "default": 0.5
+    },
+    {
+     "name": "LM Freq",
+     "default": 0.5
+    },
+    {
+     "name": "LowMid",
+     "default": 0.5
+    },
+    {
+     "name": "LM Reso",
+     "default": 0.5
+    },
+    {
+     "name": "Bs Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "Bs Reso",
+     "default": 0.5
+    },
+    {
+     "name": "Top dB",
+     "default": 0.5
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ConsoleXPre",
+   "title": "ConsoleXPre",
+   "params": [
+    {
+     "name": "Highpas",
+     "default": 0.0
+    },
+    {
+     "name": "Lowpass",
+     "default": 0.0
+    },
+    {
+     "name": "Air",
+     "default": 0.5
+    },
+    {
+     "name": "Fire",
+     "default": 0.5
+    },
+    {
+     "name": "Stone",
+     "default": 0.5
+    },
+    {
+     "name": "Range",
+     "default": 0.5
+    },
+    {
+     "name": "FC Thrs",
+     "default": 1.0
+    },
+    {
+     "name": "SC Thrs",
+     "default": 1.0
+    },
+    {
+     "name": "FC Rati",
+     "default": 1.0
+    },
+    {
+     "name": "SC Rati",
+     "default": 1.0
+    },
+    {
+     "name": "FC Atk",
+     "default": 0.5
+    },
+    {
+     "name": "SC Atk",
+     "default": 0.5
+    },
+    {
+     "name": "FC Rls",
+     "default": 0.5
+    },
+    {
+     "name": "SC Rls",
+     "default": 0.5
+    },
+    {
+     "name": "FG Thrs",
+     "default": 0.0
+    },
+    {
+     "name": "SG Thrs",
+     "default": 0.0
+    },
+    {
+     "name": "FG Rati",
+     "default": 1.0
+    },
+    {
+     "name": "SG Rati",
+     "default": 1.0
+    },
+    {
+     "name": "FG Sust",
+     "default": 0.5
+    },
+    {
+     "name": "SG Sust",
+     "default": 0.5
+    },
+    {
+     "name": "FG Rls",
+     "default": 0.5
+    },
+    {
+     "name": "SG Rls",
+     "default": 0.5
+    },
+    {
+     "name": "Tr Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Tr Reso",
+     "default": 0.5
+    },
+    {
+     "name": "HM Freq",
+     "default": 0.5
+    },
+    {
+     "name": "HighMid",
+     "default": 0.5
+    },
+    {
+     "name": "HM Reso",
+     "default": 0.5
+    },
+    {
+     "name": "LM Freq",
+     "default": 0.5
+    },
+    {
+     "name": "LowMid",
+     "default": 0.5
+    },
+    {
+     "name": "LM Reso",
+     "default": 0.5
+    },
+    {
+     "name": "Bs Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "Bs Reso",
+     "default": 0.5
+    },
+    {
+     "name": "Top dB",
+     "default": 0.5
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ContentHideD",
+   "title": "ContentHideD",
+   "params": []
+  },
+  {
+   "id": "CreamCoat",
+   "title": "CreamCoat",
+   "params": [
+    {
+     "name": "Select",
+     "default": 0.5
+    },
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "DeRez",
+     "default": 1.0
+    },
+    {
+     "name": "Predlay",
+     "default": 0.0
+    },
+    {
+     "name": "Wetness",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "Creature",
+   "title": "Creature",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.26
+    },
+    {
+     "name": "Depth",
+     "default": 0.26
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "CrickBass",
+   "title": "CrickBass",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.5
+    },
+    {
+     "name": "Tone",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "CrunchCoat",
+   "title": "CrunchCoat",
+   "params": [
+    {
+     "name": "Select",
+     "default": 0.5
+    },
+    {
+     "name": "Regen",
+     "default": 0.0
+    },
+    {
+     "name": "DeRez",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "CrunchyGrooveWear",
+   "title": "CrunchyGrooveWear",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 0.064
+    },
+    {
+     "name": "Apply",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Crystal",
+   "title": "Crystal",
+   "params": [
+    {
+     "name": "Hardnss",
+     "default": 0.7
+    },
+    {
+     "name": "Personl",
+     "default": 1.0
+    },
+    {
+     "name": "Drive",
+     "default": 0.333
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "CStrip",
+   "title": "CStrip",
+   "params": [
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "TrebFrq",
+     "default": 0.4
+    },
+    {
+     "name": "BassFrq",
+     "default": 0.4
+    },
+    {
+     "name": "Hipass",
+     "default": 0.0
+    },
+    {
+     "name": "Gate",
+     "default": 0.0
+    },
+    {
+     "name": "Compres",
+     "default": 0.0
+    },
+    {
+     "name": "CompSpd",
+     "default": 0.0
+    },
+    {
+     "name": "TimeLag",
+     "default": 0.0
+    },
+    {
+     "name": "OutGain",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "CStrip2",
+   "title": "CStrip2",
+   "params": [
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "TrebFrq",
+     "default": 0.5
+    },
+    {
+     "name": "BassFrq",
+     "default": 0.5
+    },
+    {
+     "name": "LowCap",
+     "default": 1.0
+    },
+    {
+     "name": "HiCap",
+     "default": 0.0
+    },
+    {
+     "name": "Compres",
+     "default": 0.0
+    },
+    {
+     "name": "CompSpd",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 0.33
+    }
+   ]
+  },
+  {
+   "id": "curve",
+   "title": "curve",
+   "params": []
+  },
+  {
+   "id": "Dark",
+   "title": "Dark",
+   "params": [
+    {
+     "name": "Quant",
+     "default": 1.0
+    },
+    {
+     "name": "DeRez",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "DarkNoise",
+   "title": "DarkNoise",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Dark",
+     "default": 1.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Dattorro",
+   "title": "Dattorro",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Reso",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "DCVoltage",
+   "title": "DCVoltage",
+   "params": [
+    {
+     "name": "Voltage",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "DeBess",
+   "title": "DeBess",
+   "params": [
+    {
+     "name": "Intense",
+     "default": 0.0
+    },
+    {
+     "name": "Sharp",
+     "default": 0.5
+    },
+    {
+     "name": "Depth",
+     "default": 0.5
+    },
+    {
+     "name": "Filter",
+     "default": 0.5
+    },
+    {
+     "name": "Sense",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "DeBez",
+   "title": "DeBez",
+   "params": [
+    {
+     "name": "DeBez",
+     "default": 0.5
+    },
+    {
+     "name": "DeRez",
+     "default": 0.5
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Deckwrecka",
+   "title": "Deckwrecka",
+   "params": [
+    {
+     "name": "Wreck",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "DeCrackle",
+   "title": "DeCrackle",
+   "params": [
+    {
+     "name": "Filter",
+     "default": 0.5
+    },
+    {
+     "name": "Window",
+     "default": 0.5
+    },
+    {
+     "name": "Thresld",
+     "default": 0.5
+    },
+    {
+     "name": "Surface",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "DeEss",
+   "title": "DeEss",
+   "params": [
+    {
+     "name": "Intense",
+     "default": 0.0
+    },
+    {
+     "name": "Max DS",
+     "default": 0.5
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "DeHiss",
+   "title": "DeHiss",
+   "params": [
+    {
+     "name": "Thresh",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "DeNoise",
+   "title": "DeNoise",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.0
+    },
+    {
+     "name": "HMid",
+     "default": 0.0
+    },
+    {
+     "name": "Mid",
+     "default": 0.0
+    },
+    {
+     "name": "LMid",
+     "default": 0.0
+    },
+    {
+     "name": "Bass",
+     "default": 0.0
+    },
+    {
+     "name": "Sub",
+     "default": 0.0
+    },
+    {
+     "name": "Speed",
+     "default": 0.25
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Density",
+   "title": "Density",
+   "params": [
+    {
+     "name": "Density",
+     "default": 0.2
+    },
+    {
+     "name": "Highpass",
+     "default": 0.0
+    },
+    {
+     "name": "Out Level",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Density2",
+   "title": "Density2",
+   "params": [
+    {
+     "name": "Density",
+     "default": 0.2
+    },
+    {
+     "name": "Highpass",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Density3",
+   "title": "Density3",
+   "params": [
+    {
+     "name": "Density",
+     "default": 0.0
+    },
+    {
+     "name": "Highpas",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "DeRez",
+   "title": "DeRez",
+   "params": [
+    {
+     "name": "Rate",
+     "default": 1.0
+    },
+    {
+     "name": "Rez",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "DeRez2",
+   "title": "DeRez2",
+   "params": [
+    {
+     "name": "Rate",
+     "default": 1.0
+    },
+    {
+     "name": "Rez",
+     "default": 1.0
+    },
+    {
+     "name": "Hard",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "DeRez3",
+   "title": "DeRez3",
+   "params": [
+    {
+     "name": "Rate",
+     "default": 1.0
+    },
+    {
+     "name": "Rez",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "DeRez4",
+   "title": "DeRez4",
+   "params": [
+    {
+     "name": "DownRez",
+     "default": 0.618
+    },
+    {
+     "name": "Bright",
+     "default": 0.618
+    },
+    {
+     "name": "Bassis",
+     "default": 0.382
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "DeRez5",
+   "title": "DeRez5",
+   "params": [
+    {
+     "name": "Derez",
+     "default": 1.0
+    },
+    {
+     "name": "Trim",
+     "default": 1.0
+    },
+    {
+     "name": "Square",
+     "default": 0.0
+    },
+    {
+     "name": "Bright",
+     "default": 1.0
+    },
+    {
+     "name": "Bassis",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Desk",
+   "title": "Desk",
+   "params": []
+  },
+  {
+   "id": "Desk4",
+   "title": "Desk4",
+   "params": [
+    {
+     "name": "Overdrive",
+     "default": 0.27
+    },
+    {
+     "name": "Hi Choke",
+     "default": 0.18
+    },
+    {
+     "name": "Power Sag",
+     "default": 0.26
+    },
+    {
+     "name": "Frequency",
+     "default": 0.54
+    },
+    {
+     "name": "Output Trim",
+     "default": 0.84
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "DigitalBlack",
+   "title": "DigitalBlack",
+   "params": [
+    {
+     "name": "Thresh",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Dirt",
+   "title": "Dirt",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.1
+    },
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "Highpass",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Discontapeity",
+   "title": "Discontapeity",
+   "params": [
+    {
+     "name": "More",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Discontinuity",
+   "title": "Discontinuity",
+   "params": [
+    {
+     "name": "Top dB",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Disintegrate",
+   "title": "Disintegrate",
+   "params": [
+    {
+     "name": "Top dB",
+     "default": 0.5
+    },
+    {
+     "name": "BufSize",
+     "default": 0.5
+    },
+    {
+     "name": "Layers",
+     "default": 0.2
+    },
+    {
+     "name": "Filter",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Distance",
+   "title": "Distance",
+   "params": [
+    {
+     "name": "Distance",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Distance2",
+   "title": "Distance2",
+   "params": [
+    {
+     "name": "Atmosph",
+     "default": 0.85
+    },
+    {
+     "name": "Darken",
+     "default": 0.618
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.618
+    }
+   ]
+  },
+  {
+   "id": "Distance3",
+   "title": "Distance3",
+   "params": [
+    {
+     "name": "Distance",
+     "default": 0.5
+    },
+    {
+     "name": "Top dB",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Distortion",
+   "title": "Distortion",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    },
+    {
+     "name": "Mode",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Ditherbox",
+   "title": "Ditherbox",
+   "params": [
+    {
+     "name": "Type",
+     "default": 0.86
+    }
+   ]
+  },
+  {
+   "id": "DitherFloat",
+   "title": "DitherFloat",
+   "params": [
+    {
+     "name": "Offset",
+     "default": 0.0
+    },
+    {
+     "name": "Dither",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "DitherMeDiskers",
+   "title": "DitherMeDiskers",
+   "params": []
+  },
+  {
+   "id": "DitherMeTimbers",
+   "title": "DitherMeTimbers",
+   "params": []
+  },
+  {
+   "id": "Donut",
+   "title": "Donut",
+   "params": [
+    {
+     "name": "Attack",
+     "default": 0.5
+    },
+    {
+     "name": "Release",
+     "default": 0.5
+    },
+    {
+     "name": "BaseFrq",
+     "default": 1.0
+    },
+    {
+     "name": "MoveFrq",
+     "default": 0.5
+    },
+    {
+     "name": "BaseRes",
+     "default": 0.0
+    },
+    {
+     "name": "MoveRes",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Doublelay",
+   "title": "Doublelay",
+   "params": [
+    {
+     "name": "Detune",
+     "default": 0.2
+    },
+    {
+     "name": "Delay L",
+     "default": 0.1
+    },
+    {
+     "name": "Delay R",
+     "default": 0.2
+    },
+    {
+     "name": "Feedbk",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.6
+    }
+   ]
+  },
+  {
+   "id": "DoublePaul",
+   "title": "DoublePaul",
+   "params": []
+  },
+  {
+   "id": "Drive",
+   "title": "Drive",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.0
+    },
+    {
+     "name": "Highpass",
+     "default": 0.0
+    },
+    {
+     "name": "Out Level",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "DrumSlam",
+   "title": "DrumSlam",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "DubCenter",
+   "title": "DubCenter",
+   "params": [
+    {
+     "name": "TGrind",
+     "default": 0.9
+    },
+    {
+     "name": "Grd/Out",
+     "default": 0.5
+    },
+    {
+     "name": "XOver",
+     "default": 0.74
+    },
+    {
+     "name": "BsDrive",
+     "default": 1.0
+    },
+    {
+     "name": "BsVoice",
+     "default": 0.95
+    },
+    {
+     "name": "BassOut",
+     "default": 0.5
+    },
+    {
+     "name": "SbDrive",
+     "default": 0.2
+    },
+    {
+     "name": "SbVoice",
+     "default": 0.2
+    },
+    {
+     "name": "SubOut",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Dubly",
+   "title": "Dubly",
+   "params": [
+    {
+     "name": "Dubly",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Dubly2",
+   "title": "Dubly2",
+   "params": [
+    {
+     "name": "EncAmnt",
+     "default": 0.5
+    },
+    {
+     "name": "EncFreq",
+     "default": 0.5
+    },
+    {
+     "name": "TapeDrv",
+     "default": 0.0
+    },
+    {
+     "name": "DecAmnt",
+     "default": 0.5
+    },
+    {
+     "name": "DecFreq",
+     "default": 0.5
+    },
+    {
+     "name": "Out Pad",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Dubly3",
+   "title": "Dubly3",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    },
+    {
+     "name": "Tilt",
+     "default": 0.5
+    },
+    {
+     "name": "Shape",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "DubPlate",
+   "title": "DubPlate",
+   "params": []
+  },
+  {
+   "id": "DubPlate2",
+   "title": "DubPlate2",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    },
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "DubSub",
+   "title": "DubSub",
+   "params": [
+    {
+     "name": "TGrind",
+     "default": 0.9
+    },
+    {
+     "name": "Grd/Out",
+     "default": 0.5
+    },
+    {
+     "name": "XOver",
+     "default": 0.74
+    },
+    {
+     "name": "BsDrive",
+     "default": 1.0
+    },
+    {
+     "name": "BsVoice",
+     "default": 0.95
+    },
+    {
+     "name": "BassOut",
+     "default": 0.5
+    },
+    {
+     "name": "SbDrive",
+     "default": 0.2
+    },
+    {
+     "name": "SbVoice",
+     "default": 0.2
+    },
+    {
+     "name": "SubOut",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "DubSub2",
+   "title": "DubSub2",
+   "params": [
+    {
+     "name": "HeadBmp",
+     "default": 0.5
+    },
+    {
+     "name": "HeadFrq",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "DustBunny",
+   "title": "DustBunny",
+   "params": [
+    {
+     "name": "Bunny",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Dynamics",
+   "title": "Dynamics",
+   "params": [
+    {
+     "name": "Comp",
+     "default": 0.0
+    },
+    {
+     "name": "Speed",
+     "default": 0.5
+    },
+    {
+     "name": "Gate",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Dynamics2",
+   "title": "Dynamics2",
+   "params": [
+    {
+     "name": "Thresh",
+     "default": 1.0
+    },
+    {
+     "name": "Attack",
+     "default": 0.5
+    },
+    {
+     "name": "Release",
+     "default": 0.5
+    },
+    {
+     "name": "Gate",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Dynamics3",
+   "title": "Dynamics3",
+   "params": [
+    {
+     "name": "Thresh",
+     "default": 1.0
+    },
+    {
+     "name": "Attack",
+     "default": 0.382
+    },
+    {
+     "name": "Release",
+     "default": 0.618
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Dyno",
+   "title": "Dyno",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Echojam",
+   "title": "Echojam",
+   "params": [
+    {
+     "name": "Select",
+     "default": 0.5
+    },
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Speed",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Edge",
+   "title": "Edge",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.1
+    },
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "Highpass",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "EdIsDim",
+   "title": "EdIsDim",
+   "params": [
+    {
+     "name": "ediS/diM",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Elation",
+   "title": "Elation",
+   "params": [
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    },
+    {
+     "name": "Persnlty",
+     "default": 0.3333
+    },
+    {
+     "name": "Drive",
+     "default": 0.3333
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ElectroHat",
+   "title": "ElectroHat",
+   "params": [
+    {
+     "name": "HiHat",
+     "default": 0.0
+    },
+    {
+     "name": "Trim",
+     "default": 0.5
+    },
+    {
+     "name": "Bright",
+     "default": 1.0
+    },
+    {
+     "name": "Output",
+     "default": 0.1
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Elliptical",
+   "title": "Elliptical",
+   "params": [
+    {
+     "name": "Cutoff",
+     "default": 0.5
+    },
+    {
+     "name": "Slope",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Energy",
+   "title": "Energy",
+   "params": [
+    {
+     "name": "Hiss",
+     "default": 0.5
+    },
+    {
+     "name": "Glitter",
+     "default": 0.5
+    },
+    {
+     "name": "Rat",
+     "default": 0.5
+    },
+    {
+     "name": "Fizz",
+     "default": 0.5
+    },
+    {
+     "name": "Scrape",
+     "default": 0.5
+    },
+    {
+     "name": "Chug",
+     "default": 0.5
+    },
+    {
+     "name": "Yowr",
+     "default": 0.5
+    },
+    {
+     "name": "Snarl",
+     "default": 0.5
+    },
+    {
+     "name": "I/Dr/Wt",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Energy2",
+   "title": "Energy2",
+   "params": [
+    {
+     "name": "Hiss",
+     "default": 0.5
+    },
+    {
+     "name": "Glitter",
+     "default": 0.5
+    },
+    {
+     "name": "Rat",
+     "default": 0.5
+    },
+    {
+     "name": "Fizz",
+     "default": 0.5
+    },
+    {
+     "name": "Scrape",
+     "default": 0.5
+    },
+    {
+     "name": "Chug",
+     "default": 0.5
+    },
+    {
+     "name": "Yowr",
+     "default": 0.5
+    },
+    {
+     "name": "Snarl",
+     "default": 0.5
+    },
+    {
+     "name": "I/Dr/Wt",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Ensemble",
+   "title": "Ensemble",
+   "params": [
+    {
+     "name": "Ensemble",
+     "default": 0.5
+    },
+    {
+     "name": "Fullness",
+     "default": 0.0
+    },
+    {
+     "name": "Brighten",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "EQ",
+   "title": "EQ",
+   "params": [
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "TrebFrq",
+     "default": 0.4
+    },
+    {
+     "name": "BassFrq",
+     "default": 0.4
+    },
+    {
+     "name": "Hipass",
+     "default": 0.0
+    },
+    {
+     "name": "OutGain",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "EveryConsole",
+   "title": "EveryConsole",
+   "params": [
+    {
+     "name": "ConType",
+     "default": 0.0
+    },
+    {
+     "name": "InTrim",
+     "default": 0.5
+    },
+    {
+     "name": "OutTrim",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "EverySlew",
+   "title": "EverySlew",
+   "params": [
+    {
+     "name": "Slew",
+     "default": 0.0
+    },
+    {
+     "name": "Depth",
+     "default": 1.0
+    },
+    {
+     "name": "Halo",
+     "default": 0.16
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "EveryTrim",
+   "title": "EveryTrim",
+   "params": [
+    {
+     "name": "Left",
+     "default": 0.5
+    },
+    {
+     "name": "Right",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Side",
+     "default": 0.5
+    },
+    {
+     "name": "Master",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Exciter",
+   "title": "Exciter",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 0.6
+    },
+    {
+     "name": "Excite",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Facet",
+   "title": "Facet",
+   "params": [
+    {
+     "name": "Facet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "FastDistance",
+   "title": "FastDistance",
+   "params": [
+    {
+     "name": "Distnce",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "FastDistance2",
+   "title": "FastDistance2",
+   "params": [
+    {
+     "name": "Distnce",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "FatEQ",
+   "title": "FatEQ",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "HMid",
+     "default": 0.5
+    },
+    {
+     "name": "LMid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "Out",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "FathomFive",
+   "title": "FathomFive",
+   "params": [
+    {
+     "name": "Root Note",
+     "default": 1.0
+    },
+    {
+     "name": "SubOctave",
+     "default": 0.0
+    },
+    {
+     "name": "Frequency",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "FinalClip",
+   "title": "FinalClip",
+   "params": []
+  },
+  {
+   "id": "FireAmp",
+   "title": "FireAmp",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.5
+    },
+    {
+     "name": "Tone",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.8
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Flipity",
+   "title": "Flipity",
+   "params": [
+    {
+     "name": "Flipity",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Floor",
+   "title": "Floor",
+   "params": [
+    {
+     "name": "Floor",
+     "default": 0.0
+    },
+    {
+     "name": "Drive",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Flutter",
+   "title": "Flutter",
+   "params": [
+    {
+     "name": "Flutter",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Flutter2",
+   "title": "Flutter2",
+   "params": [
+    {
+     "name": "Flutter",
+     "default": 0.5
+    },
+    {
+     "name": "Speed",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Focus",
+   "title": "Focus",
+   "params": [
+    {
+     "name": "Boost",
+     "default": 0.0
+    },
+    {
+     "name": "Focus",
+     "default": 0.5
+    },
+    {
+     "name": "Mode",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Fracture",
+   "title": "Fracture",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.25
+    },
+    {
+     "name": "Fracture",
+     "default": 0.5
+    },
+    {
+     "name": "Out Lvl",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Fracture2",
+   "title": "Fracture2",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.1
+    },
+    {
+     "name": "Fractre",
+     "default": 0.0
+    },
+    {
+     "name": "Thresh",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "FromTape",
+   "title": "FromTape",
+   "params": [
+    {
+     "name": "Louder",
+     "default": 0.5
+    },
+    {
+     "name": "Softer",
+     "default": 0.5
+    },
+    {
+     "name": "Weight",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Galactic",
+   "title": "Galactic",
+   "params": [
+    {
+     "name": "Replace",
+     "default": 0.5
+    },
+    {
+     "name": "Brightness",
+     "default": 0.5
+    },
+    {
+     "name": "Detune",
+     "default": 0.5
+    },
+    {
+     "name": "Bigness",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Galactic2",
+   "title": "Galactic2",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.5
+    },
+    {
+     "name": "Sustain",
+     "default": 0.5
+    },
+    {
+     "name": "Darken",
+     "default": 0.5
+    },
+    {
+     "name": "Wetness",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Galactic3",
+   "title": "Galactic3",
+   "params": [
+    {
+     "name": "Replace",
+     "default": 0.5
+    },
+    {
+     "name": "Brightns",
+     "default": 0.5
+    },
+    {
+     "name": "Detune",
+     "default": 0.5
+    },
+    {
+     "name": "Derez",
+     "default": 1.0
+    },
+    {
+     "name": "Bigness",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "GalacticVibe",
+   "title": "GalacticVibe",
+   "params": [
+    {
+     "name": "Drift",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Gatelope",
+   "title": "Gatelope",
+   "params": [
+    {
+     "name": "Thresh",
+     "default": 0.0
+    },
+    {
+     "name": "TrebSus",
+     "default": 1.0
+    },
+    {
+     "name": "BassSus",
+     "default": 0.5
+    },
+    {
+     "name": "AttackS",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "GlitchShifter",
+   "title": "GlitchShifter",
+   "params": [
+    {
+     "name": "Note",
+     "default": 0.5
+    },
+    {
+     "name": "Trim",
+     "default": 0.5
+    },
+    {
+     "name": "Tighten",
+     "default": 0.5
+    },
+    {
+     "name": "Feedbck",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "GoldenSlew",
+   "title": "GoldenSlew",
+   "params": [
+    {
+     "name": "Slew",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Golem",
+   "title": "Golem",
+   "params": [
+    {
+     "name": "Balance",
+     "default": 0.5
+    },
+    {
+     "name": "Offset",
+     "default": 0.5
+    },
+    {
+     "name": "Phase",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "GrindAmp",
+   "title": "GrindAmp",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.5
+    },
+    {
+     "name": "Tone",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.8
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Gringer",
+   "title": "Gringer",
+   "params": []
+  },
+  {
+   "id": "GrooveWear",
+   "title": "GrooveWear",
+   "params": [
+    {
+     "name": "Wear",
+     "default": 0.064
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "GuitarConditioner",
+   "title": "GuitarConditioner",
+   "params": []
+  },
+  {
+   "id": "HardVacuum",
+   "title": "HardVacuum",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.0
+    },
+    {
+     "name": "Warmth",
+     "default": 0.0
+    },
+    {
+     "name": "Aura",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Hermepass",
+   "title": "Hermepass",
+   "params": [
+    {
+     "name": "Cutoff",
+     "default": 0.5
+    },
+    {
+     "name": "Slope",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "HermeTrim",
+   "title": "HermeTrim",
+   "params": [
+    {
+     "name": "Left",
+     "default": 0.5
+    },
+    {
+     "name": "Right",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Side",
+     "default": 0.5
+    },
+    {
+     "name": "Master",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "HighGlossDither",
+   "title": "HighGlossDither",
+   "params": []
+  },
+  {
+   "id": "HighImpact",
+   "title": "HighImpact",
+   "params": [
+    {
+     "name": "Impact",
+     "default": 0.0
+    },
+    {
+     "name": "Output Level",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Highpass",
+   "title": "Highpass",
+   "params": [
+    {
+     "name": "Highpass",
+     "default": 0.0
+    },
+    {
+     "name": "Loose/Tight",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Highpass2",
+   "title": "Highpass2",
+   "params": [
+    {
+     "name": "Hipass",
+     "default": 0.0
+    },
+    {
+     "name": "Ls/Tite",
+     "default": 0.5
+    },
+    {
+     "name": "Poles",
+     "default": 0.25
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "HipCrush",
+   "title": "HipCrush",
+   "params": [
+    {
+     "name": "Hi Freq",
+     "default": 0.5
+    },
+    {
+     "name": "High",
+     "default": 0.0
+    },
+    {
+     "name": "HiCrush",
+     "default": 0.5
+    },
+    {
+     "name": "MidFreq",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.0
+    },
+    {
+     "name": "MdCrush",
+     "default": 0.5
+    },
+    {
+     "name": "Lo Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Low",
+     "default": 0.0
+    },
+    {
+     "name": "LoCrush",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Holt",
+   "title": "Holt",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 1.0
+    },
+    {
+     "name": "Reso",
+     "default": 0.5
+    },
+    {
+     "name": "Poles",
+     "default": 1.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Holt2",
+   "title": "Holt2",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 1.0
+    },
+    {
+     "name": "Reso",
+     "default": 0.5
+    },
+    {
+     "name": "Poles",
+     "default": 1.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Hombre",
+   "title": "Hombre",
+   "params": [
+    {
+     "name": "Voicing",
+     "default": 0.421
+    },
+    {
+     "name": "Intensity",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Huge",
+   "title": "Huge",
+   "params": [
+    {
+     "name": "Huge",
+     "default": 0.2
+    },
+    {
+     "name": "Nasty",
+     "default": 0.2
+    }
+   ]
+  },
+  {
+   "id": "Hull",
+   "title": "Hull",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 0.0
+    },
+    {
+     "name": "Bright",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Hull2",
+   "title": "Hull2",
+   "params": [
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Hype",
+   "title": "Hype",
+   "params": []
+  },
+  {
+   "id": "Hypersoft",
+   "title": "Hypersoft",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    },
+    {
+     "name": "Depth",
+     "default": 0.5
+    },
+    {
+     "name": "Bright",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Hypersonic",
+   "title": "Hypersonic",
+   "params": []
+  },
+  {
+   "id": "HypersonX",
+   "title": "HypersonX",
+   "params": [
+    {
+     "name": "Q",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Infinity",
+   "title": "Infinity",
+   "params": [
+    {
+     "name": "Filter",
+     "default": 1.0
+    },
+    {
+     "name": "Damping",
+     "default": 0.0
+    },
+    {
+     "name": "Size",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Infinity2",
+   "title": "Infinity2",
+   "params": [
+    {
+     "name": "Filter",
+     "default": 1.0
+    },
+    {
+     "name": "Size",
+     "default": 0.5
+    },
+    {
+     "name": "Damping",
+     "default": 0.0
+    },
+    {
+     "name": "Allpass",
+     "default": 1.0
+    },
+    {
+     "name": "Feedback",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Inflamer",
+   "title": "Inflamer",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.5
+    },
+    {
+     "name": "Curve",
+     "default": 0.5
+    },
+    {
+     "name": "Effect",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Infrasonic",
+   "title": "Infrasonic",
+   "params": []
+  },
+  {
+   "id": "Interstage",
+   "title": "Interstage",
+   "params": []
+  },
+  {
+   "id": "IronOxide5",
+   "title": "IronOxide5",
+   "params": [
+    {
+     "name": "Input Trim",
+     "default": 0.5
+    },
+    {
+     "name": "Tape High",
+     "default": 0.5623
+    },
+    {
+     "name": "Tape Low",
+     "default": 0.5623
+    },
+    {
+     "name": "Flutter",
+     "default": 0.5
+    },
+    {
+     "name": "Noise",
+     "default": 0.5
+    },
+    {
+     "name": "Output Trim",
+     "default": 0.5
+    },
+    {
+     "name": "Inv/Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "IronOxideClassic",
+   "title": "IronOxideClassic",
+   "params": [
+    {
+     "name": "Input Trim",
+     "default": 0.5
+    },
+    {
+     "name": "Tape Speed",
+     "default": 0.5623
+    },
+    {
+     "name": "Output Trim",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "IronOxideClassic2",
+   "title": "IronOxideClassic2",
+   "params": [
+    {
+     "name": "Input Trim",
+     "default": 0.5
+    },
+    {
+     "name": "Tape Speed",
+     "default": 0.5623
+    },
+    {
+     "name": "Output Trim",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Isolator",
+   "title": "Isolator",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 1.0
+    },
+    {
+     "name": "High",
+     "default": 0.0
+    },
+    {
+     "name": "Low",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Isolator2",
+   "title": "Isolator2",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 1.0
+    },
+    {
+     "name": "Reso",
+     "default": 0.0
+    },
+    {
+     "name": "High",
+     "default": 0.0
+    },
+    {
+     "name": "Low",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Isolator3",
+   "title": "Isolator3",
+   "params": [
+    {
+     "name": "Iso",
+     "default": 0.5
+    },
+    {
+     "name": "Q",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "kAlienSpaceship",
+   "title": "kAlienSpaceship",
+   "params": [
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Derez",
+     "default": 0.5
+    },
+    {
+     "name": "Filter",
+     "default": 0.5
+    },
+    {
+     "name": "EarlyRF",
+     "default": 0.5
+    },
+    {
+     "name": "Positin",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Kalman",
+   "title": "Kalman",
+   "params": [
+    {
+     "name": "Kalman",
+     "default": 0.5
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "kBeyond",
+   "title": "kBeyond",
+   "params": [
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Derez",
+     "default": 1.0
+    },
+    {
+     "name": "Filter",
+     "default": 0.5
+    },
+    {
+     "name": "EarlyRF",
+     "default": 0.5
+    },
+    {
+     "name": "Predlay",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "kCathedral",
+   "title": "kCathedral",
+   "params": [
+    {
+     "name": "Wetness",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "kCathedral2",
+   "title": "kCathedral2",
+   "params": [
+    {
+     "name": "Wetness",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "kCathedral3",
+   "title": "kCathedral3",
+   "params": [
+    {
+     "name": "Top dB",
+     "default": 0.5
+    },
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "DeRez",
+     "default": 1.0
+    },
+    {
+     "name": "Predlay",
+     "default": 0.0
+    },
+    {
+     "name": "Wetness",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "kCathedral4",
+   "title": "kCathedral4",
+   "params": [
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Derez",
+     "default": 1.0
+    },
+    {
+     "name": "Filter",
+     "default": 0.5
+    },
+    {
+     "name": "EarlyRF",
+     "default": 0.5
+    },
+    {
+     "name": "Predlay",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "kCathedral5",
+   "title": "kCathedral5",
+   "params": [
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Derez",
+     "default": 0.5
+    },
+    {
+     "name": "Filter",
+     "default": 0.24
+    },
+    {
+     "name": "EarlyRF",
+     "default": 0.5
+    },
+    {
+     "name": "Positin",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "kChamberAR",
+   "title": "kChamberAR",
+   "params": [
+    {
+     "name": "Input",
+     "default": 1.0
+    },
+    {
+     "name": "Delay",
+     "default": 0.5
+    },
+    {
+     "name": "Regen",
+     "default": 0.0
+    },
+    {
+     "name": "Low Cut",
+     "default": 0.0
+    },
+    {
+     "name": "Wetness",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "kCosmos",
+   "title": "kCosmos",
+   "params": [
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Derez",
+     "default": 1.0
+    },
+    {
+     "name": "Filter",
+     "default": 0.5
+    },
+    {
+     "name": "EarlyRF",
+     "default": 0.5
+    },
+    {
+     "name": "Predlay",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "kCyberCity",
+   "title": "kCyberCity",
+   "params": [
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Positin",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "kGuitarHall",
+   "title": "kGuitarHall",
+   "params": [
+    {
+     "name": "Top dB",
+     "default": 0.5
+    },
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "DeRez",
+     "default": 1.0
+    },
+    {
+     "name": "Predlay",
+     "default": 0.0
+    },
+    {
+     "name": "Wetness",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "kGuitarHall2",
+   "title": "kGuitarHall2",
+   "params": [
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Derez",
+     "default": 0.5
+    },
+    {
+     "name": "Filter",
+     "default": 0.5
+    },
+    {
+     "name": "EarlyRF",
+     "default": 0.5
+    },
+    {
+     "name": "Positin",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "kPlate140",
+   "title": "kPlate140",
+   "params": [
+    {
+     "name": "Input",
+     "default": 1.0
+    },
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "DeRez",
+     "default": 1.0
+    },
+    {
+     "name": "Predlay",
+     "default": 0.0
+    },
+    {
+     "name": "Wetness",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "kPlate240",
+   "title": "kPlate240",
+   "params": [
+    {
+     "name": "Input",
+     "default": 1.0
+    },
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "DeRez",
+     "default": 1.0
+    },
+    {
+     "name": "Predlay",
+     "default": 0.0
+    },
+    {
+     "name": "Wetness",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "kPlateA",
+   "title": "kPlateA",
+   "params": [
+    {
+     "name": "InputPad",
+     "default": 1.0
+    },
+    {
+     "name": "Damping",
+     "default": 0.5
+    },
+    {
+     "name": "Low Cut",
+     "default": 1.0
+    },
+    {
+     "name": "Predelay",
+     "default": 0.0
+    },
+    {
+     "name": "Wetness",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "kPlateB",
+   "title": "kPlateB",
+   "params": [
+    {
+     "name": "InputPad",
+     "default": 1.0
+    },
+    {
+     "name": "Damping",
+     "default": 0.5
+    },
+    {
+     "name": "Low Cut",
+     "default": 1.0
+    },
+    {
+     "name": "Predelay",
+     "default": 0.0
+    },
+    {
+     "name": "Wetness",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "kPlateC",
+   "title": "kPlateC",
+   "params": [
+    {
+     "name": "InputPad",
+     "default": 1.0
+    },
+    {
+     "name": "Damping",
+     "default": 0.5
+    },
+    {
+     "name": "Low Cut",
+     "default": 1.0
+    },
+    {
+     "name": "Predelay",
+     "default": 0.0
+    },
+    {
+     "name": "Wetness",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "kPlateD",
+   "title": "kPlateD",
+   "params": [
+    {
+     "name": "InputPad",
+     "default": 1.0
+    },
+    {
+     "name": "Damping",
+     "default": 0.5
+    },
+    {
+     "name": "Low Cut",
+     "default": 1.0
+    },
+    {
+     "name": "Predelay",
+     "default": 0.0
+    },
+    {
+     "name": "Wetness",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "kRockstar",
+   "title": "kRockstar",
+   "params": [
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Positin",
+     "default": 1.0
+    },
+    {
+     "name": "DownRez",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "kRockstar2",
+   "title": "kRockstar2",
+   "params": [
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Positin",
+     "default": 0.75
+    },
+    {
+     "name": "DownRez",
+     "default": 1.0
+    },
+    {
+     "name": "Distnce",
+     "default": 0.25
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "kStation",
+   "title": "kStation",
+   "params": [
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Derez",
+     "default": 0.5
+    },
+    {
+     "name": "Filter",
+     "default": 0.5
+    },
+    {
+     "name": "EarlyRF",
+     "default": 0.5
+    },
+    {
+     "name": "Positin",
+     "default": 0.9
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "kWoodRoom",
+   "title": "kWoodRoom",
+   "params": [
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Derez",
+     "default": 0.5
+    },
+    {
+     "name": "Filter",
+     "default": 0.25
+    },
+    {
+     "name": "EarlyRF",
+     "default": 0.5
+    },
+    {
+     "name": "Positin",
+     "default": 0.75
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "LeadAmp",
+   "title": "LeadAmp",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.5
+    },
+    {
+     "name": "Tone",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.8
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "LeftoMono",
+   "title": "LeftoMono",
+   "params": []
+  },
+  {
+   "id": "LilAmp",
+   "title": "LilAmp",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.5
+    },
+    {
+     "name": "Tone",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.8
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Logical4",
+   "title": "Logical4",
+   "params": [
+    {
+     "name": "Threshold",
+     "default": 0.5
+    },
+    {
+     "name": "Ratio",
+     "default": 0.2
+    },
+    {
+     "name": "Speed",
+     "default": 0.192
+    },
+    {
+     "name": "MakeupGn",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Longhand",
+   "title": "Longhand",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.445
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Loud",
+   "title": "Loud",
+   "params": [
+    {
+     "name": "Boost",
+     "default": 0.0
+    },
+    {
+     "name": "Output Level",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Lowpass",
+   "title": "Lowpass",
+   "params": [
+    {
+     "name": "Lowpass",
+     "default": 1.0
+    },
+    {
+     "name": "Soft/Hard",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Lowpass2",
+   "title": "Lowpass2",
+   "params": [
+    {
+     "name": "Lowpass",
+     "default": 0.0
+    },
+    {
+     "name": "Sft/Hrd",
+     "default": 0.5
+    },
+    {
+     "name": "Poles",
+     "default": 0.25
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "LRConvolve",
+   "title": "LRConvolve",
+   "params": []
+  },
+  {
+   "id": "LRConvolve2",
+   "title": "LRConvolve2",
+   "params": [
+    {
+     "name": "Soar",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "LRConvolve3",
+   "title": "LRConvolve3",
+   "params": [
+    {
+     "name": "Smooth",
+     "default": 0.0
+    },
+    {
+     "name": "Channel",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "LRFlipTimer",
+   "title": "LRFlipTimer",
+   "params": [
+    {
+     "name": "Minutes",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Luxor",
+   "title": "Luxor",
+   "params": [
+    {
+     "name": "Hardns",
+     "default": 0.7
+    },
+    {
+     "name": "Persnlty",
+     "default": 0.3333
+    },
+    {
+     "name": "Drive",
+     "default": 0.3333
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "MackEQ",
+   "title": "MackEQ",
+   "params": [
+    {
+     "name": "Trim",
+     "default": 0.1
+    },
+    {
+     "name": "Hi",
+     "default": 0.5
+    },
+    {
+     "name": "Lo",
+     "default": 0.5
+    },
+    {
+     "name": "Gain",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Mackity",
+   "title": "Mackity",
+   "params": [
+    {
+     "name": "In Trim",
+     "default": 0.1
+    },
+    {
+     "name": "Out Pad",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Mastering",
+   "title": "Mastering",
+   "params": [
+    {
+     "name": "Glue",
+     "default": 0.0
+    },
+    {
+     "name": "Scope",
+     "default": 0.5
+    },
+    {
+     "name": "Skronk",
+     "default": 0.5
+    },
+    {
+     "name": "Girth",
+     "default": 0.5
+    },
+    {
+     "name": "Drive",
+     "default": 0.5
+    },
+    {
+     "name": "Dither",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Mastering2",
+   "title": "Mastering2",
+   "params": [
+    {
+     "name": "Sidepas",
+     "default": 0.0
+    },
+    {
+     "name": "Glue",
+     "default": 0.0
+    },
+    {
+     "name": "Scope",
+     "default": 0.5
+    },
+    {
+     "name": "Skronk",
+     "default": 0.5
+    },
+    {
+     "name": "Girth",
+     "default": 0.5
+    },
+    {
+     "name": "Drive",
+     "default": 0.5
+    },
+    {
+     "name": "Dither",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "MatrixVerb",
+   "title": "MatrixVerb",
+   "params": [
+    {
+     "name": "Filter",
+     "default": 1.0
+    },
+    {
+     "name": "Damping",
+     "default": 0.0
+    },
+    {
+     "name": "Speed",
+     "default": 0.0
+    },
+    {
+     "name": "Vibrato",
+     "default": 0.0
+    },
+    {
+     "name": "RmSize",
+     "default": 0.5
+    },
+    {
+     "name": "Flavor",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Melt",
+   "title": "Melt",
+   "params": [
+    {
+     "name": "Depth",
+     "default": 0.25
+    },
+    {
+     "name": "Range",
+     "default": 0.75
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "MidAmp",
+   "title": "MidAmp",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.5
+    },
+    {
+     "name": "Tone",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.8
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "MidSide",
+   "title": "MidSide",
+   "params": [
+    {
+     "name": "Mid/Side",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Mojo",
+   "title": "Mojo",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Monitoring",
+   "title": "Monitoring",
+   "params": [
+    {
+     "name": "Monitor",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Monitoring2",
+   "title": "Monitoring2",
+   "params": [
+    {
+     "name": "Monitor",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Monitoring3",
+   "title": "Monitoring3",
+   "params": [
+    {
+     "name": "Monitor",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "MoNoam",
+   "title": "MoNoam",
+   "params": [
+    {
+     "name": "Monotor",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "MSFlipTimer",
+   "title": "MSFlipTimer",
+   "params": [
+    {
+     "name": "Minutes",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "MultiBandDistortion",
+   "title": "MultiBandDistortion",
+   "params": [
+    {
+     "name": "Freqcy",
+     "default": 0.5
+    },
+    {
+     "name": "H Gain",
+     "default": 0.0
+    },
+    {
+     "name": "L Gain",
+     "default": 0.0
+    },
+    {
+     "name": "H Hard",
+     "default": 0.0
+    },
+    {
+     "name": "L Hard",
+     "default": 0.0
+    },
+    {
+     "name": "H Mtrx",
+     "default": 1.0
+    },
+    {
+     "name": "L Mtrx",
+     "default": 1.0
+    },
+    {
+     "name": "Stable",
+     "default": 1.0
+    },
+    {
+     "name": "Output",
+     "default": 0.75
+    }
+   ]
+  },
+  {
+   "id": "MV",
+   "title": "MV",
+   "params": [
+    {
+     "name": "Depth",
+     "default": 0.5
+    },
+    {
+     "name": "Bright",
+     "default": 0.5
+    },
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "MV2",
+   "title": "MV2",
+   "params": [
+    {
+     "name": "Depth",
+     "default": 0.5
+    },
+    {
+     "name": "Bright",
+     "default": 0.5
+    },
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "NaturalizeDither",
+   "title": "NaturalizeDither",
+   "params": []
+  },
+  {
+   "id": "NCSeventeen",
+   "title": "NC-17",
+   "params": [
+    {
+     "name": "LOUDER",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Neverland",
+   "title": "Neverland",
+   "params": [
+    {
+     "name": "Hardns",
+     "default": 0.74
+    },
+    {
+     "name": "Persnlty",
+     "default": 0.3333
+    },
+    {
+     "name": "Drive",
+     "default": 0.3333
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Nikola",
+   "title": "Nikola",
+   "params": [
+    {
+     "name": "Voltage",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "NodeDither",
+   "title": "NodeDither",
+   "params": [
+    {
+     "name": "Node",
+     "default": 0.04
+    },
+    {
+     "name": "Phase",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Noise",
+   "title": "Noise",
+   "params": [
+    {
+     "name": "HighCut",
+     "default": 0.5
+    },
+    {
+     "name": "LowCut",
+     "default": 0.5
+    },
+    {
+     "name": "LShape",
+     "default": 0.5
+    },
+    {
+     "name": "Decay",
+     "default": 1.0
+    },
+    {
+     "name": "Distnc",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "NonlinearSpace",
+   "title": "NonlinearSpace",
+   "params": [
+    {
+     "name": "SmpRate",
+     "default": 0.3
+    },
+    {
+     "name": "Livenes",
+     "default": 0.5
+    },
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "Nonlin",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "NotJustAnotherCD",
+   "title": "NotJustAnotherCD",
+   "params": []
+  },
+  {
+   "id": "NotJustAnotherDither",
+   "title": "NotJustAnotherDither",
+   "params": [
+    {
+     "name": "Quant",
+     "default": 1.0
+    },
+    {
+     "name": "DeRez",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "OneCornerClip",
+   "title": "OneCornerClip",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.3333
+    },
+    {
+     "name": "Pos Thr",
+     "default": 0.966
+    },
+    {
+     "name": "Neg Thr",
+     "default": 0.966
+    },
+    {
+     "name": "Voicing",
+     "default": 0.618
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "OrbitKick",
+   "title": "OrbitKick",
+   "params": [
+    {
+     "name": "Drop",
+     "default": 0.5
+    },
+    {
+     "name": "Shape",
+     "default": 0.5
+    },
+    {
+     "name": "Start",
+     "default": 0.5
+    },
+    {
+     "name": "Finish",
+     "default": 0.5
+    },
+    {
+     "name": "Thresh",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Overheads",
+   "title": "Overheads",
+   "params": [
+    {
+     "name": "Compr",
+     "default": 0.0
+    },
+    {
+     "name": "Sharp",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Pafnuty",
+   "title": "Pafnuty",
+   "params": [
+    {
+     "name": "Second",
+     "default": 0.5
+    },
+    {
+     "name": "Third",
+     "default": 0.5
+    },
+    {
+     "name": "Fourth",
+     "default": 0.5
+    },
+    {
+     "name": "Fifth",
+     "default": 0.5
+    },
+    {
+     "name": "Sixth",
+     "default": 0.5
+    },
+    {
+     "name": "Seventh",
+     "default": 0.5
+    },
+    {
+     "name": "Eighth",
+     "default": 0.5
+    },
+    {
+     "name": "Ninth",
+     "default": 0.5
+    },
+    {
+     "name": "Tenth",
+     "default": 0.5
+    },
+    {
+     "name": "Elevnth",
+     "default": 0.5
+    },
+    {
+     "name": "Twelvth",
+     "default": 0.5
+    },
+    {
+     "name": "Thirtnh",
+     "default": 0.5
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Pafnuty2",
+   "title": "Pafnuty2",
+   "params": [
+    {
+     "name": "Second",
+     "default": 0.5
+    },
+    {
+     "name": "Third",
+     "default": 0.5
+    },
+    {
+     "name": "Fourth",
+     "default": 0.5
+    },
+    {
+     "name": "Fifth",
+     "default": 0.5
+    },
+    {
+     "name": "Sixth",
+     "default": 0.5
+    },
+    {
+     "name": "Seventh",
+     "default": 0.5
+    },
+    {
+     "name": "Eighth",
+     "default": 0.5
+    },
+    {
+     "name": "Ninth",
+     "default": 0.5
+    },
+    {
+     "name": "Tenth",
+     "default": 0.5
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Parametric",
+   "title": "Parametric",
+   "params": [
+    {
+     "name": "Tr Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Treble",
+     "default": 0.5
+    },
+    {
+     "name": "Tr Reso",
+     "default": 0.5
+    },
+    {
+     "name": "HM Freq",
+     "default": 0.5
+    },
+    {
+     "name": "HighMid",
+     "default": 0.5
+    },
+    {
+     "name": "HM Reso",
+     "default": 0.5
+    },
+    {
+     "name": "LM Freq",
+     "default": 0.5
+    },
+    {
+     "name": "LowMid",
+     "default": 0.5
+    },
+    {
+     "name": "LM Reso",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PaulDither",
+   "title": "PaulDither",
+   "params": [
+    {
+     "name": "Quant",
+     "default": 1.0
+    },
+    {
+     "name": "DeRez",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "PaulWide",
+   "title": "PaulWide",
+   "params": [
+    {
+     "name": "Quant",
+     "default": 1.0
+    },
+    {
+     "name": "DeRez",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "PDBuss",
+   "title": "PDBuss",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 1.0
+    },
+    {
+     "name": "Drive",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PDChannel",
+   "title": "PDChannel",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 1.0
+    },
+    {
+     "name": "Drive",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PeaksOnly",
+   "title": "PeaksOnly",
+   "params": []
+  },
+  {
+   "id": "Pear",
+   "title": "Pear",
+   "params": [
+    {
+     "name": "bitFreq",
+     "default": 1.0
+    },
+    {
+     "name": "Poles",
+     "default": 0.5
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Pear2",
+   "title": "Pear2",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 1.0
+    },
+    {
+     "name": "NonLin",
+     "default": 0.5
+    },
+    {
+     "name": "Poles",
+     "default": 0.5
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PearEQ",
+   "title": "PearEQ",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "HMid",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "LMid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "Sub",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "PearLiteEQ",
+   "title": "PearLiteEQ",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "HMid",
+     "default": 0.5
+    },
+    {
+     "name": "LMid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "PhaseNudge",
+   "title": "PhaseNudge",
+   "params": [
+    {
+     "name": "Phase Nudge",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PitchDelay",
+   "title": "PitchDelay",
+   "params": [
+    {
+     "name": "Time",
+     "default": 1.0
+    },
+    {
+     "name": "Regen",
+     "default": 0.0
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Reso",
+     "default": 0.0
+    },
+    {
+     "name": "Pitch",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PitchNasty",
+   "title": "PitchNasty",
+   "params": [
+    {
+     "name": "Note",
+     "default": 0.0
+    },
+    {
+     "name": "Bend",
+     "default": 0.0
+    },
+    {
+     "name": "Grind",
+     "default": 0.25
+    },
+    {
+     "name": "Feedbck",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PlatinumSlew",
+   "title": "PlatinumSlew",
+   "params": [
+    {
+     "name": "Slew",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "PocketVerbs",
+   "title": "PocketVerbs",
+   "params": [
+    {
+     "name": "Type",
+     "default": 0.0
+    },
+    {
+     "name": "Size",
+     "default": 0.5
+    },
+    {
+     "name": "Gating",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Pockey",
+   "title": "Pockey",
+   "params": [
+    {
+     "name": "DeFreq",
+     "default": 0.0
+    },
+    {
+     "name": "DeRez",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Pockey2",
+   "title": "Pockey2",
+   "params": [
+    {
+     "name": "DeFreq",
+     "default": 0.0
+    },
+    {
+     "name": "DeRez",
+     "default": 0.66
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Podcast",
+   "title": "Podcast",
+   "params": [
+    {
+     "name": "Boost",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PodcastDeluxe",
+   "title": "PodcastDeluxe",
+   "params": [
+    {
+     "name": "Boost",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Point",
+   "title": "Point",
+   "params": [
+    {
+     "name": "Input Trim",
+     "default": 0.5
+    },
+    {
+     "name": "Point",
+     "default": 0.5
+    },
+    {
+     "name": "Reaction Speed",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "PointyDeluxe",
+   "title": "PointyDeluxe",
+   "params": [
+    {
+     "name": "Hell",
+     "default": 0.5
+    },
+    {
+     "name": "Fizz",
+     "default": 0.5
+    },
+    {
+     "name": "Pick",
+     "default": 0.5
+    },
+    {
+     "name": "Satan",
+     "default": 0.5
+    },
+    {
+     "name": "Danger",
+     "default": 0.5
+    },
+    {
+     "name": "Crtical",
+     "default": 0.5
+    },
+    {
+     "name": "H Meat",
+     "default": 0.5
+    },
+    {
+     "name": "L Meat",
+     "default": 0.5
+    },
+    {
+     "name": "Swing",
+     "default": 0.5
+    },
+    {
+     "name": "Rarely",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "PointyGuitar",
+   "title": "PointyGuitar",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.6
+    },
+    {
+     "name": "Presnce",
+     "default": 0.5
+    },
+    {
+     "name": "High",
+     "default": 0.8
+    },
+    {
+     "name": "Mid",
+     "default": 0.6
+    },
+    {
+     "name": "Low",
+     "default": 0.4
+    },
+    {
+     "name": "Sub",
+     "default": 0.5
+    },
+    {
+     "name": "HSpeakr",
+     "default": 0.7
+    },
+    {
+     "name": "LSpeakr",
+     "default": 0.4
+    },
+    {
+     "name": "Gate",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 0.7
+    }
+   ]
+  },
+  {
+   "id": "Pop",
+   "title": "Pop",
+   "params": [
+    {
+     "name": "Intenst",
+     "default": 0.3
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Pop2",
+   "title": "Pop2",
+   "params": [
+    {
+     "name": "Compres",
+     "default": 0.5
+    },
+    {
+     "name": "Attack",
+     "default": 0.5
+    },
+    {
+     "name": "Release",
+     "default": 0.5
+    },
+    {
+     "name": "Drive",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Pop3",
+   "title": "Pop3",
+   "params": [
+    {
+     "name": "Thresld",
+     "default": 1.0
+    },
+    {
+     "name": "C Ratio",
+     "default": 0.5
+    },
+    {
+     "name": "C Atk",
+     "default": 0.5
+    },
+    {
+     "name": "C Rls",
+     "default": 0.5
+    },
+    {
+     "name": "Thresld",
+     "default": 0.0
+    },
+    {
+     "name": "G Ratio",
+     "default": 0.5
+    },
+    {
+     "name": "G Sust",
+     "default": 0.5
+    },
+    {
+     "name": "G Rls",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "PowerSag",
+   "title": "PowerSag",
+   "params": [
+    {
+     "name": "Depth",
+     "default": 0.0
+    },
+    {
+     "name": "Speed",
+     "default": 0.3
+    }
+   ]
+  },
+  {
+   "id": "PowerSag2",
+   "title": "PowerSag2",
+   "params": [
+    {
+     "name": "Range",
+     "default": 0.3
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Precious",
+   "title": "Precious",
+   "params": [
+    {
+     "name": "Hardns",
+     "default": 0.7
+    },
+    {
+     "name": "Persnlty",
+     "default": 0.3333
+    },
+    {
+     "name": "Drive",
+     "default": 0.3333
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Preponderant",
+   "title": "Preponderant",
+   "params": [
+    {
+     "name": "Narrow",
+     "default": 0.25
+    },
+    {
+     "name": "Medium",
+     "default": 0.5
+    },
+    {
+     "name": "Wide",
+     "default": 0.75
+    },
+    {
+     "name": "Resonan",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Pressure4",
+   "title": "Pressure4",
+   "params": [
+    {
+     "name": "Pressure",
+     "default": 0.0
+    },
+    {
+     "name": "Speed",
+     "default": 0.2
+    },
+    {
+     "name": "Mewiness",
+     "default": 1.0
+    },
+    {
+     "name": "Output Gain",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Pressure5",
+   "title": "Pressure5",
+   "params": [
+    {
+     "name": "Pressre",
+     "default": 0.0
+    },
+    {
+     "name": "Speed",
+     "default": 0.25
+    },
+    {
+     "name": "Mewines",
+     "default": 1.0
+    },
+    {
+     "name": "PawClaw",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Pressure6",
+   "title": "Pressure6",
+   "params": [
+    {
+     "name": "Compres",
+     "default": 0.0
+    },
+    {
+     "name": "Ratio",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PrimeFIR",
+   "title": "PrimeFIR",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 1.0
+    },
+    {
+     "name": "Window",
+     "default": 0.5
+    },
+    {
+     "name": "Prime",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "PunchyDeluxe",
+   "title": "PunchyDeluxe",
+   "params": [
+    {
+     "name": "Hell",
+     "default": 0.5
+    },
+    {
+     "name": "Fizz",
+     "default": 0.5
+    },
+    {
+     "name": "Pick",
+     "default": 0.5
+    },
+    {
+     "name": "Satan",
+     "default": 0.5
+    },
+    {
+     "name": "Danger",
+     "default": 0.5
+    },
+    {
+     "name": "Crtical",
+     "default": 0.5
+    },
+    {
+     "name": "H Meat",
+     "default": 0.5
+    },
+    {
+     "name": "L Meat",
+     "default": 0.5
+    },
+    {
+     "name": "Swing",
+     "default": 0.5
+    },
+    {
+     "name": "Rarely",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "PunchyGuitar",
+   "title": "PunchyGuitar",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.7
+    },
+    {
+     "name": "Presnce",
+     "default": 0.1
+    },
+    {
+     "name": "High",
+     "default": 0.8
+    },
+    {
+     "name": "Mid",
+     "default": 0.6
+    },
+    {
+     "name": "Low",
+     "default": 0.4
+    },
+    {
+     "name": "Sub",
+     "default": 0.1
+    },
+    {
+     "name": "HSpeakr",
+     "default": 0.8
+    },
+    {
+     "name": "LSpeakr",
+     "default": 0.5
+    },
+    {
+     "name": "Gate",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 0.3
+    }
+   ]
+  },
+  {
+   "id": "PurestAir",
+   "title": "PurestAir",
+   "params": [
+    {
+     "name": "Boost",
+     "default": 0.5
+    },
+    {
+     "name": "Limit",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PurestConsole2Buss",
+   "title": "PurestConsole2Buss",
+   "params": []
+  },
+  {
+   "id": "PurestConsole2Channel",
+   "title": "PurestConsole2Channel",
+   "params": []
+  },
+  {
+   "id": "PurestConsole3Buss",
+   "title": "PurestConsole3Buss",
+   "params": []
+  },
+  {
+   "id": "PurestConsole3Channel",
+   "title": "PurestConsole3Channel",
+   "params": []
+  },
+  {
+   "id": "PurestConsole4Buss",
+   "title": "PurestConsole4Buss",
+   "params": [
+    {
+     "name": "Smooth",
+     "default": 0.5
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PurestConsole4Channel",
+   "title": "PurestConsole4Channel",
+   "params": [
+    {
+     "name": "Smooth",
+     "default": 0.5
+    },
+    {
+     "name": "Pan",
+     "default": 0.5
+    },
+    {
+     "name": "Fader",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PurestConsoleBuss",
+   "title": "PurestConsoleBuss",
+   "params": []
+  },
+  {
+   "id": "PurestConsoleChannel",
+   "title": "PurestConsoleChannel",
+   "params": []
+  },
+  {
+   "id": "PurestDrive",
+   "title": "PurestDrive",
+   "params": [
+    {
+     "name": "Drive",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "PurestDualPan",
+   "title": "PurestDualPan",
+   "params": [
+    {
+     "name": "L Vol",
+     "default": 0.5
+    },
+    {
+     "name": "L Pan",
+     "default": 0.0
+    },
+    {
+     "name": "R Vol",
+     "default": 0.5
+    },
+    {
+     "name": "R Pan",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PurestEcho",
+   "title": "PurestEcho",
+   "params": [
+    {
+     "name": "Time",
+     "default": 1.0
+    },
+    {
+     "name": "Tap 1",
+     "default": 1.0
+    },
+    {
+     "name": "Tap 2",
+     "default": 0.0
+    },
+    {
+     "name": "Tap 3",
+     "default": 0.0
+    },
+    {
+     "name": "Tap 4",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "PurestFade",
+   "title": "PurestFade",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.5
+    },
+    {
+     "name": "Fade",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PurestGain",
+   "title": "PurestGain",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.5
+    },
+    {
+     "name": "Slow Fade",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PurestSaturation",
+   "title": "PurestSaturation",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PurestSquish",
+   "title": "PurestSquish",
+   "params": [
+    {
+     "name": "Squish",
+     "default": 0.0
+    },
+    {
+     "name": "BassBlm",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "PurestWarm",
+   "title": "PurestWarm",
+   "params": [
+    {
+     "name": "Polarity",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "PurestWarm2",
+   "title": "PurestWarm2",
+   "params": [
+    {
+     "name": "Dry/Pos",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Neg",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "PurestWarm3",
+   "title": "PurestWarm3",
+   "params": [
+    {
+     "name": "Asym",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Pyewacket",
+   "title": "Pyewacket",
+   "params": [
+    {
+     "name": "Input Gain",
+     "default": 0.5
+    },
+    {
+     "name": "Release",
+     "default": 0.5
+    },
+    {
+     "name": "Output Gain",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "RawGlitters",
+   "title": "RawGlitters",
+   "params": [
+    {
+     "name": "Quant",
+     "default": 1.0
+    },
+    {
+     "name": "DeRez",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "RawTimbers",
+   "title": "RawTimbers",
+   "params": [
+    {
+     "name": "Quant",
+     "default": 1.0
+    },
+    {
+     "name": "DeRez",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Recurve",
+   "title": "Recurve",
+   "params": []
+  },
+  {
+   "id": "Remap",
+   "title": "Remap",
+   "params": [
+    {
+     "name": "Remap",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ResEQ",
+   "title": "ResEQ",
+   "params": [
+    {
+     "name": "Reso 1",
+     "default": 0.0
+    },
+    {
+     "name": "Reso 2",
+     "default": 0.0
+    },
+    {
+     "name": "Reso 3",
+     "default": 0.0
+    },
+    {
+     "name": "Reso 4",
+     "default": 0.0
+    },
+    {
+     "name": "Reso 5",
+     "default": 0.0
+    },
+    {
+     "name": "Reso 6",
+     "default": 0.0
+    },
+    {
+     "name": "Reso 7",
+     "default": 0.0
+    },
+    {
+     "name": "Reso 8",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "ResEQ2",
+   "title": "ResEQ2",
+   "params": [
+    {
+     "name": "MSweep",
+     "default": 0.5
+    },
+    {
+     "name": "MBoost",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "RetroBass",
+   "title": "RetroBass",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Reverb",
+   "title": "Reverb",
+   "params": [
+    {
+     "name": "Big",
+     "default": 0.5
+    },
+    {
+     "name": "Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Righteous4",
+   "title": "Righteous4",
+   "params": [
+    {
+     "name": "LTarget",
+     "default": 0.0
+    },
+    {
+     "name": "BtDepth",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "RightoMono",
+   "title": "RightoMono",
+   "params": []
+  },
+  {
+   "id": "RingModulator",
+   "title": "RingModulator",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Soar",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "SampleDelay",
+   "title": "SampleDelay",
+   "params": [
+    {
+     "name": "ms",
+     "default": 0.0
+    },
+    {
+     "name": "Samples",
+     "default": 0.0
+    },
+    {
+     "name": "Subsamp",
+     "default": 0.0
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Shape",
+   "title": "Shape",
+   "params": [
+    {
+     "name": "Shape",
+     "default": 0.5
+    },
+    {
+     "name": "Neg/Pos",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ShortBuss",
+   "title": "ShortBuss",
+   "params": [
+    {
+     "name": "ShortBs",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "SideDull",
+   "title": "SideDull",
+   "params": [
+    {
+     "name": "Cutoff",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Sidepass",
+   "title": "Sidepass",
+   "params": [
+    {
+     "name": "Cutoff",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Silhouette",
+   "title": "Silhouette",
+   "params": [
+    {
+     "name": "Dry/Wet",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Silken",
+   "title": "Silken",
+   "params": [
+    {
+     "name": "Silken",
+     "default": 0.0
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Window",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Sinew",
+   "title": "Sinew",
+   "params": [
+    {
+     "name": "Sinew",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "SingleEndedTriode",
+   "title": "SingleEndedTriode",
+   "params": [
+    {
+     "name": "Triode",
+     "default": 0.0
+    },
+    {
+     "name": "Clas AB",
+     "default": 0.0
+    },
+    {
+     "name": "Clas B",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Slew",
+   "title": "Slew",
+   "params": [
+    {
+     "name": "Clamping",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Slew2",
+   "title": "Slew2",
+   "params": [
+    {
+     "name": "Clamping",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Slew3",
+   "title": "Slew3",
+   "params": [
+    {
+     "name": "Clampng",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Slew4",
+   "title": "Slew4",
+   "params": [
+    {
+     "name": "Compres",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "SlewOnly",
+   "title": "SlewOnly",
+   "params": []
+  },
+  {
+   "id": "SlewSonic",
+   "title": "SlewSonic",
+   "params": [
+    {
+     "name": "Mute",
+     "default": 0.5
+    },
+    {
+     "name": "Bright",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Smooth",
+   "title": "Smooth",
+   "params": [
+    {
+     "name": "Smooth",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "SmoothEQ",
+   "title": "SmoothEQ",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Low",
+     "default": 0.5
+    },
+    {
+     "name": "XoverH",
+     "default": 0.6
+    },
+    {
+     "name": "XoverL",
+     "default": 0.4
+    }
+   ]
+  },
+  {
+   "id": "SmoothEQ2",
+   "title": "SmoothEQ2",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "HMid",
+     "default": 0.5
+    },
+    {
+     "name": "LMid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "HighF",
+     "default": 0.5
+    },
+    {
+     "name": "HMidF",
+     "default": 0.5
+    },
+    {
+     "name": "LMidF",
+     "default": 0.5
+    },
+    {
+     "name": "BassF",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "SmoothEQ3",
+   "title": "SmoothEQ3",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "Mid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "SoftClock",
+   "title": "SoftClock",
+   "params": [
+    {
+     "name": "Tempo",
+     "default": 0.2
+    },
+    {
+     "name": "Count",
+     "default": 0.2
+    },
+    {
+     "name": "Tuple",
+     "default": 0.2
+    },
+    {
+     "name": "Swing",
+     "default": 0.0
+    },
+    {
+     "name": "BigBeat",
+     "default": 0.0
+    },
+    {
+     "name": "Accents",
+     "default": 0.5
+    },
+    {
+     "name": "Boost",
+     "default": 0.5
+    },
+    {
+     "name": "Speed",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "SoftClock2",
+   "title": "SoftClock2",
+   "params": [
+    {
+     "name": "Tempo",
+     "default": 0.2
+    },
+    {
+     "name": "Count",
+     "default": 0.2
+    },
+    {
+     "name": "Tuple",
+     "default": 0.2
+    },
+    {
+     "name": "Swing",
+     "default": 0.0
+    },
+    {
+     "name": "Peak",
+     "default": 0.0
+    },
+    {
+     "name": "Valley",
+     "default": 0.0
+    },
+    {
+     "name": "Accents",
+     "default": 0.5
+    },
+    {
+     "name": "Boost",
+     "default": 0.5
+    },
+    {
+     "name": "Speed",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "SoftClock3",
+   "title": "SoftClock3",
+   "params": [
+    {
+     "name": "Tempo",
+     "default": 0.2
+    },
+    {
+     "name": "Count",
+     "default": 0.2
+    },
+    {
+     "name": "Tuple",
+     "default": 0.2
+    },
+    {
+     "name": "Triplet",
+     "default": 0.0
+    },
+    {
+     "name": "Flavor",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "SoftGate",
+   "title": "SoftGate",
+   "params": [
+    {
+     "name": "Thresh",
+     "default": 0.5
+    },
+    {
+     "name": "Darken",
+     "default": 0.5
+    },
+    {
+     "name": "Silence",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "SpatializeDither",
+   "title": "SpatializeDither",
+   "params": [
+    {
+     "name": "Quant",
+     "default": 1.0
+    },
+    {
+     "name": "DeRez",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Spiral",
+   "title": "Spiral",
+   "params": []
+  },
+  {
+   "id": "Spiral2",
+   "title": "Spiral2",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    },
+    {
+     "name": "Highpass",
+     "default": 0.0
+    },
+    {
+     "name": "Presence",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Spiral3",
+   "title": "Spiral3",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Smooth",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "SquareRoot",
+   "title": "SquareRoot",
+   "params": [
+    {
+     "name": "In",
+     "default": 0.5
+    },
+    {
+     "name": "Soar",
+     "default": 0.0
+    },
+    {
+     "name": "Out",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Srsly",
+   "title": "Srsly",
+   "params": [
+    {
+     "name": "Center",
+     "default": 0.0
+    },
+    {
+     "name": "Space",
+     "default": 0.0
+    },
+    {
+     "name": "Level",
+     "default": 1.0
+    },
+    {
+     "name": "Q",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Srsly2",
+   "title": "Srsly2",
+   "params": [
+    {
+     "name": "Center",
+     "default": 0.5
+    },
+    {
+     "name": "Space",
+     "default": 0.5
+    },
+    {
+     "name": "Level",
+     "default": 1.0
+    },
+    {
+     "name": "Q",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Srsly3",
+   "title": "Srsly3",
+   "params": [
+    {
+     "name": "Center",
+     "default": 0.5
+    },
+    {
+     "name": "Space",
+     "default": 0.5
+    },
+    {
+     "name": "Level",
+     "default": 1.0
+    },
+    {
+     "name": "Q",
+     "default": 0.5
+    },
+    {
+     "name": "Nonlin",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "StarChild",
+   "title": "StarChild",
+   "params": [
+    {
+     "name": "Sustain",
+     "default": 1.0
+    },
+    {
+     "name": "Grain",
+     "default": 0.7
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.2
+    }
+   ]
+  },
+  {
+   "id": "StarChild2",
+   "title": "StarChild2",
+   "params": [
+    {
+     "name": "Sustain",
+     "default": 1.0
+    },
+    {
+     "name": "Grain",
+     "default": 0.7
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.2
+    }
+   ]
+  },
+  {
+   "id": "StereoChorus",
+   "title": "StereoChorus",
+   "params": [
+    {
+     "name": "Speed",
+     "default": 0.0
+    },
+    {
+     "name": "Depth",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "StereoDoubler",
+   "title": "StereoDoubler",
+   "params": [
+    {
+     "name": "Detune",
+     "default": 0.6
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.6
+    }
+   ]
+  },
+  {
+   "id": "StereoEnsemble",
+   "title": "StereoEnsemble",
+   "params": [
+    {
+     "name": "Depth",
+     "default": 0.5
+    },
+    {
+     "name": "FXlevel",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "StereoFX",
+   "title": "StereoFX",
+   "params": [
+    {
+     "name": "Wide",
+     "default": 0.0
+    },
+    {
+     "name": "MonoBs",
+     "default": 0.0
+    },
+    {
+     "name": "CSquish",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Stonefire",
+   "title": "Stonefire",
+   "params": [
+    {
+     "name": "Air",
+     "default": 0.5
+    },
+    {
+     "name": "Fire",
+     "default": 0.5
+    },
+    {
+     "name": "Stone",
+     "default": 0.5
+    },
+    {
+     "name": "Range",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "StoneFireComp",
+   "title": "StoneFireComp",
+   "params": [
+    {
+     "name": "Fire Th",
+     "default": 1.0
+    },
+    {
+     "name": "Attack",
+     "default": 0.5
+    },
+    {
+     "name": "Release",
+     "default": 0.5
+    },
+    {
+     "name": "Fire",
+     "default": 0.5
+    },
+    {
+     "name": "StoneTh",
+     "default": 1.0
+    },
+    {
+     "name": "Attack",
+     "default": 0.5
+    },
+    {
+     "name": "Release",
+     "default": 0.5
+    },
+    {
+     "name": "Stone",
+     "default": 0.5
+    },
+    {
+     "name": "Range",
+     "default": 0.5
+    },
+    {
+     "name": "Ratio",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "StudioTan",
+   "title": "StudioTan",
+   "params": [
+    {
+     "name": "Quantzr",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "SubsOnly",
+   "title": "SubsOnly",
+   "params": []
+  },
+  {
+   "id": "SubTight",
+   "title": "SubTight",
+   "params": [
+    {
+     "name": "Trim",
+     "default": 0.3
+    },
+    {
+     "name": "Steep",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Surge",
+   "title": "Surge",
+   "params": [
+    {
+     "name": "Surge",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "SurgeTide",
+   "title": "SurgeTide",
+   "params": [
+    {
+     "name": "SurgeNode",
+     "default": 0.5
+    },
+    {
+     "name": "SurgeRate",
+     "default": 0.3
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Suzan",
+   "title": "Suzan",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Reso",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Sweeten",
+   "title": "Sweeten",
+   "params": [
+    {
+     "name": "Sweeten",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "SweetWide",
+   "title": "SweetWide",
+   "params": [
+    {
+     "name": "Soar",
+     "default": 0.0
+    },
+    {
+     "name": "Un/Wide",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Swell",
+   "title": "Swell",
+   "params": [
+    {
+     "name": "Thresh",
+     "default": 0.9
+    },
+    {
+     "name": "Swell",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "TakeCare",
+   "title": "TakeCare",
+   "params": [
+    {
+     "name": "Speed",
+     "default": 0.15
+    },
+    {
+     "name": "Rando",
+     "default": 0.5
+    },
+    {
+     "name": "Depth",
+     "default": 0.5
+    },
+    {
+     "name": "Regen",
+     "default": 0.5
+    },
+    {
+     "name": "Derez",
+     "default": 0.5
+    },
+    {
+     "name": "Buffer",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Tape",
+   "title": "Tape",
+   "params": [
+    {
+     "name": "Slam",
+     "default": 0.5
+    },
+    {
+     "name": "Bump",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "TapeBias",
+   "title": "TapeBias",
+   "params": [
+    {
+     "name": "Bias",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "TapeDelay",
+   "title": "TapeDelay",
+   "params": [
+    {
+     "name": "Dry",
+     "default": 1.0
+    },
+    {
+     "name": "Wet",
+     "default": 0.0
+    },
+    {
+     "name": "Delay",
+     "default": 0.5
+    },
+    {
+     "name": "Feedbak",
+     "default": 0.0
+    },
+    {
+     "name": "Lean/Ft",
+     "default": 1.0
+    },
+    {
+     "name": "Depth",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "TapeDelay2",
+   "title": "TapeDelay2",
+   "params": [
+    {
+     "name": "Time",
+     "default": 1.0
+    },
+    {
+     "name": "Regen",
+     "default": 0.0
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Reso",
+     "default": 0.0
+    },
+    {
+     "name": "Flutter",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "TapeDither",
+   "title": "TapeDither",
+   "params": [
+    {
+     "name": "Quant",
+     "default": 1.0
+    },
+    {
+     "name": "DeRez",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "TapeDust",
+   "title": "TapeDust",
+   "params": [
+    {
+     "name": "Dust",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "TapeFat",
+   "title": "TapeFat",
+   "params": [
+    {
+     "name": "Lean/Ft",
+     "default": 1.0
+    },
+    {
+     "name": "Depth",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "TapeHack",
+   "title": "TapeHack",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "TapeHack2",
+   "title": "TapeHack2",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "TapeHack3",
+   "title": "TapeHack3",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Smooth",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Texturize",
+   "title": "Texturize",
+   "params": [
+    {
+     "name": "Bright",
+     "default": 0.5
+    },
+    {
+     "name": "Punchy",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "TexturizeMS",
+   "title": "TexturizeMS",
+   "params": [
+    {
+     "name": "BrightM",
+     "default": 0.5
+    },
+    {
+     "name": "PunchyM",
+     "default": 0.5
+    },
+    {
+     "name": "DryWetM",
+     "default": 0.5
+    },
+    {
+     "name": "BrightS",
+     "default": 0.5
+    },
+    {
+     "name": "PunchyS",
+     "default": 0.5
+    },
+    {
+     "name": "DryWetS",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Thunder",
+   "title": "Thunder",
+   "params": [
+    {
+     "name": "Thunder",
+     "default": 0.0
+    },
+    {
+     "name": "Output Trim",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ToneSlant",
+   "title": "ToneSlant",
+   "params": [
+    {
+     "name": "Voicing",
+     "default": 0.0
+    },
+    {
+     "name": "Highs",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "ToTape5",
+   "title": "ToTape5",
+   "params": [
+    {
+     "name": "Louder",
+     "default": 0.25
+    },
+    {
+     "name": "Softer",
+     "default": 0.0
+    },
+    {
+     "name": "Fatter",
+     "default": 0.0
+    },
+    {
+     "name": "Flutter",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ToTape6",
+   "title": "ToTape6",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    },
+    {
+     "name": "Soften",
+     "default": 0.5
+    },
+    {
+     "name": "Head B",
+     "default": 0.5
+    },
+    {
+     "name": "Flutter",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ToTape7",
+   "title": "ToTape7",
+   "params": [
+    {
+     "name": "EncAmt",
+     "default": 0.5
+    },
+    {
+     "name": "EncFreq",
+     "default": 0.5
+    },
+    {
+     "name": "TapeDrv",
+     "default": 0.5
+    },
+    {
+     "name": "Flutter",
+     "default": 0.5
+    },
+    {
+     "name": "FlutSpd",
+     "default": 0.5
+    },
+    {
+     "name": "Bias",
+     "default": 0.5
+    },
+    {
+     "name": "HeadBmp",
+     "default": 0.5
+    },
+    {
+     "name": "HeadFrq",
+     "default": 0.5
+    },
+    {
+     "name": "DecAmt",
+     "default": 0.5
+    },
+    {
+     "name": "DecFreq",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ToTape8",
+   "title": "ToTape8",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    },
+    {
+     "name": "Tilt",
+     "default": 0.5
+    },
+    {
+     "name": "Shape",
+     "default": 0.5
+    },
+    {
+     "name": "Flutter",
+     "default": 0.5
+    },
+    {
+     "name": "FlutSpd",
+     "default": 0.5
+    },
+    {
+     "name": "Bias",
+     "default": 0.5
+    },
+    {
+     "name": "HeadBmp",
+     "default": 0.5
+    },
+    {
+     "name": "HeadFrq",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ToTape9",
+   "title": "ToTape9",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    },
+    {
+     "name": "Tilt",
+     "default": 0.5
+    },
+    {
+     "name": "Shape",
+     "default": 0.5
+    },
+    {
+     "name": "Flutter",
+     "default": 0.5
+    },
+    {
+     "name": "FlutSpd",
+     "default": 0.5
+    },
+    {
+     "name": "Bias",
+     "default": 0.5
+    },
+    {
+     "name": "HeadBmp",
+     "default": 0.5
+    },
+    {
+     "name": "HeadFrq",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ToVinyl4",
+   "title": "ToVinyl4",
+   "params": [
+    {
+     "name": "Mid HiP",
+     "default": 0.2034
+    },
+    {
+     "name": "SideHiP",
+     "default": 0.3424
+    },
+    {
+     "name": "H Limit",
+     "default": 0.32
+    },
+    {
+     "name": "Gv Wear",
+     "default": 0.064
+    }
+   ]
+  },
+  {
+   "id": "TPDFDither",
+   "title": "TPDFDither",
+   "params": [
+    {
+     "name": "Quant",
+     "default": 1.0
+    },
+    {
+     "name": "DeRez",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "TPDFWide",
+   "title": "TPDFWide",
+   "params": [
+    {
+     "name": "Quant",
+     "default": 1.0
+    },
+    {
+     "name": "DeRez",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "TransDesk",
+   "title": "TransDesk",
+   "params": []
+  },
+  {
+   "id": "Tremolo",
+   "title": "Tremolo",
+   "params": [
+    {
+     "name": "Speed",
+     "default": 0.5
+    },
+    {
+     "name": "Depth",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "TremoSquare",
+   "title": "TremoSquare",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Trianglizer",
+   "title": "Trianglizer",
+   "params": [
+    {
+     "name": "Tri/Fat",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "TripleSpread",
+   "title": "TripleSpread",
+   "params": [
+    {
+     "name": "Spread",
+     "default": 0.5
+    },
+    {
+     "name": "Tighten",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Tube",
+   "title": "Tube",
+   "params": [
+    {
+     "name": "TUBE",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Tube2",
+   "title": "Tube2",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    },
+    {
+     "name": "Tube",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "TubeDesk",
+   "title": "TubeDesk",
+   "params": []
+  },
+  {
+   "id": "uLawDecode",
+   "title": "uLawDecode",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "uLawEncode",
+   "title": "uLawEncode",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Ultralight",
+   "title": "Ultralight",
+   "params": [
+    {
+     "name": "RT60",
+     "default": 0.65
+    },
+    {
+     "name": "Furnish",
+     "default": 0.75
+    },
+    {
+     "name": "SolidWl",
+     "default": 0.75
+    },
+    {
+     "name": "ReflcWl",
+     "default": 0.75
+    },
+    {
+     "name": "Predlay",
+     "default": 0.54
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    },
+    {
+     "name": "Distnce",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Ultralight2",
+   "title": "Ultralight2",
+   "params": [
+    {
+     "name": "Damping",
+     "default": 0.65
+    },
+    {
+     "name": "UnSolid",
+     "default": 0.75
+    },
+    {
+     "name": "UnReflc",
+     "default": 0.75
+    },
+    {
+     "name": "Predlay",
+     "default": 0.54
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    },
+    {
+     "name": "Distnce",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Ultralight3",
+   "title": "Ultralight3",
+   "params": [
+    {
+     "name": "Damping",
+     "default": 0.3
+    },
+    {
+     "name": "UnSolid",
+     "default": 0.0
+    },
+    {
+     "name": "UnReflc",
+     "default": 0.0
+    },
+    {
+     "name": "Predlay",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 0.5
+    },
+    {
+     "name": "Frnt/Bk",
+     "default": 0.0
+    },
+    {
+     "name": "Bot/Top",
+     "default": 0.0
+    },
+    {
+     "name": "Distnce",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Ultrasonic",
+   "title": "Ultrasonic",
+   "params": []
+  },
+  {
+   "id": "UltrasonicLite",
+   "title": "UltrasonicLite",
+   "params": []
+  },
+  {
+   "id": "UltrasonicMed",
+   "title": "UltrasonicMed",
+   "params": []
+  },
+  {
+   "id": "UltrasonX",
+   "title": "UltrasonX",
+   "params": [
+    {
+     "name": "Q",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "UnBox",
+   "title": "UnBox",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.5
+    },
+    {
+     "name": "UnBox",
+     "default": 0.0
+    },
+    {
+     "name": "Output",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "VariMu",
+   "title": "VariMu",
+   "params": [
+    {
+     "name": "Intensty",
+     "default": 0.0
+    },
+    {
+     "name": "Speed",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Verbity",
+   "title": "Verbity",
+   "params": [
+    {
+     "name": "Bigness",
+     "default": 0.25
+    },
+    {
+     "name": "Longness",
+     "default": 0.0
+    },
+    {
+     "name": "Darkness",
+     "default": 0.25
+    },
+    {
+     "name": "Wetness",
+     "default": 0.25
+    }
+   ]
+  },
+  {
+   "id": "Verbity2",
+   "title": "Verbity2",
+   "params": [
+    {
+     "name": "RmSize",
+     "default": 0.5
+    },
+    {
+     "name": "Sustain",
+     "default": 0.5
+    },
+    {
+     "name": "Mulch",
+     "default": 0.5
+    },
+    {
+     "name": "Wetness",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "VerbSevens",
+   "title": "VerbSevens",
+   "params": []
+  },
+  {
+   "id": "VerbSixes",
+   "title": "VerbSixes",
+   "params": []
+  },
+  {
+   "id": "VerbThic",
+   "title": "VerbThic",
+   "params": [
+    {
+     "name": "Replace",
+     "default": 0.5
+    },
+    {
+     "name": "Derez",
+     "default": 1.0
+    },
+    {
+     "name": "Filter",
+     "default": 1.0
+    },
+    {
+     "name": "Wider",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "VerbTiny",
+   "title": "VerbTiny",
+   "params": [
+    {
+     "name": "Replace",
+     "default": 0.5
+    },
+    {
+     "name": "Derez",
+     "default": 1.0
+    },
+    {
+     "name": "Filter",
+     "default": 1.0
+    },
+    {
+     "name": "Wider",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Vibrato",
+   "title": "Vibrato",
+   "params": [
+    {
+     "name": "Speed",
+     "default": 0.3
+    },
+    {
+     "name": "Depth",
+     "default": 0.0
+    },
+    {
+     "name": "FMSpeed",
+     "default": 0.4
+    },
+    {
+     "name": "FMDepth",
+     "default": 0.0
+    },
+    {
+     "name": "Inv/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "VinylDither",
+   "title": "VinylDither",
+   "params": [
+    {
+     "name": "Quant",
+     "default": 1.0
+    },
+    {
+     "name": "DeRez",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "VoiceOfTheStarship",
+   "title": "VoiceOfTheStarship",
+   "params": [
+    {
+     "name": "Filter",
+     "default": 0.5
+    },
+    {
+     "name": "Algrthm",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "VoiceTrick",
+   "title": "VoiceTrick",
+   "params": [
+    {
+     "name": "Tone",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Weave",
+   "title": "Weave",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Smooth",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Weight",
+   "title": "Weight",
+   "params": [
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Weight",
+     "default": 0.0
+    }
+   ]
+  },
+  {
+   "id": "Wider",
+   "title": "Wider",
+   "params": [
+    {
+     "name": "Width",
+     "default": 0.5
+    },
+    {
+     "name": "Center",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "Wolfbot",
+   "title": "Wolfbot",
+   "params": []
+  },
+  {
+   "id": "WoodenBox",
+   "title": "WoodenBox",
+   "params": [
+    {
+     "name": "Select",
+     "default": 0.5
+    },
+    {
+     "name": "Reso",
+     "default": 0.5
+    },
+    {
+     "name": "Depth",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "WoodenChest",
+   "title": "WoodenChest",
+   "params": [
+    {
+     "name": "Select",
+     "default": 0.0
+    },
+    {
+     "name": "Reso",
+     "default": 0.5
+    },
+    {
+     "name": "Depth",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "X2Buss",
+   "title": "X2Buss",
+   "params": [
+    {
+     "name": "High",
+     "default": 0.5
+    },
+    {
+     "name": "HMid",
+     "default": 0.5
+    },
+    {
+     "name": "LMid",
+     "default": 0.5
+    },
+    {
+     "name": "Bass",
+     "default": 0.5
+    },
+    {
+     "name": "HighF",
+     "default": 0.5
+    },
+    {
+     "name": "HMidF",
+     "default": 0.5
+    },
+    {
+     "name": "LMidF",
+     "default": 0.5
+    },
+    {
+     "name": "BassF",
+     "default": 0.5
+    },
+    {
+     "name": "Thresh",
+     "default": 1.0
+    },
+    {
+     "name": "Fader",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "XBandpass",
+   "title": "XBandpass",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.5
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Nuke",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "XHighpass",
+   "title": "XHighpass",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.5
+    },
+    {
+     "name": "Freq",
+     "default": 1.0
+    },
+    {
+     "name": "Nuke",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "XLowpass",
+   "title": "XLowpass",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.5
+    },
+    {
+     "name": "Freq",
+     "default": 1.0
+    },
+    {
+     "name": "Nuke",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "XNotch",
+   "title": "XNotch",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.5
+    },
+    {
+     "name": "Freq",
+     "default": 1.0
+    },
+    {
+     "name": "Nuke",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "XRegion",
+   "title": "XRegion",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.5
+    },
+    {
+     "name": "First",
+     "default": 0.5
+    },
+    {
+     "name": "Last",
+     "default": 0.5
+    },
+    {
+     "name": "Nuke",
+     "default": 0.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "YBandpass",
+   "title": "YBandpass",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Reson8",
+     "default": 0.1
+    },
+    {
+     "name": "ResEdge",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "YHighpass",
+   "title": "YHighpass",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Reson8",
+     "default": 0.1
+    },
+    {
+     "name": "ResEdge",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "YLowpass",
+   "title": "YLowpass",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Reson8",
+     "default": 0.1
+    },
+    {
+     "name": "ResEdge",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "YNotBandpass",
+   "title": "YNotBandpass",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Reson8",
+     "default": 0.1
+    },
+    {
+     "name": "ResEdge",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "YNotch",
+   "title": "YNotch",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Reson8",
+     "default": 0.1
+    },
+    {
+     "name": "ResEdge",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "YNotHighpass",
+   "title": "YNotHighpass",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Reson8",
+     "default": 0.1
+    },
+    {
+     "name": "ResEdge",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "YNotLowpass",
+   "title": "YNotLowpass",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Reson8",
+     "default": 0.1
+    },
+    {
+     "name": "ResEdge",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "YNotNotch",
+   "title": "YNotNotch",
+   "params": [
+    {
+     "name": "Gain",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Reson8",
+     "default": 0.1
+    },
+    {
+     "name": "ResEdge",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ZAcidLowpass",
+   "title": "ZAcidLowpass",
+   "params": [
+    {
+     "name": "Cutoff",
+     "default": 0.5
+    },
+    {
+     "name": "Over",
+     "default": 0.0
+    },
+    {
+     "name": "Under",
+     "default": 1.0
+    },
+    {
+     "name": "Meltdwn",
+     "default": 0.0
+    },
+    {
+     "name": "Drive",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ZBandpass",
+   "title": "ZBandpass",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Poles",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ZBandpass2",
+   "title": "ZBandpass2",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Poles",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ZHighpass",
+   "title": "ZHighpass",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Poles",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ZHighpass2",
+   "title": "ZHighpass2",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Poles",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ZLowpass",
+   "title": "ZLowpass",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Poles",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ZLowpass2",
+   "title": "ZLowpass2",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Poles",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ZNotch",
+   "title": "ZNotch",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Poles",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ZNotch2",
+   "title": "ZNotch2",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Freq",
+     "default": 0.5
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    },
+    {
+     "name": "Poles",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "Zoom",
+   "title": "Zoom",
+   "params": [
+    {
+     "name": "Zoom",
+     "default": 0.5
+    }
+   ]
+  },
+  {
+   "id": "ZOutputStage",
+   "title": "ZOutputStage",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "Output",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ZRegion",
+   "title": "ZRegion",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "First",
+     "default": 0.5
+    },
+    {
+     "name": "Last",
+     "default": 0.5
+    },
+    {
+     "name": "Poles",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  },
+  {
+   "id": "ZRegion2",
+   "title": "ZRegion2",
+   "params": [
+    {
+     "name": "Input",
+     "default": 0.1
+    },
+    {
+     "name": "First",
+     "default": 0.5
+    },
+    {
+     "name": "Last",
+     "default": 0.5
+    },
+    {
+     "name": "Poles",
+     "default": 0.5
+    },
+    {
+     "name": "Dry/Wet",
+     "default": 1.0
+    }
+   ]
+  }
+ ]
+}

@@ -847,6 +847,7 @@ func _ready() -> void:
 	await _t("_test_a_shared_mod_with_a_bad_hash_path_kind_or_size_is_refused_whole")
 	await _t("_test_the_plugin_marker_reaches_a_guest_and_lacking_it_is_the_unavailable_plate")
 	await _t("_test_a_rack_catalogue_is_the_engines_own_description")
+	await _t("_test_airwindows_is_every_effect_in_one_module")
 	await _t("_test_a_rack_patch_checks_every_verb")
 	await _t("_test_the_worlds_sockets_play_into_the_rack_and_the_rack_clouds_its_input")
 	await _t("_test_a_rack_engine_makes_the_sound_the_patch_says")
@@ -44752,6 +44753,37 @@ func _test_a_rack_catalogue_is_the_engines_own_description() -> void:
 	var told := RackEngine.describe()
 	check("the committed catalogue is what the engine describes (run: build/rack/rack --describe | python3 -m json.tool > core/music/rack/modules.json)",
 			str(told["modules"]) == str(JSON.parse_string(FileAccess.get_file_as_string(RackCatalogue.PATH))["modules"]))
+
+
+func _test_airwindows_is_every_effect_in_one_module() -> void:
+	var spec := RackCatalogue.spec("builtin.airwindows")
+	check("AIRWINDOWS is in the catalogue: an effect knob and twelve parameters", spec["knobs"].size() == 13 and spec["knobs"][0]["id"] == "effect")
+	var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://core/music/rack/airwindows.json"))
+	var names: PackedStringArray = String(spec["knobs"][0]["names"]).split("|")
+	check("the effect knob names every effect of the list", names.size() == meta["effects"].size() and names.size() > 500)
+	var ids_match := true
+	for n in names.size():
+		ids_match = ids_match and names[n] == meta["effects"][n]["id"]
+	check("in the list's order", ids_match)
+	if not RackEngine.available():
+		print("  (no engine here: the effects are not heard)")
+		return
+	check("the committed list is what the engine describes (run: build/rack/rack --describe-airwindows > core/music/rack/airwindows.json, formatted as before)",
+			str(RackEngine.describe_airwindows()["effects"]) == str(meta["effects"]))
+	var loud := {}
+	for effect in ["Galactic", "ClipOnly2"]:
+		var p := RackPatch.empty()
+		RackPatch.add(p, "builtin.noise")
+		var f := RackPatch.add(p, "builtin.airwindows")
+		RackPatch.add(p, "builtin.out")
+		RackPatch.connect_cable(p, "noise.white", "%s.l" % f)
+		RackPatch.connect_cable(p, "%s.l" % f, "out.l")
+		RackPatch.connect_cable(p, "%s.r" % f, "out.r")
+		RackPatch.set_knob(p, f, "effect", (float(names.find(effect)) + 0.5) / names.size())
+		var heard := RackEngine.render(p, PackedStringArray(["run 0.5"]))
+		loud[effect] = _rack_loudness(heard)
+		check("%s makes sound" % effect, loud[effect] > 0.001)
+	check("choosing another effect changes the sound", absf(loud["Galactic"] - loud["ClipOnly2"]) > 0.001)
 
 
 func _test_a_rack_patch_checks_every_verb() -> void:
