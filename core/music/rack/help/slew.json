@@ -1,0 +1,15 @@
+{
+  "what": "Smooths out sudden jumps in a signal, so it glides to a new value instead of snapping. Use it for glide between notes, softened steps or slow-moving controls.",
+  "how": "When the input rises, the output follows slowly, taking about RISE seconds to get most of the way there. When the input falls, FALL does the same job. A signal that jumps (a pitch from SEQ, a pulse) becomes a curve. Longer times smooth more; at 0 the signal passes straight through.",
+  "ins": {
+    "in": "The signal to smooth. Patch a pitch from SEQ or KEYS for glide, or a stepped signal from S&H for gentle movement."
+  },
+  "outs": {
+    "out": "The smoothed signal. Patch it where the original would have gone."
+  },
+  "knobs": {
+    "rise": "How slowly the output follows when the input goes up, 0 to 2 seconds. 0 is instant.",
+    "fall": "How slowly the output follows when the input goes down, 0 to 2 seconds. 0 is instant."
+  },
+  "try": "Patch SEQ's pitch into SLEW's in and SLEW's out into VCO's pitch. Turn RISE and FALL up to about a quarter of the way and hear the notes slide into each other."
+}

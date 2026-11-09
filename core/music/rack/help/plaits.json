@@ -1,0 +1,30 @@
+{
+  "what": "A voice in a box: one module that can make 24 very different kinds of sound, from plain buzzy tones to bells, plucked strings, drums and robot speech. Pick the kind with ENGINE, then shape it with the three main knobs.",
+  "how": "It makes a sound at the pitch you give it and keeps playing until you stop sending it a note. HARMONICS, TIMBRE and MORPH are three general-purpose knobs whose meaning changes with the engine; turn them and listen, since each engine gives them its own job. If you patch a trigger (a short pulse that means 'now') into TRIG, the module shapes each note itself: it plays a note, then fades it out over a time set by DECAY, with LPG choosing how much treble fades with it. The small FM AMT, TIMB AMT and MORPH AMT knobs say how much the matching input bends that parameter (they can go negative to bend the other way).",
+  "ins": {
+    "pitch": "Which note to play. Patch KEYS' pitch output here. Each 1.0 on the cable is one octave up; 0 is middle C (plus the NOTE and FINE knobs).",
+    "fm": "Wobbles the pitch from another signal (an LFO for vibrato, or a fast oscillator for harsh tones). Does nothing until FM AMT is turned away from the middle. Around 1.0 on the cable is about six semitones at full FM AMT.",
+    "timbre": "A signal here moves the TIMBRE setting while you play. Patch an LFO or ENV. Scaled by TIMB AMT, which must be turned up for it to be heard.",
+    "morph": "A signal here moves the MORPH setting while you play. Scaled by MORPH AMT, which must be turned up for it to be heard.",
+    "trig": "A pulse (0 to 1; above 0.5 counts) that plays a note: each pulse starts a new sound that fades away by itself. With nothing patched here the module just plays continuously. Patch KEYS' gate or a drum clock.",
+    "level": "Patch a 0..1 signal (such as KEYS' velocity, or an envelope) to set how loud and bright each note is, like a built-in volume control. Together with TRIG it makes notes hit harder or softer."
+  },
+  "outs": {
+    "out": "The main sound. Patch it into a filter, an amplifier (VCA), an effect or straight to OUT.",
+    "aux": "A second, related sound that depends on the engine: often a variation or a companion layer of the main one. Mix it with OUT for a fuller sound, or use it on its own."
+  },
+  "knobs": {
+    "engine": "Which of the 24 sound makers is used: VA+VCF (analogue-style tone through a filter), PHASE DIST (bent sine tones), SIX-OP A/B/C (three bell-and-electric-piano style FM sounds), TERRAIN (morphing wave landscape), STRING MACH (string-synth chords), CHIPTUNE (game-console tones), VA (two-oscillator analogue), WAVESHAPE (sine bent into harsh tones), FM (two-operator FM), GRAIN (tiny sound grains, formant-like), ADDITIVE (stacked sine harmonics), WAVETABLE (stepping through stored waves), CHORD (a full chord from one note), SPEECH (robot voice), SWARM (a crowd of saws), NOISE (filtered noise), PARTICLE (dust and crackle), STRING (plucked string), MODAL (struck bar, bell, drum body), KICK, SNARE, HAT (drums).",
+    "note": "Shifts the pitch in semitones, two octaves up or down.",
+    "fine": "A tiny pitch nudge, plus or minus a semitone, in cents (a hundredth of a semitone).",
+    "harm": "HARMONICS: the first of three sound-shaping knobs; what it does depends on the ENGINE (often how many overtones or what chord or ratio). Turn it and listen.",
+    "timbre": "TIMBRE: the second shaping knob, often a brightness or an amount of 'edge'. Its job changes with the ENGINE.",
+    "morph": "MORPH: the third shaping knob, usually a smooth change of the wave or body shape. Its job changes with the ENGINE.",
+    "decay": "How long each note rings after a pulse at TRIG. Left to right is short to long. Only matters when TRIG or LEVEL has a cable.",
+    "lpg": "How much high frequencies die away with each note: low is a soft, dull fade, high is a bright, only-volume fade. Only matters when TRIG or LEVEL has a cable.",
+    "fma": "How much the FM input bends the pitch. In the middle (0) it does nothing; left or right bends in opposite directions. With TRIG patched and nothing in FM it applies the note's own fade to the pitch instead.",
+    "tma": "How much the TIMBRE input moves TIMBRE. Middle is none; negative inverts it. With TRIG patched and nothing in TIMBRE it applies the note's own fade to TIMBRE.",
+    "mma": "How much the MORPH input moves MORPH. Middle is none; negative inverts it. With TRIG patched and nothing in MORPH it applies the note's own fade to MORPH."
+  },
+  "try": "Patch KEYS' pitch into PLAITS' pitch and PLAITS' out into OUT's left, and play. Then turn ENGINE through a few choices and move HARMONICS, TIMBRE and MORPH. For a plucked sound, also patch KEYS' gate into TRIG, patch KEYS' velocity into LEVEL, and shorten DECAY."
+}

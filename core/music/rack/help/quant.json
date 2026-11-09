@@ -1,0 +1,15 @@
+{
+  "what": "Pulls a pitch to the nearest note of a musical scale. It keeps random or wobbly pitches sounding in tune and in key.",
+  "how": "A pitch signal arrives as a number of octaves from middle C. QUANT rounds it to the closest note that belongs to the chosen scale, and sends that out. The scale picks which notes are allowed; ROOT sets which note the scale starts on. With CHROM every piano key is allowed, so it only rounds to whole semitones.",
+  "ins": {
+    "in": "The pitch to correct, in octaves from middle C (each 1.0 is an octave). Patch S&H, an LFO or SEQ here."
+  },
+  "outs": {
+    "out": "The same pitch moved to the nearest note in the scale. Patch it into a VCO's pitch."
+  },
+  "knobs": {
+    "scale": "Which notes are allowed. CHROM: all 12. MAJOR: bright, happy. MINOR: darker. DORIAN: minor with a lift. PHRYG: dark, Spanish-sounding. LYDIAN: dreamy major. MIXO: major with a bluesy ending. PENT+: five-note major, very safe. PENT-: five-note minor, also safe. BLUES: minor pentatonic plus a blue note. WHOLE: dreamy, floating, no home. HARM-: minor with an exotic gap.",
+    "root": "The note the scale is built on: C to B. Changes the key without changing the scale's mood."
+  },
+  "try": "Patch S&H (nothing in its in) into QUANT's in, QUANT's out into VCO's pitch, and CLOCK's 8th into S&H's trig. Try PENT+, then BLUES, then CHROM, and hear the random notes get more or less tuneful."
+}

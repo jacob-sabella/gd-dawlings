@@ -188,6 +188,7 @@ func _lay_cables(touching := {}) -> void:
 		cable.name = "Cable_%s_%s" % [c[0], c[1]]
 		# Lit from within and drawn thicker than life: the wall is dark and seen from across the room.
 		cable.lit = true
+		cable.flow = true
 		cable.thickness = 2.0
 		var span := a.plug_transform().origin.distance_to(b.plug_transform().origin)
 		cable.sag_ratio = RackWall.CABLE_SAG if absf(a.global_position.x - b.global_position.x) < RackWall.MODULE_WIDE * 2.0 \

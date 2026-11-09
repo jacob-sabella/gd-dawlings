@@ -1,0 +1,28 @@
+{
+  "what": "A source of slowly or quickly moving control signals, four related outputs at once. It can be an envelope (one rise and fall per gate), a repeating wave (a low-frequency oscillator, LFO), or run fast enough to be an oscillator you can hear.",
+  "how": "TIDES draws a shape that rises and then falls; SLOPE sets how long the rise is compared with the fall, SHAPE bends the curve, and SMOOTHNESS rounds or folds it. RAMP chooses whether it plays once per gate (AD), loops endlessly (LOOPING) or rises, waits while the gate is held, then falls (AR). RANGE sets how fast: LOW (about one cycle every eight seconds), CONTROL (about twice a second) or AUDIO (fast enough to hear as a note). The four outputs are variations of that shape, and OUTPUT chooses what the variation is, so what outputs 1 to 4 carry depends on OUTPUT. A signal in CLOCK makes it follow a tempo.",
+  "ins": {
+    "gate": "A gate (0 or 1, high above 0.5). In AD it starts one rise and fall; in AR it rises while the gate is high and falls when it ends; in LOOPING it restarts the cycle. Patch KEYS' gate or CLOCK here.",
+    "clock": "A steady pulse (such as CLOCK's beat). While patched, TIDES locks its speed to it and the FREQUENCY knob picks a multiple or fraction of that tempo instead of an absolute speed.",
+    "freq": "A pitch-style control (octaves, 1.0 is double speed) added to FREQUENCY. In AUDIO range patch KEYS' pitch here to play it as a note.",
+    "shape": "A control signal added to SHAPE (at half strength). Range -1..1; the total stays between 0 and 1.",
+    "slope": "A control signal added to SLOPE (at half strength). Range -1..1; the total stays between 0 and 1."
+  },
+  "outs": {
+    "out1": "Output 1: always the main shape. In GATES it is the shape itself (0..1 for AD and AR, -1..1 looping). In SLOPE PHASE and FREQUENCY it is the reference the others are measured from. In AMPLITUDE it carries the shape at its own level (see SHIFT).",
+    "out2": "Output 2. GATES: the same shape as output 1. SLOPE PHASE: the same shape, shifted in phase. FREQUENCY: the same shape at its own speed. AMPLITUDE: the same shape at its own level. All set by SHIFT.",
+    "out3": "Output 3. GATES: a gate that goes high when the rise ends and stays high until the next trigger (while looping, high during the fall). Other modes: the same shape shifted in phase, in speed, or in level, set by SHIFT.",
+    "out4": "Output 4. GATES: a gate that goes high when the whole shape has finished (a short pulse each cycle when looping). Other modes: the same shape shifted in phase, in speed, or in level, set by SHIFT."
+  },
+  "knobs": {
+    "freq": "The speed, in octaves around the middle of the chosen RANGE; each step doubles or halves it, up to four steps either way. With CLOCK patched it picks a multiple or fraction of the tempo.",
+    "shape": "The curve of the rise and fall. In the middle they are straight lines (a triangle); toward one end they bend, and at the top the output turns squarer, like a pulse.",
+    "mode": "RAMP: AD plays one rise and fall for each gate, LOOPING repeats endlessly as an LFO, AR rises when the gate goes high, stays there while it is held, and falls when it ends.",
+    "omode": "What the four outputs are. GATES: out1 and out2 are the shape, out3 and out4 are gates. AMPLITUDE: all four are the same shape but SHIFT slides the loudness across them. SLOPE PHASE: all four are the same shape, offset in phase by SHIFT. FREQUENCY: all four run at different speeds set by SHIFT.",
+    "range": "How fast the whole thing runs: LOW (about one cycle every eight seconds), CONTROL (about two a second), AUDIO (fast enough to hear: middle C at the middle of FREQUENCY).",
+    "slope": "Where the peak falls in the cycle. Low gives a very short rise and a long fall; high a long rise and a quick fall; the middle is equal.",
+    "smooth": "Left of the middle the wave is rounded off and gets quieter, down to nearly flat at the far left; in the middle it does nothing; right of the middle the wave is folded over itself, flatter at the top and richer.",
+    "shift": "What it does depends on OUTPUT. FREQUENCY: in the middle all four outputs run at the same speed; to the left outputs 2 to 4 slow down and to the right they speed up. SLOPE PHASE: in the middle all four are in step; either side offsets outputs 2 to 4 in phase. AMPLITUDE: slides which outputs carry the shape, one or two at a time; it is quiet near the middle and ends of the knob. GATES: not used."
+  },
+  "try": "Patch KEYS' gate into TIDES' gate, set RAMP to AD and OUTPUT to GATES, then patch TIDES' out1 into VCA's cv with KEYS' pitch into VCO's pitch, VCO into VCA, VCA into OUT. Play notes, then turn SLOPE from left to right and listen for the swell changing from a sudden hit with a long tail to a slow fade-in."
+}

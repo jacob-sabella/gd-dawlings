@@ -1,0 +1,33 @@
+{
+  "what": "The room itself as a sound source. It turns the weather outside, the venue's own instrument and the rings of the looper into signals you can patch like any other: each gives a level and a gate, a signal that is on (1) or off (0), like a button being pressed.",
+  "how": "Each source here has two jacks. The first is its level, a number between 0 and 1 that is smoothed so it moves gently: patch it into a CUTOFF, a VCA's cv or any other control input to let the room move your sound. The second, ending in _g, is its gate: it goes high for about 0.05 seconds each time something happens (a raindrop, a drip, a struck note, a looper note beginning). Use a gate to start an ENV or a drum. These are worked out from the song's clock, so everyone in the room hears the same. A source with nothing behind it (no weather, no instrument, no layer) stays at zero.",
+  "ins": {},
+  "outs": {
+    "weather": "Level of the weather on the window (rain, snow or storm): how heavy it is right now in the song, 0 to 1. It follows the song's bars and moves slowly. Silent in a cave, which has drips instead.",
+    "drips": "Level for the cave's drips: each drip makes it jump to a value set by how hard the drip fell, then back to zero after a moment. Only in the cave.",
+    "venue": "Level for the venue's own instrument: each time it is struck the level jumps to how hard the strike was, then falls back to zero. Only in a venue that has one.",
+    "ring1": "Level of the lowest ring of the looper: how loud the note playing in that layer is, 0 to 1, and 0 between notes.",
+    "ring2": "Level of the looper's second ring, the same way: how loud its current note is, 0 between notes.",
+    "ring3": "Level of the looper's third ring: how loud its current note is, 0 between notes.",
+    "ring4": "Level of the looper's fourth ring: how loud its current note is, 0 between notes.",
+    "ring5": "Level of the looper's fifth ring: how loud its current note is, 0 between notes.",
+    "ring6": "Level of the looper's sixth ring: how loud its current note is, 0 between notes.",
+    "ring7": "Level of the looper's seventh ring: how loud its current note is, 0 between notes.",
+    "ring8": "Level of the looper's eighth ring: how loud its current note is, 0 between notes.",
+    "marbles": "Reserved for the marble run, which has been taken out of the room: this stays at zero for now.",
+    "weather_g": "Gate: goes high for a moment on each drop that hits the window, so every raindrop can trigger an ENV or a drum.",
+    "drips_g": "Gate: a short pulse for each drip in the cave.",
+    "venue_g": "Gate: a short pulse each time the venue's instrument is struck.",
+    "ring1_g": "Gate: a short pulse each time a note begins in the looper's lowest ring.",
+    "ring2_g": "Gate: a short pulse each time a note begins in the looper's second ring.",
+    "ring3_g": "Gate: a short pulse each time a note begins in the looper's third ring.",
+    "ring4_g": "Gate: a short pulse each time a note begins in the looper's fourth ring.",
+    "ring5_g": "Gate: a short pulse each time a note begins in the looper's fifth ring.",
+    "ring6_g": "Gate: a short pulse each time a note begins in the looper's sixth ring.",
+    "ring7_g": "Gate: a short pulse each time a note begins in the looper's seventh ring.",
+    "ring8_g": "Gate: a short pulse each time a note begins in the looper's eighth ring.",
+    "marbles_g": "Reserved for the marble run, which has been taken out of the room: it never fires for now."
+  },
+  "knobs": {},
+  "try": "Patch WORLD's weather_g into ENV's gate, ENV's out into a VCA's cv, with a VCO into the VCA and the VCA into OUT. With the weather on, each raindrop plays a short note. Or patch WORLD's weather into a filter's cutoff so the sound opens and closes with the weather."
+}

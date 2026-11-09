@@ -1,0 +1,31 @@
+{
+  "what": "A voice that imitates real objects being hit, bowed or blown: a struck bar, a bowed string, a tube with air blowing across it. It makes warm, wooden, glassy and metallic tones that fade like real things.",
+  "how": "There are two parts. Exciters are what plays the object: BOW (rubbing), BLOW (a stream of air) and STRIKE (a mallet hit). The resonator is the object itself, which rings at the pitch you give it. A gate (a signal that is high while a key is held) starts the exciters; CONTOUR chooses how they behave over the note. You can also patch your own sounds into BLOW and STRIKE to ring the object with them. Last comes a built-in reverb and stereo widening, set by SPACE.",
+  "ins": {
+    "pitch": "Which note to ring. Patch KEYS' pitch here. Each 1.0 is one octave up; 0 is middle C (plus the NOTE knob).",
+    "gate": "A signal that is high (above 0.5) while a note is held and low when it ends. Patch KEYS' gate. It starts and sustains the exciters. Nothing is heard without it, unless a sound is patched into BLOW or STRIKE.",
+    "level": "A 0..1 signal that sets how hard each note is played. Patch KEYS' velocity. With nothing patched the module plays at a medium strength; around 0.5 and above, harder hits come out louder and brighter.",
+    "blow": "Optional audio (-1..1): a sound used as the 'air' exciter. Any sound here rings the object, like blowing noise into a tube.",
+    "strike": "Optional audio (-1..1): a sound used as the 'mallet' exciter. Patch noise or a drum here and the object rings with it."
+  },
+  "outs": {
+    "out": "One side of the stereo sound. Patch to OUT's left.",
+    "aux": "The other side of the stereo sound. Patch to OUT's right (or both to a mixer). With SPACE low they are almost the same."
+  },
+  "knobs": {
+    "contour": "The shape of the note's loudness. Left: a short, plucky decay that dies by itself. Middle: a decay that settles to a held level, higher towards the right. Far right: holds fully as long as the gate is high, then fades out.",
+    "bow": "How much the bow rubs the object: zero is no bowing, up gives a sustained, singing tone.",
+    "blow": "How much air is blown across the object: gives breathy, flute-like tones, sustained while the gate is high.",
+    "strike": "How hard the mallet hits at the start of each note. Gives the clear, struck attack.",
+    "flow": "The character of the blown air: changes it from a smooth rush to a grainy, rougher stream.",
+    "mallet": "How hard the mallet is: low is soft and dull, high is hard and clicky.",
+    "geometry": "The shape of the resonating object: changes the pitch spacing of its overtones, from a tuned bar to a bell-like or metallic body.",
+    "bright": "How bright the object sounds: low is dark and muffled, high is shiny with more overtones.",
+    "damping": "How quickly the ring dies away: low rings long, high is short and dead.",
+    "position": "Where on the object it is excited and listened to. Different spots bring out different overtones, from full to thin and hollow.",
+    "space": "The stereo width and reverb: at the far left it is a dry, centred sound; turning it up spreads the sound across both sides and then adds reverb.",
+    "note": "Shifts the pitch in semitones, two octaves up or down.",
+    "model": "The kind of resonator: MODAL (struck bar or plate body), STRING (one string), STRINGS (a group of strings that ring together)."
+  },
+  "try": "Patch KEYS' pitch into ELEMENTS' pitch, KEYS' gate into gate, and ELEMENTS' out and aux into OUT's left and right. Play notes with the default STRIKE, then turn BOW up and STRIKE down for a bowed tone, and turn DAMPING and GEOMETRY to change the body."
+}

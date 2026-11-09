@@ -1,0 +1,18 @@
+{
+  "what": "A metronome made of electrical pulses. It gives other modules a steady beat to follow, for example to step a sequencer or trigger a drum.",
+  "how": "Every output is a short blip (about 5 thousandths of a second) repeated at its own rate: 16th notes are the fastest, 8th notes half as fast, beats half again, and bars once per sixteen 16ths. In SONG mode it follows the song's tempo and position, and only ticks while the song is playing. In FREE mode it ignores the song, runs all the time, and uses the TEMPO knob.",
+  "ins": {},
+  "outs": {
+    "16th": "A pulse on every 16th note: four per beat. Patch it into SEQ's clk to step through a pattern quickly.",
+    "8th": "A pulse on every 8th note: two per beat.",
+    "beat": "A pulse on every beat, the steady foot-tap. Good for a kick DRUM's trig.",
+    "bar": "A pulse once per bar (sixteen 16ths). Good for slow changes or for resetting a sequence.",
+    "reset": "A single pulse the moment the song starts playing, so a sequence can start from its first step. Only sends in SONG mode; in FREE mode it stays silent."
+  },
+  "knobs": {
+    "bpm": "Tempo in beats per minute, 40 to 240. Only used in FREE mode; SONG mode uses the song's tempo.",
+    "sync": "FREE: runs on its own at TEMPO, all the time. SONG: follows the song's tempo and position, and runs only while the song plays.",
+    "swing": "Intended to push every second 16th note late for a shuffled feel, but in this version it has no effect on the pulses."
+  },
+  "try": "Set SYNC to FREE. Patch CLOCK's beat into DRUM's trig and DRUM's out into OUT's left, and you have a four-on-the-floor kick. Turn TEMPO to speed it up and slow it down."
+}

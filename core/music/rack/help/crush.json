@@ -1,0 +1,16 @@
+{
+  "what": "A lo-fi effect that makes a sound crunchy and digital, like an old video game or a damaged recording.",
+  "how": "Digital sound is a long list of numbers, so two things can be taken away. RATE throws away part of the list (fewer snapshots per second), which makes the highs alias into harsh, ringing noise. BITS limits how finely each snapshot is measured, which leaves a rough, fizzy grit. MIX blends the crushed sound with the original.",
+  "ins": {
+    "in": "The sound to crush (audio, -1..1)."
+  },
+  "outs": {
+    "out": "The crushed sound blended with the clean one by MIX. Patch it into a filter, an effect or OUT."
+  },
+  "knobs": {
+    "rate": "How much of the sound is thrown away in time: 0 is none, towards the top it gets harshly cut down, with false high tones and a dull, ringing sound.",
+    "bits": "How many bits (steps of loudness) are kept, 2 to 16 in single steps. 16 is clean; 8 is crunchy; 4 and below are very rough and noisy.",
+    "mix": "Blend of clean and crushed: 0 is the clean sound only, 1 is all crushed."
+  },
+  "try": "Patch VCO (SAW) into CRUSH's in and CRUSH's out into OUT's left. Lower BITS step by step from 16 and listen to the grit grow, then raise RATE for the harsh, fizzy ringing."
+}

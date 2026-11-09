@@ -19,6 +19,10 @@ extends Surface
 
 ## A change to the patch is asked for: `op` and `args` as `RackPatch.answer` takes them.
 signal edit_asked(op: String, args: Array)
+## The help card of module `id` was asked for (a click on its name).
+signal help_asked(id: String)
+## The module finder is asked for, with this palette group chosen ("" for all).
+signal find_asked(group: String)
 ## A knob is being turned: module id, knob and value 0..1, on every change.
 signal knob_turning(id: String, knob: String, v: float)
 ## A knob being turned, at a limited rate, to be sent on as a live ask.

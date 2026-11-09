@@ -89,6 +89,9 @@ var thickness := 1.0
 ## Dyed and lit from within rather than dark rubber, for a bay whose board is black: a dark
 ## jacket on a black board is a cable nobody can see.
 var lit := false
+## Draws its signal as a stipple of comets running from the output to the input, quicker and hotter with the level
+## (hardware/shaders/cable_flow.gdshader). For the rack's cables.
+var flow := false
 ## Pushed back while something else on the bay is being looked at.
 var dimmed := false:
 	set(v):
@@ -190,6 +193,12 @@ func signal_radius() -> float:
 func set_glow(level: float) -> void:
 	if _jacket == null or not lit:
 		return
+	if flow:
+		var fm := _jacket.material_override as ShaderMaterial
+		if fm != null:
+			fm.set_shader_parameter("level", clampf(level, 0.0, 1.0))
+			fm.set_shader_parameter("motion", Ergonomics.current.motion_scale)
+		return
 	var m := _jacket.material_override as StandardMaterial3D
 	if m == null:
 		return
@@ -201,6 +210,19 @@ func set_glow(level: float) -> void:
 
 
 var _own_material := false
+const _FLOW := preload("res://hardware/shaders/cable_flow.gdshader")
+
+
+## The cable's own flow material (its tint and level are its own).
+func _flow_material(tint: Color) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = _FLOW
+	var c := tint
+	c.s = maxf(c.s, 0.55)
+	c.v = maxf(c.v, 0.8)
+	m.set_shader_parameter("tint", c)
+	m.set_shader_parameter("motion", Ergonomics.current.motion_scale)
+	return m
 
 
 ## A dimmed cable keeps its colour and loses most of its light, so the ones still lit are the
@@ -208,7 +230,10 @@ var _own_material := false
 func _paint() -> void:
 	var tint := colour.darkened(0.7) if dimmed else colour
 	if _jacket != null:
-		_jacket.material_override = Materials.cable_lit(tint) if lit else Materials.cable(tint)
+		if flow and lit:
+			_jacket.material_override = _flow_material(tint)
+		else:
+			_jacket.material_override = Materials.cable_lit(tint) if lit else Materials.cable(tint)
 	for boot in _boots:
 		boot.material_override = Materials.cable_boot(tint)
 
@@ -257,7 +282,7 @@ func _build_jacket(spine: PackedVector3Array) -> void:
 	var jacket := MeshInstance3D.new()
 	jacket.name = "Jacket"
 	jacket.mesh = mesh
-	jacket.material_override = Materials.cable_lit(colour) if lit else Materials.cable(colour)
+	jacket.material_override = _flow_material(colour) if flow and lit else (Materials.cable_lit(colour) if lit else Materials.cable(colour))
 	# A cable is 4mm across. Without this it disappears from its own shadow map as speckle, and
 	# a patchbay full of shadow acne looks dirty rather than detailed.
 	jacket.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

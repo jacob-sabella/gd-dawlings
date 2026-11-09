@@ -1,0 +1,21 @@
+{
+  "CV": "Control voltage: a signal that is not sound but an instruction. Patched into a jack or knob input, it moves that setting for you (a filter opening, a pitch rising) instead of you turning the knob.",
+  "gate": "A signal that is high while a key is held and low when it is let go. It says when to start and stop a note.",
+  "trigger": "A very short pulse that says 'now'. It starts something (a drum, an envelope, a step) and its length does not matter.",
+  "audio": "The signal you actually hear, swinging between -1 and 1. Patch it to OUT to listen.",
+  "pitch": "On the cables, pitch is counted in octaves up from middle C: 0 is middle C, 1 is the C above, 1/12 is one semitone. This is called one volt per octave.",
+  "envelope": "A shape that plays out over time when a note starts: it rises (attack), falls (decay), holds (sustain) and fades after release. Used to make a sound start loud and die away, or to sweep a filter.",
+  "LFO": "Low-frequency oscillator: a wave too slow to hear as a note (a few cycles a second or slower). Patched to a knob input it makes things wobble, sweep or pulse.",
+  "VCA": "Voltage-controlled amplifier: a volume control that a signal operates. An envelope into a VCA is what makes a note start and stop instead of droning.",
+  "filter": "Takes away part of a sound: a low-pass filter removes the highs and makes it darker, a high-pass removes the lows.",
+  "cutoff": "The frequency where a filter starts to cut. Lower cutoff on a low-pass filter means a darker, duller sound.",
+  "resonance": "Boosts the sound right at the cutoff, so the filter sings or whistles. Turned all the way up it can ring on its own.",
+  "FM": "Frequency modulation: one signal bends the pitch of another very fast. It makes bell, metal and growl tones that a plain wave cannot.",
+  "modulation": "Changing a setting over time with a signal instead of by hand.",
+  "semitone": "One piano key. Twelve semitones make an octave.",
+  "cents": "A hundredth of a semitone. A few cents is too small to hear as a different note but makes two oscillators beat against each other.",
+  "clock": "A steady pulse that keeps things in time. Sequencers and drums step forward on each tick.",
+  "sequencer": "Plays a list of steps one after another, each with its own note, on every clock tick.",
+  "sample and hold": "Grabs the value of a signal at one moment and keeps it still until the next grab: a staircase of random-looking steps.",
+  "stereo": "Two channels, left and right. Most modules here have a left and a right jack."
+}

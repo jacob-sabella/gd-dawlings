@@ -11,12 +11,18 @@ signal drag_began(from: RackHandle, at: Vector3)
 signal drag_moved(from: RackHandle, at: Vector3)
 ## The drag was let go at `at`.
 signal drag_finished(from: RackHandle, at: Vector3)
+## The handle was pressed and let go without moving: a click on the module's name, which asks for its help.
+signal clicked(from: RackHandle)
+
+## How far, in metres, a press may wander and still be a click.
+const CLICK_SLACK := 0.012
 
 var module_id := ""
 var module_title := ""
 var size := Vector2(0.1, 0.05)
 var _strip: MeshInstance3D
 var _at := Vector3.ZERO
+var _start := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -58,11 +64,12 @@ func _default_readout() -> String:
 
 
 func hint() -> String:
-	return "drag to move it about the case · let go over a free place to put it there"
+	return "click the name for help · drag to move it about the case, let go over a free place to put it there"
 
 
 func _on_grab_begin(at: Vector3) -> void:
 	_at = at
+	_start = at
 	_shine()
 	drag_began.emit(self, at)
 
@@ -75,3 +82,5 @@ func _on_grab_move(at: Vector3) -> void:
 func _on_grab_end() -> void:
 	_shine()
 	drag_finished.emit(self, _at)
+	if _at.distance_to(_start) <= CLICK_SLACK:
+		clicked.emit(self)

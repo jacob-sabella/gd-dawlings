@@ -1,0 +1,28 @@
+{
+  "what": "All of Chris Johnson's Airwindows effects in one module: over 500 reverbs, distortions, tape and console emulations, compressors, filters, dithers and utilities. Pick one and the knobs become its controls.",
+  "how": "Sound goes in, the chosen effect changes it, and it comes out. Every Airwindows effect works the same way from the outside: a few parameters, each from nothing to full, where the middle is a reasonable place to start. Many have a Dry/Wet parameter that blends the original with the effect. Which parameter is on which knob (A, B, C...) depends on the effect, and this card spells it out. Use the browser on the card to find an effect by kind; each comes with Chris Johnson's own description of what it is for.",
+  "ins": {
+    "l": "The sound to process, left channel. If only this one is patched, it is used for both channels.",
+    "r": "The sound to process, right channel."
+  },
+  "outs": {
+    "l": "The processed sound, left channel. Patch it to OUT or to the next module.",
+    "r": "The processed sound, right channel."
+  },
+  "knobs": {
+    "effect": "Which effect you are using. This help card has a browser that lists them by kind (reverb, distortion, filter...) and sets this knob and the parameters for you.",
+    "a": "The effect's parameter A. What it does depends on the effect: this card names it for the effect you have chosen. Effects with fewer parameters ignore the later ones.",
+    "b": "The effect's parameter B. What it does depends on the effect: this card names it for the effect you have chosen. Effects with fewer parameters ignore the later ones.",
+    "c": "The effect's parameter C. What it does depends on the effect: this card names it for the effect you have chosen. Effects with fewer parameters ignore the later ones.",
+    "d": "The effect's parameter D. What it does depends on the effect: this card names it for the effect you have chosen. Effects with fewer parameters ignore the later ones.",
+    "e": "The effect's parameter E. What it does depends on the effect: this card names it for the effect you have chosen. Effects with fewer parameters ignore the later ones.",
+    "f": "The effect's parameter F. What it does depends on the effect: this card names it for the effect you have chosen. Effects with fewer parameters ignore the later ones.",
+    "g": "The effect's parameter G. What it does depends on the effect: this card names it for the effect you have chosen. Effects with fewer parameters ignore the later ones.",
+    "h": "The effect's parameter H. What it does depends on the effect: this card names it for the effect you have chosen. Effects with fewer parameters ignore the later ones.",
+    "i": "The effect's parameter I. What it does depends on the effect: this card names it for the effect you have chosen. Effects with fewer parameters ignore the later ones.",
+    "j": "The effect's parameter J. What it does depends on the effect: this card names it for the effect you have chosen. Effects with fewer parameters ignore the later ones.",
+    "k": "The effect's parameter K. What it does depends on the effect: this card names it for the effect you have chosen. Effects with fewer parameters ignore the later ones.",
+    "l": "The effect's parameter L. What it does depends on the effect: this card names it for the effect you have chosen. Effects with fewer parameters ignore the later ones."
+  },
+  "try": "Patch a VCO (or a drum module) into AIRWINDOWS, and AIRWINDOWS' left and right outputs into OUT. Open this card, pick Reverb in the browser and choose an effect such as Galactic or Verbity, then turn the parameters while you play. Try a Distortion effect next to hear the difference."
+}

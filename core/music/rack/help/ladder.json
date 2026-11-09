@@ -1,0 +1,19 @@
+{
+  "what": "A filter with a thick, warm character, in the style of the one in the classic Moog synthesizers. It removes highs, lows or a band from a sound, and when pushed it sings and growls.",
+  "how": "A filter lets some pitches through and turns others down. CUTOFF is the pitch, in Hz (vibrations per second), where that change happens. RES (resonance) boosts a peak at the cutoff, so it whistles and rings. MODE picks what is kept (lows, a band or highs) and how steeply the rest is cut: the 24 choices cut harder than the 12 choices. A control signal in the CUTOFF input can move the cutoff while you play.",
+  "ins": {
+    "in": "The sound to filter. Patch a VCO, NOISE or a mix here (audio, -1..1).",
+    "cutoff": "A control signal that moves the cutoff while you play. Patch an ENV or an LFO here. How far it moves is set by the CV knob."
+  },
+  "outs": {
+    "out": "The filtered sound. Patch it into a VCA, an effect or OUT."
+  },
+  "knobs": {
+    "cutoff": "The pitch where the filter acts, 20 Hz to 18000 Hz. With a low-pass mode, down is darker and up is brighter.",
+    "res": "Resonance: a boost at the cutoff. Low is smooth; high rings and whistles loudly.",
+    "drive": "How hard the sound is pushed into the filter. Higher is fatter and more distorted; 1 is gentle.",
+    "mode": "LP24 and LP12 keep the lows (24 is steeper, so duller). BP24 and BP12 keep a band in the middle (thin, nasal). HP24 and HP12 keep the highs (thin, airy).",
+    "cv": "How much the CUTOFF input moves the cutoff. At zero the cable does nothing; at the top a full-size signal moves it four octaves."
+  },
+  "try": "Patch NOISE's white into LADDER's in, LADDER's out into OUT's left, and set MODE to BP12. Turn RES up and sweep CUTOFF slowly to hear a whistling wind; or patch an LFO into LADDER's cutoff, turn CV up and let it sweep by itself."
+}

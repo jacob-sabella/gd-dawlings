@@ -6,6 +6,9 @@ extends RefCounted
 
 var wall: RackWall
 
+## Groups with too many modules for keys: their key opens the module finder instead.
+const FINDER_GROUPS: Array[String] = ["Airwindows"]
+
 
 func _init(of: RackWall) -> void:
 	wall = of
@@ -89,7 +92,8 @@ func _build_palette() -> void:
 		var g: String = groups[i]
 		var k := _key(g.to_upper(), key_size,
 				Vector3(wall._x_of(i + 0.5), RackWall.PALETTE_TALL - 0.04, 0.0), "show the %s modules" % g.to_lower(),
-				func() -> void: wall.shown.show_group(g), g == wall.group)
+				(func() -> void: wall.find_asked.emit(g)) if g in FINDER_GROUPS else (func() -> void: wall.shown.show_group(g)),
+				g == wall.group)
 		wall._palette_nodes.append(k)
 		wall.panel.add_child(k)
 		k.set_meta("built", true)
@@ -100,7 +104,9 @@ func _build_palette() -> void:
 			[13.5, "REC", "record what the rack plays onto its track; again to keep it",
 			func() -> void: wall.record_asked.emit(), wall._recording, "rec"],
 			[15.5, "TIDY", "lay the modules out as the signal flows, sources at the left and the OUT at the right",
-			func() -> void: wall.edit_asked.emit("tidy", []), false, "tidy"]]
+			func() -> void: wall.edit_asked.emit("tidy", []), false, "tidy"],
+			[17.5, "FIND", "search every module by name, kind or knob and put one in the case",
+			func() -> void: wall.find_asked.emit(""), false, "find"]]
 	for e in extra:
 		var xk := _key(String(e[1]), key_size, Vector3(wall._x_of(e[0]), RackWall.PALETTE_TALL - 0.04, 0.0), String(e[2]), e[3], e[4])
 		wall._palette_nodes.append(xk)
@@ -113,7 +119,7 @@ func _build_palette() -> void:
 	var legend := [["AUDIO", RackSkin.SIGNAL_AUDIO], ["PITCH", RackSkin.SIGNAL_PITCH],
 			["GATE", RackSkin.SIGNAL_GATE], ["CV", RackSkin.SIGNAL_CV]]
 	for n in legend.size():
-		var tag := _letter("o " + String(legend[n][0]), RackWall.LETTER_CAP, Vector3(wall._x_of(18.5 + n * 2.2), RackWall.PALETTE_TALL - 0.04, 0.0), legend[n][1])
+		var tag := _letter("o " + String(legend[n][0]), RackWall.LETTER_CAP, Vector3(wall._x_of(19.5 + n * 2.2), RackWall.PALETTE_TALL - 0.04, 0.0), legend[n][1])
 		wall._palette_nodes.append(tag)
 		wall.panel.add_child(tag)
 	var items: Array = []

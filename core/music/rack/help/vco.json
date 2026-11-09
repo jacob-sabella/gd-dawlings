@@ -1,0 +1,22 @@
+{
+  "what": "The thing that makes the sound. A VCO (voltage-controlled oscillator) is a tone generator: it produces a steady buzzing wave at the pitch you give it. Almost every patch starts with one.",
+  "how": "It repeats a wave shape many times a second; how many times per second is the pitch you hear. The shape sets the colour of the tone: a sine is pure and soft, a triangle is mellow, a saw is bright and buzzy, a pulse is hollow and nasal. The PITCH input tells it which note to play (a cable from KEYS does that), and the other inputs let other modules bend the sound while it plays.",
+  "ins": {
+    "pitch": "Which note to play. Patch KEYS' pitch output here. Each 1.0 on the cable is one octave up.",
+    "fm": "Frequency modulation: a signal here wobbles the pitch very fast, which adds metallic, bell-like overtones. Patch another VCO or an LFO and turn the FM knob up to hear it.",
+    "pwm": "Moves the pulse width while you play. Only matters when WAVE is PULSE: patch a slow LFO here for a thick, swirling sound.",
+    "sync": "Restarts the wave every time a pulse arrives here. With another oscillator running faster than this one, you get a tearing, screaming lead sound."
+  },
+  "outs": {
+    "out": "The oscillator's sound. Patch it into a filter, an amplifier (VCA) or straight to OUT.",
+    "sub": "The same note one octave lower, as a plain square wave. Mix it in for weight."
+  },
+  "knobs": {
+    "wave": "The wave shape: SINE (pure), TRI (mellow), SAW (bright, buzzy), PULSE (hollow). SAW is a good starting point.",
+    "tune": "Shifts the pitch in semitones, up or down two octaves. A whole piano key per step.",
+    "fine": "A tiny pitch nudge, in cents (a hundredth of a semitone). Use it to tune two oscillators slightly apart for a fat, chorused sound.",
+    "fm": "How strongly the FM input bends the pitch. Zero means the input does nothing.",
+    "pw": "Pulse width: how long each pulse stays high. Only for the PULSE wave. In the middle it sounds hollow; towards the ends it gets thin and nasal."
+  },
+  "try": "Patch KEYS' pitch into VCO's pitch, VCO's out into OUT's left, and play. Then turn WAVE through its four shapes, and add a second VCO tuned a few cents apart for a thicker sound."
+}

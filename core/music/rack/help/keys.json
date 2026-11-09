@@ -1,0 +1,17 @@
+{
+  "what": "Your playing, turned into signals other modules can use. It is how the keyboard (or the song's notes) talks to the rest of the patch.",
+  "how": "When you play a note, KEYS sends out which note it is (pitch), whether a key is down right now (gate, a signal that is 1 while held and 0 otherwise), and how hard you pressed (velocity). It plays one note at a time: if you hold two keys, the most recent one wins. The mod wheel and pitch bend come out as their own signals. Nothing is heard until you patch these into something, usually a VCO for the pitch and an ENV for the gate.",
+  "ins": {},
+  "outs": {
+    "pitch": "Which note is playing, in octaves from middle C (each 1.0 is one octave up). Patch it into a VCO's pitch. It already includes OCT, GLIDE and the pitch bend.",
+    "gate": "1 while a key is held, 0 when all keys are up. Patch it into an ENV's gate to shape the volume of each note. It stays high if you slide from one held key to another.",
+    "vel": "How hard you played the last note, 0 to 1. It keeps its value after you let go. Patch it to a VCA's cv or a filter to make loud playing sound louder or brighter.",
+    "mod": "The mod wheel, 0 to 1. Patch it wherever you want a hand-controlled amount, for example into a filter's cutoff input.",
+    "bend": "The pitch-bend wheel on its own, -1 to 1, centred at 0. The pitch output already bends by up to two semitones, so use this only to bend something else."
+  },
+  "knobs": {
+    "oct": "Shifts every note up or down by whole octaves, from -3 to +3. 0 plays the notes as written.",
+    "glide": "Makes the pitch slide to each new note instead of jumping. At 0 it jumps; towards 1 the slide takes about a second."
+  },
+  "try": "Patch KEYS' pitch into VCO's pitch and KEYS' gate into ENV's gate, ENV's out into VCA's cv and VCO's out into VCA's in, then VCA's out into OUT's left. Play some notes, then turn GLIDE up and play two notes in turn to hear the pitch slide."
+}

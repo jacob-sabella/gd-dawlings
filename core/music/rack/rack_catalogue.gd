@@ -10,6 +10,8 @@ extends RefCounted
 ## the lines sent to the engine speak engine names.
 
 const PATH := RackModuleDef.PATH
+## A group no palette key opens: the modules other modules are built on (the engine's AIRWINDOWS under every effect).
+const HIDDEN_GROUP := "Internal"
 
 static var _modules := {}
 static var _order: Array[String] = []
@@ -74,7 +76,8 @@ static func _forget() -> void:
 static func groups() -> Array[String]:
 	var out: Array[String] = []
 	for g in ModRegistry.ensure_current().groups():
-		out.append(g["id"])
+		if g["id"] != HIDDEN_GROUP:
+			out.append(g["id"])
 	return out
 
 

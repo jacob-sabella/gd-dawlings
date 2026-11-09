@@ -1,0 +1,13 @@
+{
+  "what": "Sample and hold: it grabs the value of a signal at one instant and then holds it steady until the next grab. It turns a changing signal into stepped values.",
+  "how": "Each time a pulse arrives at TRIG, it looks at what is at IN right now and keeps that value on its output, unchanged, until the next pulse. If nothing is patched into IN, it picks a new random number between -1 and 1 on each pulse instead. Patched to pitch, that gives a random melody; patched through QUANT first, a random melody that stays in key.",
+  "ins": {
+    "in": "The signal to sample. Leave it empty to get a random value (-1 to 1) on each trigger.",
+    "trig": "The pulse that says take a new sample now. Patch CLOCK's beat or 8th here. It samples on the rising edge of each pulse."
+  },
+  "outs": {
+    "out": "The held value. Steady between triggers, then jumps to the new value."
+  },
+  "knobs": {},
+  "try": "Patch CLOCK's 8th into S&H's trig, S&H's out into QUANT's in, QUANT's out into VCO's pitch, VCO into OUT's left. With nothing in S&H's in, you get a random melody locked to a scale."
+}

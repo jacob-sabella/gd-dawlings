@@ -1,0 +1,16 @@
+{
+  "what": "An amplifier that is controlled by another signal: the louder that signal, the louder the sound passes through. It is how a note gets a start and an end instead of droning forever.",
+  "how": "VCA stands for voltage-controlled amplifier. The sound goes in at IN, and the signal at CV (a control signal, a number from 0 up to about 1) is the volume: 0 is silence, 1 is full. Patch an ENV (which rises when you press a key and fades when you let go) into CV and the sound follows its shape. With nothing in CV the sound passes at full level, set by the LEVEL knob.",
+  "ins": {
+    "in": "The sound to make louder or quieter (audio, -1..1).",
+    "cv": "The volume control, from 0 (silent) to 1 (full); below 0 counts as 0, and above 1.5 is held at 1.5. Patch an ENV or an LFO here. Unpatched, the sound just passes through."
+  },
+  "outs": {
+    "out": "The sound at the level the control signal asks for. Patch it into a filter, an effect or OUT."
+  },
+  "knobs": {
+    "level": "An overall volume on top of the control signal: 0 is silent, 1 is unchanged, 2 is double.",
+    "curve": "LIN follows the control signal directly. EXP squares it, so low levels get quieter faster: fades sound smoother and the tail drops off more quickly, which is usually closer to what the ear expects."
+  },
+  "try": "Patch KEYS' pitch into VCO's pitch, VCO's out into VCA's in, ENV's out into VCA's cv, KEYS' gate into ENV's gate, and VCA's out into OUT's left. Play and each note will swell and fade; change the ENV's settings to change how."
+}

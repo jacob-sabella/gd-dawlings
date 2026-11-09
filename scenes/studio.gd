@@ -225,6 +225,9 @@ var looper_length := Looper.LENGTH_DEFAULT
 ## surface hung again with each venue at its `modular_spot`; null in AR. Its voice (RackVoice, the
 ## engine), the room's row `rack` {patch, track} (RackPatch), and the computer keys as its keys.
 var rack_wall: RackWall
+## The help card of a rack module (RackHelpScreen), opened by a click on a module's name.
+var rack_help: RackHelpScreen
+var rack_finder: RackFinderScreen
 var rack_voice: RackVoice
 ## Loads the host's saved rack when the wall is built and saves it a moment after each change.
 var rack_files := RackAutosave.new()

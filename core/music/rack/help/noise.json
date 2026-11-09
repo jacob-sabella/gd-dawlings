@@ -1,0 +1,11 @@
+{
+  "what": "A source of random hiss. Noise is the raw material for drums, wind, and breath-like sounds.",
+  "how": "It produces a different random level thousands of times a second, which you hear as a hiss. White noise has equal energy at all pitches and sounds bright and harsh like a radio between stations. Pink noise has more low pitches than high, so it sounds softer and more like rain or a waterfall. There are no knobs; shape it with a filter and a VCA.",
+  "ins": {},
+  "outs": {
+    "white": "Bright, harsh hiss. Patch it into a filter, then a VCA, for snares, hi-hats and wind.",
+    "pink": "Softer, deeper hiss. A good choice for rain, ocean or a gentler noise bed."
+  },
+  "knobs": {},
+  "try": "Patch NOISE's white into SVF's input, SVF's out into OUT's left, and sweep SVF's cutoff to hear the hiss go from rumble to bright. Then swap to pink and compare."
+}

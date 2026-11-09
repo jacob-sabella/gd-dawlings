@@ -1,0 +1,29 @@
+{
+  "what": "A texture maker. It records the sound you give it into a short memory and plays it back as a cloud of tiny snippets called grains, which can turn a held note into shimmering, glitchy or ambient textures. With SIZE turned all the way up it becomes a pitch-shifting echo instead.",
+  "how": "BEADS keeps the last few seconds of its input. A grain is a very short piece of that recording, played with a soft fade in and out. TIME chooses where in the past the grains are taken from, SIZE how long each one is, PITCH how high or low they play, and DENSITY how many are fired off. The grains are mixed with the dry input (MIX) and then pass through a reverb. Nothing happens until sound is going in, because there is nothing recorded to scatter.",
+  "ins": {
+    "l": "The sound to record (audio, about -1..1), left side. If nothing is patched into the right input, this one feeds both sides.",
+    "r": "The right side of a stereo input. Leave it empty for a mono source.",
+    "seed": "An optional gate (0 or 1) that fires the grains by hand. Patched in, grains are made while the gate is high (at the DENSITY rate), and each new pulse starts one. Unpatched, the grains run on their own.",
+    "freeze": "A gate (0 or 1). While it is high BEADS stops recording and keeps playing grains from what it has. It does the same job as the FREEZE switch.",
+    "time": "A control signal added to the TIME knob, so another module can move the grain position. Range -1..1.",
+    "pitch": "A control signal added to the PITCH knob, in octaves (1.0 is one octave up). Patch KEYS' pitch here to play the grains like an instrument; up to 4 octaves each way."
+  },
+  "outs": {
+    "l": "The left side of the result: grains, dry sound and reverb mixed. Patch it into OUT or a further effect.",
+    "r": "The right side of the result. Patch both sides to OUT's left and right for the stereo spread."
+  },
+  "knobs": {
+    "time": "Where in the recorded past the grains are taken from. Low is the most recent sound, high reaches back several seconds. In the delay mode it sets the length of the echoes.",
+    "size": "How long each grain is: short grains sound grainy and buzzy, long ones sound smooth and recognisable. All the way up it switches to the echo mode.",
+    "shape": "The fade-in and fade-out of each grain. Low gives sharp, clicky grains; high gives soft, rounded, blurred ones.",
+    "pitch": "Pitch of the grains in semitones, up or down two octaves. A whole piano key per step; zero plays them as recorded.",
+    "density": "How many grains are fired. In the middle there are none (silence, unless SEED is patched). Moving away from the middle in either direction makes more of them; to the left they fall in a regular pattern, to the right they are random.",
+    "feedback": "Sends the output back into the memory so it plays again and again. Low gives gentle repeats, high builds up into a wash, and the very top can run away loudly.",
+    "mix": "Dry against wet. Left is only the sound you put in; right is only the grains and reverb.",
+    "reverb": "How much reverb is added to the result: none at the left, a big hall at the right.",
+    "media": "The flavour of the memory. DIRTY TAPE is lo-fi and noisy with wobbling pitch; CLEAN TAPE is smoother tape; VINTAGE is a grainy old digital sampler; DIGITAL is clean. Changing it clears the memory.",
+    "freeze": "OFF records all the time. ON stops recording so the grains keep playing from the last few seconds you captured."
+  },
+  "try": "Patch KEYS' pitch into VCO's pitch, VCO's out into BEADS' l, and BEADS' l and r into OUT's left and right. Set MIX to the right, play a few notes, and then turn FREEZE to ON. Listen for the grains going on with the last notes, and turn TIME, SIZE and DENSITY to change the cloud."
+}

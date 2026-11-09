@@ -80,6 +80,13 @@ given. The rules, `core/music/rack/rack_cushion.gd`:
   `core/music/rack/airwindows.json` (from `rack --describe-airwindows`) holds each effect's parameter names and
   starting values; a test holds it to the engine. Moving to a new Airwindows commit: bump the submodule, check its
   LICENSE and file headers, rebuild, regenerate that file and `modules.json` (the effect knob's names).
+  Each effect is also a rack module of its own: `tools/airwindows_mods.py` writes `mods/builtin/airwindows/mod.json` with
+  532 composites (`builtin.aw.<effect>`: the engine module with EFFECT and the starting values set, knobs named for the
+  effect's parameters, kinds and text from `airwindows_help.json`); `--check` is what the test runs. The engine's own
+  `builtin.airwindows` stays as their base, in the hidden group `Internal`. Rerun it after either JSON file changes.
+- **Finding a module**: 532 effects do not fit on palette keys, so the AIRWINDOWS key and the FIND key open
+  `RackFinderScreen` (search by name, kind, knob or blurb; group and kind filters; ADD). The ranking and filtering are
+  `RackFinder` (tested apart from the screen). A group named in `RackWallKeys.FINDER_GROUPS` opens the finder, not keys.
 - **A custom face** (`out`, `scope`, `seq` are built in): a `face` kind in the module entry, drawn by
   `RackWallModules`; user mods may only use `standard`.
 - **A new op on the patch**: add it to `RackPatch.answer`, handle it in `RackVoice` if it reaches the engine, and add

@@ -1,0 +1,26 @@
+{
+  "what": "A dynamics unit: it lets a sound through louder or quieter, duller or brighter, according to a control that it makes itself. The control comes from a trigger, from the loudness of a sound, or from a self-running chaotic wobble. Think of it as a volume control and a filter that move on their own.",
+  "how": "FUNCTION chooses where the control comes from. ENVELOPE makes a rise and fall each time the EXCITE input gets a pulse; VACTROL does the same with the slightly lazy, glowing response of the lamp-based gates that inspired it; FOLLOWER measures how loud the sound on EXCITE is and copies it; COMPRESSOR turns loud parts down; LORENZ wobbles by itself in an unpredictable way. MODE chooses whether the control moves the volume, the brightness (a low-pass filter, which removes high treble when it is closed) or both. Nothing is connected between inputs inside the module: patch the same signal to IN and EXCITE yourself if you want the sound to follow itself.",
+  "ins": {
+    "in": "The sound to be shaped (audio, about -1..1).",
+    "excite": "The signal that drives the control: a trigger or gate (0 or 1) for ENVELOPE and VACTROL, the sound to measure for FOLLOWER, an optional sidechain for COMPRESSOR (if empty, the compressor listens to IN), and extra speed for LORENZ. It is boosted by the EXCITE knob.",
+    "shape_cv": "A control signal added to the SHAPE knob. Range -1..1; the total stays between 0 and 1.",
+    "resp_cv": "A control signal added to the RESPONSE knob. Range -1..1; the total stays between 0 and 1."
+  },
+  "outs": {
+    "out": "The shaped sound. Patch it into OUT or an effect.",
+    "cv": "The control signal that is working (0..1), volume in GAIN and GAIN+FILTER modes or brightness in FILTER mode. Patch it into another module's control jack to use the same movement elsewhere."
+  },
+  "knobs": {
+    "function": "Where the control comes from: ENVELOPE (a rise and fall after each pulse), VACTROL (a softer, lamp-like pulse response), FOLLOWER (copies the loudness of EXCITE), COMPRESSOR (turns loud parts down), LORENZ (a self-running chaotic wobble).",
+    "mode": "What the control changes: GAIN is the volume only, FILTER is a low-pass filter only (the sound gets duller as the control falls), GAIN+FILTER does both.",
+    "shape": "The first main control, by function. ENVELOPE: low is an instant attack with a short to medium decay, going up adds a longer attack, and higher still a slow rise. VACTROL: how slowly it opens and closes. FOLLOWER: how fast it reacts; low is quick and twitchy, high is slower. COMPRESSOR: the threshold, how loud a sound must get before it is turned down. LORENZ: the speed of the wobble.",
+    "resp": "The second main control, by function. ENVELOPE, VACTROL and FOLLOWER: how much the low-pass filter moves; the middle sweeps it fully, left barely moves it, right keeps it more open. COMPRESSOR: in the middle, no compression; to the left, compression gets stronger; to the right, it adds extra makeup gain to quiet parts. LORENZ: balance of wobble between volume (right) and filter (left). In GAIN mode the filter part is not heard.",
+    "alt": "A second version of each function. ENVELOPE: A rises and falls, B holds open while the pulse stays high. VACTROL: B is a plucked, ringing response. FOLLOWER: B moves only the filter, not the volume. COMPRESSOR: B is a softer, slightly slower setting. Not used by LORENZ.",
+    "amount": "How strongly the control acts. At full the control moves the sound as far as it can; at zero it acts only at the OFFSET level. For the compressor, it scales how much it turns down.",
+    "offset": "The resting level of the control: how open the volume or filter is when the control is idle. Zero idles shut. For the compressor, adds up to 12 decibels of makeup gain.",
+    "excite": "How strongly the EXCITE input is boosted before it is used, from nothing to four times. Turn it up if a quiet pulse or sound does not trigger it.",
+    "level": "The output volume, from silent through 1 (as it comes out) to one and a half times louder."
+  },
+  "try": "Patch KEYS' gate into STREAMS' excite, KEYS' pitch into VCO's pitch, VCO's out into STREAMS' in, and STREAMS' out into OUT's left. Leave FUNCTION on ENVELOPE and MODE on GAIN+FILTER, play short notes, and turn SHAPE from left to right to hear a snappy pluck become a slow swell."
+}

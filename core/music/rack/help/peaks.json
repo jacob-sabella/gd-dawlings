@@ -1,0 +1,22 @@
+{
+  "what": "A single-channel machine that makes either control signals (envelopes, slow waves, steps, pulses) or drum sounds, chosen by FUNCTION. One module is therefore many tools in one.",
+  "how": "FUNCTION picks what PEAKS is. The four knobs P1 to P4 change meaning with it, so check the knob entries below for the chosen function. A pulse into TRIG starts most functions: it opens an envelope, restarts a wave, bounces the ball, advances the sequencer or hits a drum. The control functions play on the CV output (a signal to patch into other modules' control jacks); the four drum functions play on the OUT output (real sound, to patch into OUT or an effect).",
+  "ins": {
+    "trig": "A gate or trigger (0 or 1, high above 0.5) that starts the function: an envelope opens while it is held, a drum is hit, a sequencer steps. Patch KEYS' gate or a CLOCK output here.",
+    "reset": "A gate that restarts the MINI SEQ back to its first step. Other functions ignore it.",
+    "mod1": "A control signal added to P1 (at half strength, so a -1..1 signal moves it by half its range). Use another module to move P1 on its own.",
+    "mod2": "A control signal added to P2, in the same way."
+  },
+  "outs": {
+    "out": "Audio (-1..1). The four drum functions (BASS DRUM, SNARE, HIGH HAT, FM DRUM) play here. Silent for every other function. Patch it into OUT or an effect.",
+    "cv": "The control signal for every function except the drums. ENVELOPE, BOUNCING BALL are 0..1; LFO, TAP LFO and MINI SEQ swing -1..1; the pulse functions give 0 or 1. Patch it into another module's control jack. Silent for drums."
+  },
+  "knobs": {
+    "function": "What PEAKS does: ENVELOPE, LFO (a repeating wave), TAP LFO (a wave whose speed you tap with TRIG), BOUNCING BALL, MINI SEQ (a four-step sequencer), PULSE SHAPER (reshapes a trigger into delayed, repeated pulses), PULSE RANDOM (randomly lets pulses through), and four drums: BASS DRUM, SNARE, HIGH HAT, FM DRUM.",
+    "p1": "ENVELOPE: attack, the time to rise. LFO: rate (speed). TAP LFO: output level. BOUNCING BALL: gravity (how fast the bounces die away). MINI SEQ: level of step 1 (-1..1, middle is 0). PULSE SHAPER: delay before the pulse. PULSE RANDOM: chance a pulse is let through. BASS DRUM: pitch. SNARE: pitch. FM DRUM: pitch. HIGH HAT: not used.",
+    "p2": "ENVELOPE: decay, the time to fall to the sustain level. LFO: wave shape (sine, triangle, square, steps, noise). TAP LFO: wave shape, as in LFO. BOUNCING BALL: bounce, how springy the ball is. MINI SEQ: level of step 2. PULSE SHAPER: pulse length. PULSE RANDOM: repeat. BASS DRUM: punch. SNARE: tone. FM DRUM: amount of FM (the metallic edge). HIGH HAT: not used.",
+    "p3": "ENVELOPE: sustain, the level held while TRIG stays high. LFO: a parameter of the chosen wave shape. TAP LFO: the same. BOUNCING BALL: height the ball is dropped from. MINI SEQ: level of step 3. PULSE SHAPER: gap between repeats. PULSE RANDOM: delay. BASS DRUM: tone (brightness). SNARE: snap (noisy rattle). FM DRUM: decay (how long it rings). HIGH HAT: not used.",
+    "p4": "ENVELOPE: release, the time to fall to zero once TRIG ends. LFO: phase, where in the wave a restart begins. TAP LFO: phase. BOUNCING BALL: initial speed. MINI SEQ: level of step 4. PULSE SHAPER: number of repeats. PULSE RANDOM: jitter (random timing shift). BASS DRUM: decay (how long it rings). SNARE: decay. FM DRUM: noise. HIGH HAT: not used."
+  },
+  "try": "Patch CLOCK's beat into PEAKS' trig, set FUNCTION to BASS DRUM, and patch PEAKS' out into OUT's left. You should hear a drum on every beat; then turn P1 for pitch and P4 for how long it rings. Then switch FUNCTION to ENVELOPE and patch CV into a VCA's cv to shape a note instead."
+}

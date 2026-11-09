@@ -1,0 +1,15 @@
+{
+  "what": "A small screen on the wall that draws the shape of the sound you patch in, so you can see what the sound looks like. The sound itself passes through untouched.",
+  "how": "The screen draws the wave as a line moving up and down with the sound: a smooth sine is a gentle hill, a saw is a ramp, a pulse is a box. It waits for the wave to cross zero going up, so a steady note stands still on the screen. Patch it in the middle of a chain to check what a module did, or just on a side branch. It changes nothing you hear.",
+  "ins": {
+    "in": "The signal to draw and pass on. Audio (-1..1) or a control signal; the screen shows -1 to 1."
+  },
+  "outs": {
+    "out": "An exact copy of the input. Patch it onward (to a filter, OUT or whatever comes next), or leave it empty and use the scope as a side branch."
+  },
+  "knobs": {
+    "time": "How much time fits across the screen, from 1 to 100 milliseconds. Small shows one wave stretched out; large squeezes in many waves. A low note needs a bigger value to see a whole cycle.",
+    "gain": "Makes the drawing taller or shorter, from a quarter to four times. Only the picture changes, not the sound."
+  },
+  "try": "Patch VCO's out into SCOPE's in and SCOPE's out into OUT's left. Play a note, turn the VCO's WAVE through its shapes and watch each one on the screen. Raise TIME if you see only a blur."
+}

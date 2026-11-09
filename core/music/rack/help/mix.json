@@ -1,0 +1,21 @@
+{
+  "what": "A mixer: it adds up to four sounds into one, each with its own volume.",
+  "how": "Each of the four inputs has its own knob that sets how loud that sound is in the result, and OUT sets the volume of the whole. The sounds are simply added, so several loud ones together can get very loud; turn the knobs down if it sounds harsh or crackly.",
+  "ins": {
+    "in1": "The first sound to mix (audio, -1..1). Its volume is knob 1.",
+    "in2": "The second sound to mix. Its volume is knob 2.",
+    "in3": "The third sound to mix. Its volume is knob 3.",
+    "in4": "The fourth sound to mix. Its volume is knob 4."
+  },
+  "outs": {
+    "out": "All four sounds added together, then scaled by OUT. Patch it into a filter, an effect or OUT."
+  },
+  "knobs": {
+    "l1": "Volume of input 1: 0 is silent, 0.7 is the default, 1.5 is louder than the original.",
+    "l2": "Volume of input 2.",
+    "l3": "Volume of input 3.",
+    "l4": "Volume of input 4.",
+    "master": "Volume of the whole mix after the four are added: 0 is silent, 1 is unchanged."
+  },
+  "try": "Patch two VCOs (one tuned a few semitones above the other) into MIX's in1 and in2, MIX's out into OUT's left, and listen to the two notes as a chord. Turn knob 2 down and up to bring the second voice in and out."
+}
