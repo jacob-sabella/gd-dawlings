@@ -98,14 +98,23 @@ func _build_palette() -> void:
 		wall.panel.add_child(k)
 		k.set_meta("built", true)
 	wall._extras.clear()
-	var extra := [[9.5, "PLAY", "play the rack from the computer keys", func() -> void: wall.keys_asked.emit(), wall._playing, "play"],
-			[11.5, _track_legend(), "choose the track the rack sounds through (round the tracks, then none)",
+	# The big one: two slots wide and taller, lit green when the rack is on.
+	var big := _key("ON" if wall._power else "OFF", Vector2(RackWall.MODULE_WIDE * 2.0 - 0.008, 0.075),
+			Vector3(wall._x_of(10.0), RackWall.PALETTE_TALL - 0.04, 0.0),
+			"turn the whole rack %s (off, it makes no sound and uses no processor)" % ("off" if wall._power else "on"),
+			func() -> void: wall.power_asked.emit(), wall._power)
+	wall._palette_nodes.append(big)
+	wall.panel.add_child(big)
+	big.set_meta("built", true)
+	wall._extras["power"] = big
+	var extra := [[11.5, "KEYBOARD", "play the rack from the computer keys: the letter rows become a piano", func() -> void: wall.keys_asked.emit(), wall._playing, "play"],
+			[13.5, _track_legend(), "choose the track the rack sounds through (round the tracks, then none)",
 			func() -> void: wall.track_asked.emit(), wall._track > 0, "track"],
-			[13.5, "REC", "record what the rack plays onto its track; again to keep it",
+			[15.5, "REC", "record what the rack plays onto its track; again to keep it",
 			func() -> void: wall.record_asked.emit(), wall._recording, "rec"],
-			[15.5, "TIDY", "lay the modules out as the signal flows, sources at the left and the OUT at the right",
+			[17.5, "TIDY UP", "lay the modules out as the signal flows, sources at the left and the OUT at the right",
 			func() -> void: wall.edit_asked.emit("tidy", []), false, "tidy"],
-			[17.5, "FIND", "search every module by name, kind or knob and put one in the case",
+			[19.5, "MODULES", "browse and search every module by name, kind or knob and put one in the case",
 			func() -> void: wall.find_asked.emit(""), false, "find"]]
 	for e in extra:
 		var xk := _key(String(e[1]), key_size, Vector3(wall._x_of(e[0]), RackWall.PALETTE_TALL - 0.04, 0.0), String(e[2]), e[3], e[4])
@@ -115,11 +124,17 @@ func _build_palette() -> void:
 		wall._extras[e[5]] = xk
 		if e[5] == "play":
 			wall.play_key = xk
+	# Two captions say what the keys of the top row are for: the groups add a module, the rest runs the rack.
+	var dim := Color(0.62, 0.68, 0.78)
+	for cap in [["ADD A MODULE  -  pick a group, then a key below", wall._x_of(4.5)], ["THE RACK", wall._x_of(15.5)]]:
+		var tag := _letter(String(cap[0]), RackWall.LETTER_CAP * 0.8, Vector3(float(cap[1]), RackWall.PALETTE_TALL - 0.004, 0.0), dim)
+		wall._palette_nodes.append(tag)
+		wall.panel.add_child(tag)
 	# What the cables' colours mean.
 	var legend := [["AUDIO", RackSkin.SIGNAL_AUDIO], ["PITCH", RackSkin.SIGNAL_PITCH],
 			["GATE", RackSkin.SIGNAL_GATE], ["CV", RackSkin.SIGNAL_CV]]
 	for n in legend.size():
-		var tag := _letter("o " + String(legend[n][0]), RackWall.LETTER_CAP, Vector3(wall._x_of(19.5 + n * 2.2), RackWall.PALETTE_TALL - 0.04, 0.0), legend[n][1])
+		var tag := _letter("o " + String(legend[n][0]), RackWall.LETTER_CAP, Vector3(wall._x_of(21.5 + n * 2.2), RackWall.PALETTE_TALL - 0.04, 0.0), legend[n][1])
 		wall._palette_nodes.append(tag)
 		wall.panel.add_child(tag)
 	var items: Array = []
@@ -145,5 +160,5 @@ func _build_palette() -> void:
 
 func _track_legend() -> String:
 	if wall._track <= 0:
-		return "TRK -"
+		return "TRACK -"
 	return ("T%d %s" % [wall._track, wall._track_name]).substr(0, 8)

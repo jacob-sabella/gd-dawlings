@@ -1,0 +1,19 @@
+{
+  "what": "Makes any sound ring like a struck object, such as a bar, plate or tube, at the pitch you give it.",
+  "how": "A set of tuned resonances is excited by the sound at IN and rings with it. The result is the input colored by a ringing object. STRUCTURE changes how the resonances are spaced (the kind of object), BRIGHT how much high end it has, and DAMPING how long it rings.",
+  "ins": {
+    "in": "The sound to make ring (audio). Drums, clicks or noise bursts work well.",
+    "pitch": "Pitch in octaves (1 volt per octave, 0 is middle C). Patch KEYS' pitch here."
+  },
+  "outs": {
+    "out": "The ringing sound (audio)."
+  },
+  "knobs": {
+    "tune": "Shifts the pitch in semitones, -24 to 24 (two octaves down to two up), added to the pitch input.",
+    "structure": "The spacing of the resonances, 0 to 1, which changes the kind of object.",
+    "bright": "How much high end rings, 0 to 1.",
+    "damp": "How quickly the ring dies away, 0 to 1. Low is long.",
+    "drive": "How hard the input is pushed in, 0 to 2. Higher is louder and rougher."
+  },
+  "try": "Patch DRUM (SNARE) into RESON's in, KEYS' pitch into RESON's pitch and RESON's out into OUT. Play notes while the clock drives the drum, and move STRUCTURE."
+}

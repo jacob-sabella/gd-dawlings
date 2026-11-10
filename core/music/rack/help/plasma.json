@@ -1,0 +1,17 @@
+{
+  "what": "Eye candy: a screen on the wall of slowly flowing, glowing colour, like a lava lamp that your patch stirs.",
+  "how": "The picture is a drifting mix of waves. Three signals (RED, GREEN and BLUE inputs) each push a different part of the picture around: a louder signal changes its pattern and makes the whole screen brighter. It makes no sound itself; the OUT is only all three inputs added together, so you can pass signals through. It shows its picture even when nothing downstream is heard.",
+  "ins": {
+    "red": "A signal that stirs the picture (audio or control).",
+    "green": "A second signal that stirs the picture.",
+    "blue": "A third signal that stirs the picture."
+  },
+  "outs": {
+    "out": "The three inputs added together."
+  },
+  "knobs": {
+    "flow": "How fast the picture drifts when nothing is patched.",
+    "hue": "The base colour of the picture, turning round the colour wheel."
+  },
+  "try": "Patch a kick drum into RED, an LFO (a slow wobble) into GREEN and a hi-hat into BLUE. The colours then pulse with the beat and swirl with the LFO."
+}

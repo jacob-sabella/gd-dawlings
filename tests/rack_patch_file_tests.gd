@@ -50,7 +50,8 @@ func _patch_with_a_stranger() -> Dictionary:
 func a_patch_file_round_trips() -> void:
 	_clean()
 	for name in RackPatch.presets():
-		var p := RackPatch.preset(name)
+		# (A preset written before a knob was added lacks it; sanitize fills it in, as a load does.)
+		var p := RackPatch.sanitize(RackPatch.preset(name))
 		var d := RackPatch.to_dict(p, "T", 3)
 		var text := RackPatchFile.text_of(d)
 		var back := RackPatch.from_dict(JSON.parse_string(text))

@@ -1,0 +1,18 @@
+{
+  "what": "An oscillator made of short sine grains, for vocal, plucky or smeared tones.",
+  "how": "Each cycle of the pitch contains a short burst (grain) of a sine at the formant frequency. FORMANT sets that grain's pitch and so the colour; SHAPE and BLEED change how the grains look and how much leaks between them, from clean to smeared.",
+  "ins": {
+    "pitch": "Pitch in octaves (1 volt per octave, 0 is middle C). Patch KEYS' pitch here.",
+    "formant": "A control signal that moves the formant. Each 1.0 of signal doubles its frequency (an octave)."
+  },
+  "outs": {
+    "out": "The grain tone (audio)."
+  },
+  "knobs": {
+    "formant": "The grain frequency, 100 to 5000 Hz. Low is dark and round; high is bright and nasal.",
+    "shape": "Waveshaping of the grain, 0 to 1. It changes how sharp or smooth the tone is.",
+    "bleed": "How much formant leaks through between grains, 0 to 1. Fills in the gaps for a thicker, smeared sound.",
+    "tune": "Shifts the pitch in semitones, -24 to 24 (two octaves down to two up), added to the pitch input."
+  },
+  "try": "Patch KEYS' pitch into GRAINLET's pitch, GRAINLET's out through a VCA and an AD into OUT. Play a low note while you sweep FORMANT up for a talking effect."
+}

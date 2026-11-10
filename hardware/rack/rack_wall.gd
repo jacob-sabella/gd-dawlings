@@ -39,6 +39,8 @@ signal told(text: String)
 signal track_asked()
 ## The REC key was pressed.
 signal record_asked()
+## The big POWER key was pressed: the player asks to turn the rack on or off.
+signal power_asked()
 
 const COLS := RackLayout.COLS
 const ROWS := RackLayout.ROWS
@@ -111,6 +113,8 @@ var _scopes := {}
 var _track := 0
 var _track_name := ""
 var _recording := false
+## Whether the rack is on (the room's word; it sounds only then).
+var _power := true
 var _playing := false
 var _extras := {}
 var _lamp_hot: StandardMaterial3D
@@ -343,6 +347,10 @@ static func _jack_key(path: String, is_output: bool) -> String:
 func set_track(t: int, track_name := "") -> void: shown.set_track(t, track_name)
 
 
+## The rack's power, on the big key. (`RackWallShow.set_power`)
+func set_power(on: bool) -> void: shown.set_power(on)
+
+
 ## `RackWallShow.set_recording`.
 func set_recording(on: bool) -> void: shown.set_recording(on)
 
@@ -421,14 +429,14 @@ func reach_controls() -> Array[ControlAffordance]:
 		if is_instance_valid(_pads[id]["node"]):
 			out.append(_pads[id]["node"])
 	for key in module_nodes:
-		var grip := (module_nodes[key] as Node).get_node_or_null("Grip") if not str(key).ends_with("/x") else null
+		var grip := (module_nodes[key] as Node).get_node_or_null("Grip") if not str(key).contains("/") else null
 		if grip is ControlAffordance:
 			out.append(grip)
 	for n in _palette_nodes:
 		if n is ControlAffordance:
 			out.append(n)
 	for key in module_nodes:
-		if str(key).ends_with("/x"):
+		if str(key).ends_with("/x") or str(key).ends_with("/?"):
 			out.append(module_nodes[key])
 	for n in get_children():
 		if n is SurfaceHandle:

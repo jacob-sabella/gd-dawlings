@@ -1,0 +1,17 @@
+{
+  "what": "A band filter that gives you two outputs at once: only one band of the sound, and everything except that band.",
+  "how": "A filter lets some pitches through and turns others down. SOAP centres on FREQ. Its PASS output keeps a band around that pitch and removes the rest. Its REJECT output does the opposite and cuts the band out. WIDTH sets how wide that band is.",
+  "ins": {
+    "in": "The sound to filter (audio, -1..1). Noise or a bright wave show it best.",
+    "cutoff": "A control signal that moves the centre of the band. Each 1.0 of signal doubles the frequency (an octave), -1.0 halves it. Patch an LFO or ENV here for sweeps."
+  },
+  "outs": {
+    "pass": "Only the band around FREQ. Thin and focused, like a wah or a radio.",
+    "reject": "Everything except the band: the sound with a hole cut at FREQ."
+  },
+  "knobs": {
+    "freq": "The centre of the band, 40 to 12000 Hz.",
+    "width": "How wide the band is, 10 to 6000 Hz. Narrow is a focused whistle, wide is a broad range."
+  },
+  "try": "Patch NOISE into SOAP's in and SOAP's pass into OUT. Sweep FREQ by hand, then patch an LFO into the cutoff input for an automatic sweep. Swap to the reject output to hear the band removed."
+}

@@ -1,0 +1,16 @@
+{
+  "what": "A random gate: each time a gate arrives it flips a coin and sends it to one of two outputs.",
+  "how": "At the start of each incoming gate, a random choice is made. If it comes up heads, the gate comes out of HEADS for as long as it lasts; otherwise it comes out of TAILS. CHANCE is how likely heads is. Patch a regular clock in to make a rhythm that is the same on average but never quite the same twice.",
+  "ins": {
+    "gate": "The gate or pulse to send on. Patch CLOCK's beat or 8th here.",
+    "chance": "A control signal added to the CHANCE knob (the total is kept between 0 and 1). Patch an LFO or ENV to make the odds change over time."
+  },
+  "outs": {
+    "heads": "The gate, when the coin came up heads. Patch it to a drum's trig.",
+    "tails": "The gate, when the coin came up tails. Patch it to something else, for a rhythm that plays one thing or the other."
+  },
+  "knobs": {
+    "chance": "The chance of heads, 0 to 1. 0 is never, 1 is always and 0.5 is a fair coin."
+  },
+  "try": "Patch CLOCK's 8th into COIN's gate, HEADS into a DRUM (KICK) trig and TAILS into a second DRUM (HAT) trig. Both drums go through MIX to OUT. Move CHANCE to shift the balance between them."
+}

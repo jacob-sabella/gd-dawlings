@@ -1,0 +1,16 @@
+{
+  "what": "Random clicks, some loud and some quiet, as often as you ask: crackle, rain and random triggers.",
+  "how": "DENSITY is the average number of clicks per second. They land at random, each with a random strength. The OUT jack gives the clicks themselves as sound or a control signal; the TRIG jack gives a short pulse for each click, so it can trigger envelopes and drums.",
+  "ins": {
+    "rate": "A control signal that changes the density. Each 1.0 of signal doubles the number of clicks (an octave), -1.0 halves it."
+  },
+  "outs": {
+    "out": "The clicks, each at a random size up to LEVEL. Patch it through a filter or into a resonator.",
+    "trig": "A short pulse (1 ms) for every click. Patch it to a drum, an AD or any trig input."
+  },
+  "knobs": {
+    "density": "The average clicks per second, 0.2 to 400. Low is sparse random hits; high is crackle or a fine noise.",
+    "level": "The size of the clicks on the OUT jack, 0 to 1. It does not change the TRIG output."
+  },
+  "try": "Patch DUST's trig into DRUM's trig (KIND HAT) and DRUM's out into OUT for random hats. Or send DUST's out into KARPLUS's in to hear plucked strings at random."
+}

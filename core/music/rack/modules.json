@@ -381,6 +381,15 @@
                     "def": 0,
                     "curve": "lin",
                     "names": ""
+                },
+                {
+                    "id": "offset",
+                    "label": "OFFSET",
+                    "lo": -100,
+                    "hi": 200,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "ms"
                 }
             ]
         },
@@ -1464,6 +1473,1511 @@
             "knobs": []
         },
         {
+            "type": "phaser",
+            "title": "PHASER",
+            "group": "Time",
+            "blurb": "Sweeps notches through a sound for a slow, swirling whoosh.",
+            "ins": [
+                "in"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "rate",
+                    "label": "RATE",
+                    "lo": 0.02,
+                    "hi": 8,
+                    "def": 0.3,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "depth",
+                    "label": "DEPTH",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.7,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "freq",
+                    "label": "FREQ",
+                    "lo": 100,
+                    "hi": 6000,
+                    "def": 1000,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "fb",
+                    "label": "FEEDBACK",
+                    "lo": 0,
+                    "hi": 0.75,
+                    "def": 0.3,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "poles",
+                    "label": "POLES",
+                    "lo": 0,
+                    "hi": 7,
+                    "def": 3,
+                    "curve": "step",
+                    "names": "1|2|3|4|5|6|7|8"
+                },
+                {
+                    "id": "mix",
+                    "label": "MIX",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "flanger",
+            "title": "FLANGER",
+            "group": "Time",
+            "blurb": "A short, swept delay that sounds like a jet passing: combs sliding through a sound.",
+            "ins": [
+                "in"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "rate",
+                    "label": "RATE",
+                    "lo": 0.02,
+                    "hi": 6,
+                    "def": 0.2,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "depth",
+                    "label": "DEPTH",
+                    "lo": 0,
+                    "hi": 0.93,
+                    "def": 0.6,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "delay",
+                    "label": "DELAY",
+                    "lo": 0.1,
+                    "hi": 7,
+                    "def": 1.5,
+                    "curve": "lin",
+                    "names": "ms"
+                },
+                {
+                    "id": "fb",
+                    "label": "FEEDBACK",
+                    "lo": 0,
+                    "hi": 0.95,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "mix",
+                    "label": "MIX",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "tremolo",
+            "title": "TREMOLO",
+            "group": "Time",
+            "blurb": "Makes a sound swell and dip in volume, steadily.",
+            "ins": [
+                "in",
+                "rate"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "rate",
+                    "label": "RATE",
+                    "lo": 0.1,
+                    "hi": 20,
+                    "def": 4,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "depth",
+                    "label": "DEPTH",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.6,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "wave",
+                    "label": "WAVE",
+                    "lo": 0,
+                    "hi": 3,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "SINE|TRI|SAW|SQUARE"
+                }
+            ]
+        },
+        {
+            "type": "autowah",
+            "title": "AUTOWAH",
+            "group": "Shape",
+            "blurb": "A filter that opens and closes with how loudly you play: wah-wah without a pedal.",
+            "ins": [
+                "in"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "wah",
+                    "label": "WAH",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "mix",
+                    "label": "MIX",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 1,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "level",
+                    "label": "LEVEL",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "pitch",
+            "title": "PITCH",
+            "group": "Shape",
+            "blurb": "Moves a sound up or down in pitch without changing its speed.",
+            "ins": [
+                "in",
+                "shift"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "shift",
+                    "label": "SHIFT",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "fine",
+                    "label": "FINE",
+                    "lo": -1,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "size",
+                    "label": "SIZE",
+                    "lo": 256,
+                    "hi": 16384,
+                    "def": 4096,
+                    "curve": "exp",
+                    "names": ""
+                },
+                {
+                    "id": "fun",
+                    "label": "FUN",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "mix",
+                    "label": "MIX",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 1,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "limit",
+            "title": "LIMIT",
+            "group": "Shape",
+            "blurb": "Pushes a sound up and stops its peaks from going over: louder without clipping.",
+            "ins": [
+                "in"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "gain",
+                    "label": "GAIN",
+                    "lo": 0,
+                    "hi": 24,
+                    "def": 6,
+                    "curve": "lin",
+                    "names": "dB"
+                }
+            ]
+        },
+        {
+            "type": "soap",
+            "title": "SOAP",
+            "group": "Filter",
+            "blurb": "A band filter with a pass output and a reject output: keep one band, or cut it out.",
+            "ins": [
+                "in",
+                "cutoff"
+            ],
+            "outs": [
+                "pass",
+                "reject"
+            ],
+            "knobs": [
+                {
+                    "id": "freq",
+                    "label": "FREQ",
+                    "lo": 40,
+                    "hi": 12000,
+                    "def": 1000,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "width",
+                    "label": "WIDTH",
+                    "lo": 10,
+                    "hi": 6000,
+                    "def": 300,
+                    "curve": "exp",
+                    "names": "Hz"
+                }
+            ]
+        },
+        {
+            "type": "ad",
+            "title": "AD",
+            "group": "Control",
+            "blurb": "A one-shot envelope: up in the attack time, down in the decay time, each trigger.",
+            "ins": [
+                "trig"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "attack",
+                    "label": "ATTACK",
+                    "lo": 0.001,
+                    "hi": 4,
+                    "def": 0.005,
+                    "curve": "exp",
+                    "names": "s"
+                },
+                {
+                    "id": "decay",
+                    "label": "DECAY",
+                    "lo": 0.005,
+                    "hi": 8,
+                    "def": 0.4,
+                    "curve": "exp",
+                    "names": "s"
+                },
+                {
+                    "id": "curve",
+                    "label": "CURVE",
+                    "lo": -10,
+                    "hi": 10,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "coin",
+            "title": "COIN",
+            "group": "Control",
+            "blurb": "A coin toss for every trigger: it lets a gate through or holds it back, by chance.",
+            "ins": [
+                "gate",
+                "chance"
+            ],
+            "outs": [
+                "heads",
+                "tails"
+            ],
+            "knobs": [
+                {
+                    "id": "chance",
+                    "label": "CHANCE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "wander",
+            "title": "WANDER",
+            "group": "Control",
+            "blurb": "A smoothly wandering random level: a slow, drifting change that never repeats.",
+            "ins": [
+                "rate"
+            ],
+            "outs": [
+                "out",
+                "uni"
+            ],
+            "knobs": [
+                {
+                    "id": "rate",
+                    "label": "RATE",
+                    "lo": 0.01,
+                    "hi": 40,
+                    "def": 0.5,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "depth",
+                    "label": "DEPTH",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 1,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "fm",
+            "title": "FM",
+            "group": "Source",
+            "blurb": "Two sine waves, one bending the pitch of the other: bells, basses and metal.",
+            "ins": [
+                "pitch",
+                "index"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "ratio",
+                    "label": "RATIO",
+                    "lo": 0,
+                    "hi": 10,
+                    "def": 2,
+                    "curve": "step",
+                    "names": "1/4|1/2|1|3/2|2|3|4|5|6|7|8"
+                },
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "index",
+                    "label": "INDEX",
+                    "lo": 0,
+                    "hi": 8,
+                    "def": 1.5,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "formant",
+            "title": "FORMANT",
+            "group": "Source",
+            "blurb": "A voice-like oscillator: a resonant peak you can slide, as in vowels.",
+            "ins": [
+                "pitch",
+                "formant"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "formant",
+                    "label": "FORMANT",
+                    "lo": 100,
+                    "hi": 5000,
+                    "def": 900,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "shift",
+                    "label": "SHIFT",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "vosim",
+            "title": "VOSIM",
+            "group": "Source",
+            "blurb": "A buzzy, vocal oscillator made of squared sine pulses: robot voices and throaty basses.",
+            "ins": [
+                "pitch",
+                "form1"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "form1",
+                    "label": "FORM 1",
+                    "lo": 100,
+                    "hi": 5000,
+                    "def": 600,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "form2",
+                    "label": "FORM 2",
+                    "lo": 100,
+                    "hi": 5000,
+                    "def": 1500,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "shape",
+                    "label": "SHAPE",
+                    "lo": -1,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                }
+            ]
+        },
+        {
+            "type": "shaper",
+            "title": "SHAPER",
+            "group": "Source",
+            "blurb": "One oscillator that slides from a saw, through a triangle, to a pulse as you turn the shape.",
+            "ins": [
+                "pitch",
+                "shape",
+                "pwm"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "shape",
+                    "label": "SHAPE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.3,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "pw",
+                    "label": "PW",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "sync",
+                    "label": "SYNC",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "OFF|ON"
+                },
+                {
+                    "id": "ratio",
+                    "label": "RATIO",
+                    "lo": 0.5,
+                    "hi": 8,
+                    "def": 2,
+                    "curve": "exp",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "varisaw",
+            "title": "VARISAW",
+            "group": "Source",
+            "blurb": "A saw with a notch and a ramp you can bend: bright, hollow and in between.",
+            "ins": [
+                "pitch",
+                "shape"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "shape",
+                    "label": "SHAPE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "notch",
+                    "label": "NOTCH",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                }
+            ]
+        },
+        {
+            "type": "zosc",
+            "title": "ZOSC",
+            "group": "Source",
+            "blurb": "A windowed-sine oscillator with a sweepable formant: sharp, nasal and synthetic.",
+            "ins": [
+                "pitch",
+                "formant"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "formant",
+                    "label": "FORMANT",
+                    "lo": 100,
+                    "hi": 5000,
+                    "def": 1200,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "shape",
+                    "label": "SHAPE",
+                    "lo": -1,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "mode",
+                    "label": "MODE",
+                    "lo": -1,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                }
+            ]
+        },
+        {
+            "type": "additive",
+            "title": "ADDITIVE",
+            "group": "Source",
+            "blurb": "Sixteen sine harmonics added together: sculpt a tone by choosing which overtones ring.",
+            "ins": [
+                "pitch"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "tilt",
+                    "label": "TILT",
+                    "lo": -1,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "oddeven",
+                    "label": "ODD/EVEN",
+                    "lo": -1,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "comb",
+                    "label": "COMB",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "organ",
+            "title": "ORGAN",
+            "group": "Source",
+            "blurb": "Seven saw and square waves an octave apart, mixed by hand: strings and organ pads.",
+            "ins": [
+                "pitch"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "saw8",
+                    "label": "SAW 8'",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.8,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "sq8",
+                    "label": "SQ 8'",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "saw4",
+                    "label": "SAW 4'",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.4,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "sq4",
+                    "label": "SQ 4'",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "saw2",
+                    "label": "SAW 2'",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.2,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "sq2",
+                    "label": "SQ 2'",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "saw1",
+                    "label": "SAW 1'",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "dust",
+            "title": "DUST",
+            "group": "Source",
+            "blurb": "Random clicks, some loud and some soft, as often as you ask: crackle, rain and random triggers.",
+            "ins": [
+                "rate"
+            ],
+            "outs": [
+                "out",
+                "trig"
+            ],
+            "knobs": [
+                {
+                    "id": "density",
+                    "label": "DENSITY",
+                    "lo": 0.2,
+                    "hi": 400,
+                    "def": 8,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "level",
+                    "label": "LEVEL",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.8,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "stepnoise",
+            "title": "STEPNOISE",
+            "group": "Source",
+            "blurb": "Noise that changes only at a set rate: stepped random levels, or a buzzy, gritty tone when fast.",
+            "ins": [
+                "rate",
+                "sync"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "rate",
+                    "label": "RATE",
+                    "lo": 0.1,
+                    "hi": 20000,
+                    "def": 8,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "level",
+                    "label": "LEVEL",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.8,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "particle",
+            "title": "PARTICLE",
+            "group": "Source",
+            "blurb": "A shower of tiny pings: dripping, sparkling, rattling, from a few to a swarm.",
+            "ins": [
+                "pitch"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "freq",
+                    "label": "FREQ",
+                    "lo": 100,
+                    "hi": 4000,
+                    "def": 1000,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "res",
+                    "label": "RESONANCE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.6,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "density",
+                    "label": "DENSITY",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.4,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "gain",
+                    "label": "GAIN",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "spread",
+                    "label": "SPREAD",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "scatter",
+                    "label": "SCATTER",
+                    "lo": 2,
+                    "hi": 4000,
+                    "def": 1000,
+                    "curve": "exp",
+                    "names": "Hz"
+                }
+            ]
+        },
+        {
+            "type": "grainlet",
+            "title": "GRAINLET",
+            "group": "Source",
+            "blurb": "A pitched, formant oscillator made of sine grains: vocal, plucky and smeared.",
+            "ins": [
+                "pitch",
+                "formant"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "formant",
+                    "label": "FORMANT",
+                    "lo": 100,
+                    "hi": 5000,
+                    "def": 1000,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "shape",
+                    "label": "SHAPE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "bleed",
+                    "label": "BLEED",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.3,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                }
+            ]
+        },
+        {
+            "type": "fractal",
+            "title": "FRACTAL",
+            "group": "Source",
+            "blurb": "Layered noise from slow to fast: wind, rumble and hiss, with a colour that goes dark to bright.",
+            "ins": [
+                "rate"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "freq",
+                    "label": "LOWEST",
+                    "lo": 1,
+                    "hi": 4000,
+                    "def": 60,
+                    "curve": "exp",
+                    "names": "Hz"
+                },
+                {
+                    "id": "color",
+                    "label": "COLOUR",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "level",
+                    "label": "LEVEL",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 0.8,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "synkick",
+            "title": "SYNKICK",
+            "group": "Source",
+            "blurb": "A kick drum built from a falling sine, a click and a dab of noise: punchy and tuneable.",
+            "ins": [
+                "trig"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "freq",
+                    "label": "FREQ",
+                    "lo": 25,
+                    "hi": 140,
+                    "def": 50,
+                    "curve": "lin",
+                    "names": "Hz"
+                },
+                {
+                    "id": "tone",
+                    "label": "TONE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "decay",
+                    "label": "DECAY",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "dirt",
+                    "label": "DIRT",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.3,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "fmamt",
+                    "label": "FM AMT",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "fmdec",
+                    "label": "FM DECAY",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "accent",
+                    "label": "ACCENT",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.8,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "synsnare",
+            "title": "SYNSNARE",
+            "group": "Source",
+            "blurb": "A snare from a pitched shell and a rattle of noise: crack, snap and body.",
+            "ins": [
+                "trig"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "freq",
+                    "label": "FREQ",
+                    "lo": 0.1,
+                    "hi": 0.4,
+                    "def": 0.2,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "fm",
+                    "label": "FM",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.3,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "decay",
+                    "label": "DECAY",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "snappy",
+                    "label": "SNAPPY",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.6,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "accent",
+                    "label": "ACCENT",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.8,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "modal",
+            "title": "MODAL",
+            "group": "Voice",
+            "blurb": "A struck bar, bell or glass: a voice built from a few ringing resonances.",
+            "ins": [
+                "pitch",
+                "trig"
+            ],
+            "outs": [
+                "out",
+                "aux"
+            ],
+            "knobs": [
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "structure",
+                    "label": "STRUCTURE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "bright",
+                    "label": "BRIGHT",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "damp",
+                    "label": "DAMPING",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "accent",
+                    "label": "ACCENT",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.8,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "hold",
+                    "label": "HOLD",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "OFF|ON"
+                }
+            ]
+        },
+        {
+            "type": "string",
+            "title": "STRING",
+            "group": "Voice",
+            "blurb": "A plucked string: guitar, harp and zither, from a trigger and a pitch.",
+            "ins": [
+                "pitch",
+                "trig"
+            ],
+            "outs": [
+                "out",
+                "aux"
+            ],
+            "knobs": [
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "structure",
+                    "label": "STRUCTURE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "bright",
+                    "label": "BRIGHT",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "damp",
+                    "label": "DAMPING",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "accent",
+                    "label": "ACCENT",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.8,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "hold",
+                    "label": "HOLD",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "OFF|ON"
+                }
+            ]
+        },
+        {
+            "type": "karplus",
+            "title": "KARPLUS",
+            "group": "Voice",
+            "blurb": "A string with no pluck: feed it a click, a burst of noise or a drum to make it ring at a pitch.",
+            "ins": [
+                "in",
+                "pitch"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "nonlin",
+                    "label": "NONLIN",
+                    "lo": -1,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "bright",
+                    "label": "BRIGHT",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "damp",
+                    "label": "DAMPING",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "drive",
+                    "label": "DRIVE",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 1,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "reson",
+            "title": "RESON",
+            "group": "Voice",
+            "blurb": "Makes any sound ring like a struck object: a bar, a plate or a tube, at the pitch you give it.",
+            "ins": [
+                "in",
+                "pitch"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "tune",
+                    "label": "TUNE",
+                    "lo": -24,
+                    "hi": 24,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": "st"
+                },
+                {
+                    "id": "structure",
+                    "label": "STRUCTURE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "bright",
+                    "label": "BRIGHT",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "damp",
+                    "label": "DAMPING",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "drive",
+                    "label": "DRIVE",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 1,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "drip",
+            "title": "DRIP",
+            "group": "Voice",
+            "blurb": "A bubbling water drop for every trigger.",
+            "ins": [
+                "trig"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "level",
+                    "label": "LEVEL",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.8,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
             "type": "elements",
             "title": "ELEMENTS",
             "group": "Voice",
@@ -1596,6 +3110,287 @@
                     "def": 0,
                     "curve": "step",
                     "names": "MODAL|STRING|STRINGS"
+                }
+            ]
+        },
+        {
+            "type": "spectrum",
+            "title": "SPECTRUM",
+            "group": "Mix",
+            "blurb": "A screen of glowing bars, low notes on the left to high on the right: what is in a sound, as it plays.",
+            "ins": [
+                "in"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "range",
+                    "label": "RANGE",
+                    "lo": 30,
+                    "hi": 96,
+                    "def": 60,
+                    "curve": "lin",
+                    "names": "dB"
+                },
+                {
+                    "id": "fall",
+                    "label": "FALL",
+                    "lo": 0.5,
+                    "hi": 0.98,
+                    "def": 0.85,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "vector",
+            "title": "VECTOR",
+            "group": "Mix",
+            "blurb": "Draws one signal against another: a mono sound is a line, a wide stereo sound a cloud, two sines a loop.",
+            "ins": [
+                "x",
+                "y"
+            ],
+            "outs": [
+                "x",
+                "y"
+            ],
+            "knobs": [
+                {
+                    "id": "gain",
+                    "label": "GAIN",
+                    "lo": 0.25,
+                    "hi": 4,
+                    "def": 1,
+                    "curve": "exp",
+                    "names": ""
+                },
+                {
+                    "id": "turn",
+                    "label": "VIEW",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 1,
+                    "curve": "step",
+                    "names": "X-Y|L-R"
+                }
+            ]
+        },
+        {
+            "type": "meter",
+            "title": "METER",
+            "group": "Mix",
+            "blurb": "Two level bars with a peak tick that lingers: how loud, and how close to clipping.",
+            "ins": [
+                "l",
+                "r"
+            ],
+            "outs": [
+                "l",
+                "r"
+            ],
+            "knobs": [
+                {
+                    "id": "range",
+                    "label": "RANGE",
+                    "lo": 24,
+                    "hi": 72,
+                    "def": 48,
+                    "curve": "lin",
+                    "names": "dB"
+                }
+            ]
+        },
+        {
+            "type": "plasma",
+            "title": "PLASMA",
+            "group": "Mix",
+            "blurb": "A lava lamp for your patch: three signals stir the colours, the glow and the flow of a liquid picture.",
+            "ins": [
+                "red",
+                "green",
+                "blue"
+            ],
+            "outs": [
+                "out"
+            ],
+            "knobs": [
+                {
+                    "id": "flow",
+                    "label": "FLOW",
+                    "lo": 0.05,
+                    "hi": 4,
+                    "def": 0.6,
+                    "curve": "exp",
+                    "names": ""
+                },
+                {
+                    "id": "hue",
+                    "label": "HUE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
+            "type": "marbles",
+            "title": "MARBLES",
+            "group": "Control",
+            "blurb": "Mutable Instruments' random sampler: three related random gates, and random notes in a scale that can loop what they just did.",
+            "ins": [
+                "clock",
+                "xclock"
+            ],
+            "outs": [
+                "t1",
+                "t2",
+                "t3",
+                "x1",
+                "x2",
+                "x3",
+                "y"
+            ],
+            "knobs": [
+                {
+                    "id": "model",
+                    "label": "MODEL",
+                    "lo": 0,
+                    "hi": 6,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "BERNOULLI|CLUSTERS|DRUMS|INDEPENDENT|DIVIDER|THREE|MARKOV"
+                },
+                {
+                    "id": "range",
+                    "label": "RANGE",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 1,
+                    "curve": "step",
+                    "names": "0.25X|1X|4X"
+                },
+                {
+                    "id": "rate",
+                    "label": "RATE",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "bias",
+                    "label": "T BIAS",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "jitter",
+                    "label": "JITTER",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "deja",
+                    "label": "DEJA VU",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "length",
+                    "label": "LENGTH",
+                    "lo": 0,
+                    "hi": 11,
+                    "def": 3,
+                    "curve": "step",
+                    "names": "1|2|3|4|5|6|7|8|10|12|14|16"
+                },
+                {
+                    "id": "width",
+                    "label": "WIDTH",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "xrange",
+                    "label": "X RANGE",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "NARROW|POSITIVE|FULL"
+                },
+                {
+                    "id": "spread",
+                    "label": "SPREAD",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "xbias",
+                    "label": "X BIAS",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "steps",
+                    "label": "STEPS",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "scale",
+                    "label": "SCALE",
+                    "lo": 0,
+                    "hi": 5,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "MAJOR|MINOR|PENTA|GYPSY|CHROMATIC|WHOLE"
+                },
+                {
+                    "id": "xmode",
+                    "label": "X MODE",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "SAME|BUMP|TILT"
+                },
+                {
+                    "id": "ydiv",
+                    "label": "Y DIV",
+                    "lo": 0,
+                    "hi": 11,
+                    "def": 6,
+                    "curve": "step",
+                    "names": "1/64|1/48|1/32|1/24|1/16|1/12|1/8|1/6|1/4|1/3|1/2|1"
                 }
             ]
         },

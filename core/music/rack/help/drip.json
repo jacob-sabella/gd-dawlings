@@ -1,0 +1,14 @@
+{
+  "what": "A bubbling water drop for every trigger.",
+  "how": "Each pulse at TRIG makes one short bubbling drop. The sound is generated inside, so no other input is needed. Trigger it at random with DUST or COIN for rain.",
+  "ins": {
+    "trig": "A pulse that makes a drop. Patch CLOCK or DUST's trig here."
+  },
+  "outs": {
+    "out": "The drop sound (audio)."
+  },
+  "knobs": {
+    "level": "The volume of the drop, 0 to 1."
+  },
+  "try": "Patch DUST's trig into DRIP's trig and DRIP's out into OUT, then add a DELAY or REVERB after it for a cave."
+}

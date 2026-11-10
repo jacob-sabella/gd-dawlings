@@ -12,7 +12,8 @@ extends Node
 ## The patch or the track it sounds on was replaced.
 signal changed()
 
-const FOLLOW_SECONDS := 0.25
+## How often the song's position is told to the engine, which slews its own clock to it (a seek is jumped).
+const FOLLOW_SECONDS := 0.05
 
 var engine := RackEngine.new()
 var source: RackEngine.Source
@@ -358,10 +359,9 @@ func _process(delta: float) -> void:
 		elif not playing and _was_playing:
 			engine.say("stop")
 		elif playing and _since_sync > FOLLOW_SECONDS:
-			# The song moved under the rack (a seek, a loop): follow it.
+			# The song's place, often: the engine takes up a small drift smoothly and jumps a seek or a loop.
 			_since_sync = 0.0
-			if absf(float(tp["beats"]) - engine.running_beat) > 0.5:
-				engine.say("play %f" % float(tp["beats"]))
+			engine.say("sync %f" % float(tp["beats"]))
 		_was_playing = playing
 
 

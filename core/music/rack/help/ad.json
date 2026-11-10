@@ -1,0 +1,16 @@
+{
+  "what": "A one-shot envelope: a shape that rises and then falls once each time it is triggered.",
+  "how": "An envelope is a signal that plays out a shape over time. Each pulse at TRIG starts it from zero, it rises to full in the ATTACK time, then falls back to zero over the DECAY time. Patch it to a VCA for volume or a filter's cutoff to open it on every note. It has no sustain stage, so it works for percussive sounds.",
+  "ins": {
+    "trig": "A pulse that starts the envelope. Patch CLOCK or a gate from KEYS here."
+  },
+  "outs": {
+    "out": "The envelope: 0 to 1, rising and falling once per trigger. Patch it into a VCA, a filter's cutoff or another CV input."
+  },
+  "knobs": {
+    "attack": "The time to rise from 0 to full, 0.001 to 4 seconds. Short is a click; long is a swell.",
+    "decay": "The time to fall from full back to 0, 0.005 to 8 seconds.",
+    "curve": "The bend of the segments, -10 to 10. Zero is a straight line; positive makes a fast start with a slow tail, negative the opposite."
+  },
+  "try": "Patch CLOCK's beat into AD's trig, AD's out into a VCA's cv, VCO into the VCA's in, and the VCA into OUT. Set ATTACK short and DECAY about 0.3 s for a pluck."
+}

@@ -203,6 +203,16 @@ func tv_mount_spot() -> Transform3D:
 			Vector3(venue.room_width * 0.5 - Venue.TV_FROM_RIGHT, 0.0, Studio.ROOM_FRONT + inset))
 
 
+## Where the assistant's panel hangs (AssistantPanel, docs/mcp_assistant.md): on the control room's right wall like
+## the Workshop's, further toward the desk, stood off the wall the same way. In every venue but the Rig Roulette room, where a ControlHost is attached to the studio.
+func assistant_spot() -> Variant:
+	if not ControlHost.stands or venue.venue_id() == Venue.ROULETTE_ID:
+		return null
+	var inset := AssistantPanel.OFF_WALL if venue.back_wall_gear_stands() else AssistantPanel.ON_WALL + 0.05
+	return Transform3D(Basis(Vector3.UP, -PI * 0.5),
+			Vector3(venue.room_width * 0.5 - inset, 0.0, Studio.ROOM_BACK - AssistantPanel.FROM_LIVE_ROOM))
+
+
 ## Where the Workshop's panel hangs (WorkshopPanel, docs/workshop.md; its origin the floor under the
 ## middle of its face, its front +Z into the room): on the control room's right wall near the live
 ## room's end, behind the patchbay's stand and the station board, at eye height, on stand-offs in

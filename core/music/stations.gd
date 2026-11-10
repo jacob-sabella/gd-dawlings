@@ -210,6 +210,17 @@ const ALL := [
 		"hands": "ASK opens a typing pad: OK sends it to Claude Code with what you were just doing · the game reloads back here when it is done · UNDO LAST takes it back · dev only, this machine",
 	},
 	{
+		# The room's assistant (AssistantPanel, docs/mcp_assistant.md): a panel on the control room's right wall for
+		# asking Claude, through the game's own tools, about the mix and the room or for a change to either. For
+		# everyone in the room: a guest's question runs on the host.
+		"id": &"assistant", "title": "ASSISTANT", "area": CONTROL, "zone": &"", "air": 0.5,
+		"spot": &"assistant_spot", "at": Vector3(0, AssistantPanel.MIDDLE, 0),
+		"frame": [AssistantPanel.FRAME_TOP, AssistantPanel.FRAME_FOOT], "seat": 1.2, "reach": 0.6,
+		"foot": Vector2(0.03, AssistantPanel.FACE.x * 0.5), "foot_z": 0.0, "top": AssistantPanel.MIDDLE + AssistantPanel.FACE.y * 0.5,
+		"desk": "F10 from anywhere, or ASK: type a question or a change (\"mute the hats\", \"what is on the drum bus?\") · it works through the game's own tools and acts as you, asking first before anything destructive · CANCEL stops it, NEW CHAT starts over, OPEN is the whole conversation · it runs on the host's machine",
+		"hands": "ASK opens a typing pad: OK sends it · it acts as you and asks first before anything destructive · CANCEL stops it, NEW CHAT starts over · it runs on the host's machine",
+	},
+	{
 		# The venue's own instrument (VenueInstrument, slice 42): what it is, where and how it is played
 		# are the venue's (`row_in`); these are for a card with no venue to ask.
 		"id": &"venue", "title": "THE VENUE'S INSTRUMENT", "area": VENUE, "zone": &"", "air": 0.5,

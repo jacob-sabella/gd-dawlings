@@ -599,6 +599,7 @@ const LEVELS_NICHE_STANDS_IN := 0.33
 
 ## Where the Workshop's panel hangs; null unless the Workshop is on (`VenueStations`).
 func workshop_spot() -> Variant: return station_spots.workshop_spot()
+func assistant_spot() -> Variant: return station_spots.assistant_spot()
 
 
 ## The twelve colours tracks are shown in here, in TrackColours.STANDARD's order (red, orange,

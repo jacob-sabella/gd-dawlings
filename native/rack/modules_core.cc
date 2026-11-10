@@ -69,7 +69,11 @@ struct Clock_ : Module {
     bool run = host ? ctx->tp.playing : true;
     double per = 60.0 / bpm / 4.0;  // seconds per 16th
     double step = 1.0 / (per * RATE);
-    if (host && run) phase_ = ctx->tp.beats * 4.0;
+    // OFFSET (ms) runs the pulses early, to cancel the delay between the rack and the mix.
+    double off_ms = real(3);
+    if (off_ms > -0.05 && off_ms < 0.05) off_ms = 0;  // the knob's float rounding must not be a lead: it would fire a pulse at beat 0
+    double lead = off_ms / 1000.0 * bpm / 60.0 * 4.0;  // in 16ths
+    if (host && run) phase_ = ctx->tp.beats * 4.0 + lead;
     bool reset = false;
     if (host && run && !was_playing_) { reset = true; }
     was_playing_ = run;
@@ -100,13 +104,13 @@ struct Clock_ : Module {
       left16_ = std::max(0, left16_ - 1); left8_ = std::max(0, left8_ - 1);
       leftb_ = std::max(0, leftb_ - 1); leftbar_ = std::max(0, leftbar_ - 1);
     }
-    if (host && run) phase_ = ctx->tp.beats * 4.0;  // stay locked to the song, not to our sum
+    if (host && run) phase_ = ctx->tp.beats * 4.0 + lead;  // stay locked to the song, not to our sum
   }
 };
 static Registrar r_clock({"clock", "CLOCK", "Control", "Tempo as pulses: 16ths, 8ths, beats and bars; locked to the song or free.",
     {}, {"16th", "8th", "beat", "bar", "reset"},
     {{"bpm", "TEMPO", 40, 240, 120, K::LIN, "bpm"}, {"sync", "SYNC", 0, 1, 1, K::STEP, "FREE|SONG"},
-     {"swing", "SWING", 0, 0.6f, 0, K::LIN, ""}},
+     {"swing", "SWING", 0, 0.6f, 0, K::LIN, ""}, {"offset", "OFFSET", -100, 200, 0, K::LIN, "ms"}},
     []() -> Module* { return new Clock_; }});
 
 // ---- SEQ: sixteen steps ------------------------------------------------------------------------
@@ -338,6 +342,8 @@ struct Drum_ : Module {
   daisysp::AnalogSnareDrum sd_;
   daisysp::HiHat<> hh_;
   Edge trig_;
+  // The DaisySP voices begin with a one-sample step; a ~1 ms fade-in at each strike hides it (a click otherwise).
+  float fade_ = 1.0f;
   void init() override { bd_.Init(RATE); sd_.Init(RATE); hh_.Init(RATE); }
   void process() override {
     int kind = choice(0);
@@ -349,8 +355,11 @@ struct Drum_ : Module {
     }
     for (int s = 0; s < BLOCK; ++s) {
       bool t = trig_(in[0][s]);
+      if (t) fade_ = 0.0f;
       float v = kind == 0 ? bd_.Process(t) : (kind == 1 ? sd_.Process(t) : hh_.Process(t));
-      o(0)[s] = v * 0.9f;
+      o(0)[s] = v * 0.9f * fade_;
+      fade_ = fade_ + 1.0f / (0.001f * (float)RATE);
+      if (fade_ > 1.0f) fade_ = 1.0f;
     }
   }
 };

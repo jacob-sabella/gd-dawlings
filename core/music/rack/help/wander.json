@@ -1,0 +1,16 @@
+{
+  "what": "A smoothly drifting random control signal that never repeats, for slow, natural-feeling movement.",
+  "how": "At each step the module picks a new random level and glides smoothly to it. RATE sets how often it picks a new one. Patch the output into a cutoff, pitch or any other CV input to make that setting drift on its own.",
+  "ins": {
+    "rate": "A control signal that changes the speed. Each 1.0 of signal doubles the RATE (an octave), -1.0 halves it."
+  },
+  "outs": {
+    "out": "The drifting signal, between -DEPTH and +DEPTH (bipolar). Good for pitch or filter wobbles.",
+    "uni": "The same signal squeezed to sit around 0.5, so it stays between 0 and 1 at full DEPTH (less depth, narrower). Good for volume or things that cannot go negative."
+  },
+  "knobs": {
+    "rate": "How fast it wanders, 0.01 to 40 times a second. Slow is a gentle drift.",
+    "depth": "The size of the wandering, 0 to 1, for both outputs. At 0 there is no movement."
+  },
+  "try": "Patch WANDER's out into SVF's cutoff (turn the CV knob up to the middle), with VCO into SVF's in and SVF's lp into OUT. Hold a note and hear the filter drift on its own."
+}

@@ -8,15 +8,7 @@
   "description": "The palette groups and the rack modules that need no third-party DSP.",
   "licence": {"spdx": "MIT", "copyright": "Copyright (c) 2026 Jacob Sabella"},
   "source": {"kind": "in_tree", "path": "native/rack"},
-  "groups": [
-    {"id": "Source", "title": "Source", "order": 1},
-    {"id": "Voice", "title": "Voice", "order": 2},
-    {"id": "Control", "title": "Control", "order": 3},
-    {"id": "Filter", "title": "Filter", "order": 4},
-    {"id": "Shape", "title": "Shape", "order": 5},
-    {"id": "Time", "title": "Time", "order": 6},
-    {"id": "Mix", "title": "Mix", "order": 7}
-  ],
+  "groups": [{"id": "Source", "title": "Source", "order": 1}, {"id": "Voice", "title": "Voice", "order": 2}, {"id": "Control", "title": "Control", "order": 3}, {"id": "Filter", "title": "Filter", "order": 4}, {"id": "Shape", "title": "Shape", "order": 5}, {"id": "Time", "title": "Time", "order": 6}, {"id": "Mix", "title": "Mix", "order": 7}],
   "provides": [
     {"kind": "rack_module", "type": "builtin.keys", "title": "KEYS", "group": "Source", "blurb": "Your notes: pitch, gate, velocity, the mod wheel and the bend.", "sound": {"kind": "engine", "type": "keys"}, "skin": {"face": "#4D1A1F", "accent": "#FF594D", "pattern": "checker", "tagline": "PLAY ME"}, "pad_knobs": ["oct", "glide"]},
     {"kind": "rack_module", "type": "builtin.clock", "title": "CLOCK", "group": "Control", "blurb": "Tempo as pulses: 16ths, 8ths, beats and bars; locked to the song or free.", "sound": {"kind": "engine", "type": "clock"}, "skin": {"face": "#382B0D", "accent": "#FFC726", "pattern": "stripes", "tagline": "TICK TOCK"}, "pad_knobs": ["bpm", "swing"]},
@@ -31,6 +23,10 @@
     {"kind": "rack_module", "type": "builtin.mix", "title": "MIX", "group": "Mix", "blurb": "Four inputs to one.", "sound": {"kind": "engine", "type": "mix"}, "skin": {"face": "#38331A", "accent": "#F2D966", "pattern": "bars", "tagline": "ALL TOGETHER"}},
     {"kind": "rack_module", "type": "builtin.scope", "title": "SCOPE", "group": "Mix", "blurb": "A screen on the wall: the wave of whatever is patched in, passed on.", "sound": {"kind": "engine", "type": "scope"}, "skin": {"face": "#0A1F1A", "accent": "#66FFB3", "pattern": "wave", "tagline": "WHAT DO YOU SEE"}, "pad_knobs": ["time", "gain"]},
     {"kind": "rack_module", "type": "builtin.world", "title": "WORLD", "group": "Source", "blurb": "The room itself as a source: the weather, the venue's instrument, the looper's rings, each a level and a gate.", "sound": {"kind": "engine", "type": "world"}, "skin": {"face": "#123817", "accent": "#80FF66", "pattern": "dots", "tagline": "LISTEN OUT"}},
-    {"kind": "rack_module", "type": "builtin.hand", "title": "HAND", "group": "Source", "blurb": "The CV bench in the room as a source: five boxes of two knobs and a slider, set by a hand at the board.", "sound": {"kind": "engine", "type": "hand"}, "skin": {"face": "#3D210A", "accent": "#FFB840", "pattern": "dots", "tagline": "HANDS ON"}}
+    {"kind": "rack_module", "type": "builtin.hand", "title": "HAND", "group": "Source", "blurb": "The CV bench in the room as a source: five boxes of two knobs and a slider, set by a hand at the board.", "sound": {"kind": "engine", "type": "hand"}, "skin": {"face": "#3D210A", "accent": "#FFB840", "pattern": "dots", "tagline": "HANDS ON"}},
+    {"kind": "rack_module", "type": "builtin.spectrum", "title": "SPECTRUM", "group": "Mix", "blurb": "A screen of glowing bars, low notes on the left to high on the right: what is in a sound, as it plays.", "sound": {"kind": "engine", "type": "spectrum"}, "skin": {"face": "#1C4715", "accent": "#6FFF59", "pattern": "dots", "tagline": "SEE THE SOUND"}, "pad_knobs": ["range", "fall"]},
+    {"kind": "rack_module", "type": "builtin.vector", "title": "VECTOR", "group": "Mix", "blurb": "Draws one signal against another: a mono sound is a line, a wide stereo sound a cloud, two sines a loop.", "sound": {"kind": "engine", "type": "vector"}, "skin": {"face": "#15472F", "accent": "#59FFAF", "pattern": "dots", "tagline": "DRAW THE SIGNAL"}, "pad_knobs": ["gain", "turn"]},
+    {"kind": "rack_module", "type": "builtin.meter", "title": "METER", "group": "Mix", "blurb": "Two level bars with a peak tick that lingers: how loud, and how close to clipping.", "sound": {"kind": "engine", "type": "meter"}, "skin": {"face": "#1F4715", "accent": "#78FF59", "pattern": "stripes", "tagline": "HOW LOUD"}},
+    {"kind": "rack_module", "type": "builtin.plasma", "title": "PLASMA", "group": "Mix", "blurb": "A lava lamp for your patch: three signals stir the colours, the glow and the flow of a liquid picture.", "sound": {"kind": "engine", "type": "plasma"}, "skin": {"face": "#474215", "accent": "#FFEE59", "pattern": "checker", "tagline": "LAVA LAMP"}, "pad_knobs": ["flow", "hue"]}
   ]
 }

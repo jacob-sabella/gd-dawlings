@@ -1,6 +1,6 @@
 // rack: the modular room's engine as a process. Text commands on stdin, one per line:
 //   add ID TYPE | remove ID | clear | cable MOD.OUT MOD.IN | uncable MOD.IN | cut MOD.OUT
-//   knob MOD.KNOB V01 | bpm N | play BEATS | stop | note_on P V | note_off P | bend V | cc K V
+//   knob MOD.KNOB V01 | bpm N | play BEATS | sync BEATS | stop | note_on P V | note_off P | bend V | cc K V
 //   run SECONDS (offline only) | patch (prints the patch) | quit
 // Modes: --describe prints the module catalogue as JSON; --render OUT.wav [SCRIPT] runs the script (a file, or stdin)
 // and writes a stereo 16-bit WAV (and a line of peak/rms); --live streams float32 stereo to stdout,
@@ -64,6 +64,14 @@ static void run_line(Rack& r, const std::string& line, double* run_s) {
   else if (c == "bpm") { double v; in >> v; r.ctx.tp.bpm = v < 20 ? 20 : v; }
   else if (c == "play") { double v = 0; in >> v; r.ctx.tp.beats = v; r.ctx.tp.playing = true; }
   else if (c == "stop") r.ctx.tp.playing = false;
+  // sync BEATS: where the song is now. A small difference is slewed away; a big one (a seek) is jumped.
+  else if (c == "sync") {
+    double v = 0; in >> v;
+    double err = v - r.ctx.tp.beats;
+    if (!r.ctx.tp.playing) return;
+    if (err > 0.25 || err < -0.25) { r.ctx.tp.beats = v; r.ctx.tp.slew = 0; }
+    else r.ctx.tp.slew = err;
+  }
   else if (c == "note_on") { int p, v; in >> p >> v; r.note_on(p, v); }
   else if (c == "note_off") { int p; in >> p; r.note_off(p); }
   else if (c == "bend") { float v; in >> v; r.bend(v); }

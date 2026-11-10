@@ -1,0 +1,17 @@
+{
+  "what": "An oscillator of two sine waves where one bends the pitch of the other: bells, electric pianos, basses and metal.",
+  "how": "FM is frequency modulation. One sine (the modulator) wobbles the pitch of the other (the carrier) at audio speed, which makes new overtones. RATIO sets how fast the modulator runs compared to the carrier, and INDEX sets how strongly it bends. A whole-number ratio gives a pitched tone; others give bell-like clangs.",
+  "ins": {
+    "pitch": "Pitch in octaves (1 volt per octave, 0 is middle C). Patch KEYS' pitch here.",
+    "index": "A control signal that adds to INDEX (each 1.0 adds 4). Patch an ENV here so each note starts bright and mellows."
+  },
+  "outs": {
+    "out": "The FM tone (audio). Patch it through a VCA into OUT."
+  },
+  "knobs": {
+    "ratio": "The modulator's speed compared to the carrier: 1/4, 1/2, 1, 3/2, 2, 3, 4, 5, 6, 7 or 8. Whole numbers sound tuned; 3/2 is more hollow.",
+    "tune": "Shifts the pitch in semitones, -24 to 24 (two octaves down to two up), added to the pitch input.",
+    "index": "How strongly the modulator bends the carrier, 0 to 8 (the pitch input can add more, to a limit of 12). 0 is a pure sine; higher is brighter and harsher."
+  },
+  "try": "Patch KEYS' pitch into FM's pitch, FM's out into a VCA driven by an AD, and the VCA into OUT. Also patch the AD into FM's index and try RATIO at 3 or 3/2 for a bell."
+}

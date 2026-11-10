@@ -1,0 +1,18 @@
+{
+  "what": "A buzzy, vowel-like oscillator built from pulses of sine waves: robot voices and throaty basses.",
+  "how": "VOSIM makes each cycle of the pitch from a burst of squared sine waves at two frequencies, FORM 1 and FORM 2. These two frequencies work like the peaks in a vowel. SHAPE bends the wave. The result is a raspy, speech-like or reedy sound.",
+  "ins": {
+    "pitch": "Pitch in octaves (1 volt per octave, 0 is middle C). Patch KEYS' pitch here.",
+    "form1": "A control signal that moves FORM 1. Each 1.0 of signal doubles its frequency (an octave)."
+  },
+  "outs": {
+    "out": "The buzzy tone (audio)."
+  },
+  "knobs": {
+    "form1": "The frequency of the first peak, 100 to 5000 Hz.",
+    "form2": "The frequency of the second peak, 100 to 5000 Hz. Different from FORM 1 for vowel-like colour.",
+    "shape": "Waveshaping, -1 to 1. It alters the contour of the pulses; 0 is neutral.",
+    "tune": "Shifts the pitch in semitones, -24 to 24 (two octaves down to two up), added to the pitch input."
+  },
+  "try": "Patch KEYS' pitch into VOSIM's pitch, VOSIM's out through a VCA into OUT, then play a low note and sweep FORM 1 while it sounds. Patch an LFO into the form1 input for a talking effect."
+}

@@ -1,0 +1,19 @@
+{
+  "what": "An effect that moves a sound up or down in pitch without changing how fast it plays.",
+  "how": "The sound is chopped into short overlapping pieces that are played back faster or slower, which changes the pitch. SHIFT sets how far, in semitones (12 is one octave). Large shifts, or a small SIZE, can add a warble.",
+  "ins": {
+    "in": "The sound to shift (audio, -1..1).",
+    "shift": "A control signal that shifts the pitch on top of the SHIFT knob. Each 1.0 of signal adds 12 semitones (an octave). Patch KEYS' pitch for a harmony that follows the keys, or an LFO for vibrato."
+  },
+  "outs": {
+    "out": "The shifted sound, blended with the original by MIX."
+  },
+  "knobs": {
+    "shift": "How far to move the pitch, -24 to 24 semitones. 12 is an octave up, -12 an octave down, 7 is a fifth.",
+    "fine": "A fine-tuning knob, -1 to 1. In this version it is not connected and has no effect.",
+    "size": "The size of the pieces the sound is cut into, 256 to 16384 (samples). Small is quick and warbly; large is smoother but smears short sounds.",
+    "fun": "Adds a rough, glitchy character to the shift, 0 to 1. Zero is clean.",
+    "mix": "Balance of dry and effect: 0 is only your sound, 1 is only the shifted sound. About the middle gives a harmony."
+  },
+  "try": "Patch VCO into PITCH's in and PITCH's out into OUT. Set MIX to the middle and SHIFT to 7 to hear the VCO accompanied by a fifth above. Try -12 for an octave below."
+}

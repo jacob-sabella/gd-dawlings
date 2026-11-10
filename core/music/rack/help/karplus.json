@@ -1,0 +1,19 @@
+{
+  "what": "A string with no pluck of its own: send in any short sound and it rings at a pitch.",
+  "how": "A short burst going round a loop of delay with filtering is how a string works. Anything you feed IN is put into the string and it rings at the PITCH you give it. A click or burst of noise sounds plucked; a drum or longer sound is turned into a string tone.",
+  "ins": {
+    "in": "The sound to excite the string (audio). Patch a DUST, a NOISE burst through a VCA, or a DRUM here.",
+    "pitch": "Pitch in octaves (1 volt per octave, 0 is middle C). Patch KEYS' pitch here."
+  },
+  "outs": {
+    "out": "The ringing string (audio)."
+  },
+  "knobs": {
+    "tune": "Shifts the pitch in semitones, -24 to 24 (two octaves down to two up), added to the pitch input.",
+    "nonlin": "How non-linear the string is, -1 to 1. Zero is a plain string; positive or negative values add different kinds of bright, buzzy or bent character.",
+    "bright": "How much high end stays in the ring, 0 to 1.",
+    "damp": "How fast the ring dies away, 0 to 1. Low is a long ring.",
+    "drive": "How hard the input is pushed into the string, 0 to 2. Higher is louder and rougher."
+  },
+  "try": "Patch DUST's out into KARPLUS's in, KEYS' pitch into KARPLUS's pitch and KARPLUS's out into OUT. Hold a note and hear a string being plucked at random."
+}

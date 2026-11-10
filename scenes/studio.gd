@@ -236,7 +236,7 @@ var room_deltas := RoomDeltas.new()
 ## What the weather, the rings and the venue's instrument play into the rack's WORLD module.
 var modular_world: ModularWorld
 var modular_annex: ModularAnnex
-var rack_row := {"patch": RackPatch.preset(&"keys_voice"), "track": 0}
+var rack_row := {"patch": RackPatch.preset(&"keys_voice"), "track": 0, "power": true}
 ## The lyric board in the vocal booth (LyricBoard, docs/spatial_loop.md part two, slice 56), stood
 ## again with each venue at its `lyrics_spot`; null where there is no booth and in AR. What it shows is
 ## the song's (MixState.lyrics), so nothing of it is the room's.
@@ -614,6 +614,28 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 		# Never a stuck solo: a key let go while another window had focus never comes here.
 		signal_views.look_solo_release()
+		_unfocused_pacing(true)
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_WM_WINDOW_FOCUS_IN:
+		_unfocused_pacing(false)
+
+
+## A window the compositor is not showing (another workspace, tabbed out) gets no frame callbacks, so a vsynced present
+## blocks the main thread for long stretches and the sound that is fed once a frame (the rack's direct feed, the
+## monitor synth) runs dry and crackles. Unfocused, present without waiting, and keep the frame rate low; back on focus.
+var _vsync_before := -1
+
+
+func _unfocused_pacing(away: bool) -> void:
+	if get_viewport() != null and get_viewport().use_xr:
+		return
+	if away and _vsync_before < 0:
+		_vsync_before = DisplayServer.window_get_vsync_mode()
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		Engine.max_fps = 30
+	elif not away and _vsync_before >= 0:
+		DisplayServer.window_set_vsync_mode(_vsync_before as DisplayServer.VSyncMode)
+		Engine.max_fps = 0
+		_vsync_before = -1
 
 
 ## The Rig Roulette panel, setup wall and the roll itself (`RollRoom`).

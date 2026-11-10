@@ -1,0 +1,17 @@
+{
+  "what": "A screen on the wall that draws one signal against another, so a sound becomes a shape: a line, a loop, a cloud or a flower.",
+  "how": "The dot moves left and right with X and up and down with Y, and leaves a short glowing trail. Two sine waves of the same pitch make a circle or ellipse, a mono sound (the same on both) makes a straight diagonal line, and a wide stereo sound makes a cloud. If Y is not patched, it is the same as X. Both signals pass on to the outputs. It shows its picture even when nothing downstream is heard.",
+  "ins": {
+    "x": "The signal that moves the dot left and right.",
+    "y": "The signal that moves the dot up and down. Unpatched, it copies X."
+  },
+  "outs": {
+    "x": "X passed on untouched.",
+    "y": "Y passed on untouched."
+  },
+  "knobs": {
+    "gain": "How big the picture is. Turn it up to see quiet signals, down if the picture is cut off at the edges.",
+    "turn": "X-Y draws the signals as they are. L-R turns the picture a quarter turn, as a stereo scope does, so a mono sound stands straight up instead of lying diagonal."
+  },
+  "try": "Patch two VCOs (oscillators) into X and Y, set to similar pitches and nudge one slightly: the shape slowly turns inside out as the pitches drift."
+}

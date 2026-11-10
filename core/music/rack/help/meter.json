@@ -1,0 +1,16 @@
+{
+  "what": "A screen on the wall with two level bars (left and right) that show how loud a sound is, with a white tick that remembers the highest peak for a moment.",
+  "how": "Each bar shows the average loudness (RMS, the steady level your ears hear) in green, yellow and red as it gets close to the top. The white tick marks the recent loudest peak and lingers about a second and a half before it falls. If the tick reaches the right-hand end, the sound is about to clip. Both signals pass on unchanged. It shows its picture even when nothing downstream is heard.",
+  "ins": {
+    "l": "The left signal to measure (audio).",
+    "r": "The right signal to measure (audio)."
+  },
+  "outs": {
+    "l": "The left signal, passed on untouched.",
+    "r": "The right signal, passed on untouched."
+  },
+  "knobs": {
+    "range": "How many dB (decibels, a measure of loudness) the bar covers, from full level at the right to this far down at the left. A larger range shows quiet sounds; a smaller one is more sensitive to changes near the top."
+  },
+  "try": "Put METER before OUT and play a loud patch. If the white tick keeps hitting the right-hand end, turn the mixer or LIMIT down until it stays in the green and yellow."
+}

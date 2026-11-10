@@ -1,0 +1,14 @@
+{
+  "what": "A safety device that boosts a sound and then stops its peaks from going over the maximum, so it gets louder without clipping.",
+  "how": "The sound is multiplied by GAIN and then any peak that would go past full level is squeezed back down. Quiet sounds come out louder while loud peaks are held at the ceiling, instead of breaking up as a harsh crackle.",
+  "ins": {
+    "in": "The sound to limit (audio, -1..1)."
+  },
+  "outs": {
+    "out": "The boosted sound, held so its peaks do not go beyond the ceiling."
+  },
+  "knobs": {
+    "gain": "How much to boost the sound before limiting, 0 to 24 dB (decibels, a measure of loudness; 6 dB is roughly double the level). More gain is louder and more squashed."
+  },
+  "try": "Put LIMIT between the last mixer and OUT: patch MIX's output into LIMIT's in and LIMIT's out into OUT's left and right. Raise GAIN until the sound is louder but not crackly."
+}

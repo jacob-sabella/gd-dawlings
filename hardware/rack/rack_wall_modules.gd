@@ -120,6 +120,7 @@ func _remove_module(id: String) -> void:
 		wall._drop(holder as Node)
 	wall.module_nodes.erase(id)
 	wall.module_nodes.erase(id + "/x")
+	wall.module_nodes.erase(id + "/?")
 	for d: Dictionary in [wall.jacks, wall.knobs, wall._settle_at, wall._stream_due]:
 		for key: String in d.keys():
 			if key.begins_with(id + "."):
@@ -211,13 +212,18 @@ func _build_module(id: String) -> void:
 				"take %s out of the case, and its cables with it" % title, func() -> void: wall.edit_asked.emit("remove", [id]))
 		holder.add_child(gone)
 		wall.module_nodes[id + "/x"] = gone
-	# The grip along the title, clear of the take-out key: drag the module about the case.
+	# The ? beside it: the module's help card (what it is, each jack and knob, something to try).
+	var ask := wall._key("?", Vector2(0.02, 0.02), Vector3(wide * 0.5 - (0.014 if type == RackPatch.OUT_MODULE else 0.04), RackWall.ROW_TALL - 0.026, 0.0),
+			"what is %s? what it does, each jack and knob, and something to try" % title, func() -> void: wall.help_asked.emit(id))
+	holder.add_child(ask)
+	wall.module_nodes[id + "/?"] = ask
+	# The grip along the title, clear of the ? and take-out keys: drag the module about the case.
 	var grip := RackHandle.new()
 	grip.name = "Grip"
 	grip.module_id = id
 	grip.module_title = title
-	grip.size = Vector2(wide - 0.05, 0.034)
-	grip.position = Vector3(-0.008, RackWall.ROW_TALL - 0.026, 0.0)
+	grip.size = Vector2(wide - 0.08, 0.034)
+	grip.position = Vector3(-0.023, RackWall.ROW_TALL - 0.026, 0.0)
 	grip.drag_began.connect(wall._on_grip_began)
 	grip.drag_moved.connect(wall._on_grip_moved)
 	grip.drag_finished.connect(wall._on_grip_finished)
@@ -232,8 +238,9 @@ func _build_module(id: String) -> void:
 		var c := n % per
 		var at := Vector3((c - (inrow - 1) * 0.5) * RackWall.KNOB_PITCH, RackWall.ROW_TALL - 0.1 - r * RackWall.KNOB_ROW, 0.0)
 		_build_knob(holder, id, ks[n], at)
-	if type == "builtin.scope":
+	if ScopeScreen.mode_of(type) >= 0:
 		var screen := ScopeScreen.new()
+		screen.mode = ScopeScreen.mode_of(type)
 		screen.size = Vector2(wide - 0.03, 0.2)
 		screen.tint = _tint_of(type)
 		screen.position = Vector3(0, 0.24, 0.003)

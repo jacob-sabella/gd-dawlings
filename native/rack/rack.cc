@@ -150,8 +150,11 @@ void Rack::rebuild() {
     for (auto& e : edges_) if (e.to == m) reach(e.from);
   };
   if (sink_) reach(sink_);
-  // A SCOPE watches whatever feeds it, heard or not.
-  for (auto& kv : mods_) if (std::string(kv.second->spec->type) == "scope") reach(kv.second.get());
+  // A screen (SCOPE, SPECTRUM, VECTOR, METER, PLASMA) watches whatever feeds it, heard or not.
+  for (auto& kv : mods_) {
+    const std::string ty = kv.second->spec->type;
+    if (ty == "scope" || ty == "spectrum" || ty == "vector" || ty == "meter" || ty == "plasma") reach(kv.second.get());
+  }
   order_.clear();
   std::set<Module*> done, onstack;
   std::function<void(Module*)> visit = [&](Module* m) {
@@ -185,7 +188,15 @@ void Rack::block() {
     m->peak = p;
   }
   ctx.block++;
-  if (ctx.tp.playing) ctx.tp.beats += (double)BLOCK / RATE * ctx.tp.bpm / 60.0;
+  if (ctx.tp.playing) {
+    double per_block = (double)BLOCK / RATE * ctx.tp.bpm / 60.0;
+    ctx.tp.beats += per_block;
+    // A drift told by `sync` is taken up smoothly, at most 2% of the tempo, so no pulse is cut or doubled.
+    double room = per_block * 0.02;
+    double take = ctx.tp.slew > room ? room : (ctx.tp.slew < -room ? -room : ctx.tp.slew);
+    ctx.tp.beats += take;
+    ctx.tp.slew -= take;
+  }
 }
 
 void Rack::render(float* l, float* r, int n) {
