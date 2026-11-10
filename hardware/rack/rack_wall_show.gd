@@ -21,6 +21,13 @@ func set_track(t: int, track_name := "") -> void:
 	wall.keys._build_palette()
 
 
+## Light the POWER key, and rebuild the palette if it changed.
+func set_power(on: bool) -> void:
+	if on != wall._power:
+		wall._power = on
+		wall.keys._build_palette()
+
+
 ## Light the REC state on the wall and rebuild the key palette if it changed.
 func set_recording(on: bool) -> void:
 	if on != wall._recording:

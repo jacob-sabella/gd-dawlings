@@ -1,0 +1,17 @@
+{
+  "what": "An effect that makes a sound swell and dip in volume at a steady speed.",
+  "how": "A slow wave (RATE) is used as a volume control on the sound, so it gets louder and quieter over and over. DEPTH is how far the volume falls, and WAVE chooses the shape of the swell. A sine is smooth; a square switches abruptly between loud and quiet.",
+  "ins": {
+    "in": "The sound to make pulse (audio, -1..1).",
+    "rate": "A control signal that changes the speed. Each 1.0 of signal doubles the RATE (an octave), -1.0 halves it. Patch an LFO or ENV here."
+  },
+  "outs": {
+    "out": "The sound with its volume rising and falling."
+  },
+  "knobs": {
+    "rate": "How fast the volume pulses, 0.1 to 20 times a second.",
+    "depth": "How deep the dips go: 0 is no change, 1 drops all the way to silence.",
+    "wave": "The shape of the swell: SINE (smooth), TRI (a straight up-and-down), SAW (a ramp, with one sudden change per cycle), SQUARE (on and off)."
+  },
+  "try": "Patch VCO into TREMOLO's in and TREMOLO's out into OUT's left and right. Hold a note on KEYS, set RATE around 5 Hz, then switch WAVE to SQUARE for a chopped sound."
+}

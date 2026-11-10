@@ -1,6 +1,6 @@
 {
   "what": "A metronome made of electrical pulses. It gives other modules a steady beat to follow, for example to step a sequencer or trigger a drum.",
-  "how": "Every output is a short blip (about 5 thousandths of a second) repeated at its own rate: 16th notes are the fastest, 8th notes half as fast, beats half again, and bars once per sixteen 16ths. In SONG mode it follows the song's tempo and position, and only ticks while the song is playing. In FREE mode it ignores the song, runs all the time, and uses the TEMPO knob.",
+  "how": "Every output is a short blip (about 5 thousandths of a second) repeated at its own rate: 16th notes are the fastest, 8th notes half as fast, beats half again, and bars once per sixteen 16ths. In SONG mode it follows the song's tempo and position, and only ticks while the song is playing. In FREE mode it ignores the song, runs all the time, and uses the TEMPO knob. The pulses are kept within a millisecond or so of the song: the rack is told the song's place many times a second and eases its own clock to it.",
   "ins": {},
   "outs": {
     "16th": "A pulse on every 16th note: four per beat. Patch it into SEQ's clk to step through a pattern quickly.",
@@ -12,7 +12,8 @@
   "knobs": {
     "bpm": "Tempo in beats per minute, 40 to 240. Only used in FREE mode; SONG mode uses the song's tempo.",
     "sync": "FREE: runs on its own at TEMPO, all the time. SONG: follows the song's tempo and position, and runs only while the song plays.",
-    "swing": "Intended to push every second 16th note late for a shuffled feel, but in this version it has no effect on the pulses."
+    "swing": "Intended to push every second 16th note late for a shuffled feel, but in this version it has no effect on the pulses.",
+    "offset": "Runs the pulses early by this many milliseconds (below zero, late), from 100 late to 200 early. The rack's sound reaches the mix a little after the song's own, so set this near that delay and what CLOCK steps lands with the song: play a click on a track, turn OFFSET up until the two are one sound. Only used in SONG mode."
   },
   "try": "Set SYNC to FREE. Patch CLOCK's beat into DRUM's trig and DRUM's out into OUT's left, and you have a four-on-the-floor kick. Turn TEMPO to speed it up and slow it down."
 }

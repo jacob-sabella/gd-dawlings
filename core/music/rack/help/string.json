@@ -1,0 +1,21 @@
+{
+  "what": "A plucked string, like a guitar, harp or zither, played with a trigger and a pitch.",
+  "how": "Each pulse at TRIG plucks a simulated string at the given pitch. The string rings and fades by itself. BRIGHT sets how much of the high end the pluck has, DAMPING how fast it fades, and STRUCTURE changes the string's character.",
+  "ins": {
+    "pitch": "Pitch in octaves (1 volt per octave, 0 is middle C). Patch KEYS' pitch here.",
+    "trig": "A pulse that plucks the string. Patch KEYS' gate or CLOCK here."
+  },
+  "outs": {
+    "out": "The plucked sound (audio).",
+    "aux": "A second tap of the voice, a different mix of the same sound. Patch it somewhere else for a stereo spread."
+  },
+  "knobs": {
+    "tune": "Shifts the pitch in semitones, -24 to 24 (two octaves down to two up), added to the pitch input.",
+    "structure": "Changes the character of the string, 0 to 1: from a plain pluck toward a more inharmonic, metallic sound.",
+    "bright": "How bright the pluck is, 0 to 1.",
+    "damp": "How fast the string dies away, 0 to 1. Low is a long ring; high is a short pluck.",
+    "accent": "How hard the string is plucked, 0 to 1.",
+    "hold": "OFF or ON. ON keeps the string sounding instead of fading."
+  },
+  "try": "Patch KEYS' pitch into STRING's pitch and KEYS' gate into STRING's trig, STRING's out into OUT. Play a tune; try a little DELAY or REVERB after it for a harp."
+}

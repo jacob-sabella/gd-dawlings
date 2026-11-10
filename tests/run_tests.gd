@@ -860,6 +860,8 @@ func _ready() -> void:
 	await _t("_test_a_rack_layout_keeps_modules_apart_and_answers_in_words")
 	await _t("_test_the_studios_rack_is_edited_through_the_room_and_lit_by_its_level")
 	await _t("_test_a_key_played_in_the_studio_is_heard_and_lights_the_room")
+	await _t("_test_the_rack_power_key_switches_the_rack")
+	await _t("_test_the_rack_clock_has_an_offset_and_follows_sync")
 	await _t("_test_a_bandmates_first_note_wakes_the_rack_and_is_heard")
 	await _t("_test_a_scope_shows_the_wave_patched_into_it_even_when_unheard")
 	await _t("_test_the_cv_bench_is_a_source_a_hand_sets")
@@ -950,6 +952,84 @@ func _test_signal_reaper_estimates_its_sends() -> void:
 
 func _test_signal_the_built_in_engine_taps_every_stage() -> void:
 	await SignalTests.new(self).the_built_in_engine_taps_every_stage()
+
+
+const ControlApiTests := preload("res://tests/control_api_tests.gd")
+
+
+func _test_control_api_rules() -> void:
+	await ControlApiTests.new(self).rules()
+
+
+func _test_control_api_batches() -> void:
+	await ControlApiTests.new(self).batches()
+
+
+func _test_control_api_refs() -> void:
+	await ControlApiTests.new(self).refs()
+
+
+func _test_control_api_server() -> void:
+	await ControlApiTests.new(self).server()
+
+
+func _test_control_api_socket() -> void:
+	await ControlApiTests.new(self).socket()
+
+
+func _test_control_api_stream() -> void:
+	await ControlApiTests.new(self).stream()
+
+
+func _test_control_api_command() -> void:
+	await ControlApiTests.new(self).command()
+
+
+func _test_control_api_panel() -> void:
+	await ControlApiTests.new(self).panel()
+
+
+func _test_control_api_run() -> void:
+	await ControlApiTests.new(self).run()
+
+
+# --- the control API (docs/mcp_assistant.md): each domain's checks are in tests/control_<domain>_tests.gd ---
+
+const ControlProjectTests := preload("res://tests/control_project_tests.gd")
+const ControlTrackTests := preload("res://tests/control_track_tests.gd")
+const ControlFxTests := preload("res://tests/control_fx_tests.gd")
+const ControlItemTests := preload("res://tests/control_item_tests.gd")
+const ControlRackTests := preload("res://tests/control_rack_tests.gd")
+const ControlRoomToolsTests := preload("res://tests/control_roomtools_tests.gd")
+const ControlModsTests := preload("res://tests/control_mods_tests.gd")
+
+
+func _test_control_project() -> void:
+	await ControlProjectTests.new(self).run()
+
+
+func _test_control_track() -> void:
+	await ControlTrackTests.new(self).run()
+
+
+func _test_control_fx() -> void:
+	await ControlFxTests.new(self).run()
+
+
+func _test_control_item() -> void:
+	await ControlItemTests.new(self).run()
+
+
+func _test_control_rack() -> void:
+	await ControlRackTests.new(self).run()
+
+
+func _test_control_room() -> void:
+	await ControlRoomToolsTests.new(self).run()
+
+
+func _test_control_mods() -> void:
+	await ControlModsTests.new(self).run()
 
 
 # --- the Workshop (docs/workshop.md): its checks are in tests/workshop_tests.gd -----------------
@@ -45172,6 +45252,71 @@ func _rack_panels(wall: RackWall) -> int:
 	return wall.module_nodes.keys().filter(func(k: String) -> bool: return not k.contains("/")).size()
 
 
+## CLOCK's OFFSET runs its pulses early by that many milliseconds, and `sync` jumps the engine's clock to the
+## song's place after a seek and eases a small drift away instead of cutting a pulse.
+func _test_the_rack_clock_has_an_offset_and_follows_sync() -> void:
+	if not RackEngine.available():
+		print("  (no engine here: the clock is not heard)")
+		return
+	var first := func(offset_ms: float, lines: Array) -> float:
+		var p := RackPatch.empty()
+		var c := RackPatch.add(p, "builtin.clock")
+		RackPatch.add(p, "builtin.out")
+		RackPatch.connect_cable(p, "%s.beat" % c, "out.l")
+		RackPatch.set_knob(p, c, "offset", (offset_ms + 100.0) / 300.0)
+		var heard := RackEngine.render(p, PackedStringArray(lines))
+		for n in heard.size():
+			if absf(heard[n].x) > 0.01:
+				return float(n) / RackEngine.RATE
+		return -1.0
+	# From beat 0.5 the next beat is a quarter of a second away at 120 bpm.
+	var base: float = first.call(0.0, ["play 0.5", "run 1"])
+	check("at 120 bpm the next beat is a quarter second away (%.3f)" % base, absf(base - 0.25) < 0.01)
+	var early: float = first.call(100.0, ["play 0.5", "run 1"])
+	check("OFFSET 100 ms brings it 100 ms early (%.3f)" % early, absf(early - 0.15) < 0.01)
+	var late: float = first.call(-50.0, ["play 0.5", "run 1"])
+	check("a negative OFFSET runs it late (%.3f)" % late, absf(late - 0.30) < 0.01)
+	var jumped: float = first.call(0.0, ["play 0", "sync 0.8", "run 1"])
+	check("a sync far off jumps the clock to the song's place (%.3f)" % jumped, absf(jumped - 0.1) < 0.01)
+	var eased: float = first.call(0.0, ["play 0.5", "sync 0.6", "run 1"])
+	check("a small drift is eased, not jumped (%.3f)" % eased, eased > 0.21 and eased < 0.2475)
+
+
+## The rack's big ON/OFF key: off the row says so and the wall's key goes dark, nothing wakes the engine and a
+## running one is stopped; on again it wakes with the patch it had. The control tool says the same.
+func _test_the_rack_power_key_switches_the_rack() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var host: RackHost = studio.rack_host
+	check("the rack starts on", host.rack_on() and studio.rack_wall._power)
+	check("the wall has the big key", studio.rack_wall._extras.has("power"))
+	var patch_before: Dictionary = (studio.rack_row["patch"] as Dictionary).duplicate(true)
+	studio.rack_wall.power_asked.emit()
+	check("the key switches it off", not host.rack_on() and not studio.rack_wall._power)
+	check("the patch is kept", (studio.rack_row["patch"] as Dictionary)["modules"].size() == patch_before["modules"].size())
+	host._rack_wake()
+	check("nothing wakes the engine while it is off", not studio.rack_voice.running())
+	host.ask_rack("power", [true])
+	check("it is switched on by an explicit word", host.rack_on() and studio.rack_wall._power)
+	if RackEngine.available():
+		host._rack_wake()
+		check("and the engine wakes", studio.rack_voice.running())
+		host.ask_rack("power", [false])
+		check("off stops the engine", not studio.rack_voice.running())
+		host.ask_rack("power", [])
+		check("a bare ask flips it back on", host.rack_on())
+	var api := ControlTools.make_api(studio)
+	var off: Dictionary = await api.call_tool("rack_power", {"on": false}, 0)
+	check("the control tool switches it off", bool(off.get("ok", false)) and not host.rack_on())
+	var read: Dictionary = await api.call_tool("rack_power", {}, 0)
+	check("and reads the state", bool(read.get("ok", false)) and (read["data"] as Dictionary).get("on", true) == false)
+	studio.queue_free()
+	await get_tree().process_frame
+
+
 ## The rack played live from the keyboard, start to finish, in a studio: a computer key pressed with the
 ## keys on goes into the engine, is heard through the track the rack plays through, lights the room's
 ## annex and the wall's meters, and a bandmate's note comes in the same way for the host.
@@ -45281,6 +45426,57 @@ func _test_a_scope_shows_the_wave_patched_into_it_even_when_unheard() -> void:
 			break
 	check("the scope sees a wave with nothing patched to OUT, and nobody reading the stream (%.2f)" % peak, peak > 0.05)
 	check("its screen has the points of a window", voice.scopes.has("scope") and (voice.scopes["scope"] as PackedFloat32Array).size() == 96)
+	voice.shutdown()
+	voice.queue_free()
+
+
+## The eye candy: SPECTRUM, VECTOR, METER and PLASMA are screens like the SCOPE. Each sees what is patched into it
+## with nothing patched to OUT, and each draws in its own mode without error.
+func _test_the_eye_candy_modules_see_what_is_patched_in_and_draw_it() -> void:
+	for t in ["builtin.scope", "builtin.spectrum", "builtin.vector", "builtin.meter", "builtin.plasma"]:
+		check("%s is a screen of its own mode" % t, ScopeScreen.mode_of(t) >= 0 and RackLayout.width_of(t) == RackLayout.SCOPE_WIDE)
+	var seen := {}
+	for t in ["builtin.spectrum", "builtin.vector", "builtin.meter", "builtin.plasma"]:
+		var screen := ScopeScreen.new()
+		screen.mode = ScopeScreen.mode_of(t)
+		add_child(screen)
+		var pts := PackedFloat32Array()
+		pts.resize(96)
+		for i in 96:
+			pts[i] = 0.5 + 0.4 * sin(i * 0.3)
+		screen.set_wave(pts)
+		screen.set_wave(pts)
+		check("%s draws a picture" % t, screen.get_child_count() > 3)
+		screen.queue_free()
+	if not RackEngine.available():
+		return
+	var voice := RackVoice.new()
+	add_child(voice)
+	var p := RackPatch.empty()
+	RackPatch.add(p, "builtin.noise", Vector2i(0, 0))
+	RackPatch.add(p, "builtin.spectrum", Vector2i(2, 0))
+	RackPatch.add(p, "builtin.vector", Vector2i(6, 0))
+	RackPatch.add(p, "builtin.meter", Vector2i(10, 0))
+	RackPatch.add(p, "builtin.plasma", Vector2i(14, 0))
+	RackPatch.add(p, "builtin.out", Vector2i(18, 0))
+	RackPatch.connect_cable(p, "noise.white", "spectrum.in")
+	RackPatch.connect_cable(p, "noise.white", "vector.x")
+	RackPatch.connect_cable(p, "noise.white", "meter.l")
+	RackPatch.connect_cable(p, "noise.white", "plasma.red")
+	voice.set_patch(p)
+	check("the voice starts", voice.start())
+	for i in 60:
+		await get_tree().create_timer(0.05).timeout
+		voice._process(0.05)
+		for id in ["spectrum", "vector", "meter", "plasma"]:
+			if voice.scopes.has(id):
+				for v in (voice.scopes[id] as PackedFloat32Array):
+					if absf(v) > 0.05:
+						seen[id] = true
+		if seen.size() == 4:
+			break
+	for id in ["spectrum", "vector", "meter", "plasma"]:
+		check("%s sees the noise with nothing patched to OUT" % id, seen.has(id))
 	voice.shutdown()
 	voice.queue_free()
 

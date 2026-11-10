@@ -1,0 +1,21 @@
+{
+  "what": "A struck bar, bell or glass: a voice built from a few ringing resonances, played with a trigger and a pitch.",
+  "how": "Each pulse at TRIG strikes a set of ringing resonances tuned to the pitch. STRUCTURE changes how those resonances are spaced, which changes the material (wood, metal, glass). BRIGHT sets how many high resonances ring and DAMPING how quickly they die away.",
+  "ins": {
+    "pitch": "Pitch in octaves (1 volt per octave, 0 is middle C). Patch KEYS' pitch here.",
+    "trig": "A pulse that strikes the voice. Patch KEYS' gate or CLOCK here."
+  },
+  "outs": {
+    "out": "The struck sound (audio).",
+    "aux": "A second tap of the voice, a different mix of the same sound. Patch it somewhere else for a stereo spread."
+  },
+  "knobs": {
+    "tune": "Shifts the pitch in semitones, -24 to 24 (two octaves down to two up), added to the pitch input.",
+    "structure": "The spacing of the resonances, 0 to 1: it changes the material from a simple bar to a bell-like clang.",
+    "bright": "How bright the strike is, 0 to 1. Low is soft and dull; high rings with more overtones.",
+    "damp": "How fast the ring dies away, 0 to 1. Low is a long ring; high is a short, damped tap.",
+    "accent": "How hard it is struck, 0 to 1.",
+    "hold": "OFF or ON. ON keeps the sound ringing as a sustained tone instead of dying away."
+  },
+  "try": "Patch KEYS' pitch into MODAL's pitch and KEYS' gate into MODAL's trig, MODAL's out into OUT. Play notes; raise STRUCTURE for a bell and lower DAMPING for a longer ring."
+}

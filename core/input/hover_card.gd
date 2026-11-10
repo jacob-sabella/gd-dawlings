@@ -31,6 +31,10 @@ var _on: Surface = null
 var _shown: ControlAffordance = null
 var _line: Label3D
 var _hint: Label3D
+## A dark plate behind the words, so they read over any knob, key or lane at any angle.
+var _back: MeshInstance3D
+const PAD := 0.012
+const BACK_ALPHA := 0.82
 
 
 ## The surface a control is part of, or null.
@@ -72,6 +76,7 @@ func show_for(control: ControlAffordance, _at := Vector2.ZERO) -> void:
 	# The hint wraps rather than shrinks: it is the longest thing said and the one read last.
 	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint.width = WIDEST / PIXEL
+	_fit_back()
 	var box := HoverRim.footprint(control)
 	var face := control.global_transform.orthonormalized()
 	var tall := CAP * (3.4 if _hint.visible else 1.4)
@@ -82,6 +87,22 @@ func show_for(control: ControlAffordance, _at := Vector2.ZERO) -> void:
 	var at := under if _in_view(under - face.basis.y.normalized() * tall) or not _in_view(over) else over
 	_strip.global_transform = Transform3D(face.basis, at)
 	_strip.visible = true
+
+
+## The plate sized to the lettering as it is now: the lines' bounds in the strip's plane, and a margin.
+func _fit_back() -> void:
+	var rect := Rect2()
+	var first := true
+	for l: Label3D in [_line, _hint]:
+		if not l.visible:
+			continue
+		var a := l.get_aabb()
+		var r := Rect2(l.position.x + a.position.x, l.position.y + a.position.y, a.size.x, a.size.y)
+		rect = r if first else rect.merge(r)
+		first = false
+	rect = rect.grow(PAD)
+	(_back.mesh as QuadMesh).size = rect.size
+	_back.position = Vector3(rect.get_center().x, rect.get_center().y, -0.001)
 
 
 func _in_view(point: Vector3) -> bool:
@@ -129,11 +150,24 @@ func _build() -> void:
 	_strip.name = "HoverStrip"
 	_strip.top_level = true
 	add_child(_strip)
+	_back = MeshInstance3D.new()
+	_back.name = "Backing"
+	_back.mesh = QuadMesh.new()
+	var plate := StandardMaterial3D.new()
+	plate.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	plate.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	plate.albedo_color = Color(0.04, 0.05, 0.07, BACK_ALPHA)
+	plate.no_depth_test = true
+	plate.render_priority = 2
+	_back.material_override = plate
+	_back.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_strip.add_child(_back)
 	_line = _label(CAP, INK)
 	_hint = _label(CAP * 0.72, DIM)
 	_hint.position.y = -CAP * 1.6
 	# A heavier outline than the gear's own: the hint can lie over keys and lanes, not bare panel.
 	_hint.outline_size = maxi(_hint.outline_size, roundi(_hint.font_size * 0.3))
+	_strip.move_child(_back, -1)  # the lettering stays the strip's first children
 	_strip.visible = false
 
 

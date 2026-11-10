@@ -1,0 +1,18 @@
+{
+  "what": "A sharp, nasal, synthetic oscillator made from a sine wave cut into windows, with a formant you can sweep.",
+  "how": "ZOSC makes a sine at the formant frequency, then cuts it into a new window at every cycle of the played pitch. The pitch stays where you play it; FORMANT sets the resonant, vowel-like peak. SHAPE and MODE change the window and give a very wide range of colours.",
+  "ins": {
+    "pitch": "Pitch in octaves (1 volt per octave, 0 is middle C). Patch KEYS' pitch here.",
+    "formant": "A control signal that moves the formant. Each 1.0 of signal doubles its frequency (an octave). Patch an ENV here for a plucky sweep."
+  },
+  "outs": {
+    "out": "The oscillator (audio)."
+  },
+  "knobs": {
+    "formant": "The frequency of the resonant peak, 100 to 5000 Hz.",
+    "shape": "Changes the contour of the window, -1 to 1. Zero is neutral.",
+    "mode": "Changes the offset and phase of the wave, -1 to 1, giving different timbres.",
+    "tune": "Shifts the pitch in semitones, -24 to 24 (two octaves down to two up), added to the pitch input."
+  },
+  "try": "Patch KEYS' pitch into ZOSC's pitch, ZOSC's out through a VCA with an AD envelope into OUT, and the same AD into the formant input for a squelchy, plucked sweep."
+}

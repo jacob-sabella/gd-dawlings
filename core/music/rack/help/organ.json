@@ -1,0 +1,21 @@
+{
+  "what": "Seven oscillators an octave apart, saw and square, that you mix by hand: strings and organ pads.",
+  "how": "Each pair of knobs sets how loud a saw and a square wave are at one octave. The footage numbers come from organs: 8' is the played pitch, 4' is one octave up, 2' is two octaves up and 1' is three octaves up. Mixing them is like drawing the organ's stops, so you can make a thin or a full tone.",
+  "ins": {
+    "pitch": "Pitch in octaves (1 volt per octave, 0 is middle C). Patch KEYS' pitch here."
+  },
+  "outs": {
+    "out": "The mix of all seven (audio)."
+  },
+  "knobs": {
+    "tune": "Shifts the pitch in semitones, -24 to 24 (two octaves down to two up), added to the pitch input.",
+    "saw8": "The volume of the saw at the played pitch, 0 to 1.",
+    "sq8": "The volume of the square at the played pitch, 0 to 1.",
+    "saw4": "The volume of the saw one octave up, 0 to 1.",
+    "sq4": "The volume of the square one octave up, 0 to 1.",
+    "saw2": "The volume of the saw two octaves up, 0 to 1.",
+    "sq2": "The volume of the square two octaves up, 0 to 1.",
+    "saw1": "The volume of the saw three octaves up, 0 to 1."
+  },
+  "try": "Patch KEYS' pitch into ORGAN's pitch, ORGAN's out through a VCA into OUT. Hold a chord and move the SAW and SQ knobs, then try the output through CHORUS."
+}

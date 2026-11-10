@@ -1,0 +1,20 @@
+{
+  "what": "One oscillator that morphs from a saw, through a triangle, to a pulse wave as you turn SHAPE.",
+  "how": "A variable-shape oscillator makes one wave whose outline changes smoothly with SHAPE. PW (pulse width) changes the proportions of the pulse wave. With SYNC on, the wave restarts at a second, faster frequency (the pitch times RATIO), which gives a tearing, bright sound that changes as RATIO is swept.",
+  "ins": {
+    "pitch": "Pitch in octaves (1 volt per octave, 0 is middle C). Patch KEYS' pitch here.",
+    "shape": "A control signal that adds to SHAPE (each 1.0 adds 0.5). Patch an LFO or ENV to morph the wave.",
+    "pwm": "A control signal that adds to PW (each 1.0 adds 0.4). An LFO here is the classic pulse-width modulation, a moving, chorus-like tone."
+  },
+  "outs": {
+    "out": "The oscillator (audio)."
+  },
+  "knobs": {
+    "shape": "The wave shape, 0 to 1: a saw at one end, a triangle in the middle, a pulse at the top.",
+    "pw": "The pulse width, 0 to 1. 0.5 is a symmetrical square when SHAPE is at the pulse end; it only matters there.",
+    "tune": "Shifts the pitch in semitones, -24 to 24 (two octaves down to two up), added to the pitch input.",
+    "sync": "OFF or ON. ON restarts the wave at the pitch times RATIO, for a hard-sync sound.",
+    "ratio": "The sync frequency compared to the pitch, 0.5 to 8. Only matters when SYNC is ON; sweeping it makes the classic sync whoosh."
+  },
+  "try": "Patch KEYS' pitch into SHAPER's pitch, SHAPER's out through a VCA into OUT, and an LFO into the pwm input. Hold a note and sweep SHAPE from saw to pulse; then turn SYNC on and move RATIO."
+}

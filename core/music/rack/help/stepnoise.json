@@ -1,0 +1,16 @@
+{
+  "what": "Noise that holds a random level and only changes at a set rate: stepped random values, or gritty buzz when fast.",
+  "how": "A new random value is picked at the RATE and held until the next one. At a few times a second you get a random staircase to use as control, like a sample-and-hold. At audio rates it turns into a buzzy, pitched-sounding noise.",
+  "ins": {
+    "rate": "A control signal that changes the speed. Each 1.0 of signal doubles the RATE (an octave).",
+    "sync": "A pulse that restarts the cycle and picks a new value now. Patch CLOCK here to make the steps follow the beat."
+  },
+  "outs": {
+    "out": "The stepped noise, up to plus or minus LEVEL. Use it as audio or as a control signal."
+  },
+  "knobs": {
+    "rate": "How often a new value is picked, 0.1 to 20000 times a second. Slow gives steps; fast gives a gritty tone.",
+    "level": "The size of the output, 0 to 1."
+  },
+  "try": "Patch CLOCK's 8th into STEPNOISE's sync, STEPNOISE's out into SVF's cutoff (CV about the middle), VCO into SVF's in and SVF's lp into OUT. The filter jumps to a new random setting on each beat."
+}

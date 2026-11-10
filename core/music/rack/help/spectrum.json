@@ -1,0 +1,15 @@
+{
+  "what": "A screen on the wall that shows what a sound is made of: a row of glowing bars, bass notes at the left and bright, high sounds at the right.",
+  "how": "The sound is chopped into its frequencies (a spectrum) many times a second and each bar is how loud one band of frequencies is. A bass drum lights the left bars; a hi-hat lights the right. The sound passes straight on to OUT unchanged, so you can put it anywhere on a cable. It shows its picture even when nothing downstream is heard.",
+  "ins": {
+    "in": "The sound to look at (audio)."
+  },
+  "outs": {
+    "out": "The same sound, passed on untouched."
+  },
+  "knobs": {
+    "range": "How many dB (decibels, a measure of loudness) below full level still show as a bar. A bigger range shows quiet detail; a smaller one shows only the loud parts.",
+    "fall": "How slowly the bars drop after a loud moment. High and the bars hang and sink gently; low and they snap down."
+  },
+  "try": "Patch a NOISE or a sawtooth source into SPECTRUM's in. Then put a filter between them and turn its cutoff: watch the bars on the right vanish as the sound darkens."
+}

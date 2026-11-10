@@ -36,6 +36,13 @@ static func binary() -> String:
 	return _binary
 
 
+## Finds (and builds, if it must) the engine on a worker thread, so the first walk into the rack does not wait
+## on the build script's checks (about two seconds on the main thread, once).
+static func warm() -> void:
+	if not _tried:
+		WorkerThreadPool.add_task(binary, false, "rack engine")
+
+
 static func available() -> bool:
 	return binary() != ""
 

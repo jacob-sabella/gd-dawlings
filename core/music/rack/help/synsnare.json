@@ -1,0 +1,18 @@
+{
+  "what": "A snare drum from a pitched shell plus a rattle of noise: crack, snap and body.",
+  "how": "Each pulse at TRIG hits the drum. A pitched tone gives the body of the drum and filtered noise gives the snare wires' rattle. FREQ tunes the shell, FM adds a bent edge, SNAPPY balances the noise against the body, and DECAY sets how long it lasts.",
+  "ins": {
+    "trig": "A pulse that strikes the snare. Patch CLOCK's beat or a division of it here."
+  },
+  "outs": {
+    "out": "The snare (audio)."
+  },
+  "knobs": {
+    "freq": "Tunes the shell, 0.1 to 0.4 (this is a tuning scale, not Hz; the drum's pitch is this x 1000 Hz). Higher is a higher, tighter drum.",
+    "fm": "Adds a frequency-modulated, bent attack, 0 to 1.",
+    "decay": "How long the hit rings, 0 to 1.",
+    "snappy": "How much noise rattle is in the sound, 0 to 1. Low is mostly the shell; high is mostly the wires.",
+    "accent": "How hard the snare is struck, 0 to 1."
+  },
+  "try": "Patch CLOCK's 8th into SYNSNARE's trig, SYNSNARE's out into OUT, and SYNKICK on the beat in the same MIX. Raise SNAPPY to taste."
+}

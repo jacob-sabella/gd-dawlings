@@ -1,0 +1,19 @@
+{
+  "what": "An effect that makes a sound swirl, as if a slow whoosh were passing through it.",
+  "how": "The sound goes through a chain of filters that shift its phase, and a slow wobble (RATE) moves them. Mixed with the original, the shifting makes notches that sweep up and down the sound. More POLES means more notches and a deeper swirl.",
+  "ins": {
+    "in": "The sound to swirl (audio, -1..1). Rich sounds such as a saw wave show it best."
+  },
+  "outs": {
+    "out": "The original blended with the phased sound (by MIX)."
+  },
+  "knobs": {
+    "rate": "How fast the sweep goes, 0.02 to 8 times a second. Slow is a gentle swirl.",
+    "depth": "How far the sweep travels: 0 is none, 1 is the widest.",
+    "freq": "The centre of the sweep, 100 to 6000 Hz. Low is hollow and bassy, high is thin and airy.",
+    "fb": "Sends some of the result back in, 0 to 0.75: a more pronounced, whistling swirl.",
+    "poles": "How many filter stages, 1 to 8. More stages give more notches and a stronger effect.",
+    "mix": "Balance of dry and effect: 0 is only your sound, 1 is only the phased sound. The effect is strongest near the middle."
+  },
+  "try": "Patch VCO (SAW) into PHASER's in, PHASER's out into OUT's left and right, and hold a note on KEYS. Raise FEEDBACK and POLES to hear the swirl deepen, and slow RATE right down."
+}

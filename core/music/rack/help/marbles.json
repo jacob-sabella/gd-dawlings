@@ -1,0 +1,35 @@
+{
+  "what": "A random sampler from Mutable Instruments. It makes a stream of random gates (the T outputs) and, on those beats, picks random notes in a scale (the X and Y outputs). A DEJA VU control makes the randomness repeat, so a happy accident can become a looping melody.",
+  "how": "The T section makes three gates that are related by chance: which beats happen, which are missed and which are shared depends on the MODEL. The X section waits for each T gate and then picks a new random pitch, shaped by SPREAD (how far from the middle it may roam), X BIAS (whether it leans high or low) and STEPS (from smooth glides to notes locked into the SCALE). DEJA VU decides whether the choices are fresh each time or replayed from a loop LENGTH steps long: fully left is always new, the middle locks the loop, fully right keeps changing the loop slowly.",
+  "ins": {
+    "clock": "An optional clock for the T section (a gate). Without a cable, the module keeps its own time, set by RATE. With one, the T gates follow it and RATE picks a multiple or division of it.",
+    "xclock": "An optional clock for the X and Y section. Without a cable, X takes a new note on the T gates."
+  },
+  "outs": {
+    "t1": "The first random gate (1 when high).",
+    "t2": "The middle gate: a steady clock-like gate at the master rate, which the other two are related to.",
+    "t3": "The second random gate.",
+    "x1": "A random pitch, 1 per octave from C4 (patch it to a VCO's pitch). Changes on each X clock.",
+    "x2": "A second random pitch from the same settings, usually near x1 but not the same (set by X MODE).",
+    "x3": "A third random pitch, the same way.",
+    "y": "A slower random level that changes less often (set by Y DIV); useful as a gentle modulation."
+  },
+  "knobs": {
+    "model": "How the three gates relate: BERNOULLI toss a coin between t1 and t3 on each beat; CLUSTERS bursts of beats; DRUMS drum-like patterns; INDEPENDENT two unrelated coin tosses; DIVIDER t1 and t3 are slower copies of the clock; THREE each beat is one of three states; MARKOV the next gate depends on the last few.",
+    "range": "The speed range of the gates: 0.25X slow, 1X normal, 4X fast.",
+    "rate": "How fast the gates run (or, with a clock cable, the multiple or division of it): the middle is the base speed.",
+    "bias": "Leans the gates one way: toward t1 or toward t3 (the exact effect depends on the MODEL).",
+    "jitter": "Makes the gate timing loose and human, from perfectly steady to wandering.",
+    "deja": "Fresh or repeated: left is always new random values, the middle repeats them in a loop of LENGTH steps, right slowly changes the loop.",
+    "length": "How many steps long the deja vu loop is, 1 to 16.",
+    "width": "How long each gate stays high, from short pulses to long ones.",
+    "xrange": "How far the pitches can go: NARROW is about two octaves up, POSITIVE five octaves up, FULL five octaves either way.",
+    "spread": "How widely the random pitches scatter: left they stay on one note, right they roam the whole range.",
+    "xbias": "Leans the pitches low (left) or high (right).",
+    "steps": "From smooth (left, notes slide between values) to quantized (right, notes snap to the SCALE).",
+    "scale": "The set of notes the pitches may land on: MAJOR, MINOR, PENTA (pentatonic), GYPSY, CHROMATIC (every note) or WHOLE (whole tone).",
+    "xmode": "How x1, x2 and x3 relate: SAME gives each its own random values from identical settings, BUMP spreads their characters apart, TILT tilts their ranges.",
+    "ydiv": "How much slower than the X clock the y output changes, from every beat (1) to once in 64 beats (1/64)."
+  },
+  "try": "Patch MARBLES's x1 into VCO's pitch and VCO's out into OUT, and let it run: it plays random notes. Turn STEPS to the right so they sit in the scale. Then patch t1 into a DRUM's trig for a random kick, and turn DEJA VU to the middle: the melody and rhythm lock into a loop you can keep."
+}

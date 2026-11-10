@@ -1,0 +1,18 @@
+{
+  "what": "An effect that sounds like a jet passing overhead: a copy of the sound delayed by a tiny, moving amount.",
+  "how": "The sound is mixed with a copy delayed by a few milliseconds. A slow wobble (RATE) changes the delay, and where the two meet they cancel and reinforce at regular pitches, a comb of notches that slides up and down. FEEDBACK sends the copy back round for a stronger, ringing sweep.",
+  "ins": {
+    "in": "The sound to flange (audio, -1..1). Noise, a saw wave or drums all work well."
+  },
+  "outs": {
+    "out": "The original blended with the swept copy (by MIX)."
+  },
+  "knobs": {
+    "rate": "How fast the sweep goes, 0.02 to 6 times a second.",
+    "depth": "How far the delay moves, 0 to 0.93: none to the widest sweep.",
+    "delay": "The base delay in milliseconds, 0.1 to 7. Short is bright and tight; longer puts the combs lower in the sound.",
+    "fb": "How much of the output is sent back in, 0 to 0.95. High values ring and whistle strongly.",
+    "mix": "Balance of dry and effect: 0 is only your sound, 1 is only the delayed copy."
+  },
+  "try": "Patch NOISE into FLANGER's in and FLANGER's out into OUT's left and right. Set MIX to the middle, FEEDBACK about 0.5, and slow RATE down to hear a jet sweep. Try a DRUM loop through it as well."
+}

@@ -734,7 +734,13 @@ func _build_midi(box: VBoxContainer) -> void:
 	_midi_button.tooltip_text = ("Listen to every MIDI keyboard this computer can see: its keys, its pitch wheel, "
 			+ "its mod wheel and expression, all played, heard by the band and kept in your takes.")
 	_midi_button.pressed.connect(func():
+		# Looking for devices can hold the game up for a few seconds: say so first, and let it be drawn.
+		_midi_button.disabled = true
+		_midi_status.text = "Looking for MIDI keyboards…  (the game may pause for a moment)"
+		await get_tree().process_frame
+		await get_tree().process_frame
 		Session.guest_midi.open_midi()
+		_midi_button.disabled = false
 		_refresh_midi())
 	device_row.add_child(_midi_button)
 
@@ -1744,7 +1750,7 @@ func _build_project(column: VBoxContainer) -> void:
 	_template_files.name = "TemplateFiles"
 	_template_files.access = FileDialog.ACCESS_FILESYSTEM
 	_template_files.filters = PackedStringArray(["*.dawproject ; Project template"])
-	_template_files.use_native_dialog = true
+	_template_files.use_native_dialog = _native_dialogs()
 	_template_files.title = "Start from a template"
 	_template_files.file_selected.connect(func(path: String): start_from_template(path.get_file().get_basename()))
 	add_child(_template_files)
@@ -1753,7 +1759,7 @@ func _build_project(column: VBoxContainer) -> void:
 	_files.name = "ProjectFiles"
 	_files.access = FileDialog.ACCESS_FILESYSTEM
 	_files.filters = PackedStringArray(["*.dawproject ; DAWproject"])
-	_files.use_native_dialog = true
+	_files.use_native_dialog = _native_dialogs()
 	_files.file_selected.connect(_on_file_chosen)
 	add_child(_files)
 	_confirm_new = ConfirmationDialog.new()
@@ -1787,7 +1793,7 @@ func _build_project(column: VBoxContainer) -> void:
 	_imports.file_mode = FileDialog.FILE_MODE_OPEN_FILES
 	_imports.title = "Bring in audio"
 	_imports.filters = PackedStringArray(["%s ; Sound files" % ", ".join(AudioImport.EXTENSIONS.map(func(e): return "*." + e))])
-	_imports.use_native_dialog = true
+	_imports.use_native_dialog = _native_dialogs()
 	_imports.files_selected.connect(func(paths: PackedStringArray): bring_in_files(paths))
 	add_child(_imports)
 
@@ -2068,6 +2074,13 @@ func start_from_template(template_name: String) -> PackedStringArray:
 	return said
 
 
+## Whether the file dialogs are the system's. On Linux that goes through the desktop portal over D-Bus, and when no
+## portal backend can start the main thread waits out a 25 s timeout and the game looks frozen, so there they are
+## the game's own unless DAWLINGS_NATIVE_DIALOGS=1 asks for the system's.
+static func _native_dialogs() -> bool:
+	return OS.get_name() != "Linux" or OS.get_environment("DAWLINGS_NATIVE_DIALOGS") == "1"
+
+
 func _ask_new() -> void:
 	_confirm_new.popup_centered()
 
@@ -2084,6 +2097,10 @@ func _on_file_chosen(path: String) -> void:
 	if _files.file_mode == FileDialog.FILE_MODE_SAVE_FILE:
 		save_project_as(path)
 	else:
+		# Reading a project can hold the game up for a while: say so first, and let it be drawn.
+		toast("Opening %s…  (the game may pause until it is loaded)" % path.get_file())
+		await get_tree().process_frame
+		await get_tree().process_frame
 		open_project(path)
 
 

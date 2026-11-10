@@ -1,0 +1,16 @@
+{
+  "what": "A wah-wah effect that follows how loud you play: the filter opens on loud notes and closes as they fade.",
+  "how": "The module listens to the loudness of the sound. Loud sounds open a resonant filter and quiet sounds close it, so each note makes a 'wah' without a pedal or any other control signal. WAH sets where the filter sits.",
+  "ins": {
+    "in": "The sound to wah (audio, -1..1). Notes with clear starts, like plucks, drums or keys, work best."
+  },
+  "outs": {
+    "out": "The wah-filtered sound, blended with the original by MIX."
+  },
+  "knobs": {
+    "wah": "Where the wah sits and how far it opens, 0 to 1. Low is a closed, muffled tone; high is a more open, bright one.",
+    "mix": "Balance of dry and effect: 0 is only your sound, 1 is only the wah.",
+    "level": "The volume of the wah effect, 0 to 1. Turn it up if the effect is too quiet."
+  },
+  "try": "Patch KEYS into VCO's pitch, VCO (SAW) into AUTOWAH's in and AUTOWAH's out into OUT. Play short notes and move WAH to hear the filter open with each one."
+}

@@ -38,6 +38,7 @@ what lacks one.
 - `item_room.md` - the item room and item kinds.
 - `sampling_station.md` - sampling from a take or an item.
 - `workshop.md` - the Workshop (Claude building in the room).
+- `mcp_assistant.md` - the control API (an MCP server in the game) and the room's assistant.
 - `discord.md` - the Discord bridge.
 
 **Doing things**

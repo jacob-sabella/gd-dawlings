@@ -38,8 +38,8 @@ func manifests_equal_the_old_tables() -> void:
 	_use(reg)
 	var ids: Array = reg.mods().map(func(m: ModManifest) -> String: return m.id)
 	ids.sort()
-	check("the shipped mods are core, daisysp, effects, mutable and presets, all available, with no problem",
-			ids == ["builtin.core", "builtin.daisysp", "builtin.effects", "builtin.mutable", "builtin.presets"]
+	check("the shipped mods are airwindows, core, daisysp, effects, mutable and presets, all available, with no problem",
+			ids == ["builtin.airwindows", "builtin.core", "builtin.daisysp", "builtin.effects", "builtin.mutable", "builtin.presets"]
 			and ids.all(func(i: String) -> bool: return reg.is_available(i)) and reg.problems().is_empty())
 	check("the vendor pins are the submodules' (THIRD_PARTY_NOTICES.md)",
 			reg.mod("builtin.daisysp").source["path"] == "vendor/daisysp" and reg.mod("builtin.daisysp").source["commit"] == "2c72eaf"
@@ -50,7 +50,8 @@ func manifests_equal_the_old_tables() -> void:
 	var entry_types: Array = []
 	for m in reg.mods():
 		for e in m.entries:
-			if e["kind"] == "rack_module":
+			# (The Airwindows mod's 532 composites are `builtin.aw.<effect>`; they are built on the engine's AIRWINDOWS.)
+			if e["kind"] == "rack_module" and not String(e["type"]).begins_with("builtin.aw."):
 				entry_types.append(e["type"])
 	check("the manifests give one rack module for each module the engine describes (%d)" % types.size(),
 			entry_types.size() == types.size() and entry_types.all(func(x: String) -> bool: return x in types)

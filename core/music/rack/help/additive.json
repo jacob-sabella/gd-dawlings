@@ -1,0 +1,17 @@
+{
+  "what": "An oscillator made of sixteen sine waves added together, so you choose which overtones are present.",
+  "how": "Every note is a fundamental sine plus overtones at 2x, 3x, 4x... its frequency. Here the first sixteen are mixed for you. TILT sets how fast they fall in loudness, ODD/EVEN favours one kind, and COMB spotlights one region of overtones. A sine has none; a saw has them all.",
+  "ins": {
+    "pitch": "Pitch in octaves (1 volt per octave, 0 is middle C). Patch KEYS' pitch here."
+  },
+  "outs": {
+    "out": "The additive tone (audio)."
+  },
+  "knobs": {
+    "tune": "Shifts the pitch in semitones, -24 to 24 (two octaves down to two up), added to the pitch input.",
+    "tilt": "The slope of the overtones, -1 to 1. Low (negative) values keep more overtones for a brighter tone; high (positive) values make the sound closer to a sine.",
+    "oddeven": "Weights the even or odd overtones, -1 to 1. Positive removes the even ones (hollow, like a clarinet); negative removes the odd ones.",
+    "comb": "Picks out a band of overtones, 0 to 1. At 0 all overtones are used; raised, it favours a narrower region that moves up as you turn it."
+  },
+  "try": "Patch KEYS' pitch into ADDITIVE's pitch, ADDITIVE's out through a VCA and ENV into OUT. Hold a note and move TILT and ODD/EVEN to hear the overtones change."
+}

@@ -7,6 +7,24 @@ extends Node3D
 
 const POINTS := 96
 const TRAILS := 4
+## What the screen draws: the wave (SCOPE), bars low to high (SPECTRUM), one signal against another (VECTOR),
+## two level bars (METER), a flowing picture (PLASMA).
+enum Mode { WAVE, BARS, XY, METER, PLASMA }
+
+## The screen mode of a rack module type, or -1 if it has no screen.
+static func mode_of(type: String) -> int:
+	match type:
+		"builtin.scope": return Mode.WAVE
+		"builtin.spectrum": return Mode.BARS
+		"builtin.vector": return Mode.XY
+		"builtin.meter": return Mode.METER
+		"builtin.plasma": return Mode.PLASMA
+	return -1
+
+var mode: int = Mode.WAVE
+var _fill := MeshInstance3D.new()
+var _fill_mat := StandardMaterial3D.new()
+var _bars: PackedFloat32Array = PackedFloat32Array()
 
 var size := Vector2(0.4, 0.18)
 var tint := Color(0.4, 1.0, 0.7):
@@ -56,6 +74,14 @@ func build() -> void:
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_grid()
+	_fill_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_fill_mat.vertex_color_use_as_albedo = true
+	_fill_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_fill_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_fill.mesh = ImmediateMesh.new()
+	_fill.material_override = _fill_mat
+	_fill.position = Vector3(0, 0, 0.0007)
+	add_child(_fill)
 	for t in TRAILS:
 		var mi := MeshInstance3D.new()
 		mi.mesh = ImmediateMesh.new()
@@ -118,6 +144,10 @@ func set_wave(wave: PackedFloat32Array) -> void:
 	if pts.is_empty():
 		pts = PackedFloat32Array()
 		pts.resize(POINTS)
+	if mode != Mode.WAVE:
+		_draw_mode(pts)
+		return
+	_fill.visible = false
 	_history.push_front(pts)
 	if _history.size() > TRAILS:
 		_history.pop_back()
@@ -136,3 +166,101 @@ func set_wave(wave: PackedFloat32Array) -> void:
 			im.surface_add_vertex(Vector3(-hw + size.x * i / float(maxi(n - 1, 1)), clampf(w[i], -1.0, 1.0) * hh, 0))
 		im.surface_end()
 	_glow.light_energy = clampf(peak, 0.0, 1.0) * 0.6
+
+
+func _quad(im: ImmediateMesh, x0: float, y0: float, x1: float, y1: float, c: Color) -> void:
+	for v in [Vector2(x0, y0), Vector2(x1, y0), Vector2(x1, y1), Vector2(x0, y0), Vector2(x1, y1), Vector2(x0, y1)]:
+		im.surface_set_color(c)
+		im.surface_add_vertex(Vector3(v.x, v.y, 0))
+
+
+## A colour of the tint's hue turned by `turn` (0..1 round the wheel), `v` bright.
+func _hued(turn: float, v: float, a := 1.0) -> Color:
+	return Color.from_hsv(fposmod(tint.h + turn, 1.0), 0.75, clampf(v, 0.0, 1.0), a)
+
+
+func _draw_mode(pts: PackedFloat32Array) -> void:
+	var hw := size.x * 0.5
+	var hh := size.y * 0.5
+	var im := _fill.mesh as ImmediateMesh
+	im.clear_surfaces()
+	_fill.visible = true
+	var peak := 0.0
+	match mode:
+		Mode.BARS:
+			_hide_trace()
+			var n := mini(pts.size(), POINTS)
+			var bw := size.x / n
+			im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+			for i in n:
+				var v := clampf(pts[i], 0.0, 1.0)
+				peak = maxf(peak, v)
+				var x := -hw + bw * i
+				_quad(im, x + bw * 0.12, -hh, x + bw * 0.88, -hh + size.y * v, _hued(float(i) / n * 0.45, 0.55 + 0.45 * v))
+			im.surface_end()
+		Mode.XY:
+			_fill.visible = false
+			_history.push_front(pts)
+			if _history.size() > TRAILS:
+				_history.pop_back()
+			for t in _history.size():
+				var tm := _trace[t].mesh as ImmediateMesh
+				tm.clear_surfaces()
+				_trace[t].visible = true
+				var w: PackedFloat32Array = _history[t]
+				tm.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+				for i in w.size() / 2:
+					if t == 0:
+						peak = maxf(peak, maxf(absf(w[i * 2]), absf(w[i * 2 + 1])))
+					tm.surface_add_vertex(Vector3(clampf(w[i * 2], -1.0, 1.0) * hw * 0.92, clampf(w[i * 2 + 1], -1.0, 1.0) * hh * 0.92, 0))
+				tm.surface_end()
+		Mode.METER:
+			_hide_trace()
+			im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+			for c in 2:
+				var y0 := hh * (0.62 - c * 1.0) - hh * 0.28
+				var y1 := y0 + hh * 0.56
+				var rms := clampf(pts[c * 3], 0.0, 1.0)
+				var cells := 32
+				var cw := size.x * 0.92 / cells
+				for i in cells:
+					var f := float(i + 1) / cells
+					if f > rms:
+						_quad(im, -hw * 0.92 + cw * i + cw * 0.1, y0, -hw * 0.92 + cw * (i + 1) - cw * 0.1, y1, Color(1, 1, 1, 0.05))
+						continue
+					var col := Color(0.2, 0.9, 0.4) if f < 0.7 else (Color(1.0, 0.8, 0.2) if f < 0.9 else Color(1.0, 0.25, 0.2))
+					_quad(im, -hw * 0.92 + cw * i + cw * 0.1, y0, -hw * 0.92 + cw * (i + 1) - cw * 0.1, y1, col)
+				var pk := clampf(pts[c * 3 + 2], 0.0, 1.0)
+				var px := -hw * 0.92 + size.x * 0.92 * pk
+				_quad(im, px - cw * 0.3, y0 - hh * 0.06, px + cw * 0.3, y1 + hh * 0.06, Color(1, 1, 1, 0.9))
+				peak = maxf(peak, rms)
+			im.surface_end()
+		Mode.PLASMA:
+			_hide_trace()
+			var r := clampf(pts[0], 0.0, 1.0)
+			var g := clampf(pts[1], 0.0, 1.0)
+			var b := clampf(pts[2], 0.0, 1.0)
+			var t := pts[3]
+			var hue := pts[4]
+			var cols := 28
+			var rows := 12
+			var cw := size.x / cols
+			var rh := size.y / rows
+			im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+			for j in rows:
+				for i in cols:
+					var u := float(i) / cols
+					var w := float(j) / rows
+					var a := sin(u * 7.0 + t * 1.3 + r * 6.0) + sin(w * 9.0 - t * 0.9 + g * 6.0) \
+							+ sin((u + w) * 6.0 + t * 0.7 + b * 6.0) + sin(sqrt((u - 0.5) * (u - 0.5) + (w - 0.5) * (w - 0.5)) * 14.0 - t * 1.6)
+					var f := a * 0.25 + 0.5
+					var c := _hued(hue + f * 0.5 + (r - b) * 0.2, 0.25 + 0.75 * f * (0.5 + 0.5 * maxf(r, maxf(g, b))))
+					_quad(im, -hw + cw * i, -hh + rh * j, -hw + cw * (i + 1), -hh + rh * (j + 1), c)
+					peak = maxf(peak, f)
+			im.surface_end()
+	_glow.light_energy = clampf(peak, 0.0, 1.0) * 0.6
+
+
+func _hide_trace() -> void:
+	for m in _trace:
+		m.visible = false

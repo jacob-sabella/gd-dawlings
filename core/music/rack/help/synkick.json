@@ -1,0 +1,20 @@
+{
+  "what": "A kick drum built from a falling sine, a click and a touch of noise, with many knobs to tune it.",
+  "how": "Each pulse at TRIG strikes the drum. A sine starts above its base pitch and falls fast to FREQ, with FM AMT and FM DECAY setting how big and how long that fall is. A click and a bit of noise (DIRT) add attack. Unlike DRUM it can be tuned from a deep thump to a short punch.",
+  "ins": {
+    "trig": "A pulse that strikes the kick. Patch CLOCK's beat here."
+  },
+  "outs": {
+    "out": "The kick (audio)."
+  },
+  "knobs": {
+    "freq": "The base pitch of the kick, 25 to 140 Hz. Low is a deep boom.",
+    "tone": "The brightness of the click at the start, 0 to 1.",
+    "decay": "How long the body rings, 0 to 1. Short is tight; long is boomy.",
+    "dirt": "How much noise and grit is added, 0 to 1.",
+    "fmamt": "How far the pitch starts above FREQ before falling, 0 to 1. More gives a stronger 'thwack'.",
+    "fmdec": "How long the pitch fall takes, 0 to 1. Short is a click; long is a sweeping boom.",
+    "accent": "How hard the kick is struck, 0 to 1: louder and punchier."
+  },
+  "try": "Patch CLOCK's beat into SYNKICK's trig and SYNKICK's out into OUT. Lower FREQ and lengthen DECAY for a deep kick; shorten DECAY and raise TONE for a tight one."
+}

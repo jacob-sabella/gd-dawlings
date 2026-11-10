@@ -479,6 +479,60 @@ func publish_room(state: Dictionary) -> void: room_work.publish_room(state)
 ## Guest: ask the host to change the room, and get back the ask's number -- the guest goes ahead and does it, and the number is how it learns the host has answered. 0 when nothing was sent: the host's own asks go straight to its studio, and there is nobody to predict for (`SessionRoom.ask_room`).
 func ask_room(verb: StringName, args: Array) -> int: return room_work.ask_room(verb, args)
 
+# --- the assistant (docs/mcp_assistant.md) ---------------------------------------------------------
+
+## Host: `from` (a peer id; this machine's own for the host itself) asked the assistant something.
+signal assistant_asked(text: String, from: int)
+## Guest: the host's assistant said or did something (an event Assistant makes: {run, kind, text, ...}).
+signal assistant_said(event: Dictionary)
+## The longest thing one may ask the assistant.
+const ASSISTANT_ASK_MAX := 400
+
+## Ask the room's assistant, which runs on the host: straight to it on the host, one reliable message from a guest.
+func ask_assistant(text: String) -> void:
+	var asked := text.strip_edges().left(ASSISTANT_ASK_MAX)
+	if asked == "":
+		return
+	if is_authority():
+		assistant_asked.emit(asked, local_peer_id)
+	elif _connected():
+		_assistant_ask.rpc_id(1, asked)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _assistant_ask(text: String) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role == Role.HOST and admitting._is_member(from) and text.length() <= ASSISTANT_ASK_MAX:
+		assistant_asked.emit(text, from)
+
+## Host: `from` answered a confirm card (`kind` "yes" or "no", `id` the card's) or cancelled a run (`kind` "cancel", `id` the run's).
+signal assistant_did(kind: String, id: int, from: int)
+
+## Answer a confirm or cancel a run: straight to the assistant on the host, one reliable message from a guest.
+func act_assistant(kind: String, id: int) -> void:
+	if is_authority():
+		assistant_did.emit(kind, id, local_peer_id)
+	elif _connected():
+		_assistant_act.rpc_id(1, kind, id)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _assistant_act(kind: String, id: int) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role == Role.HOST and admitting._is_member(from) and kind in ["yes", "no", "cancel"]:
+		assistant_did.emit(kind, id, from)
+
+## Host: say `event` to every guest, or to `only` (a peer id) if given.
+func say_assistant(event: Dictionary, only := 0) -> void:
+	if role != Role.HOST or not _connected():
+		return
+	for id in admitting._audience():
+		if only == 0 or id == only:
+			_assistant_say.rpc_id(id, event)
+
+@rpc("authority", "call_remote", "reliable")
+func _assistant_say(event: Dictionary) -> void:
+	if role == Role.GUEST:
+		assistant_said.emit(event)
+
 ## Where something being pushed is right now, to everyone else. Often and unreliably, like a head: a lost one is overtaken by the next (`SessionMotion.send_motion`).
 func send_motion(piece: StringName, x: float, z: float, heading: float) -> void:
 	movers.send_motion(piece, x, z, heading)

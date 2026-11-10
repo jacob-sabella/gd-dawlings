@@ -1,0 +1,8 @@
+marbles/random/discrete_distribution_quantizer.cc
+marbles/random/lag_processor.cc
+marbles/random/output_channel.cc
+marbles/random/quantizer.cc
+marbles/random/t_generator.cc
+marbles/random/x_y_generator.cc
+marbles/ramp/ramp_extractor.cc
+marbles/resources.cc

@@ -61,6 +61,18 @@ given. The rules, `core/music/rack/rack_cushion.gd`:
 - `RackVoice.direct_stats()` reports fill, skips, underruns, hurried and dropped frames. `tools/rack_pump_probe.tscn`
   plays a preset to the real driver for a while and prints them (usage in its header, `docs/tools.md`).
 
+## Power and the song clock
+
+- **The big ON/OFF key** (left of PLAY on the wall) is the room's `power` in `studio.rack_row` (next to `track`, not in the
+  patch, so it is not saved with it and the rack is on at launch). It is the `power` rack op (`RackHost._rack_apply`; no
+  argument flips, `true`/`false` sets), so a guest's press is the host's and every player's key shows it. Off, the host stops
+  the engine process (silence, no processor, held notes let go), `_rack_wake` refuses to start it, and the patch is kept; on,
+  the next key or take wakes it as before. The control tool is `rack_power`.
+- **The clock follows the song closely.** `RackVoice` tells the engine the song's place (`sync BEATS`) every 50 ms while it
+  plays. The engine jumps if it is more than a quarter beat off (a seek or a loop) and otherwise eases the difference away at
+  up to 2 % of the tempo, so no pulse is cut or doubled. CLOCK's **OFFSET** knob (ms, -100..200) runs its pulses early to
+  cancel the rack's delay behind the mix (the cushion, above): set it by ear against a click.
+
 ## How to extend it
 
 - **A new module from existing ones (composite)**, **a skin**, **a preset**: a mod folder, `docs/mods.md` 9 "How to
@@ -73,6 +85,17 @@ given. The rules, `core/music/rack/rack_cushion.gd`:
   `vendor/mutable-eurorack/`) and lives in `native/rack/modules_<name>.cc`, and `tools/rack_build.sh` picks both up
   (`RACK_ONLY="warps braids"`, `RACK_BUILD_DIR` and `RACK_BIN` build a few modules into a private binary while
   others are being written; a source named in two lists is compiled once).
+- **After adding an engine module** run `tools/rack_sync_manifest.py` (it rewrites `modules.json` from `rack --describe`,
+  and gives each module no mod dresses yet a skin entry in the mod of the library its DSP comes from: `OWNER` in the
+  script, daisysp by default; taglines from `tools/rack_taglines.json`; a module with fewer than two knobs gets no
+  `pad_knobs`). Then write its `core/music/rack/help/<type>.json`. Skins must be unique per type (a test).
+  The 30 modules of `native/rack/modules_daisy.cc` are the rest of the pinned DaisySP that is not already a module;
+  MARBLES (`modules_marbles.cc`) is Mutable's random sampler. Not used: FRAMES (fixed-point, hardware-timed), YARNS
+  (KEYS covers it), GRIDS and EDGES (GPL-3.0).
+- **Screens** (SCOPE, SPECTRUM, VECTOR, METER, PLASMA): a module whose `Module::scope` fills 96 numbers, sent to the
+  room every third tick and drawn by `ScopeScreen` in the mode `ScopeScreen.mode_of(type)` gives (wave, bars, X-Y,
+  level bars, plasma). They are always processed, heard or not (`Rack::rebuild`), and are four columns wide
+  (`RackLayout.SCOPE_WIDE`). A new one: a mode in `ScopeScreen`, an entry in `mode_of`, a branch in `Rack::rebuild`.
 - **AIRWINDOWS** is one module for all of Airwindows' effects (`vendor/airwindows`, MIT). `tools/airwindows_gen.py`
   writes, at build time, a wrapper per plugin that compiles it in its own namespace against `native/rack/aw/audioeffectx.h`
   (a small host stand-in, not Steinberg's header) and the table the module reads; nothing of the plugins is copied.
@@ -84,7 +107,7 @@ given. The rules, `core/music/rack/rack_cushion.gd`:
   532 composites (`builtin.aw.<effect>`: the engine module with EFFECT and the starting values set, knobs named for the
   effect's parameters, kinds and text from `airwindows_help.json`); `--check` is what the test runs. The engine's own
   `builtin.airwindows` stays as their base, in the hidden group `Internal`. Rerun it after either JSON file changes.
-- **Finding a module**: 532 effects do not fit on palette keys, so the AIRWINDOWS key and the FIND key open
+- **Finding a module**: 532 effects do not fit on palette keys, so the AIRWINDOWS key (the finder on that group) and the MODULES key (the finder on every module) open
   `RackFinderScreen` (search by name, kind, knob or blurb; group and kind filters; ADD). The ranking and filtering are
   `RackFinder` (tested apart from the screen). A group named in `RackWallKeys.FINDER_GROUPS` opens the finder, not keys.
 - **A custom face** (`out`, `scope`, `seq` are built in): a `face` kind in the module entry, drawn by

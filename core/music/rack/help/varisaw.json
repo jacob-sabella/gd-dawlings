@@ -1,0 +1,17 @@
+{
+  "what": "A saw wave whose slope and notch you can bend, from bright and full to hollow.",
+  "how": "Instead of a plain saw wave, VARISAW has two controls over its outline. SHAPE bends the wave's slope (the ramp), and NOTCH carves a notch in it. Together they sweep from a bright buzzy saw to a more hollow, pulse-like tone.",
+  "ins": {
+    "pitch": "Pitch in octaves (1 volt per octave, 0 is middle C). Patch KEYS' pitch here.",
+    "shape": "A control signal that adds to SHAPE (each 1.0 adds 0.5). Patch an LFO or ENV for a moving tone."
+  },
+  "outs": {
+    "out": "The oscillator (audio)."
+  },
+  "knobs": {
+    "shape": "The slope of the wave, 0 to 1. Moves the tone between a plain ramp and a more bent wave.",
+    "notch": "The depth of the notch cut into the wave, 0 to 1. Changes the hollowness of the tone.",
+    "tune": "Shifts the pitch in semitones, -24 to 24 (two octaves down to two up), added to the pitch input."
+  },
+  "try": "Patch KEYS' pitch into VARISAW's pitch, VARISAW's out into a VCA (with an ENV) and then OUT. Hold a note and move SHAPE and NOTCH to hear the colour change."
+}

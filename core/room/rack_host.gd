@@ -130,6 +130,7 @@ func _build_rack() -> void:
 	studio.rack_wall.keys_asked.connect(func() -> void: _modular_play(not studio.modular_keys.is_active()))
 	studio.rack_wall.track_asked.connect(func() -> void: ask_rack("track", [0]))
 	studio.rack_wall.record_asked.connect(_rack_toggle_record)
+	studio.rack_wall.power_asked.connect(func() -> void: ask_rack("power", []))
 	studio.rack_voice = RackVoice.new()
 	studio.rack_voice.name = "RackVoice"
 	studio.add_child(studio.rack_voice)
@@ -303,6 +304,10 @@ func _turn_knob(id: String, k: String, v: float) -> bool:
 
 ## `op` done to the row `row`; the refusal in words, or "".
 func _rack_apply(row: Dictionary, op: String, args: Array) -> String:
+	if op == "power":
+		# No argument flips it; true or false sets it.
+		row["power"] = bool(args[0]) if args.size() > 0 else not bool(row.get("power", true))
+		return ""
 	if op == "track":
 		var tracks: Array = DAW.state.track_indices() if DAW.state != null else []
 		tracks.sort()
@@ -332,7 +337,8 @@ func _answer_rack(op: String, args: Array, from: int) -> void:
 ## The room's rack as `row` has it, here: on the wall and in the voice, with a knob a hand here is still
 ## turning kept where the hand has it. On the host it wakes the engine for any edit.
 func _show_rack(row: Dictionary) -> void:
-	studio.rack_row = {"patch": RackPatch.sanitize(row.get("patch", {})), "track": int(row.get("track", 0))}
+	studio.rack_row = {"patch": RackPatch.sanitize(row.get("patch", {})), "track": int(row.get("track", 0)),
+			"power": bool(row.get("power", true))}
 	studio.rack_files.note(studio.rack_row)
 	var turning := studio.rack_wall.turning() if studio.rack_wall != null and is_instance_valid(studio.rack_wall) else {}
 	var patch: Dictionary = studio.rack_row["patch"]
@@ -341,7 +347,14 @@ func _show_rack(row: Dictionary) -> void:
 	if studio.rack_wall != null and is_instance_valid(studio.rack_wall):
 		studio.rack_wall.show_patch(patch)
 		studio.rack_wall.set_track(int(studio.rack_row["track"]), _rack_track_name(int(studio.rack_row["track"])))
-	if studio.rack_voice != null and is_instance_valid(studio.rack_voice) and Session.is_authority():
+		studio.rack_wall.set_power(rack_on())
+	if studio.rack_voice != null and is_instance_valid(studio.rack_voice) and Session.is_authority() and not rack_on():
+		# Off: the engine process is stopped (silence, no processor) and the keys let go.
+		studio.rack_voice.all_off()
+		if studio.rack_voice.running():
+			studio.rack_voice.shutdown()
+		studio.rack_voice.patch = patch
+	elif studio.rack_voice != null and is_instance_valid(studio.rack_voice) and Session.is_authority():
 		if studio.rack_voice.running() or _rack_engaged():
 			_rack_wake()
 		studio.rack_voice.set_patch(patch)
@@ -370,7 +383,7 @@ func _rack_track_name(index: int) -> String:
 
 ## Start the engine if it is not going (host only), the track chosen for it if none is: the first one.
 func _rack_wake() -> void:
-	if studio.rack_voice == null or not Session.is_authority() or studio.rack_voice.running():
+	if studio.rack_voice == null or not Session.is_authority() or studio.rack_voice.running() or not rack_on():
 		return
 	if not RackEngine.available():
 		return
@@ -387,6 +400,11 @@ func _rack_wake() -> void:
 		studio.rack_voice.set_patch(studio.rack_row["patch"])
 		studio.rack_voice.set_track(int(studio.rack_row["track"]))
 		_show_rack(studio.rack_row)
+
+
+## Whether the rack is switched on (the big key): off, nothing wakes the engine.
+func rack_on() -> bool:
+	return bool(studio.rack_row.get("power", true))
 
 
 func _rack_engaged() -> bool:

@@ -177,13 +177,8 @@ func _describe() -> void:
 	var kinds := RackFinder.kinds_of(t)
 	if not kinds.is_empty():
 		text += "[color=#9fb0c8]%s[/color]\n" % ", ".join(kinds)
-	text += "\n%s\n" % String(s["blurb"]).replace("[", "[lb]")
-	text += "\n[b]IN[/b]  %s\n[b]OUT[/b]  %s\n" % [", ".join(s["ins"]) if not (s["ins"] as Array).is_empty() else "-", ", ".join(s["outs"]) if not (s["outs"] as Array).is_empty() else "-"]
-	var labels: Array = []
-	for k: Dictionary in s["knobs"]:
-		labels.append(String(k["label"]))
-	text += "[b]KNOBS[/b]  %s\n" % (", ".join(labels) if not labels.is_empty() else "-")
-	text += "\n[color=#9fb0c8]After it is on the rack, the ? on its plate explains it in full.[/color]"
+	text += "[color=#9fb0c8]Once it is on the rack, click the ? on its plate to read this again.[/color]\n"
+	text += RackHelpScreen.card_bbcode(RackHelp.card(t))
 	_detail.text = text
 
 

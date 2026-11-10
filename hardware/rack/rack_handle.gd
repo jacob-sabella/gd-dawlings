@@ -64,7 +64,7 @@ func _default_readout() -> String:
 
 
 func hint() -> String:
-	return "click the name for help · drag to move it about the case, let go over a free place to put it there"
+	return "click the name, or the ? on the plate, for help · drag to move it about the case, let go over a free place to put it there"
 
 
 func _on_grab_begin(at: Vector3) -> void:

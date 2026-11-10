@@ -16,7 +16,7 @@ const SCOPE_WIDE := 4
 
 ## How many columns a type's panel takes.
 static func width_of(type: String) -> int:
-	if type == "builtin.scope":
+	if ScopeScreen.mode_of(type) >= 0:
 		return SCOPE_WIDE
 	var s := RackCatalogue.spec(type)
 	if s.is_empty():

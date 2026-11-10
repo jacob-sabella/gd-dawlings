@@ -202,6 +202,9 @@ func _ready() -> void:
 	# The Workshop (docs/workshop.md): only with its dev flag, on the host's own machine. It reads
 	# `--workshop` and `--resume` itself, and puts the room back after a reload.
 	Workshop.attach(self, studio)
+	# The control API, its MCP server and the assistant (docs/mcp_assistant.md).
+	RackEngine.warm()
+	ControlHost.attach(self, studio)
 	if args["play_into"] > 0:
 		Session.guest_midi.target_track = args["play_into"]
 	if args["mic_into"] > 0:

@@ -56,6 +56,8 @@ struct Transport {
   double bpm = 120.0;
   double beats = 0.0;  // song position in beats when playing
   bool playing = false;
+  // What `sync` found the engine off by, in beats, still to be taken up (see Rack::block).
+  double slew = 0.0;
 };
 struct Ctx {
   Transport tp;

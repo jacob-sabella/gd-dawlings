@@ -1,0 +1,20 @@
+{
+  "what": "A shower of tiny, ringing pings, from a few drips to a swarm of sparkle or rattle.",
+  "how": "Random clicks are sent into a resonant filter. Each one makes a short ping at a pitch near FREQ. DENSITY sets how many there are, RESONANCE how long each rings, and SCATTER and SPREAD set how much the pitch varies from one ping to the next.",
+  "ins": {
+    "pitch": "Pitch in octaves (1 volt per octave, 0 is middle C). The pings' pitch is FREQ multiplied by the pitch (middle C leaves FREQ unchanged, an octave up doubles it). Patch KEYS' pitch here."
+  },
+  "outs": {
+    "out": "The cloud of pings (audio)."
+  },
+  "knobs": {
+    "freq": "The centre pitch of the pings, 100 to 4000 Hz. The pitch input scales it up or down.",
+    "tune": "Shifts the pitch in semitones, -24 to 24 (two octaves down to two up), added to the pitch input.",
+    "res": "How long each ping rings, 0 to 1. Low is a dry tick; high is a tonal chime.",
+    "density": "How many pings there are, 0 to 1. Low is a few drips; high is a swarm.",
+    "gain": "The overall volume, 0 to 1.",
+    "spread": "How much the pitch of each ping is randomized, 0 to 1.",
+    "scatter": "How often the random pitch changes, 2 to 4000 times a second."
+  },
+  "try": "Patch PARTICLE's out into OUT. Start with DENSITY low for drips, then raise DENSITY and RESONANCE. Run it through DELAY or REVERB to fill the space."
+}

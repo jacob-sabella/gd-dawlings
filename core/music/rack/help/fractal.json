@@ -1,0 +1,16 @@
+{
+  "what": "Layered noise from slow to fast, as in wind, rumble or hiss, with a colour from dark to bright.",
+  "how": "Five noise layers are mixed, each moving at twice the speed of the one before. LOWEST is the speed of the slowest layer. COLOUR chooses how loud the fast layers are, from dark and rumbling to bright and hissy. The output makes both a noise source and a source of random control.",
+  "ins": {
+    "rate": "A control signal that changes LOWEST. Each 1.0 of signal doubles it (an octave)."
+  },
+  "outs": {
+    "out": "The noise (audio or control), clipped to -1..1."
+  },
+  "knobs": {
+    "freq": "The rate of the slowest noise layer, 1 to 4000 Hz. Low is deep rumbling; high is mostly hiss.",
+    "color": "The balance of fast and slow layers, 0 to 1. Low is darker; high is brighter.",
+    "level": "The volume, 0 to 2. Above 1 is louder but can clip."
+  },
+  "try": "Patch FRACTAL's out into SVF's in, SVF's lp into OUT. Sweep SVF's cutoff to make wind. Try a slow ENV into the cutoff for a rising and falling gust."
+}
