@@ -28,6 +28,13 @@ func set_power(on: bool) -> void:
 		wall.keys._build_palette()
 
 
+## Light the RUN key (the rack's own transport), and rebuild the palette if it changed.
+func set_running(on: bool) -> void:
+	if on != wall._running:
+		wall._running = on
+		wall.keys._build_palette()
+
+
 ## Light the REC state on the wall and rebuild the key palette if it changed.
 func set_recording(on: bool) -> void:
 	if on != wall._recording:

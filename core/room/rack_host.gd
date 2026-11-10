@@ -130,6 +130,9 @@ func _build_rack() -> void:
 	studio.rack_wall.keys_asked.connect(func() -> void: _modular_play(not studio.modular_keys.is_active()))
 	studio.rack_wall.track_asked.connect(func() -> void: ask_rack("track", [0]))
 	studio.rack_wall.record_asked.connect(_rack_toggle_record)
+	studio.rack_wall.run_asked.connect(func() -> void:
+		studio.rack_voice.own_run = not studio.rack_voice.own_run
+		studio.rack_wall.set_running(studio.rack_voice.own_run))
 	studio.rack_wall.power_asked.connect(func() -> void: ask_rack("power", []))
 	studio.rack_voice = RackVoice.new()
 	studio.rack_voice.name = "RackVoice"
