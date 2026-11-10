@@ -28,6 +28,13 @@ var _sent := RackPatch.empty()
 ## Composite plate id -> the engine module whose meter stands for it (RackExpansion.meter_map).
 var _meter_map := {}
 var _was_playing := false
+## The rack runs its own clock whether or not the song plays (the RUN key).
+var own_run := false:
+	set(v):
+		if v and not own_run:
+			_own_beats = float(_transport()["beats"])
+		own_run = v
+var _own_beats := 0.0
 var _bpm := 0.0
 var _since_sync := 0.0
 var _take_from := -1.0
@@ -350,6 +357,12 @@ func _process(delta: float) -> void:
 		_since_sync += delta
 		var tp := _transport()
 		var playing: bool = tp["playing"]
+		if playing:
+			_own_beats = float(tp["beats"])
+		elif own_run:
+			playing = true
+			_own_beats += delta * float(tp["bpm"]) / 60.0
+			tp = {"playing": true, "beats": _own_beats, "bpm": tp["bpm"]}
 		if not is_equal_approx(_bpm, float(tp["bpm"])):
 			_bpm = float(tp["bpm"])
 			engine.say("bpm %f" % _bpm)

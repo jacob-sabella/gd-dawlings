@@ -45138,6 +45138,28 @@ func _test_a_rack_engine_makes_the_sound_the_patch_says() -> void:
 		check("%s runs on its own, hot, without breaking" % type, sane)
 
 
+## RUN starts the rack's own clock with the song stopped, and STOP ends it.
+func _test_the_rack_runs_on_its_own_clock_when_the_song_is_stopped() -> void:
+	if not RackEngine.available():
+		return
+	var voice := RackVoice.new()
+	add_child(voice)
+	voice.transport_override = func() -> Dictionary: return {"playing": false, "beats": 0.0, "bpm": 120.0}
+	voice.set_patch(RackPatch.default_patch())
+	check("the voice starts", voice.start())
+	voice._process(0.05)
+	check("the song stopped, the rack is still", not voice._was_playing)
+	voice.own_run = true
+	voice._process(0.5)
+	check("RUN starts the rack with the song stopped", voice._was_playing)
+	check("its own beats count on (%.2f)" % voice._own_beats, voice._own_beats > 0.9)
+	voice.own_run = false
+	voice._process(0.05)
+	check("STOP ends it", not voice._was_playing)
+	voice.shutdown()
+	voice.queue_free()
+
+
 func _test_a_rack_voice_plays_live_through_a_track() -> void:
 	if not RackEngine.available():
 		print("  (no engine here: no sound to check)")

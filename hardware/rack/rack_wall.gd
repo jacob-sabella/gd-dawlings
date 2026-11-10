@@ -41,6 +41,8 @@ signal track_asked()
 signal record_asked()
 ## The big POWER key was pressed: the player asks to turn the rack on or off.
 signal power_asked()
+## The rack's own transport is asked to start or stop (RUN), apart from the song.
+signal run_asked()
 
 const COLS := RackLayout.COLS
 const ROWS := RackLayout.ROWS
@@ -116,6 +118,7 @@ var _recording := false
 ## Whether the rack is on (the room's word; it sounds only then).
 var _power := true
 var _playing := false
+var _running := false
 var _extras := {}
 var _lamp_hot: StandardMaterial3D
 var _lamp_cold: StandardMaterial3D
@@ -349,6 +352,7 @@ func set_track(t: int, track_name := "") -> void: shown.set_track(t, track_name)
 
 ## The rack's power, on the big key. (`RackWallShow.set_power`)
 func set_power(on: bool) -> void: shown.set_power(on)
+func set_running(on: bool) -> void: shown.set_running(on)
 
 
 ## `RackWallShow.set_recording`.
