@@ -4,9 +4,15 @@ extends Node3D
 ## A glowing oscilloscope screen: dark glass, a graticule, and a trace (`set_wave`, points -1..1) with
 ## a phosphor smear of its last few frames. Used small on a SCOPE module's panel and large as the TV
 ## on the annex wall; both show what the engine's SCOPE module saw at the point it is patched in.
+##
+## The trace (the wave and the XY figure) is drawn as an analogue scope's beam (scope_beam.gdshader):
+## bright where the signal lingers, faint where it swings fast. The bars fall as cava's do (CavaBars).
 
 const POINTS := 96
 const TRAILS := 4
+const BEAM := preload("res://hardware/visuals/scope_beam.gdshader")
+## The beam's spot (one sigma) against the screen's height.
+const BEAM_SIGMA := 0.011
 ## What the screen draws: the wave (SCOPE), bars low to high (SPECTRUM), one signal against another (VECTOR),
 ## two level bars (METER), a flowing picture (PLASMA).
 enum Mode { WAVE, BARS, XY, METER, PLASMA }
@@ -25,6 +31,9 @@ var mode: int = Mode.WAVE
 var _fill := MeshInstance3D.new()
 var _fill_mat := StandardMaterial3D.new()
 var _bars: PackedFloat32Array = PackedFloat32Array()
+## The bars' fall and smoothing; the engine's SPECTRUM already scales them, so no auto-gain.
+var _cava := CavaBars.new(POINTS)
+var _bars_at := -1
 
 var size := Vector2(0.4, 0.18)
 var tint := Color(0.4, 1.0, 0.7):
@@ -33,7 +42,6 @@ var tint := Color(0.4, 1.0, 0.7):
 		_restyle()
 var _trace: Array[MeshInstance3D] = []
 var _history: Array[PackedFloat32Array] = []
-var _line_mat := StandardMaterial3D.new()
 var _grid_mat := StandardMaterial3D.new()
 var _glass := MeshInstance3D.new()
 var _glow := OmniLight3D.new()
@@ -69,7 +77,7 @@ func build() -> void:
 	_glass.material_override = gm
 	_glass.position = Vector3(0, 0, -0.001)
 	add_child(_glass)
-	for m in [_line_mat, _grid_mat]:
+	for m in [_grid_mat]:
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -88,7 +96,7 @@ func build() -> void:
 	for t in TRAILS:
 		var mi := MeshInstance3D.new()
 		mi.mesh = ImmediateMesh.new()
-		mi.material_override = _line_mat if t == 0 else _trail_material(t)
+		mi.material_override = _beam_material(t)
 		mi.position = Vector3(0, 0, 0.001 + t * 0.0001)
 		add_child(mi)
 		_trace.append(mi)
@@ -101,10 +109,40 @@ func build() -> void:
 	set_wave(PackedFloat32Array())
 
 
-func _trail_material(t: int) -> StandardMaterial3D:
-	var m := _line_mat.duplicate() as StandardMaterial3D
+func _beam_material(t: int) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = BEAM
+	m.set_shader_parameter(&"sigma", size.y * BEAM_SIGMA)
+	m.set_shader_parameter(&"fade", 1.0 if t == 0 else 0.45 / float(t + 1))
 	m.set_meta(&"trail", t)
 	return m
+
+
+## The beam along `pts` (screen units) into `im`: a quad a few sigmas round each segment, carrying where
+## a point is along and across it (UV) and the segment's length (UV2), for the beam shader. Nothing for
+## fewer than two points.
+func _beam(im: ImmediateMesh, pts: PackedVector2Array) -> void:
+	im.clear_surfaces()
+	if pts.size() < 2:
+		return
+	var w := size.y * BEAM_SIGMA * 3.0
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in pts.size() - 1:
+		var a := pts[i]
+		var d := pts[i + 1] - a
+		var length := d.length()
+		var dir := d / length if length > 1e-6 else Vector2.RIGHT
+		var n := Vector2(-dir.y, dir.x) * w
+		var back := a - dir * w
+		var front := a + dir * (length + w)
+		var corners := [[back - n, Vector2(-w, -w)], [front - n, Vector2(length + w, -w)], [front + n, Vector2(length + w, w)],
+				[back - n, Vector2(-w, -w)], [front + n, Vector2(length + w, w)], [back + n, Vector2(-w, w)]]
+		for c: Array in corners:
+			im.surface_set_uv(c[1])
+			im.surface_set_uv2(Vector2(length, 0.0))
+			var p: Vector2 = c[0]
+			im.surface_add_vertex(Vector3(p.x, p.y, 0))
+	im.surface_end()
 
 
 func _grid() -> void:
@@ -131,11 +169,9 @@ func _grid() -> void:
 func _restyle() -> void:
 	if not _built:
 		return
-	_line_mat.albedo_color = Color(tint.r, tint.g, tint.b, 1.0) * 1.1
 	_grid_mat.albedo_color = Color(tint.r, tint.g, tint.b, 0.12)
-	for t in range(1, _trace.size()):
-		(_trace[t].material_override as StandardMaterial3D).albedo_color = \
-				Color(tint.r, tint.g, tint.b, 0.45 / float(t + 1))
+	for t in _trace.size():
+		(_trace[t].material_override as ShaderMaterial).set_shader_parameter(&"tint", Color(tint.r, tint.g, tint.b, 1.0))
 	_glow.light_color = tint
 
 
@@ -158,16 +194,16 @@ func set_wave(wave: PackedFloat32Array) -> void:
 	var hh := size.y * 0.5 * 0.92
 	var peak := 0.0
 	for t in _history.size():
-		var im := _trace[t].mesh as ImmediateMesh
-		im.clear_surfaces()
+		_trace[t].visible = true
 		var w: PackedFloat32Array = _history[t]
-		im.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
 		var n := w.size()
+		var line := PackedVector2Array()
+		line.resize(n)
 		for i in n:
 			if t == 0:
 				peak = maxf(peak, absf(w[i]))
-			im.surface_add_vertex(Vector3(-hw + size.x * i / float(maxi(n - 1, 1)), clampf(w[i], -1.0, 1.0) * hh, 0))
-		im.surface_end()
+			line[i] = Vector2(-hw + size.x * i / float(maxi(n - 1, 1)), clampf(w[i], -1.0, 1.0) * hh)
+		_beam(_trace[t].mesh as ImmediateMesh, line)
 	_glow.light_energy = clampf(peak, 0.0, 1.0) * 0.6
 
 
@@ -194,9 +230,10 @@ func _draw_mode(pts: PackedFloat32Array) -> void:
 			_hide_trace()
 			var n := mini(pts.size(), POINTS)
 			var bw := size.x / n
+			var fell := _fall_bars(pts.slice(0, n))
 			im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 			for i in n:
-				var v := clampf(pts[i], 0.0, 1.0)
+				var v := clampf(fell[i], 0.0, 1.0)
 				peak = maxf(peak, v)
 				var x := -hw + bw * i
 				_quad(im, x + bw * 0.12, -hh, x + bw * 0.88, -hh + size.y * v, _hued(float(i) / n * 0.45, 0.55 + 0.45 * v))
@@ -207,16 +244,14 @@ func _draw_mode(pts: PackedFloat32Array) -> void:
 			if _history.size() > TRAILS:
 				_history.pop_back()
 			for t in _history.size():
-				var tm := _trace[t].mesh as ImmediateMesh
-				tm.clear_surfaces()
 				_trace[t].visible = true
 				var w: PackedFloat32Array = _history[t]
-				tm.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+				var figure := PackedVector2Array()
 				for i in w.size() / 2:
 					if t == 0:
 						peak = maxf(peak, maxf(absf(w[i * 2]), absf(w[i * 2 + 1])))
-					tm.surface_add_vertex(Vector3(clampf(w[i * 2], -1.0, 1.0) * hw * 0.92, clampf(w[i * 2 + 1], -1.0, 1.0) * hh * 0.92, 0))
-				tm.surface_end()
+					figure.append(Vector2(clampf(w[i * 2], -1.0, 1.0) * hw * 0.92, clampf(w[i * 2 + 1], -1.0, 1.0) * hh * 0.92))
+				_beam(_trace[t].mesh as ImmediateMesh, figure)
 		Mode.METER:
 			_hide_trace()
 			im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -262,6 +297,16 @@ func _draw_mode(pts: PackedFloat32Array) -> void:
 					peak = maxf(peak, f)
 			im.surface_end()
 	_glow.light_energy = clampf(peak, 0.0, 1.0) * 0.6
+
+
+## The SPECTRUM's bars as cava would show them: rising at once, falling under gravity, a little smoothed.
+func _fall_bars(raw: PackedFloat32Array) -> PackedFloat32Array:
+	var now := Time.get_ticks_msec()
+	var delta := clampf(float(now - _bars_at) / 1000.0, 0.0, 0.1) if _bars_at >= 0 else 1.0 / 60.0
+	_bars_at = now
+	_cava.auto_sens = false
+	_cava.smoothing = 0.35
+	return _cava.step(raw, maxf(delta, 0.001))
 
 
 func _hide_trace() -> void:

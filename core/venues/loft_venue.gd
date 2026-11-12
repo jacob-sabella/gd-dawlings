@@ -463,6 +463,24 @@ func _beside(at: Vector2) -> Vector2:
 	return Vector2(at.x + signf(at.x) * _grow(), at.y)
 
 
+## The booth here keeps its first width (BOOTH_WIDE) and is grown forward instead (BOOTH_DEEP): any wider and
+## its door wall would take the floor the gallery's stair needs (gallery_span: the stair is STAIR_STEPS treads
+## long, and fits with a hand to spare), and no further forward than leaves the tour case its 0.6 m.
+const BOOTH_WIDE := 3.4
+const BOOTH_DEEP := 4.2
+
+
+## Every venue's zones, but the booth narrower and deeper (BOOTH_WIDE, BOOTH_DEEP), its back and left walls
+## where every venue has them.
+func zones() -> Dictionary:
+	var out := super()
+	if out.has(&"vocals"):
+		var booth: AABB = out[&"vocals"]
+		out[&"vocals"] = AABB(Vector3(booth.position.x, booth.position.y, booth.end.z - BOOTH_DEEP),
+				Vector3(minf(booth.size.x, BOOTH_WIDE), booth.size.y, BOOTH_DEEP))
+	return out
+
+
 ## Where the gallery runs along the back wall (x from, x to): from a walkway's width past the booth's
 ## door wall to a piece's clearance short of the lattice -- the floor behind the riser that nothing
 ## else needs.

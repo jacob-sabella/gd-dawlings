@@ -55,12 +55,12 @@ func _build_blanks() -> void:
 		wall._blank_paint.metallic = 0.4
 		wall._blank_paint.roughness = 0.5
 	for row in RackWall.ROWS:
-		for col in RackWall.COLS:
+		for col in RackLayout.ALL_COLS:
 			if taken.has(Vector2i(col, row)) or wall.module_nodes.has("blank/%d_%d" % [col, row]):
 				continue
 			var holder := Node3D.new()
 			holder.name = "Blank_%d_%d" % [col, row]
-			holder.position = Vector3(wall._x_of(col + 0.5), wall._row_foot(row), 0)
+			holder.transform = wall._cell_frame(col + 0.5, wall._row_foot(row))
 			var plate := MeshInstance3D.new()
 			var face := BoxMesh.new()
 			face.size = Vector3(RackWall.MODULE_WIDE - 0.003, RackWall.ROW_TALL - 0.004, 0.004)
@@ -138,11 +138,11 @@ func _move_module(id: String) -> void:
 		return
 	var col := int(m["at"][0])
 	var row := int(m["at"][1])
-	var to := Vector3(wall._x_of(col + RackLayout.width_in(wall.patch, id) * 0.5), wall._row_foot(row), 0)
+	var to := wall._cell_frame(col + RackLayout.width_in(wall.patch, id) * 0.5, wall._row_foot(row))
 	if not wall._carry.is_empty() and wall._carry["id"] == id:
 		wall._carry["home"] = to
 	else:
-		holder.position = to
+		holder.transform = to
 	var plate := holder.get_node_or_null("Plate") as MeshInstance3D
 	if plate != null:
 		(plate.material_override as StandardMaterial3D).albedo_color = RackSkin.face(String(m["type"]), (col + row) % 2 == 1)
@@ -159,7 +159,7 @@ func _build_module(id: String) -> void:
 	var row := int(m["at"][1])
 	var holder := Node3D.new()
 	holder.name = "Module_%s" % id
-	holder.position = Vector3(wall._x_of(col + w * 0.5), wall._row_foot(row), 0)
+	holder.transform = wall._cell_frame(col + w * 0.5, wall._row_foot(row))
 	var wide := RackWall.MODULE_WIDE * w
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"

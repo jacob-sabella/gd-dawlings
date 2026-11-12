@@ -17,9 +17,13 @@ const PART_EVERY := 1.0
 const NEAR := 3.5
 ## The creature's voice sleeps after this long without a stone struck (s): it costs a core's fifth while it runs.
 const CREATURE_SLEEP := 20.0
-## Where the creature's perch stands in the booth (its frame, as `spot_in`'s): against the far wall from the
-## door, turned to face into the booth.
-const PERCH_AT := Vector3(-1.2, 0.0, 0.35)
+## Where the creature's perch stands in the booth (its frame, as `spot_in`'s): toward the far wall from the
+## door, turned to face into the booth, with room to stand at its stones clear of the singer at the mic.
+const PERCH_AT := Vector3(-1.65, 0.0, 0.5)
+## How far the station stands behind the booth's middle, toward its +Z wall (and at least STATION_WALL off
+## that wall): far enough back from the mic that its boom does not cross the desk.
+const STATION_BACK := 1.0
+const STATION_WALL := 0.55
 
 var studio: Studio
 var _part_age := 99.0
@@ -40,6 +44,8 @@ var _part_notes := 0
 ## The venue's creature (Bestiary): its perch in the booth, and its voice on the host, woken by a stone and put
 ## to sleep again when no stone has been struck for CREATURE_SLEEP.
 var perch: CreaturePerch
+## The particle-life pane on the booth's closed wall (docs/visuals.md): the voice's species dance to the mix.
+var pane: ParticleLifePane
 var creature: Creature
 var _creature_idle := 0.0
 var _lit_stone := -1
@@ -78,6 +84,7 @@ func stand() -> void:
 		for n in names:
 			ask("grab", [n, -1000.0]))
 	_stand_perch(zones[&"vocals"])
+	_stand_pane(zones[&"vocals"])
 	casts_none(booth)
 	if perch != null:
 		casts_none(perch)
@@ -100,6 +107,24 @@ static func casts_none(root: Node) -> void:
 		(root as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
+## The particle-life pane in booth `box`, hung on its solid side (-X) wall at eye height, turned into the booth,
+## along from the perch and clear of the glass the singer looks out through; it lights the booth as much as it is
+## looked at.
+func _stand_pane(box: AABB) -> void:
+	if pane != null and is_instance_valid(pane):
+		pane.queue_free()
+	pane = ParticleLifePane.new()
+	pane.name = "BoothPane"
+	pane.tint = RackMood.palette(studio.venue.venue_id())["base"]
+	pane.transform = pane_spot(box)
+	studio.venue.add_child(pane)
+
+
+static func pane_spot(box: AABB) -> Transform3D:
+	var c := box.get_center()
+	return Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(box.position.x + 0.08, box.position.y + 1.6, c.z - 0.8))
+
+
 ## The venue's creature on its perch in booth `box`.
 func _stand_perch(box: AABB) -> void:
 	if perch != null and is_instance_valid(perch):
@@ -116,7 +141,7 @@ func _stand_perch(box: AABB) -> void:
 ## Where the perch stands in a booth `box`: PERCH_AT from its middle, facing +X (into the booth).
 static func perch_spot(box: AABB) -> Transform3D:
 	var c := box.get_center()
-	var at := Vector3(c.x + maxf(PERCH_AT.x, -box.size.x * 0.5 + 0.45), box.position.y, c.z + PERCH_AT.z)
+	var at := Vector3(c.x + maxf(PERCH_AT.x, -box.size.x * 0.5 + 0.5), box.position.y, c.z + PERCH_AT.z)
 	return Transform3D(Basis(Vector3.UP, PI * 0.5), at)
 
 
@@ -124,7 +149,7 @@ static func perch_spot(box: AABB) -> Transform3D:
 ## the booth's +Z wall, inside it, its desk turned to the singer at the mic.
 static func spot_in(box: AABB) -> Transform3D:
 	var c := box.get_center()
-	var at := Vector3(c.x + clampf(box.size.x * 0.1, -0.2, 0.2), box.position.y, minf(c.z + 0.55, box.end.z - 0.45))
+	var at := Vector3(c.x + clampf(box.size.x * 0.1, -0.2, 0.2), box.position.y, minf(c.z + STATION_BACK, box.end.z - STATION_WALL))
 	var mic := Vector3(c.x + ZoneKit.MIC_AT.x - 0.4, box.position.y, c.z + ZoneKit.MIC_AT.z)
 	var to := mic - at
 	to.y = 0.0

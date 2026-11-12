@@ -497,7 +497,7 @@ not colour, says which is which). Where each station stands is still the venue's
 | RHYTHM | straight ahead turned round from the desk | drum riser with the hand drums and the looper; the open lattice floor; the venue's instrument on the back wall behind the riser |
 | HARMONY | front right | the bricks table (fifths wheel, section blocks) |
 | SYNTH & SOUND DESIGN | back right | the keyboard stand and modular rack; the sampler round a middle in front of it |
-| VOCALS | back left | the booth (3.4 x 3.1 m, a 1.2 m door), the lyric board, room for a talk box |
+| VOCALS | back left | the booth (4.4 x 4.1 m, the loft's 3.4 x 4.2; a 1.2 m door), the singer's station and the creature's perch, the lyric board, room for a talk box |
 | TAPE & TOYS | front left | prop shelf and cassette rack on the wall, hoop and Tour case across the middle from them; the items' homes |
 
 The most-used live stations, the riser and the lattice, are the ones straight ahead of the seat

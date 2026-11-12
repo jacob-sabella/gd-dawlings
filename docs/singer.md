@@ -42,6 +42,12 @@ be grabbed by hand. The voice is Jameson Hodge's CHIMERA (MIT), pinned as the su
   the last 7 not sung"). The desk: the modes, SPEAK, LYRICS (the session panel's LYRICS box at a desk, so a whole
   song can be pasted; the typing pad in a headset, " / " between lines), SEQ, and big PART (only tracks with notes),
   TRACK (the first press finds or makes a "Singer" track) and REC (records the song, choosing the TRACK first).
+- **The booth's floor.** Every venue's `vocals` zone is 4.4 x 4.1 m (`Venue.ZONES`; the loft's 3.4 x 4.2, its stair
+  needing the width; the studio's side room's 4.0 x 3.5). The station stands `SingerHost.STATION_BACK` (1 m) behind
+  the booth's middle, so the mic's boom is in front of the desk rather than across it, and the perch
+  `PERCH_AT` toward the far wall from the door. The head is 0.0225 m per body cm (`SingerHead.SCALE`, about 66 cm
+  neck to crown); its grips, pedestal and halo grow with it (`SingerHead.GROWN`), and the prompter stands clear of
+  its nose.
 - **Lettering by venue, readable always.** `SingerStyle.of(venue)` letters the prompter, the desk, the perch and the
   lyric board in the venue's mood colours and its own character (the club's spaced neon capitals, the chalk zone's
   leaning hand, the desert's heavy capitals...). `SingerStyle.readable` holds every venue to 7:1 for the words and

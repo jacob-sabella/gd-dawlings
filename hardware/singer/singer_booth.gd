@@ -22,12 +22,16 @@ signal lyrics_asked()
 signal rec_asked()
 
 const PEDESTAL := 1.12
+## Where the head's origin (its glottis) sits over the pedestal: high enough that its neck clears the halo, the
+## face at a standing player's eye.
+const HEAD_AT := Vector3(-0.06, PEDESTAL + 0.09 * SingerHead.GROWN, -0.02)
 const DESK_AT := Vector3(0.0, 0.98, 0.22)
 ## Steep enough that a standing player reads it face on (it was 38 degrees, read from above at a slant).
 const DESK_TILT := deg_to_rad(-24.0)
 const DESK := Vector2(0.78, 0.4)
 ## The prompter beside the face: its left edge, turned toward the desk, and its lines' sizes (m).
-const PROMPTER_AT := Vector3(0.17, PEDESTAL + 0.24, 0.02)
+## Clear of the face: the head's nose comes to about x 0.15 (SingerHead.SCALE, HEAD_AT).
+const PROMPTER_AT := Vector3(0.25, PEDESTAL + 0.25, 0.02)
 const PROMPTER_TURN := deg_to_rad(-12.0)
 const PROMPTER_WIDE := 0.46
 const CAP_NOW := 0.034
@@ -74,7 +78,7 @@ func _ready() -> void:
 	_build_pedestal()
 	head = SingerHead.new()
 	head.name = "Head"
-	head.position = Vector3(-0.06, PEDESTAL + 0.09, -0.02)
+	head.position = HEAD_AT
 	add_child(head)
 	var desk := Node3D.new()
 	desk.name = "Desk"
@@ -104,8 +108,8 @@ func names_tracks_with(f: Callable) -> void:
 func _build_pedestal() -> void:
 	var post := MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.035
-	cyl.bottom_radius = 0.05
+	cyl.top_radius = 0.035 * SingerHead.GROWN
+	cyl.bottom_radius = 0.05 * SingerHead.GROWN
 	cyl.height = PEDESTAL
 	post.mesh = cyl
 	post.position.y = PEDESTAL * 0.5
@@ -117,8 +121,8 @@ func _build_pedestal() -> void:
 	add_child(post)
 	var foot := MeshInstance3D.new()
 	var disc := CylinderMesh.new()
-	disc.top_radius = 0.2
-	disc.bottom_radius = 0.22
+	disc.top_radius = 0.24
+	disc.bottom_radius = 0.26
 	disc.height = 0.03
 	foot.mesh = disc
 	foot.position.y = 0.015
@@ -128,8 +132,8 @@ func _build_pedestal() -> void:
 	var ring := MeshInstance3D.new()
 	ring.name = "Halo"
 	var torus := TorusMesh.new()
-	torus.inner_radius = 0.07
-	torus.outer_radius = 0.078
+	torus.inner_radius = 0.07 * SingerHead.GROWN
+	torus.outer_radius = 0.078 * SingerHead.GROWN
 	ring.mesh = torus
 	ring.position.y = PEDESTAL
 	var glow := StandardMaterial3D.new()

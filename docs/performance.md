@@ -34,7 +34,7 @@ static memory, then per-surface mesh and triangle counts. A window is needed (he
 goes through `offscreen_run`. Draw calls, primitives, nodes and meshes are deterministic as means over the window (not as single frames: see "One frame is not the scene"); frame times are not
 (see "Noise").
 
-The target is a standalone headset: this room twice (once per eye) at 72 Hz, 6.94 ms a frame, on a mobile GPU. Desktop frame times are not that budget; read the counts and the slope.
+The target is a desktop GPU, on a screen or a PC VR headset (this room twice, once per eye, at 90 Hz: 11.1 ms a frame). Standalone headsets on the mobile renderer are no longer a target (2026-11-12): too weak for the room. The heavy visuals (`hardware/visuals/`) run under `VisualBudget`'s quality setting and only while seen.
 
 ## Numbers at HEAD (2026-11-07, after the VU fix below)
 

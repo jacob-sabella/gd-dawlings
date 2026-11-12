@@ -33,7 +33,84 @@ func _build_case() -> void:
 		post.add_to_group(&"presentation_chrome")
 		wall._put(post)
 	_build_dressing()
+	_build_wing()
 	_build_pillars()
+
+
+## The wing's case round the corner (RackWall.WING_X): a backing as tall as the module rows, its rails, the lit
+## edge lines and posts to the floor, like the case's. Its blanks and modules are put in it as the case's are.
+func _build_wing() -> void:
+	var wing := Node3D.new()
+	wing.name = "Wing"
+	wing.transform = wall._cell_frame(RackLayout.COLS + RackLayout.WING_COLS * 0.5, 0.0)
+	var wide := RackWall.MODULE_WIDE * RackLayout.WING_COLS
+	var foot := wall._row_foot(RackWall.ROWS - 1)
+	var top := wall._row_foot(0) + RackWall.ROW_TALL
+	var case := MeshInstance3D.new()
+	case.name = "WingCase"
+	var box := BoxMesh.new()
+	box.size = Vector3(wide + RackWall.BORDER * 2.0, top - foot + RackWall.BORDER * 2.0, RackWall.CASE_DEEP)
+	case.mesh = box
+	case.position = Vector3(0, (foot + top) * 0.5, -RackWall.CASE_DEEP * 0.5 - 0.002)
+	case.material_override = Materials.chassis()
+	wing.add_child(case)
+	for side in [-1.0, 1.0]:
+		var line := MeshInstance3D.new()
+		line.name = "WingEdge"
+		var b := BoxMesh.new()
+		b.size = Vector3(0.004, top - foot, 0.002)
+		line.mesh = b
+		line.position = Vector3(side * (wide * 0.5 + RackWall.BORDER * 0.5), (foot + top) * 0.5, -0.001)
+		line.material_override = wall._edge_material
+		line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		wing.add_child(line)
+	for k in 3:
+		var post := MeshInstance3D.new()
+		post.name = "WingPost"
+		var bar := BoxMesh.new()
+		var high := RackWall.MODULAR_FLOOR + foot
+		bar.size = Vector3(RackWall.POST, high, RackWall.POST)
+		post.mesh = bar
+		post.position = Vector3((k - 1) * (wide * 0.5 - 0.05), -RackWall.MODULAR_FLOOR + high * 0.5, -RackWall.CASE_DEEP * 0.5)
+		post.material_override = Materials.brushed_metal()
+		post.add_to_group(&"presentation_chrome")
+		wing.add_child(post)
+	for row in RackWall.ROWS:
+		for at in [0.0, RackWall.ROW_TALL]:
+			var rail := MeshInstance3D.new()
+			rail.name = "WingRail"
+			var b := BoxMesh.new()
+			b.size = Vector3(wide, 0.007, 0.006)
+			rail.mesh = b
+			rail.position = Vector3(0, wall._row_foot(row) + at, -0.001)
+			rail.material_override = Materials.brushed_metal()
+			wing.add_child(rail)
+	# The case's halo behind it (the same material, so it glows with the rack), and work lamps over it as over
+	# the case, one to each stretch of it.
+	var halo := MeshInstance3D.new()
+	halo.name = "WingHalo"
+	var quad := QuadMesh.new()
+	quad.size = Vector2(wide + 0.5, top - foot + 0.5)
+	halo.mesh = quad
+	halo.position = Vector3(0, (foot + top) * 0.5, -RackWall.CASE_DEEP - 0.012)
+	halo.material_override = wall._halo_material
+	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	halo.add_to_group(&"presentation_chrome")
+	wing.add_child(halo)
+	for k in 3:
+		var lamp := SpotLight3D.new()
+		lamp.name = "WingLamp%d" % k
+		lamp.light_color = Color(1.0, 0.92, 0.8)
+		lamp.light_energy = 1.2
+		lamp.spot_range = 2.6
+		lamp.spot_angle = 70.0
+		lamp.shadow_enabled = false
+		var x := (k - 1) * wide / 3.0
+		var from := Vector3(x, top + RackWall.BORDER + 0.1, 0.3)
+		lamp.transform = Transform3D(Basis.looking_at(Vector3(x, (foot + top) * 0.5, 0) - from, Vector3.UP), from)
+		lamp.add_to_group(&"presentation_chrome")
+		wing.add_child(lamp)
+	wall._put(wing)
 
 
 ## What makes the case a thing to look at: the level bar along its top, glowing edge lines down its

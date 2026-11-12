@@ -51,7 +51,7 @@ const JAMB := 0.04
 const SIDE_ZONES := {
 	&"drums": AABB(Vector3(-9.6, 0.0, -3.4), Vector3(2.6, 2.8, 2.6)),
 	&"matrix": AABB(Vector3(-11.0, 0.0, 0.45), Vector3(3.4, 3.4, 3.4)),
-	&"vocals": AABB(Vector3(-14.5, 0.0, -3.9), Vector3(3.4, 2.6, 3.1)),
+	&"vocals": AABB(Vector3(-14.5, 0.0, -3.9), Vector3(4.0, 2.6, 3.5)),
 }
 ## Beside: the tubular bells against the side room's back wall in its far corner, past the
 ## lattice, under the patch wall's end (x at the base width).

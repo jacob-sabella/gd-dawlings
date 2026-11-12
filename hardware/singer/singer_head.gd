@@ -1,7 +1,7 @@
 class_name SingerHead
 extends Node3D
 
-## The singer's head: a life-and-a-half-size head cut down the middle, drawn in glowing lines, with the voice's
+## The singer's head: a head over twice life size cut down the middle, drawn in glowing lines, with the voice's
 ## insides moving in it as the engine sings (the vector-display look of CHIMERA's own screens, made a thing in the
 ## room). Everything inside comes from the engine (Singer.body, Singer.frame): the walls, tongue, lips, teeth, jaw,
 ## soft palate, epiglottis and nose as CHIMERA computes them for the articulators now; the airway as a tube of rings
@@ -21,8 +21,12 @@ signal moved(name: String, cm: float)
 ## A hand let go of a grip that moved `names`.
 signal let_go(names: PackedStringArray)
 
-## Metres per body centimetre: a head about 37 cm tall, a reach across.
-const SCALE := 0.015
+## Metres per body centimetre: a head about 66 cm from the neck to the crown, big enough to read the mouth's
+## insides from the desk (0.015 until 2026-11-12, "the cool head thing could be a bit bigger").
+const SCALE := 0.0225
+## How much bigger than it was first drawn (SCALE 0.015): the grips' handles grow with it, and the booth's
+## pedestal and halo (SingerBooth).
+const GROWN := SCALE / 0.015
 ## The palette: blue is the body, amber is sound, the grips each a colour of their own.
 const BLUE := Color(0.31, 0.71, 0.95)
 const BLUE_DIM := Color(0.12, 0.37, 0.55)
@@ -377,13 +381,13 @@ class Grip extends ControlAffordance:
 		collision_mask = 0
 		var shape := CollisionShape3D.new()
 		var sphere := SphereShape3D.new()
-		sphere.radius = 0.022
+		sphere.radius = 0.022 * SingerHead.GROWN
 		shape.shape = sphere
 		add_child(shape)
 		_shape = MeshInstance3D.new()
 		var m := SphereMesh.new()
-		m.radius = 0.0055
-		m.height = 0.011
+		m.radius = 0.0055 * SingerHead.GROWN
+		m.height = 0.011 * SingerHead.GROWN
 		m.radial_segments = 8
 		m.rings = 4
 		_shape.mesh = m
