@@ -17,7 +17,9 @@ checkout; its AVR submodules are not.
 ## Data shipped with CHIMERA
 
 The voice reads English through the Carnegie Mellon Pronouncing Dictionary as CHIMERA ships it,
-`vendor/chimera/public/data/cmudict.txt.gz`, loaded from the checkout at run time (`dv_init`), not copied. It is under
+`vendor/chimera/public/data/cmudict.txt.gz`, loaded from the checkout at run time (`dv_init`), not copied into the
+repository. A release ships it unchanged beside the engine, `rack/cmudict.txt.gz`, with this file and every licence of
+what the engine is built from in `rack/licences/` (`tools/rack_ship.sh`). It is under
 its own BSD-style licence, Copyright (C) 1993-2015 Carnegie Mellon University; the full text is
 `vendor/chimera/public/data/CMUDICT-LICENSE.txt`.
 

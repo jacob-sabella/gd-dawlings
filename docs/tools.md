@@ -49,7 +49,9 @@ workspace 10 on Hyprland; never run a bare `godot --path .`.** The shot, budget 
 
 ## Building
 
-`tools/rack_build.sh` (the rack engine from the pinned submodules), `tools/rack_probe.sh` (one Plaits note),
+`tools/rack_build.sh` (the rack engine from the pinned submodules; `RACK_TARGET=windows` cross-builds `rack.exe`
+with MinGW into `build/rack-windows/`), `tools/rack_ship.sh linux|windows DEST` (the engine, the voice's dictionary
+and the licences into `DEST/rack/`, as a release ships it), `tools/rack_probe.sh` (one Plaits note),
 `tools/build_quest.sh` (APK), `tools/fetch_openxr_vendors.sh`, `tools/make_cards.sh`, `tools/make_action_map.gd`,
 `tools/blender/`
 (model scripts), `tools/discord_bridge/`, `tools/mock/`.

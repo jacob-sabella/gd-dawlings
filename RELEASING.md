@@ -14,7 +14,9 @@ just before an export.
 
 - `ci.yml` -- the headless suite, on pushes to any branch but `master`; also the test gate below.
 - `release-check.yml` -- the suite, then dawkit's native core and a full Linux and Windows export,
-  kept as artifacts. Runs on pull requests, on manual dispatch, and as the gate of the release.
+  each with the modular room's engine in `rack/` beside the game (`tools/rack_ship.sh`: the engine, the
+  voice's dictionary and every licence; Windows is cross-built with MinGW and Rust's
+  `x86_64-pc-windows-gnu`), kept as artifacts. Runs on pull requests, on manual dispatch, and as the gate of the release.
 - `release-stable.yml` -- manual: `release-check`, then a final release at `VERSION`'s base, then a
   PR bumping `VERSION` to the next development base (`patch` by default; `minor` or `major` by input).
   To cut a minor or major, first merge a PR bumping `VERSION`, then run the workflow.

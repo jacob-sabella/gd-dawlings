@@ -1,12 +1,18 @@
 class_name RackEngine
 extends RefCounted
 
-## The modular room's engine, native/rack, as a process: built on demand from the pinned submodules
-## (tools/rack_build.sh), told the patch and the player's notes as text lines, heard back as float32
+## The modular room's engine, native/rack, as a process: the one a release ships beside the game (`SHIPPED`,
+## built by the release workflow for Linux and Windows), else built on demand from the pinned submodules
+## (tools/rack_build.sh) when running from source; told the patch and the player's notes as text lines, heard back as float32
 ## stereo on its stdout (live) or as a WAV (offline). Its stderr says how loud each module is, for the
 ## room's lights.
 
 const SCRIPT := "res://tools/rack_build.sh"
+## Where a release keeps the engine and the voice's dictionary: a folder beside the game's executable.
+const SHIPPED := "rack"
+## The voice's pronouncing dictionary (CHIMERA's), in the submodule when running from source.
+const CMUDICT_SOURCE := "res://vendor/chimera/public/data/cmudict.txt.gz"
+const CMUDICT := "cmudict.txt.gz"
 const RATE := 48000
 
 static var _binary := ""
@@ -21,8 +27,13 @@ static func binary() -> String:
 	if not _tried:
 		_tried = true
 		var told := OS.get_environment("DAWLINGS_RACK")
+		var shipped := shipped_dir()
+		var exe := shipped.path_join("rack.exe" if OS.get_name() == "Windows" else "rack")
 		if told != "" and FileAccess.file_exists(told):
 			_binary = told
+		elif OS.has_feature("template") and FileAccess.file_exists(exe):
+			_binary = exe
+			_point_at_the_dictionary(shipped.path_join(CMUDICT))
 		elif OS.get_name() == "Linux" or OS.get_name() == "macOS":
 			var out: Array = []
 			var code := OS.execute("bash", [ProjectSettings.globalize_path(SCRIPT)], out, true)
@@ -32,8 +43,21 @@ static func binary() -> String:
 					_binary = ProjectSettings.globalize_path("res://").path_join(_binary)
 			else:
 				push_warning("rack: could not build the engine: %s" % str(out))
+			_point_at_the_dictionary(ProjectSettings.globalize_path(CMUDICT_SOURCE))
 	_lock.unlock()
 	return _binary
+
+
+## The folder a release ships the engine in, beside the executable.
+static func shipped_dir() -> String:
+	return OS.get_executable_path().get_base_dir().path_join(SHIPPED)
+
+
+## The engine reads the voice's dictionary from DAWLINGS_CMUDICT (native/rack/modules_voice.cc), which every engine
+## process started from here inherits; an absolute path, so it does not hang on where the game was started.
+static func _point_at_the_dictionary(path: String) -> void:
+	if OS.get_environment("DAWLINGS_CMUDICT") == "" and FileAccess.file_exists(path):
+		OS.set_environment("DAWLINGS_CMUDICT", path)
 
 
 ## Finds (and builds, if it must) the engine on a worker thread, so the first walk into the rack does not wait

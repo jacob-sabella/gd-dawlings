@@ -700,6 +700,9 @@ static func _render(api: ControlApi, a: Dictionary) -> Dictionary:
 	# The engine's binary: never built from here (a build can take minutes); only used when it is already there.
 	var told := OS.get_environment("DAWLINGS_RACK")
 	var exe := told if told != "" and FileAccess.file_exists(told) else ProjectSettings.globalize_path("res://build/rack/rack")
+	var shipped := RackEngine.shipped_dir().path_join("rack.exe" if OS.get_name() == "Windows" else "rack")
+	if (told == "" or not FileAccess.file_exists(told)) and OS.has_feature("template") and FileAccess.file_exists(shipped):
+		exe = shipped  # a release's own engine, beside the game
 	if not FileAccess.file_exists(exe):
 		return ControlTool.fail("the rack engine is not built on this machine (build/rack/rack is missing; tools/rack_build.sh builds it), so nothing can be rendered")
 	if not RackEngine.available():

@@ -106,7 +106,9 @@ streams reach the sink only at the per-app volumes you keep). The two are mixed 
 
 `tools/rack_build.sh` builds the rack and links `$(tools/voice_build.sh)` (`cargo build --release --locked`,
 target `build/voice/`). It needs the `vendor/chimera` submodule and a Rust toolchain. The dictionary is read at run
-time from `vendor/chimera/public/data/cmudict.txt.gz` (`dv_init`). Notices: `THIRD_PARTY_NOTICES.md`.
+time from `vendor/chimera/public/data/cmudict.txt.gz` (`dv_init`; `DAWLINGS_CMUDICT` names another). `VOICE_TARGET`
+builds for another Rust target (`RACK_TARGET=windows tools/rack_build.sh` sets it). A release carries the engine and
+the dictionary in `rack/` beside the game (`tools/rack_ship.sh`, `RackEngine.SHIPPED`). Notices: `THIRD_PARTY_NOTICES.md`.
 
 ## Tests
 
