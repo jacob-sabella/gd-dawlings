@@ -78,6 +78,9 @@ func build() -> void:
 	_fill_mat.vertex_color_use_as_albedo = true
 	_fill_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_fill_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	# `_quad` winds its cells counter-clockwise, Godot's back face: culled, the bars, the meter and the plasma
+	# drew nothing at all.
+	_fill_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_fill.mesh = ImmediateMesh.new()
 	_fill.material_override = _fill_mat
 	_fill.position = Vector3(0, 0, 0.0007)

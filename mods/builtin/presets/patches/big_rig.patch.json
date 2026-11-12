@@ -12,6 +12,7 @@
     "hat": {"at": [5, 2], "knobs": {"accent": 0.8, "decay": 0.12, "freq": 0.2727272727272728, "kind": 0.8333, "tone": 0.5}, "type": "builtin.drum"},
     "kick": {"at": [3, 2], "knobs": {"accent": 0.8, "decay": 0.55, "freq": 0.1273, "kind": 0.1667, "tone": 0.5}, "type": "builtin.drum"},
     "lad": {"at": [7, 1], "knobs": {"cutoff": 0.5, "cv": 0.65, "drive": 0.2, "mode": 0.08333333333333333, "res": 0.6111}, "type": "builtin.ladder"},
+    "lamp": {"at": [17, 0], "knobs": {"flow": 0.55, "hue": 0.6}, "type": "builtin.plasma"},
     "lfo1": {"at": [10, 0], "knobs": {"depth": 0.8, "rate": 0.2357, "shape": 0.1}, "type": "builtin.lfo"},
     "lfo2": {"at": [11, 0], "knobs": {"depth": 0.9, "rate": 0.4475, "shape": 0.3}, "type": "builtin.lfo"},
     "mixA": {"at": [0, 3], "knobs": {"l1": 0.5, "l2": 0.6, "l3": 0.55, "l4": 0.4, "master": 0.6666666666666666}, "type": "builtin.mix"},
@@ -91,6 +92,9 @@
     ["rev.l", "out.l"],
     ["rev.r", "out.r"],
     ["rev.l", "scope.in"],
-    ["vca1.out", "bass_scope.in"]
+    ["vca1.out", "bass_scope.in"],
+    ["kick.out", "lamp.red"],
+    ["snare.out", "lamp.green"],
+    ["hat.out", "lamp.blue"]
   ]
 }

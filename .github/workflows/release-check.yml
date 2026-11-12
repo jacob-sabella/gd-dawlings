@@ -1,7 +1,8 @@
 name: Release Check
 
 # Full pre-release validation: the headless suite, then the native core and a full export for
-# Linux and Windows, with the two builds kept as artifacts.
+# Linux and Windows, each with the modular room's engine beside it (rack/: the engine, the voice's
+# dictionary and the licences, tools/rack_ship.sh), with the two builds kept as artifacts.
 #
 # Runs on:
 #   - pull_request to master -- keeps every change honest.
@@ -52,6 +53,12 @@ jobs:
           # The posix thread model, which the local builds (Arch's MinGW) are made with.
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
           sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+
+      - name: Rust, for the voice in the rack engine (and its Windows target)
+        run: |
+          rustup toolchain install stable --profile minimal --target x86_64-pc-windows-gnu
+          rustup default stable
+          rustc --version
 
       - name: Cache Godot and its export templates
         uses: actions/cache@v6
@@ -130,6 +137,16 @@ jobs:
           cp docs/playtest.md build/windows/README.md
           test -s build/linux/dawlings.x86_64 && test -s build/windows/dawlings.exe
           ls build/linux/libdawkit.* build/windows/libdawkit.*
+
+      - name: The rack engine beside each build
+        run: |
+          # The modular room's engine is a program of its own (native/rack, with the Rust voice), so it ships
+          # in rack/ beside the game, with the voice's dictionary and every licence (RackEngine.SHIPPED).
+          tools/rack_ship.sh linux build/linux
+          tools/rack_ship.sh windows build/windows
+          test "$(build/linux/rack/rack --describe | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["modules"]))')" -gt 60
+          file build/windows/rack/rack.exe | grep -q "PE32+ executable"
+          ls -la build/linux/rack build/windows/rack
 
       - uses: actions/upload-artifact@v7
         with:

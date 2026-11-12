@@ -1,0 +1,13 @@
+{
+  "format": "dawlings.mod",
+  "api_version": 1,
+  "id": "builtin.chimera",
+  "name": "CHIMERA voice",
+  "version": "1.0.0",
+  "author": "Jameson Hodge (CHIMERA); wrapper by dawlings",
+  "licence": {"spdx": "MIT", "copyright": "Copyright (c) 2026 Jameson Hodge"},
+  "source": {"kind": "submodule", "path": "vendor/chimera", "commit": "1d3ea49", "upstream": "https://github.com/jamesondh/chimera-vocal-synth"},
+  "provides": [
+    {"kind": "rack_module", "type": "builtin.voice", "title": "VOICE", "group": "Voice", "blurb": "A human voice built from the body up: lungs, vocal folds, tongue, lips and nose. Sings the lyrics a syllable a note, speaks, beatboxes, or becomes a songbird, a seal, an alligator or an elephant.", "sound": {"kind": "engine", "type": "voice"}, "skin": {"face": "#08120C", "accent": "#59FF9C", "pattern": "wave", "tagline": "LUNGS TO LIPS"}, "pad_knobs": ["vowel", "open"]}
+  ]
+}

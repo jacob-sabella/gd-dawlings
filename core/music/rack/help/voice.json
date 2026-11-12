@@ -1,0 +1,32 @@
+{
+  "what": "A singer in a box. Nothing here is a recording: it simulates a body breathing out through vocal folds, a throat, a tongue, lips and a nose, sample by sample, so it can sing the song's words, speak, beatbox, or become an animal. It is CHIMERA, by Jameson Hodge.",
+  "how": "MODE picks what it does. SING: each note (from KEYS, or a GATE and PITCH) sings the next syllable of the song's lyrics, holding the vowel while the note is held and closing the word when you let go; the vocal booth also sends it the song's own vocal part, which it sings with the consonants just ahead of the beat. VOWEL: you play the mouth itself; VOWEL slides the tongue from 'ee' to 'oo', OPEN drops the jaw, BREATH pushes air, and a gate breathes it. BEAT: each gate makes a beatbox sound (SOUND), and SEQ ON plays the booth's pattern in time with the song. BEAST: a songbird, seal, alligator or elephant; each gate plays its CALL. BODY moves from a man's voice to a woman's and CHILD toward a child's; the body changes a moment after the knob stops.",
+  "ins": {
+    "pitch": "The note, 1.0 an octave, 0 middle C. With nothing patched it follows the keys.",
+    "gate": "Above 0.5 is a note held (SING), breath (VOWEL), a hit (BEAT) or a call (BEAST). With nothing patched it follows the keys.",
+    "vowel": "Added to the VOWEL knob: an LFO here makes it say 'ee-ah-oo' on its own (VOWEL mode).",
+    "open": "Added to the OPEN knob: how far the jaw drops (VOWEL mode). An envelope here makes it 'wah'.",
+    "breath": "Added to the BREATH knob: how hard it blows (VOWEL mode)."
+  },
+  "outs": {
+    "out": "The voice. Patch it to OUT, or through a filter, delay or reverb first.",
+    "env": "How loud the voice is now, 0..1: patch it to move something else with the singing."
+  },
+  "knobs": {
+    "mode": "SING, VOWEL, BEAT or BEAST (see above).",
+    "body": "From a man's body (left) to a woman's (right): longer or shorter vocal tract and folds, so a lower or higher, darker or brighter voice.",
+    "child": "Toward a child's body: smaller and higher still.",
+    "vowel": "The tongue, front to back: ee, eh, ah, oh, oo. On the orb pad it is left to right.",
+    "open": "How far the jaw (and with it the lips) opens. On the orb pad it is up and down.",
+    "breath": "How hard the lungs push in VOWEL mode: soft and breathy to loud and pressed.",
+    "vibrato": "How wide the vibrato on held vowels is, in cents.",
+    "tension": "How tight the vocal folds are in VOWEL mode: slack and soft to bright and edgy.",
+    "oct": "Moves every note up or down by octaves.",
+    "beast": "Which animal BEAST mode plays.",
+    "call": "Which of the animal's calls a gate plays.",
+    "sound": "Which beatbox sound a gate plays in BEAT mode: kick, hi-hat, open hat, snare, rimshot, inward snare, tongue click, lip pop, crash, or a hummed bass note at the gate's pitch.",
+    "seq": "ON plays the beat pattern sent from the booth in time with the song (BEAT mode).",
+    "level": "How loud it comes out."
+  },
+  "try": "Patch KEYS' pitch to VOICE's pitch and VOICE's out to OUT, and play a few notes: it sings the song's words. Then set MODE to VOWEL, hold a key and drag the orb pad around: you are moving its tongue and jaw. Patch an LFO into VOWEL for a voice that says 'yah-yah-yah' on its own."
+}

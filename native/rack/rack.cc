@@ -255,4 +255,22 @@ void Rack::cc(int k, int v) {
   else if (k == 11) ctx.keys.expr = v / 127.0f;
 }
 
+bool Rack::text(const std::string& path, const std::string& value) {
+  std::string m, k;
+  if (!split_path(path, m, k)) return false;
+  auto it = mods_.find(m);
+  if (it == mods_.end()) return false;
+  it->second->text(k, value);
+  return true;
+}
+
+const std::vector<float>* Rack::tap(const std::string& path) const {
+  std::string m, k;
+  if (!split_path(path, m, k)) return nullptr;
+  auto it = mods_.find(m);
+  if (it == mods_.end()) return nullptr;
+  int o = index_of(it->second->spec->outs, k);
+  return o < 0 ? nullptr : &it->second->out[o];
+}
+
 }  // namespace rack

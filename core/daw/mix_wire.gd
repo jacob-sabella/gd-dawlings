@@ -42,6 +42,10 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			_apply_track(state, p, args)
 		"master":
 			_apply_master(state, p, args)
+		"singer":
+			# dawlings's own: the host's vocal booth singer as it sings (`SingerLive`), `/singer/live`.
+			if p.size() == 2 and p[1] == "live":
+				state.singer_live = SingerLive.unpack(args, state.singer_live)
 		"rack":
 			# dawlings's own: the host's modular room as it plays (`RackLive`), `/rack/live`.
 			if p.size() == 2 and p[1] == "live":

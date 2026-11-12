@@ -38,12 +38,13 @@ func manifests_equal_the_old_tables() -> void:
 	_use(reg)
 	var ids: Array = reg.mods().map(func(m: ModManifest) -> String: return m.id)
 	ids.sort()
-	check("the shipped mods are airwindows, core, daisysp, effects, mutable and presets, all available, with no problem",
-			ids == ["builtin.airwindows", "builtin.core", "builtin.daisysp", "builtin.effects", "builtin.mutable", "builtin.presets"]
+	check("the shipped mods are airwindows, chimera, core, daisysp, effects, mutable and presets, all available, with no problem",
+			ids == ["builtin.airwindows", "builtin.chimera", "builtin.core", "builtin.daisysp", "builtin.effects", "builtin.mutable", "builtin.presets"]
 			and ids.all(func(i: String) -> bool: return reg.is_available(i)) and reg.problems().is_empty())
 	check("the vendor pins are the submodules' (THIRD_PARTY_NOTICES.md)",
 			reg.mod("builtin.daisysp").source["path"] == "vendor/daisysp" and reg.mod("builtin.daisysp").source["commit"] == "2c72eaf"
-			and reg.mod("builtin.mutable").source["path"] == "vendor/mutable-eurorack" and reg.mod("builtin.mutable").source["commit"] == "f4cfa76")
+			and reg.mod("builtin.mutable").source["path"] == "vendor/mutable-eurorack" and reg.mod("builtin.mutable").source["commit"] == "f4cfa76"
+			and reg.mod("builtin.chimera").source["path"] == "vendor/chimera" and reg.mod("builtin.chimera").source["commit"] == "1d3ea49")
 	# Modules: one entry for each the engine describes, nothing else.
 	var engine_types: Array = snapshot.map(func(m: Dictionary) -> String: return m["type"])
 	var types: Array = engine_types.map(func(x: String) -> String: return "builtin." + x)
@@ -58,13 +59,17 @@ func manifests_equal_the_old_tables() -> void:
 			and types.all(func(x: String) -> bool: return reg.has_rack_module(x) and reg.entry_owner("rack_module:" + x) != ""))
 	check("a module belongs to the mod whose DSP it uses",
 			reg.entry_owner("rack_module:builtin.plaits") == "builtin.mutable" and reg.entry_owner("rack_module:builtin.reverb") == "builtin.mutable"
-			and reg.entry_owner("rack_module:builtin.vco") == "builtin.daisysp" and reg.entry_owner("rack_module:builtin.keys") == "builtin.core")
+			and reg.entry_owner("rack_module:builtin.vco") == "builtin.daisysp" and reg.entry_owner("rack_module:builtin.keys") == "builtin.core"
+			and reg.entry_owner("rack_module:builtin.voice") == "builtin.chimera")
 	var same_text := true
 	var same_sound := true
 	var same_skin := true
 	var close_skin := true
 	var same_pads := true
 	var legacy_skins: Dictionary = legacy["skins"]
+	var newer: Array = []
+	var text_off: Array = []
+	var newer_ok := true
 	for m in snapshot:
 		var engine: String = m["type"]
 		var ty := "builtin." + engine
@@ -75,7 +80,17 @@ func manifests_equal_the_old_tables() -> void:
 		plain["engine"] = engine
 		plain["type"] = ty
 		same_text = same_text and str(spec) == str(plain)
+		if e["title"] != m["title"] or e["group"] != m["group"] or e["blurb"] != m["blurb"] or str(spec) != str(plain):
+			text_off.append(engine)
 		same_sound = same_sound and e["sound"] == {"kind": "engine", "type": engine}
+		if not legacy_skins.has(engine):
+			# A module added since the old tables went (the VOICE): its skin and pad are its own mod's.
+			var own: Dictionary = e.get("skin", {})
+			newer.append(engine)
+			if engine == "voice":
+				newer_ok = newer_ok and not own.is_empty() and RackSkin.of(ty)[0].to_html(false) == Color(own["face"]).to_html(false) \
+						and RackWall.pad_knobs(ty) == Array(e.get("pad_knobs", []))
+			continue
 		var old: Array = legacy_skins[engine]
 		var face := Color(old[0][0], old[0][1], old[0][2])
 		var accent := Color(old[1][0], old[1][1], old[1][2])
@@ -85,9 +100,11 @@ func manifests_equal_the_old_tables() -> void:
 				and got[2] == StringName(old[2]) and got[3] == old[3]
 		close_skin = close_skin and _within(got[0], face, 0.003) and _within(got[1], accent, 0.003)
 		same_pads = same_pads and RackWall.pad_knobs(ty) == legacy["pad_knobs"].get(engine, [])
-	check("title, group and blurb equal modules.json for every module, and the catalogue serves them with the engine's jacks", same_text)
+	check("title, group and blurb equal modules.json for every module, and the catalogue serves them with the engine's jacks %s" % [text_off], same_text)
 	check("every module's sound is the engine module of its own name, and its type is builtin.<name>", same_sound)
 	check("every skin equals the old table to the 8-bit step, pattern and tagline exactly", same_skin)
+	check("the modules added since the old tables wear their own mod's skin and pad (%d of them, the VOICE among them)" % newer.size(),
+			"voice" in newer and newer_ok)
 	check("and is within 0.003 of the old floats", close_skin)
 	check("every orb pad has the old table's two knobs, and a module without one has none", same_pads)
 	check("every old pad belongs to a module the engine has", legacy["pad_knobs"].keys().all(func(k: String) -> bool: return k in engine_types))
@@ -100,17 +117,40 @@ func manifests_equal_the_old_tables() -> void:
 	check("the presets are the old ones in the old order (%d)" % old_names.size(),
 			RackPatch.presets().map(func(n: StringName) -> String: return String(n)) == old_names)
 	var titles := true
-	var patches := true
+	var unchanged := true
+	var tapped := true
+	var screens := 0
 	for p in legacy["presets"]:
 		var n := StringName(p["name"])
 		titles = titles and RackPatch.preset_title(n) == p["title"]
-		patches = patches and RackPatch.preset(n) == _with_cells(p["patch"])
+		var old := _with_cells(p["patch"])
+		var now := RackPatch.preset(n)
+		# The old patch, module for module, knob for knob and cable for cable; what is added since is screens.
+		for id in old["modules"]:
+			unchanged = unchanged and now["modules"].get(id) == old["modules"][id]
+		unchanged = unchanged and (old["cables"] as Array).all(func(c: Array) -> bool: return c in now["cables"])
+		for id in now["modules"]:
+			if old["modules"].has(id):
+				continue
+			var type: String = now["modules"][id]["type"]
+			screens += 1
+			tapped = tapped and ScopeScreen.mode_of(type) >= 0
+		# A screen only listens: a cable from one goes nowhere, and every cable is on jacks its modules have.
+		for c: Array in now["cables"]:
+			var from_id := String(c[0]).get_slice(".", 0)
+			var from: String = now["modules"][from_id]["type"]
+			var to: String = now["modules"][String(c[1]).get_slice(".", 0)]["type"]
+			tapped = tapped and RackCatalogue.has_out(from, String(c[0]).get_slice(".", 1)) \
+					and RackCatalogue.has_in(to, String(c[1]).get_slice(".", 1)) \
+					and (old["modules"].has(from_id) or ScopeScreen.mode_of(from) < 0)
 	check("every preset has its old title", titles)
-	check("and its old patch, module for module, knob for knob and cable for cable", patches)
+	check("and its old patch, module for module, knob for knob and cable for cable", unchanged)
+	check("what each has had added since is screens (%d), tapped off its jacks and patched on to nothing" % screens,
+			tapped and screens >= RackPatch.presets().size() - 1)
 	var again := RackPatch.preset(&"keys_voice")
 	again["modules"]["keys"]["at"][0] = 99
 	again["cables"].clear()
-	check("a preset is a fresh copy each time", RackPatch.preset(&"keys_voice") == _with_cells(legacy["presets"][0]["patch"]))
+	check("a preset is a fresh copy each time", RackPatch.preset(&"keys_voice") != again and RackPatch.preset(&"keys_voice")["cables"].size() > 0)
 	check("a preset's cells are ints", RackPatch.preset(&"acid_line")["modules"]["vco"]["at"][0] is int)
 	check("the default patch is the keys voice", RackPatch.default_patch() == RackPatch.preset(&"keys_voice"))
 	check("a name no mod gives is an empty patch with no title", RackPatch.preset(&"nope") == RackPatch.empty() and RackPatch.preset_title(&"nope") == "")

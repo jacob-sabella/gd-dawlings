@@ -13,6 +13,21 @@ VENUE=cabin tools/budget.sh 13       # another venue
 XDG_DATA_HOME=/tmp/clean tools/budget.sh 13   # with no saved rooms, patches or profile
 ```
 
+`tools/budget.sh` ends with a verdict (`budget: PASS`, or a FAIL line and exit 1): each row's draws and primitives
+at most 5% over the reference rows below (kept in the script as `REF`; 48 fitted remeasured at 0a32bba, see the
+script), and the singer's voice, CHIMERA rendered through the rack, at most 25% of one core (`tools/budget.sh voice`
+runs that alone; it measured 18 to 20%). Frame times are printed and not judged.
+
+Found and fixed (2026-11-12): at 90 tracks in the wide pose the singer's branch drew about 620 more a frame than
+0a32bba (6737 against 6116, steady), all of it in the sun's shadow cascades (with shadows off the two drew the same,
+2107 and 2110) and only after the first frame that redrew the omni shadows. Bisected to the vocal booth's three knobs,
+then to nothing about them but when they load the moulded knob (`Part.mesh`): synchronously while the venue was
+being stood up (`SingerHost.stand`), ahead of the desk's and the rack's banks. A bare `Part.mesh(Knob.MESH_PATH)`
+there with no booth at all did the same; deferred one idle frame it did not. The booth now adds its knobs on the
+next idle frame (`SingerBooth._build_desk`), and 90 tracks reads 3785 fitted and 6222 wide, 0a32bba's figures, now
+reference rows in the script. Why the load's moment reaches the cascades is not known; look here first if a part
+loaded during `set_venue` costs the sun hundreds of draws.
+
 `tools/budget.sh` starts the game with `--budget --tracks N --quit-after 200` (`tools/budget.gd`), vsync off, and
 prints one row per pose: primitives, draw calls, objects, mean and worst frame time, nodes, start-up time and
 static memory, then per-surface mesh and triangle counts. A window is needed (headless draws nothing), so it

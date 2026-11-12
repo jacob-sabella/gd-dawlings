@@ -649,7 +649,7 @@ func ceiling_height() -> float:
 ## cassette rack, the sampler). In a studio those (WHEELED) are left out: the walker already stops at
 ## every trolley in the floor plan, wherever it has been pushed.
 func solids() -> Array:
-	var out := zone_solids()
+	var out := _off_the_annex_site(zone_solids())
 	out.append_array(instrument_solids())
 	out.append_array(weather_solids())
 	if prop_shelf_solid():
@@ -659,6 +659,18 @@ func solids() -> Array:
 		if station_spots.trolley_of(&"prop_shelf") == null:
 			out.append_array(wheeled_solids())
 	return out
+
+
+## `solids` less those standing where the modular annex is built. The annex hides the venue's own scenery
+## there (`AnnexSite.clear_the_site`), so a solid left behind is an invisible wall: the grid's palm by the
+## room's door was one. The site is the one `clear_the_site` clears.
+func _off_the_annex_site(scenery: Array) -> Array:
+	if not has_annex():
+		return scenery
+	var room := ModularAnnex.inside(annex_edge())
+	var site := Rect2(room.position.x - ModularAnnex.WALL - 0.1, room.position.y - 0.1,
+			room.size.x + ModularAnnex.WALL + 0.3, room.size.y + 0.2)
+	return scenery.filter(func(f: Dictionary) -> bool: return not site.has_point(f["c"]))
 
 
 ## The free-standing pieces where they stand now, as walker footprints with their heights.

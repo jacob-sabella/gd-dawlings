@@ -32,7 +32,17 @@ print(" ".join(str(m["activeWorkspace"]["id"]) for m in json.load(sys.stdin)))' 
     # `exec`, so the PID the compositor spawned is the PID that opens the window: the rule is
     # attached to that process, and a window opened by a child of it is not guaranteed to match.
     {
-      printf '#!/usr/bin/env bash\ncd %q || exit 1\necho $$ >%q\nexec' "$PWD" "$dir/pid"
+      printf '#!/usr/bin/env bash\ncd %q || exit 1\necho $$ >%q\n' "$PWD" "$dir/pid"
+      # The compositor starts the window with its own environment, not this shell's: where the
+      # sound goes is carried over by hand, or a capture told to play into the null sink (shot.sh,
+      # budget.sh) plays through the speakers of whoever is at the machine.
+      local var val
+      for var in PULSE_SINK PULSE_SOURCE PIPEWIRE_NODE; do
+        # `|| true`: printenv fails for an unset name, and a caller under `set -e` would die here
+        val="$(printenv "$var" || true)"
+        if [ -n "$val" ]; then printf 'export %s=%q\n' "$var" "$val"; fi
+      done
+      printf 'exec'
       printf ' %q' "$@"
       printf ' >%q 2>&1\n' "$dir/log"
     } >"$dir/run.sh"

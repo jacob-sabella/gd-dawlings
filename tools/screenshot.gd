@@ -24,6 +24,10 @@ var _cam: Array = []
 ## is the floor you stand on, when it is not the ground: a gallery, a riser.
 var _walk: Array = []
 var _walk_mirror := 0.0
+## "singer[,distance]": stood in front of the vocal booth\'s singer, facing its head and desk.
+var _walk_singer := 0.0
+## "perch[,distance]": stood in front of the venue's creature's perch in the booth.
+var _walk_perch := 0.0
 ## `--walk rack[,distance[,sideways[,height]]]`: stand facing the modular rack wall (see ShotArgs).
 var _walk_rack_on := false
 var _walk_rack: Array = []
@@ -290,6 +294,8 @@ var cmdline := ShotArgs.new(self)
 var scenes := ShotScenes.new(self)
 ## What happens on each frame of a shot.
 var stepping := ShotFrames.new(self)
+## `--singer-demo`: the vocal booth's singer end to end (tools/singer_demo.gd).
+var singer_demo: SingerDemo
 ## The scripted mouse that drags, aims and turns.
 var driving := ShotDrive.new(self)
 ## Longer demonstrations: cassettes, the wheel's takes, the signal and the clip editor.
@@ -307,6 +313,8 @@ func _process(_delta: float) -> void:
 	stepping._process_scenes()
 	stepping._process_chords()
 	stepping._process_hands()
+	if singer_demo != null:
+		singer_demo.step(_delta)
 
 
 func _capture() -> void: stepping._capture()

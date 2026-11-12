@@ -210,6 +210,9 @@ const ROOM_VERBS := {&"tv": [TYPE_STRING, TYPE_BOOL, TYPE_FLOAT], &"open_tablet"
 		&"looper_layer": [TYPE_FLOAT, TYPE_FLOAT, TYPE_ARRAY],
 		# The modular room's rack (RackPatch.answer): its patch, edited. The room's `rack` row.
 		&"rack": [TYPE_STRING_NAME, TYPE_ARRAY],
+		# The vocal booth's singer (SingerRow.answer): its row changed, or a moment played (a line said, a beatbox
+		# hit, a hand on its mouth, a key at the booth, a creature's call). The room's `singer` row.
+		&"singer": [TYPE_STRING_NAME, TYPE_ARRAY],
 		# An edit of the room's layout (LayoutEdit): move, rotate, add, remove or reset a piece. Host only, but a
 		# guest's `move` of a piece on wheels is the push it makes by hand anywhere (docs/layouts.md 7).
 		&"layout": [TYPE_STRING_NAME, TYPE_ARRAY],

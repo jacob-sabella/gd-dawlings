@@ -10,3 +10,6 @@
 [submodule "vendor/airwindows"]
 	path = vendor/airwindows
 	url = https://github.com/airwindows/airwindows.git
+[submodule "vendor/chimera"]
+	path = vendor/chimera
+	url = https://github.com/jamesondh/chimera-vocal-synth.git

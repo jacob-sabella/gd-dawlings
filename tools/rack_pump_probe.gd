@@ -1,8 +1,10 @@
 extends Node
 ## Plays a rack preset (or patch file) straight to the speakers for a while and prints how the direct feed did
 ## (RackVoice.direct_stats): mean and least generator fill, underruns, the worst frame.
-## offscreen_run godot --path . tools/rack_pump_probe.tscn -- acid_line 60 [stall_ms_every_second [studio]]
+## offscreen_run godot --path . tools/rack_pump_probe.tscn -- acid_line 60 [stall_ms_every_second [studio|track [out.wav]]]
 ## The window must not be vsynced (see tools/shot.sh's override.cfg), and the sound goes where PULSE_SINK says.
+## A fifth argument, a .wav path, also keeps what the master bus played (before the system's volume for the game,
+## which a capture from the sink is after), to look for clicks in: ... acid_line 60 0 studio /tmp/out.wav
 var voice: RackVoice
 var t0 := 0
 var secs := 60.0
@@ -12,22 +14,36 @@ var _pumps := 0
 var _fill_sum := 0.0
 var _fill_min := 1 << 30
 var _worst_ms := 0.0
+var _rec: AudioEffectRecord
+var _wav := ""
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	var which: String = args[0] if args.size() > 0 else "acid_line"
 	secs = float(args[1]) if args.size() > 1 else 60.0
 	stall_ms = int(args[2]) if args.size() > 2 else 0
 	Engine.max_fps = 60
-	if args.size() > 3 and args[3] == "studio":
-		# The whole studio around the rack: the frame times the game really has.
-		DAW.use(OfflineBackend.new())
+	if args.size() > 4:
+		_wav = args[4]
+		_rec = AudioEffectRecord.new()
+		AudioServer.add_bus_effect(0, _rec)
+		_rec.set_recording_active(true)
+	if args.size() > 3 and args[3] in ["studio", "track"]:
+		# The whole studio around the rack: the frame times the game really has. `track`: on the built-in engine,
+		# played through track 1 (InputMonitor.feeds), the way the rack sounds in a session, not straight out.
+		var on_track: bool = args[3] == "track"
+		if on_track:
+			var built := GodotBackend.new()
+			built.track_count = 4
+			DAW.use(built)
+		else:
+			DAW.use(OfflineBackend.new())
 		var studio := Studio.new()
 		studio.medium = Presentation.Medium.SCREEN
 		add_child(studio)
 		for i in 180:
 			await get_tree().process_frame
 		voice = studio.rack_voice
-		voice.set_track(0)
+		voice.set_track(1 if on_track else 0)
 	else:
 		voice = RackVoice.new()
 		add_child(voice)
@@ -70,5 +86,11 @@ func _process(d: float) -> void:
 	if el > secs * 1000:
 		print("FINAL ", JSON.stringify(st), " mean fill ms %.1f, min fill ms %.1f, worst frame ms %.1f" % [
 				_fill_sum / maxf(1.0, _pumps) / 48.0, _fill_min / 48.0, _worst_ms])
+		if _rec != null:
+			_rec.set_recording_active(false)
+			var got := _rec.get_recording()
+			if got != null:
+				got.save_to_wav(_wav)
+				print("WAV ", _wav)
 		voice.shutdown()
 		get_tree().quit()

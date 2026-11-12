@@ -1,5 +1,6 @@
 {
   "modules": {
+    "bars": {"at": [29, 0], "knobs": {"fall": 0.9, "range": 0.55}, "type": "builtin.spectrum"},
     "cl": {"at": [19, 0], "knobs": {"density": 0.85, "feedback": 0.3, "freeze": 0.25, "mix": 1.0, "pitch": 0.6, "position": 0.5, "reverb": 0.6, "size": 0.55, "spread": 1.0, "texture": 0.7}, "type": "builtin.clouds"},
     "clk": {"at": [15, 0], "knobs": {"bpm": 0.08, "swing": 0.0, "sync": 0.0}, "type": "builtin.clock"},
     "lfo": {"at": [15, 1], "knobs": {"depth": 1.0, "rate": 0.18, "shape": 0.1}, "type": "builtin.lfo"},
@@ -7,7 +8,8 @@
     "noise": {"at": [15, 3], "knobs": {}, "type": "builtin.noise"},
     "out": {"at": [24, 0], "knobs": {"level": 0.9}, "type": "builtin.out"},
     "rev": {"at": [22, 0], "knobs": {"damp": 0.7, "diff": 0.7, "mix": 0.35, "time": 0.95}, "type": "builtin.reverb"},
-    "rg": {"at": [17, 0], "knobs": {"bright": 0.8, "damping": 0.85, "model": 0.0, "note": 0.25, "poly": 1.0, "position": 0.4, "structure": 0.7}, "type": "builtin.rings"}
+    "rg": {"at": [17, 0], "knobs": {"bright": 0.8, "damping": 0.85, "model": 0.0, "note": 0.25, "poly": 1.0, "position": 0.4, "structure": 0.7}, "type": "builtin.rings"},
+    "vec": {"at": [25, 0], "knobs": {"gain": 0.7, "turn": 0.75}, "type": "builtin.vector"}
   },
   "cables": [
     ["clk.beat", "rg.strum"],
@@ -17,6 +19,9 @@
     ["cl.l", "rev.l"],
     ["cl.r", "rev.r"],
     ["rev.l", "out.l"],
-    ["rev.r", "out.r"]
+    ["rev.r", "out.r"],
+    ["rev.l", "vec.x"],
+    ["rev.r", "vec.y"],
+    ["cl.l", "bars.in"]
   ]
 }

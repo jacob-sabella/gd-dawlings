@@ -107,6 +107,10 @@ func _ready() -> void:
 			if args["online"]:
 				Session.host_online(args["session_port"])
 		_start_daw(args)
+		# What guests hear is the DAW's own output (Session.mix_source), and the DAW did not exist yet when hosting
+		# began: the feed had taken silence for its source. It is handed the DAW's now, before any guest is in.
+		if Session.role == Session.Role.HOST and Session.mix_feed != null and Session.mix_feed.sending:
+			Session.mix_feed.start_sending(Session.mix_feed.port, Session.mix_source.call())
 	else:
 		Session.start_solo()
 		_start_daw(args)
@@ -196,9 +200,10 @@ func _ready() -> void:
 	studio.computer_keys_toggled.connect(session_panel.toggle_computer_keys)
 	if args["session_panel"]:
 		session_panel.open()
-	var tour_hud := TourHud.new()
-	tour_hud.name = "TourHud"
-	add_child(tour_hud)
+	if Tour.enabled:
+		var tour_hud := TourHud.new()
+		tour_hud.name = "TourHud"
+		add_child(tour_hud)
 	# The Workshop (docs/workshop.md): only with its dev flag, on the host's own machine. It reads
 	# `--workshop` and `--resume` itself, and puts the room back after a reload.
 	Workshop.attach(self, studio)

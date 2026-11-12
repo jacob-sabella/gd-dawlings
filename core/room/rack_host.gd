@@ -120,7 +120,8 @@ func _build_rack() -> void:
 	studio.rack_finder.name = "RackFinder"
 	studio.add_child(studio.rack_finder)
 	studio.rack_wall.find_asked.connect(func(g: String) -> void: studio.rack_finder.open_finder(g))
-	studio.rack_finder.add_asked.connect(func(t: String) -> void: ask_rack("add", [t, -1, 0]))
+	studio.rack_finder.add_asked.connect(_finder_add)
+	studio.rack_finder.on_rack = func() -> Dictionary: return studio.rack_row.get("patch", {})
 	studio.rack_wall.help_asked.connect(func(id: String) -> void: studio.rack_help.open_for(studio.rack_wall.patch, id))
 	studio.rack_help.knob_asked.connect(func(id: String, k: String, pos: float) -> void: ask_rack("knob", [id, k, pos]))
 	studio.rack_wall.knob_streamed.connect(func(id: String, k: String, v: float) -> void: ask_rack("knob", [id, k, v]))
@@ -275,6 +276,14 @@ func ask_rack(op: String, args: Array) -> void:
 		return
 	if studio.room_rows._predict(&"rack", [StringName(op), args]) > 0:
 		_show_rack(row)
+
+
+## A module asked for in the finder: asked like any add, and the finder told what came of it, as the panel
+## stands in front of the rack it went into. The answer is the one the ask will get (tried on a copy first).
+func _finder_add(type: String) -> void:
+	var refusal := _rack_apply(studio.rack_row.duplicate(true), "add", [type, -1, 0])
+	ask_rack("add", [type, -1, 0])
+	studio.rack_finder.tell_added(type, refusal)
 
 
 ## An edit of the room's layout, `op` and `args` as `LayoutEdit` takes them: done on the host, refused in
@@ -582,7 +591,7 @@ func _follow_modular() -> void:
 		# The song recording catches the rack: begun at the take's start, kept where it ends.
 		if DAW.state != null and int(studio.rack_row["track"]) > 0:
 			if DAW.state.recording and not studio.rack_voice.recording() and DAW.state.playing:
-				_rack_auto_take = studio.rack_voice.record_start(DAW.state.position_seconds)
+				_rack_auto_take = studio.rack_voice.record_start(studio.rack_voice.song_seconds())
 			elif not DAW.state.recording and studio.rack_voice.recording() and _rack_auto_take:
 				studio.rack_voice.record_stop()
 				_rack_auto_take = false

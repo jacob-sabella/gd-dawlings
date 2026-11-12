@@ -1,10 +1,12 @@
 {
   "modules": {
+    "bars": {"at": [27, 0], "knobs": {"fall": 0.8, "range": 0.6}, "type": "builtin.spectrum"},
     "clock": {"at": [12, 0], "knobs": {"bpm": 0.45, "swing": 0.0, "sync": 0.0}, "type": "builtin.clock"},
     "delay": {"at": [24, 0], "knobs": {"fb": 0.45, "mix": 0.3, "pp": 0.25, "sync": 0.5, "time": 0.6775932438262062, "tone": 0.7861760963081325}, "type": "builtin.delay"},
     "env": {"at": [18, 0], "knobs": {"a": 0.0, "d": 0.72, "r": 0.5, "s": 0.12}, "type": "builtin.env"},
     "ladder": {"at": [20, 0], "knobs": {"cutoff": 0.45, "cv": 0.7, "drive": 0.06666666666666665, "mode": 0.08333333333333333, "res": 0.65}, "type": "builtin.ladder"},
     "lfo": {"at": [12, 1], "knobs": {"depth": 1.0, "rate": 0.4, "shape": 0.1}, "type": "builtin.lfo"},
+    "lvl": {"at": [31, 0], "knobs": {}, "type": "builtin.meter"},
     "out": {"at": [26, 0], "knobs": {"level": 0.75}, "type": "builtin.out"},
     "seq": {"at": [14, 0], "knobs": {"gate": 0.55, "len": 0.96875, "s1": 0.35, "s10": 0.0, "s11": 0.55, "s12": 0.35, "s13": 0.35, "s14": 0.45, "s15": 0.0, "s16": 0.6, "s2": 0.0, "s3": 0.4, "s4": 0.35, "s5": 0.5, "s6": 0.0, "s7": 0.35, "s8": 0.42, "s9": 0.35}, "type": "builtin.seq"},
     "vca": {"at": [22, 0], "knobs": {"curve": 0.75, "level": 0.5}, "type": "builtin.vca"},
@@ -20,6 +22,9 @@
     ["env.out", "vca.cv"],
     ["vca.out", "delay.in"],
     ["delay.l", "out.l"],
-    ["delay.r", "out.r"]
+    ["delay.r", "out.r"],
+    ["ladder.out", "bars.in"],
+    ["delay.l", "lvl.l"],
+    ["delay.r", "lvl.r"]
   ]
 }

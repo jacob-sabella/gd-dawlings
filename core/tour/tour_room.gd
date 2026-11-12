@@ -22,6 +22,8 @@ func _init(of: Studio) -> void:
 ## gives Tour (docs/architecture.md): everything past "it broke" or "the run is over" is
 ## core/tour/tour.gd's.
 func _build_tour_case() -> void:
+	if not Tour.enabled:
+		return
 	studio.tour_case = TourCase.new()
 	studio.studio_set.add_child(studio.tour_case)
 	studio.tour_case.transform = studio.venue_switch._venue_to_set(studio.venue.tour_case_spot())

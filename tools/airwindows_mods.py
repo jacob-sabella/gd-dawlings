@@ -3,7 +3,8 @@
 
 Each effect is a *composite* (docs/mods.md 3.5): the one engine module `builtin.airwindows` with its EFFECT knob
 set to that effect, its own knobs named for the effect's parameters (`airwindows.json`, from the engine) and
-started at their own default values. So a patch holds `builtin.aw.galactic`, not "an AIRWINDOWS set to Galactic",
+started at their own default values, or, where those change nothing heard, at the start measured for it
+(`airwindows_starts.json`, tools/airwindows_starts.py: Density ships at no density, PurestDrive at no drive). So a patch holds `builtin.aw.galactic`, not "an AIRWINDOWS set to Galactic",
 and the palette finds one by name or kind (RackFinderScreen). The text and kinds come from
 `airwindows_help.json` (tools/airwindows_help.py). Run after either of those files changes; a test holds this
 file to them.
@@ -42,6 +43,7 @@ def main():
     params = {e["id"]: e for e in json.load(open(os.path.join(RACK, "airwindows.json")))["effects"]}
     ids = list(params)
     help_ = json.load(open(os.path.join(RACK, "airwindows_help.json")))
+    starts = json.load(open(os.path.join(RACK, "airwindows_starts.json")))["starts"]
     kinds = list(help_["categories"])
     entries = [{
         "kind": "rack_module", "type": "builtin.airwindows", "title": "AIRWINDOWS", "group": "Internal",
@@ -64,7 +66,7 @@ def main():
         knobs = {LETTERS[i]: {"to": "fx." + LETTERS[i], "label": e["params"][i]["name"].upper()} for i in range(n)}
         set_ = {"effect": round((ids.index(eid) + 0.5) / len(ids), 9)}
         for i in range(n):
-            set_[LETTERS[i]] = e["params"][i]["default"]
+            set_[LETTERS[i]] = starts.get(eid, {}).get(LETTERS[i], e["params"][i]["default"])
         pads = [LETTERS[0], LETTERS[1] if n > 1 else LETTERS[0]]
         face = accent = ""
         while True:

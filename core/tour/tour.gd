@@ -190,10 +190,16 @@ func _physics_process(delta: float) -> void:
 			_finish_pending_since += delta
 
 
-## Whether a run can be started here right now: the built-in engine only (real loudness and
-## spectrum measurement needs real audio), and only on the host.
+## Whether Tour mode is in the game at all. Off for now (2026-11-12: it never played as wanted): no
+## case stands in any venue, nothing of it is drawn, and no run can start. The code and its tests stay;
+## the suite turns it on (tests/run_tests.gd), and so does `--tour-mode` for working on it.
+var enabled := OS.get_cmdline_user_args().has("--tour-mode")
+
+
+## Whether a run can be started here right now: Tour mode on, the built-in engine only (real loudness
+## and spectrum measurement needs real audio), and only on the host.
 func is_available() -> bool:
-	return DAW.backend is GodotBackend and Session.is_authority()
+	return enabled and DAW.backend is GodotBackend and Session.is_authority()
 
 
 ## One bar at this run's song tempo, in seconds, while a brief needs its parts ticked live; 0.0

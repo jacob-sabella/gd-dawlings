@@ -9,14 +9,18 @@ Design history and the saved-patch rules are in `docs/mods.md` 6; the older desc
 
 | Layer | Files | What |
 |---|---|---|
-| Mods | `mods/builtin/{core,daisysp,mutable,airwindows,presets}/mod.json`, `core/mods/` | the 38 modules, their skins and 17 presets as manifests; the registry |
+| Mods | `mods/builtin/{core,daisysp,mutable,airwindows,chimera,presets}/mod.json`, `core/mods/` | the 38 modules, their skins and 17 presets as manifests; the registry |
 | Description | `RackCatalogue`, `RackSkin`, `RackModuleDef`, `RackCurves`, `core/music/rack/modules.json` | what modules exist, their jacks and knobs (from the engine snapshot), how they look, composite resolution |
 | Patch (data) | `RackPatch`, `RackPatchFile`, `RackAutosave`, `RackGaps`, `RackExpansion`, `RackLayout`, `RackMood` | the patch as a dictionary `{modules, cables}` and every edit as one `answer(op, args)`; v2 file format; `user://patches/_current.patch.json`; what this machine cannot show; composites expanded to engine modules; where modules sit in the case (`COLS` x `ROWS`); the glow per venue |
-| Sound (host only) | `RackVoice`, `RackCushion`, `RackEngine`, `native/rack/` | the engine as a process (`rack` binary built from pinned `vendor/` submodules by `tools/rack_build.sh`), told the patch as text lines, heard back as stereo float32; played through a track of the song |
+| Sound (host only) | `RackVoice`, `RackCushion`, `RackEngine`, `native/rack/` | the engine as a process (`rack` binary built from pinned `vendor/` submodules by `tools/rack_build.sh`; an exported game uses the one shipped in `rack/` beside it, `tools/rack_ship.sh`, Linux and Windows), told the patch as text lines, heard back as stereo float32; played through a track of the song |
 | The wall | `hardware/rack/rack_wall.gd` (459 lines) + `RackWallModules`, `RackWallDrag`, `RackWallKeys`, `RackWallShow`, `RackWallDressing`; `RackUnit`, `RackPad`, `RackJack`, `RackHandle`, `RackBars`, `RackStubs`, `ScopeScreen`, `ModularJack`, `ModularTouch` | the surface: the case, a plate per module with knobs and jacks, a palette under the modules, cables, touch keys, the unavailable-plate stubs |
 | The room | `ModularAnnex` + `AnnexSite` (`core/venues/`), `Modular` + `ModularWorld` + `WorldSocket` (`core/music/modular/`), `RackHost` (`core/room/`) | the room built onto the venue, the world (rain, the weather, the song clock) into the rack's sockets, the studio's rack section |
 
 (`RackUnit` is not the modular rack: it is one FX plugin as a 19-inch unit on the DAW's plugin rack.)
+
+The VOICE module (CHIMERA's physical-model voice, `native/rack/modules_voice.cc`, linked from the Rust static
+library `native/voice/`) also takes words through the `text MOD.KEY ...` verb and reports its body; it is the
+vocal booth's singer too: `docs/singer.md`.
 
 ## How it fits (who calls whom)
 
@@ -60,6 +64,16 @@ given. The rules, `core/music/rack/rack_cushion.gd`:
   for latency.
 - `RackVoice.direct_stats()` reports fill, skips, underruns, hurried and dropped frames. `tools/rack_pump_probe.tscn`
   plays a preset to the real driver for a while and prints them (usage in its header, `docs/tools.md`).
+
+A rack carried by a track (the built-in engine with a track chosen) is heard through `InputMonitor.feeds`, as a live
+input is: a thread tops the track's player up every half millisecond and keeps only a short queue, so the monitor is
+never late. That queue was 768 frames, made for Godot's 512-frame mix step; under PipeWire the mixer takes its
+quantum at once, 1024 frames here, so a quarter of every step was silence: a click every 21 ms, the modular room
+through a track sounding like a buzz. A player found to have run dry now deepens the queue (256 frames a time, to
+4096 at most) for every player after it too. Measured with `tools/rack_pump_probe.tscn -- sine.json 60 0 track
+out.wav` (a sine VCO, the master bus recorded in the game, every gap and step in the waveform counted): 2,800 clicks a
+minute before; after, the few of the first seconds while the queue finds its depth, then none for the rest of the
+minute, with or without a 120 ms stall every second.
 
 ## Power and the song clock
 
@@ -107,6 +121,14 @@ given. The rules, `core/music/rack/rack_cushion.gd`:
   532 composites (`builtin.aw.<effect>`: the engine module with EFFECT and the starting values set, knobs named for the
   effect's parameters, kinds and text from `airwindows_help.json`); `--check` is what the test runs. The engine's own
   `builtin.airwindows` stays as their base, in the hidden group `Internal`. Rerun it after either JSON file changes.
+  Many Airwindows effects ship neutral (Density at no density, Drive at no drive, Highpass wide open), so a module
+  at the plugin's own defaults changed nothing and seemed broken. `tools/airwindows_starts.py` renders every effect
+  on a test signal and, for each one that changes it by less than 20 dB under the dry signal, moves a knob (or two:
+  an amount and its dry/wet both shipped at 0) as little as makes it heard without moving the level by more than
+  6 dB (12 where nothing within 6 is heard, as for a high-pass). It writes `core/music/rack/airwindows_starts.json`,
+  which `airwindows_mods.py` lays over the defaults: 188 effects start moved. The 37 it leaves (dithers, the
+  transparent consoles, ultrasonic filters, the flip timers, gain tools) are named there as neutral by design. Rerun
+  it, then `airwindows_mods.py`, after the engine or the effect list changes.
 - **Finding a module**: 532 effects do not fit on palette keys, so the AIRWINDOWS key (the finder on that group) and the MODULES key (the finder on every module) open
   `RackFinderScreen` (search by name, kind, knob or blurb; group and kind filters; ADD). The ranking and filtering are
   `RackFinder` (tested apart from the screen). A group named in `RackWallKeys.FINDER_GROUPS` opens the finder, not keys.

@@ -46,6 +46,9 @@ func default_spot(id: StringName) -> Variant:
 	if _spots_for != key:
 		_spots = LiveRoom.spots(ShellFacts.anchors_of(venue), restored)
 		_spots_for = key
+	if id == &"tour_case" and not Tour.enabled:
+		# Tour mode is off: no case, and no solid where it would stand.
+		return null
 	return _spots.get(id)
 
 

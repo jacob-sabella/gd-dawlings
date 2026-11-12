@@ -4143,6 +4143,151 @@
             ]
         },
         {
+            "type": "voice",
+            "title": "VOICE",
+            "group": "Voice",
+            "blurb": "A human voice built from the body up: lungs, vocal folds, tongue, lips and nose. Sings the lyrics a syllable a note, speaks, beatboxes, or becomes a songbird, a seal, an alligator or an elephant.",
+            "ins": [
+                "pitch",
+                "gate",
+                "vowel",
+                "open",
+                "breath"
+            ],
+            "outs": [
+                "out",
+                "env"
+            ],
+            "knobs": [
+                {
+                    "id": "mode",
+                    "label": "MODE",
+                    "lo": 0,
+                    "hi": 3,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "SING|VOWEL|BEAT|BEAST"
+                },
+                {
+                    "id": "body",
+                    "label": "BODY",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "child",
+                    "label": "CHILD",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "vowel",
+                    "label": "VOWEL",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.5,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "open",
+                    "label": "OPEN",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.6,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "breath",
+                    "label": "BREATH",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.6,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "vibrato",
+                    "label": "VIBRATO",
+                    "lo": 0,
+                    "hi": 100,
+                    "def": 35,
+                    "curve": "lin",
+                    "names": "cents"
+                },
+                {
+                    "id": "tension",
+                    "label": "TENSION",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0.55,
+                    "curve": "lin",
+                    "names": ""
+                },
+                {
+                    "id": "oct",
+                    "label": "OCT",
+                    "lo": -2,
+                    "hi": 2,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "-2|-1|0|+1|+2"
+                },
+                {
+                    "id": "beast",
+                    "label": "BEAST",
+                    "lo": 0,
+                    "hi": 3,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "SONGBIRD|SEAL|GATOR|ELEPHANT"
+                },
+                {
+                    "id": "call",
+                    "label": "CALL",
+                    "lo": 0,
+                    "hi": 3,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "1|2|3|4"
+                },
+                {
+                    "id": "sound",
+                    "label": "SOUND",
+                    "lo": 0,
+                    "hi": 9,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "KICK|HAT|OPEN HAT|SNARE|RIM|INWARD|CLICK|POP|CRASH|HUM"
+                },
+                {
+                    "id": "seq",
+                    "label": "SEQ",
+                    "lo": 0,
+                    "hi": 1,
+                    "def": 0,
+                    "curve": "step",
+                    "names": "OFF|ON"
+                },
+                {
+                    "id": "level",
+                    "label": "LEVEL",
+                    "lo": 0,
+                    "hi": 2,
+                    "def": 1,
+                    "curve": "lin",
+                    "names": ""
+                }
+            ]
+        },
+        {
             "type": "warps",
             "title": "WARPS",
             "group": "Shape",

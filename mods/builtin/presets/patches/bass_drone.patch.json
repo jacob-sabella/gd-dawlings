@@ -1,5 +1,6 @@
 {
   "modules": {
+    "bars": {"at": [30, 0], "knobs": {"fall": 0.9, "range": 0.6}, "type": "builtin.spectrum"},
     "cho": {"at": [21, 0], "knobs": {"delay": 0.2413793103448276, "depth": 0.8, "fb": 0.22222222222222224, "mix": 0.6, "rate": 0.2}, "type": "builtin.chorus"},
     "lad": {"at": [19, 0], "knobs": {"cutoff": 0.4, "cv": 0.7, "drive": 0.35, "mode": 0.08333333333333333, "res": 0.55}, "type": "builtin.ladder"},
     "lfo": {"at": [17, 1], "knobs": {"depth": 1.0, "rate": 0.12, "shape": 0.1}, "type": "builtin.lfo"},
@@ -9,7 +10,8 @@
     "rev": {"at": [23, 0], "knobs": {"damp": 0.7, "diff": 0.7, "mix": 0.35, "time": 0.9}, "type": "builtin.reverb"},
     "v1": {"at": [15, 0], "knobs": {"fine": 0.47, "fm": 0.0, "pw": 0.5000000000000001, "tune": 0.12, "wave": 0.5}, "type": "builtin.vco"},
     "v2": {"at": [15, 1], "knobs": {"fine": 0.53, "fm": 0.0, "pw": 0.5000000000000001, "tune": 0.12, "wave": 0.5}, "type": "builtin.vco"},
-    "v3": {"at": [15, 2], "knobs": {"fine": 0.5, "fm": 0.0, "pw": 0.5000000000000001, "tune": 0.0, "wave": 0.0}, "type": "builtin.vco"}
+    "v3": {"at": [15, 2], "knobs": {"fine": 0.5, "fm": 0.0, "pw": 0.5000000000000001, "tune": 0.0, "wave": 0.0}, "type": "builtin.vco"},
+    "vec": {"at": [26, 0], "knobs": {"gain": 0.6, "turn": 0.25}, "type": "builtin.vector"}
   },
   "cables": [
     ["v1.out", "mix.in1"],
@@ -22,6 +24,9 @@
     ["cho.l", "rev.l"],
     ["cho.r", "rev.r"],
     ["rev.l", "out.l"],
-    ["rev.r", "out.r"]
+    ["rev.r", "out.r"],
+    ["v1.out", "vec.x"],
+    ["v2.out", "vec.y"],
+    ["lad.out", "bars.in"]
   ]
 }

@@ -1,0 +1,625 @@
+{
+ "about": "Starting knob values for the Airwindows effects that do nothing heard at their own defaults; measured by tools/airwindows_starts.py, laid over the defaults by tools/airwindows_mods.py.",
+ "neutral_by_design": [
+  "BitShiftGain",
+  "BuildATPDF",
+  "Coils",
+  "Console8BussIn",
+  "Console8ChannelIn",
+  "Console8SubIn",
+  "curve",
+  "DCVoltage",
+  "DeBess",
+  "Desk",
+  "DigitalBlack",
+  "DoublePaul",
+  "HighGlossDither",
+  "Hypersonic",
+  "HypersonX",
+  "Interstage",
+  "LRFlipTimer",
+  "MSFlipTimer",
+  "NaturalizeDither",
+  "NodeDither",
+  "NotJustAnotherCD",
+  "PurestConsole2Buss",
+  "PurestConsole2Channel",
+  "PurestConsole3Buss",
+  "PurestConsole3Channel",
+  "PurestConsoleBuss",
+  "PurestConsoleChannel",
+  "PurestDrive",
+  "PurestWarm",
+  "PurestWarm2",
+  "ShortBuss",
+  "Spiral",
+  "TransDesk",
+  "TubeDesk",
+  "UltrasonicLite",
+  "UltrasonicMed",
+  "UltrasonX"
+ ],
+ "starts": {
+  "ADClip7": {
+   "a": 0.25
+  },
+  "ADT": {
+   "a": 0.25
+  },
+  "Acceleration": {
+   "a": 0.5
+  },
+  "Acceleration2": {
+   "a": 0.5
+  },
+  "Air": {
+   "e": 0.75
+  },
+  "Air3": {
+   "a": 0.75
+  },
+  "Air4": {
+   "a": 0.75
+  },
+  "Apicolypse": {
+   "c": 0.25
+  },
+  "AtmosphereBuss": {
+   "a": 0.75
+  },
+  "AtmosphereChannel": {
+   "a": 0.75
+  },
+  "AverMatrix": {
+   "a": 0.25
+  },
+  "Average": {
+   "a": 0.25
+  },
+  "BassKit": {
+   "d": 0.25
+  },
+  "Baxandall": {
+   "a": 0.25
+  },
+  "Baxandall2": {
+   "a": 0.25
+  },
+  "Baxandall3": {
+   "b": 0.25
+  },
+  "Beam": {
+   "a": 0.5,
+   "c": 0.75
+  },
+  "BezEQ": {
+   "a": 0.25
+  },
+  "BezEQ3": {
+   "a": 0.25
+  },
+  "BezEQ4": {
+   "a": 0.25
+  },
+  "BiquadHiLo": {
+   "a": 0.25
+  },
+  "BiquadStack": {
+   "b": 0.75
+  },
+  "BitDualPan": {
+   "a": 0.75
+  },
+  "BitShiftPan": {
+   "a": 0.75
+  },
+  "BlockParty": {
+   "a": 0.25
+  },
+  "BrassRider": {
+   "b": 0.25
+  },
+  "BrightAmbience": {
+   "a": 0.25
+  },
+  "ButterComp": {
+   "a": 0.5
+  },
+  "ButterComp2": {
+   "a": 0.25
+  },
+  "CStrip": {
+   "a": 0.25
+  },
+  "CStrip2": {
+   "j": 0.25
+  },
+  "Cabs2": {
+   "a": 0.75
+  },
+  "CansAW": {
+   "a": 0.5
+  },
+  "Capacitor": {
+   "a": 0.75
+  },
+  "ChannelX": {
+   "b": 0.25
+  },
+  "ChromeOxide": {
+   "a": 1.0
+  },
+  "Coils2": {
+   "b": 0.25
+  },
+  "Cojones": {
+   "c": 0.25
+  },
+  "Compresaturator": {
+   "a": 0.75
+  },
+  "Console7Channel": {
+   "a": 0.75
+  },
+  "Console8ChannelOut": {
+   "a": 0.75
+  },
+  "Console8LiteChannel": {
+   "a": 0.75
+  },
+  "Console8SubOut": {
+   "a": 0.75
+  },
+  "Console9Buss": {
+   "a": 0.25
+  },
+  "ConsoleHBuss": {
+   "a": 0.25
+  },
+  "ConsoleHChannel": {
+   "a": 0.0
+  },
+  "ConsoleHPre": {
+   "a": 0.5
+  },
+  "ConsoleMCChannel": {
+   "a": 0.25
+  },
+  "ConsoleMDBuss": {
+   "a": 0.75
+  },
+  "ConsoleMDChannel": {
+   "d": 0.25
+  },
+  "ConsoleX2Buss": {
+   "a": 0.25
+  },
+  "ConsoleX2Channel": {
+   "a": 0.0
+  },
+  "ConsoleX2Pre": {
+   "a": 0.5
+  },
+  "CrunchyGrooveWear": {
+   "a": 0.25
+  },
+  "Crystal": {
+   "c": 0.25
+  },
+  "Dark": {
+   "a": 0.5,
+   "b": 0.75
+  },
+  "DeEss": {
+   "a": 0.5
+  },
+  "DeHiss": {
+   "a": 1.0
+  },
+  "DeNoise": {
+   "d": 0.25
+  },
+  "DeRez5": {
+   "a": 0.75
+  },
+  "Deckwrecka": {
+   "a": 0.5
+  },
+  "Density": {
+   "a": 0.25
+  },
+  "Density2": {
+   "a": 0.25
+  },
+  "Desk4": {
+   "a": 0.25
+  },
+  "Discontapeity": {
+   "a": 0.25
+  },
+  "Discontinuity": {
+   "a": 0.75
+  },
+  "Distortion": {
+   "a": 0.75
+  },
+  "DitherFloat": {
+   "a": 0.75,
+   "b": 0.25
+  },
+  "Ditherbox": {
+   "a": 1.0
+  },
+  "Drive": {
+   "a": 0.25
+  },
+  "DrumSlam": {
+   "a": 0.25
+  },
+  "Dubly": {
+   "a": 1.0
+  },
+  "Dubly2": {
+   "c": 0.25
+  },
+  "Dubly3": {
+   "c": 0.25
+  },
+  "DustBunny": {
+   "a": 0.25
+  },
+  "Dynamics": {
+   "a": 0.5
+  },
+  "Dynamics2": {
+   "a": 0.25
+  },
+  "Dynamics3": {
+   "a": 0.75
+  },
+  "EQ": {
+   "a": 0.25
+  },
+  "Energy": {
+   "a": 0.0
+  },
+  "Energy2": {
+   "a": 0.0
+  },
+  "EveryConsole": {
+   "b": 0.75
+  },
+  "EverySlew": {
+   "a": 0.25
+  },
+  "EveryTrim": {
+   "a": 0.25
+  },
+  "Exciter": {
+   "b": 0.5
+  },
+  "Facet": {
+   "a": 0.25
+  },
+  "Flipity": {
+   "a": 0.25
+  },
+  "Floor": {
+   "a": 0.25
+  },
+  "Flutter": {
+   "a": 0.25
+  },
+  "Focus": {
+   "a": 0.25
+  },
+  "Fracture2": {
+   "b": 0.25
+  },
+  "Gatelope": {
+   "a": 0.5,
+   "c": 0.25
+  },
+  "GoldenSlew": {
+   "a": 0.5
+  },
+  "GrooveWear": {
+   "a": 0.25
+  },
+  "HardVacuum": {
+   "a": 0.25
+  },
+  "HermeTrim": {
+   "a": 0.0
+  },
+  "HighImpact": {
+   "c": 0.25
+  },
+  "Highpass": {
+   "a": 0.25
+  },
+  "Highpass2": {
+   "a": 0.25,
+   "b": 0.0
+  },
+  "Holt": {
+   "a": 0.75
+  },
+  "Holt2": {
+   "a": 0.75
+  },
+  "Hull": {
+   "a": 0.25,
+   "b": 0.25
+  },
+  "Hull2": {
+   "b": 0.25
+  },
+  "Isolator": {
+   "a": 0.75
+  },
+  "Isolator2": {
+   "a": 0.75
+  },
+  "Logical4": {
+   "b": 0.25
+  },
+  "Loud": {
+   "b": 0.75
+  },
+  "Lowpass": {
+   "a": 0.75
+  },
+  "MoNoam": {
+   "a": 0.25
+  },
+  "Monitoring": {
+   "a": 0.5
+  },
+  "Monitoring2": {
+   "a": 0.5
+  },
+  "Monitoring3": {
+   "a": 0.5
+  },
+  "NCSeventeen": {
+   "a": 0.25
+  },
+  "NotJustAnotherDither": {
+   "a": 0.5,
+   "b": 0.75
+  },
+  "OneCornerClip": {
+   "a": 0.25
+  },
+  "Overheads": {
+   "a": 0.25
+  },
+  "PDBuss": {
+   "a": 0.75
+  },
+  "PDChannel": {
+   "a": 0.75
+  },
+  "Pafnuty": {
+   "a": 0.25
+  },
+  "Pafnuty2": {
+   "a": 0.0,
+   "j": 0.25
+  },
+  "Parametric": {
+   "b": 0.75
+  },
+  "PaulDither": {
+   "a": 0.5,
+   "b": 0.75
+  },
+  "PaulWide": {
+   "a": 0.5,
+   "b": 0.75
+  },
+  "Pear": {
+   "a": 0.75
+  },
+  "Pear2": {
+   "a": 0.75
+  },
+  "PearEQ": {
+   "a": 0.25
+  },
+  "PearLiteEQ": {
+   "a": 0.25
+  },
+  "PhaseNudge": {
+   "a": 0.25
+  },
+  "PlatinumSlew": {
+   "a": 0.25
+  },
+  "Point": {
+   "a": 0.25
+  },
+  "Pop": {
+   "a": 0.25
+  },
+  "Pop3": {
+   "a": 0.75
+  },
+  "PowerSag": {
+   "a": 0.75
+  },
+  "PowerSag2": {
+   "b": 0.25
+  },
+  "Pressure4": {
+   "a": 0.25
+  },
+  "PurestAir": {
+   "a": 1.0
+  },
+  "PurestDualPan": {
+   "b": 0.25
+  },
+  "PurestFade": {
+   "b": 0.75
+  },
+  "PurestGain": {
+   "b": 0.75
+  },
+  "PurestSaturation": {
+   "b": 0.75
+  },
+  "PurestWarm3": {
+   "a": 0.0
+  },
+  "Remap": {
+   "a": 0.75
+  },
+  "ResEQ": {
+   "i": 0.25
+  },
+  "ResEQ2": {
+   "b": 0.5
+  },
+  "RingModulator": {
+   "d": 0.5
+  },
+  "SampleDelay": {
+   "a": 0.25
+  },
+  "Shape": {
+   "a": 0.0,
+   "b": 0.25
+  },
+  "Sidepass": {
+   "a": 0.25
+  },
+  "Silhouette": {
+   "a": 0.75
+  },
+  "SingleEndedTriode": {
+   "a": 0.5,
+   "d": 0.5
+  },
+  "Slew": {
+   "a": 0.5
+  },
+  "Slew2": {
+   "a": 0.5
+  },
+  "Slew3": {
+   "a": 0.5
+  },
+  "SlewSonic": {
+   "b": 0.75
+  },
+  "Smooth": {
+   "b": 0.75
+  },
+  "SmoothEQ": {
+   "a": 0.25
+  },
+  "SmoothEQ2": {
+   "b": 0.25
+  },
+  "SmoothEQ3": {
+   "b": 0.25
+  },
+  "SoftGate": {
+   "a": 1.0
+  },
+  "SpatializeDither": {
+   "a": 0.5,
+   "b": 0.75
+  },
+  "Spiral2": {
+   "b": 0.25
+  },
+  "Spiral3": {
+   "c": 0.75
+  },
+  "Srsly": {
+   "c": 0.75
+  },
+  "StereoFX": {
+   "a": 0.25
+  },
+  "StoneFireComp": {
+   "a": 0.75
+  },
+  "Stonefire": {
+   "a": 0.75
+  },
+  "SubTight": {
+   "a": 0.5
+  },
+  "Surge": {
+   "a": 0.5
+  },
+  "SweetWide": {
+   "b": 0.25
+  },
+  "Sweeten": {
+   "a": 1.0
+  },
+  "TPDFDither": {
+   "a": 0.5,
+   "b": 0.75
+  },
+  "TPDFWide": {
+   "a": 0.5,
+   "b": 0.75
+  },
+  "TapeBias": {
+   "a": 0.75
+  },
+  "TapeDelay": {
+   "a": 0.75
+  },
+  "TapeDither": {
+   "a": 0.5,
+   "b": 0.75
+  },
+  "TapeDust": {
+   "a": 0.25
+  },
+  "TapeHack": {
+   "b": 0.75
+  },
+  "TapeHack2": {
+   "b": 0.75
+  },
+  "TapeHack3": {
+   "b": 0.75
+  },
+  "Texturize": {
+   "c": 0.75
+  },
+  "TexturizeMS": {
+   "c": 0.75
+  },
+  "Thunder": {
+   "a": 0.25
+  },
+  "UnBox": {
+   "a": 0.75
+  },
+  "VariMu": {
+   "a": 0.25
+  },
+  "VinylDither": {
+   "a": 0.5,
+   "b": 0.75
+  },
+  "Weight": {
+   "b": 1.0
+  },
+  "XNotch": {
+   "b": 0.75
+  },
+  "Zoom": {
+   "a": 1.0
+  }
+ }
+}

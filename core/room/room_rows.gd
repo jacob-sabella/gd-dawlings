@@ -60,7 +60,7 @@ func room_state() -> Dictionary:
 			"ropes": studio.stage.ropes.duplicate() if studio.stage != null else {},
 			"sampler": studio.sampler.armed_by if studio.sampler != null and is_instance_valid(studio.sampler) else 0,
 			"weather": studio.weather_listening, "looper": studio.looper_row.duplicate(),
-			RackPatch.ROW: RackGaps.published(studio.rack_row),
+			RackPatch.ROW: RackGaps.published(studio.rack_row), SingerRow.ROW: studio.singer_row.duplicate(),
 			"tv": studio.tv.row() if studio.tv != null and is_instance_valid(studio.tv) else {}, "pads": pads_row.duplicate(true)}
 
 
@@ -178,7 +178,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 				pending_items[p["args"][0]] = true
 			&"patch", &"on_air", &"plug", &"rope", &"make", &"paste", &"sampler", &"weather", \
 					&"looper", &"looper_layer", \
-					&"rack", &"tv": pass
+					&"rack", &"tv", &"singer": pass
 			&"open_tablet", &"open_track_rack": pending_open[p["id"]] = true
 			&"close_tablet", &"close_track_rack": pending_close[p["args"][0]] = true
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
@@ -303,6 +303,8 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			if p["verb"] == &"rack":
 				studio.rack_host._rack_apply(row, String(p["args"][0]), p["args"][1])
 		studio.rack_host._show_rack(row)
+	if state.has(SingerRow.ROW):
+		studio.singer_host.show_room(state[SingerRow.ROW])
 	if state.has("board") and not studio._predictions.any(func(p): return p["verb"] == &"board_source"):
 		studio.roll_room._show_board(StringName(state["board"]))
 	studio._applying_room = false
@@ -513,6 +515,9 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"rack":
 			# A guest's edit of the rack, or its track: the room's row, or told why not.
 			studio.rack_host._answer_rack(String(args[0]), args[1], from)
+		&"singer":
+			# A guest's ask of the booth's singer: its row, or a moment it plays.
+			studio.singer_host.answer(String(args[0]), args[1], from)
 		&"layout":
 			studio.layout_edit.answer(String(args[0]), args[1], from)
 		&"scratch":
