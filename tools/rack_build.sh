@@ -8,13 +8,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 MI=vendor/mutable-eurorack
 DS=vendor/daisysp/Source
+[ -f vendor/chimera/Cargo.toml ] || { echo "run: git submodule update --init vendor/chimera" >&2; exit 1; }
 [ -f "$MI/stmlib/stmlib.h" ] && [ -d "$DS" ] || { echo "run: git submodule update --init --recursive vendor/daisysp vendor/mutable-eurorack && git -C $MI submodule update --init stmlib" >&2; exit 1; }
 OUT=${RACK_BUILD_DIR:-build/rack}
 BIN=${RACK_BIN:-rack}   # a private name lets two builds share the object cache and link side by side
 mkdir -p "$OUT/obj"
 CXX=${CXX:-c++}
 FLAGS="-O2 -std=c++14 -DTEST -include cstdio -I$MI -I$DS -I$DS/Utility -Inative/rack -Inative/rack/aw -w"
-SRC="native/rack/rack.cc native/rack/main.cc $(ls native/rack/modules_core.cc native/rack/modules_mutable.cc native/rack/modules_daisy.cc native/rack/modules_eye.cc $(for m in ${RACK_ONLY:-$(cd native/rack/libs && ls *.txt | sed s/.txt//)}; do echo native/rack/modules_$m.cc; done))
+SRC="native/rack/rack.cc native/rack/main.cc $(ls native/rack/modules_core.cc native/rack/modules_mutable.cc native/rack/modules_daisy.cc native/rack/modules_eye.cc native/rack/modules_voice.cc $(for m in ${RACK_ONLY:-$(cd native/rack/libs && ls *.txt | sed s/.txt//)}; do echo native/rack/modules_$m.cc; done))
  $(for l in $(for m in ${RACK_ONLY:-$(cd native/rack/libs && ls *.txt | sed s/.txt//)}; do echo native/rack/libs/$m.txt; done); do [ -f "$l" ] && sed -e "s|^|$MI/|" "$l" | tr '\n' ' '; done | xargs -n1 sh -c 'ls $0' 2>/dev/null)
  $(ls $MI/plaits/dsp/*.cc $MI/plaits/dsp/*/*.cc $MI/plaits/resources.cc $MI/rings/dsp/*.cc $MI/rings/resources.cc $MI/clouds/dsp/*.cc $MI/clouds/dsp/pvoc/*.cc $MI/clouds/resources.cc $MI/stmlib/dsp/*.cc $MI/stmlib/utils/*.cc 2>/dev/null)
  $(ls $DS/Control/adsr.cpp $DS/Effects/chorus.cpp $DS/Effects/decimator.cpp $DS/Effects/overdrive.cpp $DS/Effects/wavefolder.cpp $DS/Drums/analogbassdrum.cpp $DS/Drums/analogsnaredrum.cpp $DS/Drums/hihat.cpp $DS/Filters/ladder.cpp $DS/Filters/svf.cpp $DS/Synthesis/oscillator.cpp $DS/Utility/dcblock.cpp $(for f in Control/adenv Control/phasor Dynamics/crossfade Dynamics/limiter Drums/synthbassdrum Drums/synthsnaredrum Effects/autowah Effects/flanger Effects/phaser Effects/tremolo Filters/soap Noise/clockednoise Noise/grainlet Noise/particle PhysicalModeling/KarplusString PhysicalModeling/drip PhysicalModeling/modalvoice PhysicalModeling/resonator PhysicalModeling/stringvoice Synthesis/fm2 Synthesis/formantosc Synthesis/oscillatorbank Synthesis/variablesawosc Synthesis/variableshapeosc Synthesis/vosim Synthesis/zoscillator; do echo $DS/$f.cpp; done) 2>/dev/null)"
@@ -37,5 +38,7 @@ for f in $(printf "%s\n" $SRC | awk "!seen[\$0]++"); do
   fi
 done
 for p in "${pids[@]:-}"; do [ -n "$p" ] && wait "$p"; done
-$CXX -o "$OUT/$BIN" "${OBJS[@]}"
+# The voice (CHIMERA, vendor/chimera) is Rust: tools/voice_build.sh makes native/voice's static library.
+VOICE_LIB=$(tools/voice_build.sh)
+$CXX -o "$OUT/$BIN" "${OBJS[@]}" "$VOICE_LIB" -lpthread -ldl -lm
 echo "$OUT/$BIN"

@@ -1,0 +1,29 @@
+# dawlings' voice shim: a small C ABI over the pinned CHIMERA engine (vendor/chimera, MIT), linked
+# into the rack engine as a static library. Nothing of CHIMERA is copied: its crates are path
+# dependencies on the submodule, and chimera-wasm's own C ABI is carried in the same archive.
+# Built by tools/voice_build.sh (cargo build --release here).
+[package]
+name = "dawlings-voice"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+
+[dependencies]
+chimera = { path = "../../vendor/chimera/crates/chimera" }
+chimera-wasm = { path = "../../vendor/chimera/crates/chimera-wasm" }
+flate2 = "1"
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = "fat"
+panic = "abort"
+debug = false
+
+[workspace]

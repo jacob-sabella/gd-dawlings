@@ -90,8 +90,9 @@ python3 tools/rig/route_audio.py snapshot "$BEFORE" 2>/dev/null || echo '[]' >"$
 ( PULSE_SINK="$SINK" PIPEWIRE_NODE="$SINK" offscreen_run "${preload[@]}" "$reaper_bin" -cfgfile "$RIG/reaper.ini" \
     -nosplash "${open[@]}" >"$RIG/reaper.log" 2>&1 & )
 
-# Up means answering: the bridge writes its data directory when it starts.
-for _ in $(seq 1 200); do
+# Up means answering: the bridge writes its data directory when it starts. Two minutes: a Reaper that
+# rescans its LV2 plugins first takes well over the 40 s this once allowed, and was reported dead.
+for _ in $(seq 1 600); do
   if [ -d "$RIG/Scripts/dawlings_bridge_data" ] && { [ -f "$PROJECT" ] || [ "${open[0]}" = "$PROJECT" ]; }; then
     # Reaper opens its main window from a later process than the one the compositor launched,
     # so the exec rule does not always catch it; move whatever it opened, by PID, after the fact.

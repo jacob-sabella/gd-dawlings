@@ -1,9 +1,11 @@
 {
   "modules": {
+    "bars": {"at": [31, 0], "knobs": {"fall": 0.85, "range": 0.6}, "type": "builtin.spectrum"},
     "clk": {"at": [9, 0], "knobs": {"bpm": 0.28, "swing": 0.0, "sync": 0.0}, "type": "builtin.clock"},
     "dly": {"at": [26, 0], "knobs": {"fb": 0.72, "mix": 0.4, "pp": 1.0, "sync": 0.67, "time": 0.6775932438262062, "tone": 0.4}, "type": "builtin.delay"},
     "env": {"at": [15, 0], "knobs": {"a": 0.0, "d": 0.7, "r": 0.5, "s": 0.5}, "type": "builtin.env"},
     "kick": {"at": [11, 0], "knobs": {"accent": 0.8, "decay": 0.6, "freq": 0.12, "kind": 0.0, "tone": 0.5}, "type": "builtin.drum"},
+    "lamp": {"at": [35, 0], "knobs": {"flow": 0.45, "hue": 0.35}, "type": "builtin.plasma"},
     "lfo": {"at": [17, 1], "knobs": {"depth": 0.9, "rate": 0.42, "shape": 0.1}, "type": "builtin.lfo"},
     "mix": {"at": [24, 0], "knobs": {"l1": 0.9, "l2": 0.9, "l3": 0.5, "l4": 0.4666666666666666, "master": 0.6666666666666666}, "type": "builtin.mix"},
     "mixv": {"at": [17, 0], "knobs": {"l1": 0.7, "l2": 0.5, "l3": 0.4666666666666666, "l4": 0.4666666666666666, "master": 0.6666666666666666}, "type": "builtin.mix"},
@@ -36,6 +38,10 @@
     ["dly.l", "rev.l"],
     ["dly.r", "rev.r"],
     ["rev.l", "out.l"],
-    ["rev.r", "out.r"]
+    ["rev.r", "out.r"],
+    ["svf.lp", "bars.in"],
+    ["kick.out", "lamp.red"],
+    ["sn.out", "lamp.green"],
+    ["dly.l", "lamp.blue"]
   ]
 }

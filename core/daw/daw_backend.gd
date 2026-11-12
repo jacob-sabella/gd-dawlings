@@ -2709,7 +2709,7 @@ func record_for_replication(key: String, args: Array) -> void:
 ## project with no items in it and nothing would report an error.
 func is_volatile(key: String) -> bool:
 	return key.contains("/vu") or key == "/time" or key.begins_with("/time/") \
-			or key == "/beat/str" or key == RackLive.ADDRESS
+			or key == "/beat/str" or key == RackLive.ADDRESS or key == SingerLive.ADDRESS
 
 
 func tick_replication(delta: float) -> void:

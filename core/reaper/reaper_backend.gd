@@ -74,9 +74,22 @@ var _refresh_clock := 0.0
 ## every plugin in the bank -- and applied in one frame they froze the room for two seconds.
 ## They are applied a few milliseconds' worth a frame instead, so a busy project settles over a
 ## handful of frames rather than stopping the world while it does.
+##
+## And what comes in is taken in as state (`_take_in`): the transport and the meters, which say what is
+## happening now, are applied the moment they arrive, and a message for an address that is already waiting
+## replaces the waiting one's value rather than queueing behind it. Without it, while Reaper records, its
+## feedback came faster than a frame's share applied it and the queue only grew: the play position stood at the
+## take's start for 100 s, then ran through it all in a burst, and everything that reads the transport (the
+## singer following the song, the demo waiting for the chorus to end, the timeline's playhead) waited on it.
 var _inbox: Array[Dictionary] = []
 var _inbox_at := 0
 const APPLY_BUDGET_USEC := 6000
+## Where in `_inbox` each waiting address is: {address: index}.
+var _waiting := {}
+## The transport's own addresses, applied as they arrive (`_take_in`, with the meters: `_ahead`): a surface
+## refresh is tens of thousands of distinct plugin parameters, and the transport waited behind them.
+const AHEAD := {"/time": true, "/play": true, "/stop": true, "/record": true, "/pause": true, "/repeat": true,
+		"/beat/str": true, "/time/str": true, "/tempo/raw": true}
 
 
 ## Shorter than this, a fade Reaper reports is its own default anti-click fade, not one anyone made.
@@ -258,7 +271,7 @@ func _process(delta: float) -> void:
 		_poll_structure(delta)
 		_poll_meters(delta)
 	if _peer:
-		_inbox.append_array(_peer.poll())
+		_take_in(_peer.poll())
 		_apply_inbox()
 	follow_count_in()
 
@@ -282,6 +295,8 @@ func _apply_inbox() -> void:
 	var until := Time.get_ticks_usec() + APPLY_BUDGET_USEC
 	while _inbox_at < _inbox.size():
 		var m := _inbox[_inbox_at]
+		if int(_waiting.get(m["address"], -1)) == _inbox_at:
+			_waiting.erase(m["address"])
 		_inbox_at += 1
 		_apply(m["address"], m["args"])
 		if _inbox_at % 32 == 0 and Time.get_ticks_usec() > until:
@@ -289,6 +304,29 @@ func _apply_inbox() -> void:
 	if _inbox_at >= _inbox.size():
 		_inbox.clear()
 		_inbox_at = 0
+		_waiting.clear()
+
+
+## What arrived from Reaper, into the inbox: the transport and the meters applied now, a waiting address's value
+## replaced where it waits, anything else queued.
+func _take_in(messages: Array[Dictionary]) -> void:
+	for m in messages:
+		var address: String = m["address"]
+		if _ahead(address):
+			_apply(address, m["args"])
+			continue
+		var at := int(_waiting.get(address, -1))
+		if at >= _inbox_at and at < _inbox.size():
+			_inbox[at] = m
+		else:
+			_waiting[address] = _inbox.size()
+			_inbox.append(m)
+
+
+## Whether a message is applied as it arrives, ahead of what waits: the transport, and the meters (`/track/N/vu`, `/master/vu/L`),
+## which are what is heard now and are worth nothing late.
+static func _ahead(address: String) -> bool:
+	return AHEAD.has(address) or address.contains("/vu")
 
 
 ## Reaper speaks the project's own mix vocabulary almost exactly -- see core/daw/mix_wire.gd

@@ -4,13 +4,20 @@ extends CanvasLayer
 ## The module finder: every module the rack can hold, found by typing (name, kind, knob or blurb), by palette group
 ## and by kind. Choose one to read what it is, then ADD (or Enter, or a double click) to put it in the next free
 ## place in the case. Opened by the FIND key and by the AIRWINDOWS key of the palette (532 effects will not fit on
-## keys). Escape or CLOSE shuts it. It changes nothing itself: the host answers `add_asked`.
+## keys). Escape or CLOSE shuts it. It changes nothing itself: the host answers `add_asked` and tells it what came
+## of the ask (`tell_added`): the button flashes ADDED, a line under it says so (or why not), and a module the rack
+## holds is ticked in the list with how many, since the panel hides the rack the module went into.
 
 ## Module `type` is asked to be put in the case.
 signal add_asked(type: String)
 
 const _DIM := Color(0.62, 0.68, 0.78)
 const _HEAD := Color(1.0, 0.86, 0.5)
+const _DONE := Color(0.45, 0.95, 0.55)
+const _REFUSED := Color(1.0, 0.5, 0.42)
+## How long the button says ADDED.
+const FLASH_SECONDS := 1.4
+const _ADD_TEXT := "ADD TO THE RACK"
 ## The rows listed at most (the list is a window on the matches; typing narrows them).
 const MOST_LISTED := 600
 
@@ -22,7 +29,11 @@ var _count: Label
 var _list: ItemList
 var _detail: RichTextLabel
 var _add: Button
+var _status: Label
 var _found: Array[String] = []
+var _flash: Tween
+## The rack's patch as it is now, for the ticks in the list; unset, nothing is ticked.
+var on_rack := Callable()
 
 
 func _ready() -> void:
@@ -92,10 +103,15 @@ func _ready() -> void:
 	_detail.add_theme_font_size_override("bold_font_size", 15)
 	right.add_child(_detail)
 	_add = Button.new()
-	_add.text = "ADD TO THE RACK"
+	_add.text = _ADD_TEXT
+	_add.custom_minimum_size = Vector2(0, 40)
 	PanelLook.button(_add)
 	_add.pressed.connect(_add_chosen)
 	right.add_child(_add)
+	_status = Label.new()
+	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status.add_theme_color_override("font_color", _DIM)
+	right.add_child(_status)
 	get_viewport().size_changed.connect(_fit)
 
 
@@ -126,6 +142,7 @@ func open_finder(group := "") -> void:
 		_kinds.add_item(k.to_upper())
 		_kinds.set_item_metadata(_kinds.item_count - 1, k)
 	_search.text = ""
+	_status.text = ""
 	_panel.visible = true
 	_fit()
 	refresh()
@@ -145,19 +162,64 @@ static func _select_meta(o: OptionButton, value: String) -> void:
 	o.select(0)
 
 
-## The list again, for what is typed and chosen.
-func refresh() -> void:
+## The list again, for what is typed and chosen; `keep` stays chosen if it is still found.
+func refresh(keep := "") -> void:
+	var held := held_counts()
 	_found = RackFinder.search(_search.text, String(_groups.get_item_metadata(_groups.selected)),
 			String(_kinds.get_item_metadata(_kinds.selected)))
 	_list.clear()
 	for t in _found.slice(0, MOST_LISTED):
 		var s := RackCatalogue.spec(t)
 		var kinds := RackFinder.kinds_of(t)
-		_list.add_item("%s     %s" % [s["title"], String(kinds[0]).to_upper() if not kinds.is_empty() else String(s["group"]).to_upper()])
+		var n := int(held.get(t, 0))
+		var mark := "✓ " if n > 0 else "    "
+		var many := "  ×%d" % n if n > 1 else ""
+		_list.add_item("%s%s%s     %s" % [mark, s["title"], many, String(kinds[0]).to_upper() if not kinds.is_empty() else String(s["group"]).to_upper()])
 	_count.text = "%d found" % _found.size() if _found.size() <= MOST_LISTED else "%d found (showing %d)" % [_found.size(), MOST_LISTED]
 	if not _found.is_empty():
-		_list.select(0)
+		var at := maxi(0, _found.find(keep))
+		_list.select(at)
+		_list.ensure_current_is_visible()
 	_describe()
+
+
+## How many of each type the rack holds, by type; empty where it cannot be read.
+func held_counts() -> Dictionary:
+	var counts := {}
+	if not on_rack.is_valid():
+		return counts
+	var p: Dictionary = on_rack.call()
+	for id in p.get("modules", {}):
+		var t := String(p["modules"][id].get("type", ""))
+		counts[t] = int(counts.get(t, 0)) + 1
+	return counts
+
+
+## What came of asking for `type`: "" for added, else why not. The button flashes, the line under it says
+## so, and the list ticks the module.
+func tell_added(type: String, refusal: String) -> void:
+	if _panel == null:
+		return
+	var title := String(RackCatalogue.spec(type).get("title", type))
+	if _flash != null and _flash.is_valid():
+		_flash.kill()
+	if refusal != "":
+		_status.add_theme_color_override("font_color", _REFUSED)
+		_status.text = "%s was not added: %s." % [title, refusal]
+		_add.text = _ADD_TEXT
+		_add.modulate = Color.WHITE
+		return
+	var n := int(held_counts().get(type, 0))
+	_status.add_theme_color_override("font_color", _DONE)
+	_status.text = "✓ %s is on the rack%s. CLOSE to see it, or add another." % [title, " (%d of them now)" % n if n > 1 else ""]
+	refresh(type)
+	_add.text = "✓ ADDED"
+	_add.modulate = _DONE
+	_flash = create_tween()
+	_flash.tween_interval(FLASH_SECONDS)
+	_flash.tween_callback(func() -> void:
+		_add.text = _ADD_TEXT
+		_add.modulate = Color.WHITE)
 
 
 ## The type chosen in the list, or "".

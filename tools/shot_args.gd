@@ -81,6 +81,9 @@ func _ready() -> void:
 				if i + 1 < args.size():
 					var xyz := args[i + 1].split(",")
 					if xyz.size() == 3: shot._point_at = Vector3(float(xyz[0]), float(xyz[1]), float(xyz[2]))
+			"--singer-demo":
+				shot.singer_demo = SingerDemo.new(shot)
+				shot._walk_singer = 0.85
 			"--note":
 				if i + 1 < args.size(): shot._note = args[i + 1]
 			"--plug":
@@ -144,6 +147,13 @@ func _ready() -> void:
 					shot._walk_mirror = float(parts[1]) if parts.size() > 1 else 1.4
 				# "rack[,distance[,sideways[,height[,turn]]]]": stood in front of the modular rack wall, facing it square on (along its normal; it leans back),
 				# `sideways` and `height` metres along the wall (height from its middle), turned `turn` radians.
+				elif i + 1 < args.size() and args[i + 1].begins_with("singer"):
+					var sp := args[i + 1].split(",")
+					shot._walk_singer = float(sp[1]) if sp.size() > 1 else 1.1
+				# "perch[,distance]": stood in front of the venue's creature on its perch in the booth.
+				elif i + 1 < args.size() and args[i + 1].begins_with("perch"):
+					var pp := args[i + 1].split(",")
+					shot._walk_perch = float(pp[1]) if pp.size() > 1 else 0.9
 				elif i + 1 < args.size() and args[i + 1].begins_with("rack"):
 					shot._walk_rack = Array(args[i + 1].split(",")).slice(1).map(func(s): return float(s))
 					shot._walk_rack_on = true

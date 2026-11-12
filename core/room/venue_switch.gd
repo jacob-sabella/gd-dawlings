@@ -60,6 +60,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	RoomSync.wheel_in(studio)
 	studio.pieces.stand_all()
 	studio.rack_host._stand_the_modular()
+	studio.singer_host.stand()
 	studio.pieces.stand(&"weather")
 	studio.furniture_host._hang_hood_signs()
 	var mirror := studio.venue.shell_floor.make_mirror(env)

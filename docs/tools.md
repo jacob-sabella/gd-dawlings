@@ -20,10 +20,11 @@ workspace 10 on Hyprland; never run a bare `godot --path .`.** The shot, budget 
 
 | Tool | What |
 |---|---|
-| `tools/budget.sh [sizes]` (`VENUE=`) | frame time, draws, primitives, nodes, memory and per-surface meshes at 13/24/48/90 tracks, two poses; the `Budget` autoload is `tools/budget.gd` (inert unless `--budget`). Numbers: `docs/performance.md`. |
+| `tools/budget.sh [sizes]` (`VENUE=`) | frame time, draws, primitives, nodes, memory and per-surface meshes at 13/24/48/90 tracks, two poses; the `Budget` autoload is `tools/budget.gd` (inert unless `--budget`). Ends with `budget: PASS` or FAIL (counts against reference rows, the singer's voice under 25% of a core; `voice` for that alone). Numbers: `docs/performance.md`. |
 | `tools/patchbay_stress.tscn` | the routing bay at several sizes, what it costs |
 | `tools/render_demo_song.gd` | renders the demo song's parts and times them |
-| `tools/rack_pump_probe.tscn` (`.gd`) | the rack's direct feed to the real audio driver for N seconds: generator fill, underruns, skips, worst frame (`-- preset seconds [stall_ms [studio]]`; needs a non-vsynced window as in `tools/shot.sh`, and `PULSE_SINK` set to a null sink); `docs/rack.md` |
+| `tools/rack_pump_probe.tscn` (`.gd`) | the rack's direct feed to the real audio driver for N seconds: generator fill, underruns, skips, worst frame (`-- preset seconds [stall_ms [studio|track [out.wav]]]`: `track` plays it through a built-in track, `out.wav` keeps the master bus; needs a non-vsynced window as in `tools/shot.sh`, and `PULSE_SINK` set to a null sink); `docs/rack.md` |
+| `tools/singer_clip.sh` | the singer demo as an mp4 with its sound, made in real time on workspace 10 (the movie writer cannot: the singer's engine runs in real time); `--reaper` after the path for the rig's Reaper; `docs/singer.md` |
 | `tools/audio_latency.sh`, `tools/keys_latency.sh` | how far behind the host a guest hears the mix; key-down to sound through the keys helper |
 
 ## Checking the code

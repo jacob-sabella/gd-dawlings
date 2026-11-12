@@ -1,5 +1,6 @@
 {
   "modules": {
+    "bars": {"at": [34, 0], "knobs": {"fall": 0.8, "range": 0.6}, "type": "builtin.spectrum"},
     "clap": {"at": [11, 0], "knobs": {"accent": 0.8, "decay": 0.35, "freq": 0.2727272727272728, "kind": 0.5, "tone": 0.5}, "type": "builtin.drum"},
     "clk": {"at": [9, 0], "knobs": {"bpm": 0.45, "swing": 0.0, "sync": 0.0}, "type": "builtin.clock"},
     "dly": {"at": [25, 0], "knobs": {"fb": 0.4, "mix": 0.18, "pp": 0.25, "sync": 0.5, "time": 0.6775932438262062, "tone": 0.7861760963081325}, "type": "builtin.delay"},
@@ -8,6 +9,7 @@
     "hat": {"at": [11, 1], "knobs": {"accent": 0.8, "decay": 0.1, "freq": 0.2727272727272728, "kind": 0.99, "tone": 0.5}, "type": "builtin.drum"},
     "kick": {"at": [11, 2], "knobs": {"accent": 0.8, "decay": 0.55, "freq": 0.15, "kind": 0.0, "tone": 0.5}, "type": "builtin.drum"},
     "lad": {"at": [17, 0], "knobs": {"cutoff": 0.35, "cv": 0.8, "drive": 0.35, "mode": 0.08333333333333333, "res": 0.62}, "type": "builtin.ladder"},
+    "lamp": {"at": [30, 0], "knobs": {"flow": 0.6, "hue": 0.55}, "type": "builtin.plasma"},
     "mix": {"at": [21, 0], "knobs": {"l1": 0.65, "l2": 1.0, "l3": 0.3, "l4": 0.28, "master": 0.6666666666666666}, "type": "builtin.mix"},
     "out": {"at": [29, 0], "knobs": {"level": 0.6}, "type": "builtin.out"},
     "rev": {"at": [27, 0], "knobs": {"damp": 0.7, "diff": 0.7, "mix": 0.15, "time": 0.45}, "type": "builtin.reverb"},
@@ -35,6 +37,10 @@
     ["dly.l", "rev.l"],
     ["dly.r", "rev.r"],
     ["rev.l", "out.l"],
-    ["rev.r", "out.r"]
+    ["rev.r", "out.r"],
+    ["kick.out", "lamp.red"],
+    ["clap.out", "lamp.green"],
+    ["hat.out", "lamp.blue"],
+    ["lad.out", "bars.in"]
   ]
 }

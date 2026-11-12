@@ -388,6 +388,8 @@ var recording: bool = false
 var position_seconds: float = 0.0
 ## What the host's modular room is doing (`RackLive`): a guest's copy, `{}` when there is none. Not saved.
 var rack_live: Dictionary = {}
+## What the host's vocal booth singer is doing (`SingerLive`): a guest's copy, `{}` when there is none. Not saved.
+var singer_live: Dictionary = {}
 var position_string: String = "1.1.00"
 ## The clock as the DAW spells it in minutes and seconds, when it says. Bar/beat is the one a
 ## desk shows; this is for the readout that wants both.

@@ -28,6 +28,9 @@ extends Node
 ## How much sound a track's player is kept holding, in frames: enough to ride over Godot's 512-frame
 ## mix step and the thread's wake-ups, no more. Its latency, at most.
 const QUEUE_FRAMES := 768
+## How much a player's queue deepens each time it is found to have run dry, and the most it grows to.
+const QUEUE_STEP := 256
+const QUEUE_MOST := 4096
 ## The player's own room, in seconds: well over the queue, so a burst from the pipe is trimmed here
 ## rather than refused by the player.
 const BUFFER := 0.1
@@ -218,17 +221,37 @@ func buses_of(index: int) -> Array:
 	return out
 
 
-## Up to QUEUE_FRAMES held, the newest of what came kept and the rest dropped. Past it already (the
-## mixer stalled), nothing is added until it has drained back: the monitor never falls behind.
+## Up to the player's queue held (QUEUE_FRAMES to start), the newest of what came kept and the rest
+## dropped. Past it already (the mixer stalled), nothing is added until it has drained back: the monitor
+## never falls behind.
+##
+## The queue must hold more than the mixer takes at once, and that is the audio server's step, not
+## Godot's 512: under PipeWire it is its quantum, 1024 frames here, and a queue of 768 left a quarter of
+## every step silent, a click every 21 ms (the modular room through a track sounded like a buzz). So a
+## player found to have run dry deepens the queue, QUEUE_STEP more each time up to QUEUE_MOST, for every player
+## after it too (the step is the machine's, not the player's): as shallow as this machine's audio lets it be,
+## and no shallower.
 static func _feed(playback: AudioStreamGeneratorPlayback, frames: PackedVector2Array) -> void:
 	if frames.is_empty():
 		return
+	var id := playback.get_instance_id()
+	var skips := playback.get_skips()
+	if _skips_seen.has(id) and skips > int(_skips_seen[id]) and depth < QUEUE_MOST:
+		depth = mini(depth + QUEUE_STEP, QUEUE_MOST)
 	var room := playback.get_frames_available()
 	var queued := _capacity_of(playback) - room
-	var take := mini(frames.size(), mini(room, QUEUE_FRAMES - queued))
+	var take := mini(frames.size(), mini(room, depth - queued))
 	if take <= 0:
+		_skips_seen[id] = skips
 		return
 	playback.push_buffer(frames if take == frames.size() else frames.slice(frames.size() - take))
+	# counted from the first push: a player is "dry" until then by Godot's count, which says nothing
+	_skips_seen[id] = playback.get_skips()
+
+
+## The players' queue now (frames), deepened from QUEUE_FRAMES by one running dry (`_feed`).
+static var depth := QUEUE_FRAMES
+static var _skips_seen := {}
 
 
 ## What a player holds when empty: its buffer, as Godot rounded it. Read once, on the first push.

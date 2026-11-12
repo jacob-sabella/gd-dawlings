@@ -32,6 +32,8 @@ func _ready() -> void:
 	OfflineBackend.autosave_every = 0.0
 	# A studio under test neither reads nor writes the player's saved rack.
 	RackAutosave.disabled = true
+	# Tour mode is off in the game for now (Tour.enabled); its tests still run it.
+	Tour.enabled = true
 	# Nor the player's saved rooms (RoomDeltas).
 	RoomDeltas.disabled = true
 	MadeRooms.disabled = true
@@ -469,6 +471,8 @@ func _ready() -> void:
 	await _t("_test_item_room_target_struck_finds_the_nearest_one_in_range")
 	await _t("_test_only_the_host_can_break_the_case")
 	await _t("_test_tour_venue_solids_include_the_case")
+	await _t("_test_tour_mode_off_puts_no_case_in_the_room")
+	await _t("_test_no_venue_leaves_an_invisible_solid_in_the_modular_room")
 	await _t("_test_tour_spill_puts_a_real_item_in_the_room")
 	await _t("_test_tour_run_ended_announces_the_result_to_the_room")
 	await _t("_test_tour_guest_spawns_spilled_instruments_from_the_run")
@@ -878,6 +882,17 @@ func _ready() -> void:
 	await _t("_test_the_input_monitor_never_queues_more_than_a_moment")
 	await _t("_test_a_guests_devices_are_used_only_when_the_host_allows_them")
 	await _t("_test_a_tracks_input_and_monitoring_are_set_in_2d")
+	await _t("_test_singer_the_row_answers_its_asks")
+	await _t("_test_singer_the_vocal_part_is_one_voice")
+	await _t("_test_singer_the_board_finds_the_syllable_sung")
+	await _t("_test_singer_a_guest_is_sent_the_singer")
+	await _t("_test_singer_every_venue_has_a_creature_in_key")
+	await _t("_test_singer_the_beat_is_locked_to_the_song")
+	await _t("_test_singer_the_voice_renders_through_the_rack")
+	await _t("_test_singer_the_voice_is_chimeras_sample_for_sample")
+	await _t("_test_singer_the_voice_sings_live")
+	await _t("_test_singer_a_take_of_the_singer_is_in_sync")
+	await _t("_test_singer_every_venue_letters_the_words_readably")
 	_report()
 
 
@@ -4582,15 +4597,29 @@ func _test_a_flood_from_reaper_is_taken_in_over_frames() -> void:
 	var reaper := ReaperBackend.new()
 	reaper.state = MixState.new()
 	add_child(reaper)
+	# a refresh is distinct parameters, which replacing a waiting address's value cannot shorten
+	var flood: Array[Dictionary] = []
 	for i in 60000:
-		reaper._inbox.append({"address": "/track/1/fx/1/fxparam/%d/value" % (i % 32 + 1), "args": [0.25]})
-	reaper._inbox.append({"address": "/track/1/fx/1/fxparam/7/value", "args": [0.75]})
+		flood.append({"address": "/track/1/fx/1/fxparam/%d/value" % (i + 1), "args": [0.25]})
+	flood.append({"address": "/track/1/fx/1/fxparam/7/value", "args": [0.75]})
+	# and the transport at the very back of it
+	flood.append({"address": "/time", "args": [12.5]})
+	flood.append({"address": "/record", "args": [1.0]})
+	var t_in := Time.get_ticks_usec()
+	reaper._take_in(flood)
+	var took_in := (Time.get_ticks_usec() - t_in) / 1000.0
+	check("taking in 60,000 at once is cheap (%.1fms)" % took_in, took_in < 200.0)
+	check("and queues each address once (%d waiting)" % reaper._inbox.size(), reaper._inbox.size() == 60000)
 	var t0 := Time.get_ticks_usec()
 	reaper._apply_inbox()
 	var took := (Time.get_ticks_usec() - t0) / 1000.0
-	check("one frame takes in only its share (%.1fms, %d of 60001)" % [took, reaper._inbox_at],
-			took < 20.0 and reaper._inbox_at > 0 and reaper._inbox_at < 60001)
+	check("one frame takes in only its share (%.1fms, %d left)" % [took, reaper._inbox.size() - reaper._inbox_at],
+			took < 20.0 and reaper._inbox.size() - reaper._inbox_at > 0)
 	check("and says it is still catching up", reaper.catching_up())
+	# 2026-11-12: while Reaper records its feedback outran a frame's share, and the play position stood at the take's
+	# start for 100 s: the transport is taken ahead of whatever is behind
+	close_to("but where the song is arrives at once, ahead of them", reaper.state.position_seconds, 12.5)
+	check("and that it records", reaper.state.recording)
 	var frames := 1
 	while reaper.catching_up() and frames < 2000:
 		reaper._apply_inbox()
@@ -4598,6 +4627,14 @@ func _test_a_flood_from_reaper_is_taken_in_over_frames() -> void:
 	check("the rest arrives over the next frames (%d)" % frames, not reaper.catching_up() and frames > 1)
 	close_to("in order: the last word is the one that stands",
 			float(reaper.state.fx(1, 1).params.get(7, -1.0)), 0.75)
+	# the same addresses again and again (a fader dragged, a refresh resent) wait once each, with the last value
+	var same: Array[Dictionary] = []
+	for i in 3000:
+		same.append({"address": "/track/1/fx/1/fxparam/%d/value" % (i % 8 + 1), "args": [float(i) / 3000.0]})
+	reaper._take_in(same)
+	reaper._apply_inbox()
+	check("a backlog of the same few addresses is taken in one frame", not reaper.catching_up())
+	close_to("as the last of each", float(reaper.state.fx(1, 1).params.get(8, -1.0)), 2999.0 / 3000.0)
 
 	# Gear holds its rebuild while the DAW is catching up -- but not for ever.
 	DAW.use(reaper, false)
@@ -9018,9 +9055,15 @@ func _test_a_monitor_goes_to_the_gear_and_leaves_the_room_alone() -> void:
 		var box := studio.rack.global_transform * studio.rack.content_aabb()
 		var centre := box.get_center()
 		var off := rad_to_deg((-cam.basis.z).angle_to(centre - cam.origin))
+		# In frame by where the camera is, not by its frustum: with physics interpolation on (project.godot) the
+		# frustum is the interpolated camera's, which no frame has moved yet in a check that runs in one frame.
 		var inside := 0
+		var t := tan(deg_to_rad(studio.camera.fov) * 0.5)
+		var size := studio.camera.get_viewport().get_visible_rect().size
+		var aspect := size.x / maxf(size.y, 1.0)
 		for i in 8:
-			if studio.camera.is_position_in_frustum(box.get_endpoint(i)):
+			var p := cam.affine_inverse() * box.get_endpoint(i)
+			if p.z < -studio.camera.near and absf(p.y) <= -p.z * t and absf(p.x) <= -p.z * t * aspect:
 				inside += 1
 		return [off, inside, cam.origin.distance_to(centre)]
 
@@ -14592,6 +14635,8 @@ func _test_the_input_monitor_never_queues_more_than_a_moment() -> void:
 	var held := HeldSource.new()
 	monitor.make_source = func(_device: String) -> MixSource: return held
 	add_child(monitor)
+	var was_depth := InputMonitor.depth
+	InputMonitor.depth = InputMonitor.QUEUE_FRAMES
 	monitor.drive(s, func(_index: int) -> Array: return [[&"Master", 0.0]])
 	var player := monitor.get_children()[0] as AudioStreamPlayer
 	var playback := player.get_stream_playback() as AudioStreamGeneratorPlayback
@@ -14613,6 +14658,20 @@ func _test_the_input_monitor_never_queues_more_than_a_moment() -> void:
 	monitor.feed()
 	check("and a full player takes no more: the monitor is never later than the queue",
 			room - playback.get_frames_available() == InputMonitor.QUEUE_FRAMES)
+	# The queue deepens when a player runs dry (the mixer took more at once than it held: PipeWire's 1024-frame
+	# quantum against 768 left a quarter of every step silent), a step at a time, for the players after it too.
+	InputMonitor._skips_seen[playback.get_instance_id()] = playback.get_skips() - 1
+	held.frames = burst
+	monitor.feed()
+	check("a player found dry deepens the queue by a step (%d)" % InputMonitor.depth,
+			InputMonitor.depth == InputMonitor.QUEUE_FRAMES + InputMonitor.QUEUE_STEP)
+	check("and holds what the deeper queue allows", room - playback.get_frames_available() == InputMonitor.depth)
+	for i in 40:
+		InputMonitor._skips_seen[playback.get_instance_id()] = playback.get_skips() - 1
+		held.frames = burst
+		monitor.feed()
+	check("never past the most", InputMonitor.depth == InputMonitor.QUEUE_MOST)
+	InputMonitor.depth = was_depth
 	var left := InputMonitor.new()
 	check("fed from a thread of its own when left to itself", left.threaded)
 	left.free()
@@ -20705,6 +20764,54 @@ func _test_tour_venue_solids_include_the_case() -> void:
 		check("the %s's solids include the Tour case" % id, found == venue.prop_shelf_solid())
 		remove_child(venue)
 		venue.free()
+
+
+## The modular room clears the venue's scenery where it is built (AnnexSite), and the scenery's solids go
+## with it: in no venue does an invisible solid stand in the room or its doorway (the grid's palm by the door
+## was one, 0.6 m square and 3 m tall, just inside).
+func _test_no_venue_leaves_an_invisible_solid_in_the_modular_room() -> void:
+	var with_annex := 0
+	for id in Venue.IDS:
+		var venue := Venue.make(id)
+		add_child(venue)
+		if venue.has_annex():
+			with_annex += 1
+			var floors := ModularAnnex.floors(venue.annex_edge(), venue.live_room_half())
+			var inside: Array = venue.solids().filter(func(f: Dictionary) -> bool:
+				return floors[0].has_point(f["c"]) or floors[1].has_point(f["c"]))
+			check("the %s leaves no solid in the modular room or its doorway%s" % [id, "" if inside.is_empty() else ": %s" % [inside]], inside.is_empty())
+		remove_child(venue)
+		venue.free()
+	check("venues with a modular room were looked at (%d)" % with_annex, with_annex > 0)
+
+
+## Tour mode switched off (`Tour.enabled`, the game's default for now): no case in any venue, no solid where it
+## would stand, none built in the studio, and no run can start.
+func _test_tour_mode_off_puts_no_case_in_the_room() -> void:
+	var spots := true
+	var solids := true
+	for id in Venue.IDS:
+		var venue := Venue.make(id)
+		add_child(venue)
+		Tour.enabled = true
+		var home := venue.default_tour_case_spot()
+		Tour.enabled = false
+		spots = spots and venue.default_spot(&"tour_case") == null
+		for f: Dictionary in venue.solids():
+			solids = solids and not (f.get("c") as Vector2).is_equal_approx(Vector2(home.origin.x, home.origin.z))
+		remove_child(venue)
+		venue.free()
+	check("no venue has a place for the case", spots)
+	check("and none has a solid where it stood", solids)
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	await get_tree().process_frame
+	check("the studio builds no case", studio.tour_case == null and studio.find_children("*", "TourCase", true, false).is_empty())
+	check("a run cannot start", not Tour.is_available())
+	Tour.start_run()
+	check("and asking for one starts nothing", Tour.run == null)
+	_drop_floor_studio(rig)
+	Tour.enabled = true
 
 
 ## Instruments spilling out of the case: `Tour.spill` puts a real item in the host's own room
@@ -44974,6 +45081,18 @@ func _test_the_finder_finds_by_name_kind_knob_and_group_and_adds() -> void:
 	check("typing narrows it, and the first match is chosen", screen.chosen() == "builtin.aw.galactic")
 	screen._add_chosen()
 	check("adding asks the host for that module", asked == ["builtin.aw.galactic"])
+	var held := {"modules": {}}
+	screen.on_rack = func() -> Dictionary: return held
+	held["modules"]["g1"] = {"type": "builtin.aw.galactic"}
+	screen.tell_added("builtin.aw.galactic", "")
+	check("an add is shown: the button says ADDED and the line under it names the module",
+			screen._add.text.contains("ADDED") and screen._status.text.contains("GALACTIC") and screen._status.text.contains("on the rack"))
+	check("the list ticks it, and it stays chosen", screen._list.get_item_text(0).begins_with("✓") and screen.chosen() == "builtin.aw.galactic")
+	held["modules"]["g2"] = {"type": "builtin.aw.galactic"}
+	screen.tell_added("builtin.aw.galactic", "")
+	check("a second says how many", screen._list.get_item_text(0).contains("×2") and screen._status.text.contains("2 of them"))
+	screen.tell_added("builtin.aw.galactic", "the case is full: take something out first")
+	check("a refusal says why, and the button is not ADDED", screen._status.text.contains("case is full") and not screen._add.text.contains("ADDED"))
 	screen.close_finder()
 	check("it closes", not screen.is_open())
 	screen.queue_free()
@@ -45469,6 +45588,13 @@ func _test_the_eye_candy_modules_see_what_is_patched_in_and_draw_it() -> void:
 		screen.set_wave(pts)
 		screen.set_wave(pts)
 		check("%s draws a picture" % t, screen.get_child_count() > 3)
+		if t != "builtin.vector":
+			# The cells must be seen from the room (+z): a culled back face drew nothing at all.
+			var arrays := (screen._fill.mesh as ImmediateMesh).surface_get_arrays(0)
+			var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var facing_room := v.size() >= 3 and (v[1] - v[0]).cross(v[2] - v[0]).z < 0.0
+			check("%s's cells are seen from the front of the screen" % t, screen._fill.visible and v.size() >= 3
+					and (screen._fill_mat.cull_mode == BaseMaterial3D.CULL_DISABLED or facing_room))
 		screen.queue_free()
 	if not RackEngine.available():
 		return
@@ -46754,3 +46880,121 @@ func _test_the_venue_instrument_and_weather_come_out_with_their_solids() -> void
 func _test_removed_shell_pieces_are_kept_and_a_guest_sees_them() -> void:
 	RoomPiecesTests.new(self).a_restart_keeps_them_out()
 	RoomPiecesTests.new(self).a_guest_sees_the_pieces_out_and_back()
+
+
+# --- the vocal booth's singer (docs/singer.md): its checks are in tests/singer_tests.gd ----------------
+
+const SingerTests := preload("res://tests/singer_tests.gd")
+
+
+func _test_singer_the_row_answers_its_asks() -> void:
+	SingerTests.new(self).the_row_answers_its_asks()
+
+
+func _test_singer_the_vocal_part_is_one_voice() -> void:
+	SingerTests.new(self).the_vocal_part_is_one_voice()
+
+
+func _test_singer_the_board_finds_the_syllable_sung() -> void:
+	SingerTests.new(self).the_board_finds_the_syllable_sung()
+
+
+func _test_singer_a_guest_is_sent_the_singer() -> void:
+	SingerTests.new(self).a_guest_is_sent_the_singer()
+
+
+func _test_singer_every_venue_has_a_creature_in_key() -> void:
+	SingerTests.new(self).every_venue_has_a_creature_in_key()
+
+
+func _test_singer_the_beat_is_locked_to_the_song() -> void:
+	SingerTests.new(self).the_beat_is_locked_to_the_song()
+
+
+func _test_singer_the_voice_renders_through_the_rack() -> void:
+	SingerTests.new(self).the_voice_renders_through_the_rack()
+
+
+func _test_singer_the_voice_is_chimeras_sample_for_sample() -> void:
+	SingerTests.new(self).the_voice_is_chimeras_sample_for_sample()
+
+
+func _test_singer_the_voice_sings_live() -> void:
+	await SingerTests.new(self).the_voice_sings_live()
+
+
+func _test_singer_a_take_of_the_singer_is_in_sync() -> void:
+	await SingerTests.new(self).a_take_of_the_singer_is_in_sync()
+
+
+func _test_singer_every_venue_letters_the_words_readably() -> void:
+	SingerTests.new(self).every_venue_letters_the_words_readably()
+
+
+func _test_singer_the_voice_plays_from_its_jacks() -> void:
+	SingerTests.new(self).the_voice_plays_from_its_jacks()
+
+
+func _test_singer_every_venue_hears_its_creature() -> void:
+	SingerTests.new(self).every_venue_hears_its_creature()
+
+
+## Every venue with a booth stands its own creature on a perch there (Bestiary), lettered and in its booth.
+func _test_singer_every_venue_stands_its_creature_in_the_booth() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	var said := PackedStringArray()
+	var booths := 0
+	for id: StringName in Venue.IDS:
+		studio.set_venue(id, false)
+		await get_tree().process_frame
+		if studio.singer_booth == null or not is_instance_valid(studio.singer_booth):
+			continue
+		booths += 1
+		var perch: CreaturePerch = studio.singer_host.perch
+		var ok: bool = perch != null and is_instance_valid(perch) and perch.is_inside_tree() \
+				and perch.get_parent() == studio.venue and perch.spec == Bestiary.of(id) \
+				and perch.stones.size() == Bestiary.STONES and perch.stones[0].legend_text != ""
+		said.append("%s %s%s" % [id, Bestiary.BY_VENUE.get(id, "?"), "" if ok else " (NOT)"])
+		check("the %s stands its creature in the booth" % id, ok)
+	print("  perches: ", ", ".join(said))
+	check("every venue but the roulette room has a booth (%d of %d)" % [booths, Venue.IDS.size()], booths >= Venue.IDS.size() - 1)
+	_drop_floor_studio(rig)
+
+
+## The room's lights follow the voice: the song stopped, the rack quiet, the singer breathing a vowel from the booth
+## lifts the venue's light (`heard`, what its lamps and RackMood colours are driven by) from nothing.
+func _test_singer_the_room_lights_follow_the_voice() -> void:
+	if not RackEngine.available():
+		check("(no engine on this machine: skipped)", true)
+		return
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	DAW.transport_stop()
+	studio.set_venue(&"studio", false)
+	await get_tree().process_frame
+	var host: SingerHost = studio.singer_host
+	host.ask("set", ["mode", SingerRow.Mode.VOWEL])
+	check("the voice wakes", host._wake())
+	# the song stopped, its meters fall to nothing (a meter's ballistics: about half a second)
+	for i in 90:
+		await get_tree().process_frame
+	var quiet: float = studio.venue.heard
+	host.ask("play", [57, true])
+	var lit := 0.0
+	var level := 0.0
+	var deadline := Time.get_ticks_msec() + 5000
+	while Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+		level = maxf(level, host.level())
+		lit = maxf(lit, studio.venue.heard)
+		if lit > 0.2 and lit > quiet + 0.15:
+			break
+	host.ask("play", [57, false])
+	print("  lights: heard %.3f quiet, %.3f singing (voice level %.3f)" % [quiet, lit, level])
+	check("the voice is heard by the room", level > 0.02)
+	check("the room is dark before it", quiet < 0.05)
+	check("and its light rises with it", lit > quiet + 0.15)
+	if studio.singer != null and is_instance_valid(studio.singer):
+		studio.singer.shutdown()
+	_drop_floor_studio(rig)

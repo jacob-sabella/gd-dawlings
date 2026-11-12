@@ -1,0 +1,9 @@
+add v voice
+add o out
+cable v.out o.l
+text v.lyrics twinkle twinkle little star
+knob v.vibrato 0.5
+bpm 100
+play 0
+text v.song 0 100 0.5 60 1 60 1 67 1 67 1 69 1 69 1 67 2
+run 6

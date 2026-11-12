@@ -4,6 +4,8 @@
     "drive": {"at": [21, 0], "knobs": {"drive": 0.35, "level": 0.5333333333333333}, "type": "builtin.drive"},
     "hat": {"at": [17, 0], "knobs": {"accent": 0.8, "decay": 0.15, "freq": 0.2727272727272728, "kind": 0.99, "tone": 0.5}, "type": "builtin.drum"},
     "kick": {"at": [17, 1], "knobs": {"accent": 0.8, "decay": 0.5, "freq": 0.2727272727272728, "kind": 0.0, "tone": 0.5}, "type": "builtin.drum"},
+    "lamp": {"at": [24, 0], "knobs": {"flow": 0.55, "hue": 0.6}, "type": "builtin.plasma"},
+    "lvl": {"at": [28, 0], "knobs": {}, "type": "builtin.meter"},
     "mix": {"at": [19, 0], "knobs": {"l1": 0.8, "l2": 0.55, "l3": 0.35, "l4": 0.4666666666666666, "master": 0.6666666666666666}, "type": "builtin.mix"},
     "out": {"at": [23, 0], "knobs": {"level": 0.35}, "type": "builtin.out"},
     "snare": {"at": [17, 2], "knobs": {"accent": 0.8, "decay": 0.5, "freq": 0.2727272727272728, "kind": 0.5, "tone": 0.5}, "type": "builtin.drum"}
@@ -16,6 +18,11 @@
     ["snare.out", "mix.in2"],
     ["hat.out", "mix.in3"],
     ["mix.out", "drive.in"],
-    ["drive.out", "out.l"]
+    ["drive.out", "out.l"],
+    ["kick.out", "lamp.red"],
+    ["snare.out", "lamp.green"],
+    ["hat.out", "lamp.blue"],
+    ["drive.out", "lvl.l"],
+    ["drive.out", "lvl.r"]
   ]
 }

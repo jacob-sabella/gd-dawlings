@@ -1,10 +1,12 @@
 {
   "modules": {
     "clock": {"at": [16, 0], "knobs": {"bpm": 0.12, "swing": 0.0, "sync": 0.0}, "type": "builtin.clock"},
+    "lvl": {"at": [27, 0], "knobs": {}, "type": "builtin.meter"},
     "noise": {"at": [16, 1], "knobs": {}, "type": "builtin.noise"},
     "out": {"at": [22, 0], "knobs": {"level": 0.35}, "type": "builtin.out"},
     "reverb": {"at": [20, 0], "knobs": {"damp": 0.7, "diff": 0.7, "mix": 0.55, "time": 0.9}, "type": "builtin.reverb"},
-    "rings": {"at": [18, 0], "knobs": {"bright": 0.6, "damping": 0.8, "model": 0.08333333333333333, "note": 0.25, "poly": 0.16666666666666666, "position": 0.4, "structure": 0.5}, "type": "builtin.rings"}
+    "rings": {"at": [18, 0], "knobs": {"bright": 0.6, "damping": 0.8, "model": 0.08333333333333333, "note": 0.25, "poly": 0.16666666666666666, "position": 0.4, "structure": 0.5}, "type": "builtin.rings"},
+    "vec": {"at": [23, 0], "knobs": {"gain": 0.75, "turn": 0.75}, "type": "builtin.vector"}
   },
   "cables": [
     ["clock.beat", "rings.strum"],
@@ -12,6 +14,10 @@
     ["rings.odd", "reverb.l"],
     ["rings.even", "reverb.r"],
     ["reverb.l", "out.l"],
-    ["reverb.r", "out.r"]
+    ["reverb.r", "out.r"],
+    ["reverb.l", "vec.x"],
+    ["reverb.r", "vec.y"],
+    ["reverb.l", "lvl.l"],
+    ["reverb.r", "lvl.r"]
   ]
 }

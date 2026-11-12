@@ -125,6 +125,13 @@ var meters := {}
 ## What each SCOPE module saw lately: id -> PackedFloat32Array of points, -1..1.
 var scopes := {}
 var steps := {}
+## What each VOICE module's body is doing (`voice ID ...` lines): id -> its telemetry (VoiceTele reads it).
+var voices := {}
+## The syllables each VOICE module sings its lyrics as (`voicesyl` lines): id -> PackedStringArray.
+var syllables := {}
+## Each VOICE module's head outlines now (`voiceframe` lines, cm): id -> {glottis: Vector2, lines: [11 PackedVector2Array]}
+## (VoiceTele.LINES names them).
+var frames := {}
 ## When something last took the sound (msec): the engine stalls on a full pipe, so a rack nobody is
 ## listening to is drained by its voice to keep its meters and scopes alive.
 var last_read := 0
@@ -206,6 +213,8 @@ func stop() -> void:
 	_spare.clear()
 	meters = {}
 	scopes = {}
+	voices = {}
+	frames = {}
 
 
 func running() -> bool:
@@ -269,6 +278,34 @@ func poll() -> void:
 				steps[sq[1]] = int(sq[2])
 		elif line.begins_with("meter "):
 			last_meter = line
+		elif line.begins_with("voice "):
+			var vq := line.split(" ", false)
+			if vq.size() > 3:
+				var t := PackedFloat32Array()
+				t.resize(vq.size() - 4)
+				for k in t.size():
+					t[k] = float(vq[k + 2])
+				voices[vq[1]] = {"tele": t, "syl": int(vq[vq.size() - 1])}
+		elif line.begins_with("voiceframe "):
+			var fq := line.split(" ", false)
+			var fr := VoiceTele.read_frame(fq.slice(2))
+			if not fr.is_empty():
+				frames[fq[1]] = fr
+		elif line.begins_with("voicesyl "):
+			# voicesyl ID FIRST COUNT a|b|c: the syllables from FIRST on (a long lyric comes in pieces)
+			var sq2 := line.split(" ", false, 4)
+			if sq2.size() >= 4:
+				var first := int(sq2[2])
+				var count := int(sq2[3])
+				var had: PackedStringArray = syllables.get(sq2[1], PackedStringArray())
+				if first == 0 or had.size() != count:
+					had = PackedStringArray()
+					had.resize(count)
+				var parts := sq2[4].split("|") if sq2.size() > 4 else PackedStringArray()
+				for k in parts.size():
+					if first + k < count:
+						had[first + k] = parts[k]
+				syllables[sq2[1]] = had
 	var parts := last_meter.split(" ", false)
 	if parts.size() < 2:
 		return

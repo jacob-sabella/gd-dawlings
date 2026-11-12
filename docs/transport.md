@@ -21,6 +21,14 @@ when a control moves. There is no handshake and no error — which means **a wro
 indistinguishable from a stopped Reaper.** Both are silence. That is why `OSCPeer` counts
 packets and the HUD shows the count: it is the only way to tell the two apart from inside.
 
+What arrives is taken in as state (`ReaperBackend._take_in`). The transport (`/time`, `/play`, `/record`, ...)
+and the meters are applied the moment they arrive. A message for an address already waiting in the inbox replaces
+the waiting value instead of queueing behind it. The rest is applied a few milliseconds' worth a frame. Before
+this, a surface refresh (tens of thousands of plugin parameters) or the feedback of a take being recorded ran
+ahead of what the frames applied, and the cache's play position stood still for over a minute while Reaper
+rolled. That broke everything that reads it: the singer following the song (docs/singer.md), REC waiting for a
+take's end, the playhead.
+
 ### Setup
 
 Copy `reaper/Dawlings.ReaperOSC` to Reaper's `OSC/` folder, then

@@ -124,7 +124,11 @@ Right-drag orbits, the wheel zooms, WASD walks. V cycles the venues — the stud
 synthwave grid, the chalk zone, and others. Only the world changes; the gear and the layout stay
 the same. See `docs/venues.md`.
 
-## Tour mode
+## Tour mode (switched off)
+
+**Off for now:** it never played as intended, so no case stands in the room and no run can start
+(`Tour.enabled` in `core/tour/tour.gd`). Start the game with `-- --tour-mode` to have it back while
+working on it; the test suite turns it on. What it is meant to be:
 
 A roguelike gig-rescue mode, one person alone or a band online. A run starts by
 breaking open the road case chained shut at the back of the room — the host throws things at it

@@ -41,6 +41,7 @@ func _process(delta: float) -> void:
 		_modular_owed = 0.0
 		studio.rack_host._follow_modular()
 		studio.rack_host._follow_pads()
+		studio.singer_host.follow(1.0 / 30.0)
 	studio.item_host._follow_making()
 	studio.sampler_host._follow_gives(delta)
 	_follow_kit()
@@ -48,7 +49,7 @@ func _process(delta: float) -> void:
 		# A room that holds still for anyone who has asked it to (COMFORT's "Room reacts").
 		studio.venue.reactive = studio.ergonomics.room_reacts
 		studio.venue.lift_on_clip = studio.ergonomics.lift_on_clip
-		studio.venue.pulse(studio.fed_level if studio.fed_level >= 0.0 else maxf(maxf(DAW.state.master.vu_l, DAW.state.master.vu_r), studio.rack_host.rack_level()))
+		studio.venue.pulse(studio.fed_level if studio.fed_level >= 0.0 else maxf(maxf(DAW.state.master.vu_l, DAW.state.master.vu_r), maxf(studio.rack_host.rack_level(), studio.singer_host.level())))
 		studio.venue_look.follow_clip(delta)
 	if studio.camera == null or not studio.god_mode:
 		return

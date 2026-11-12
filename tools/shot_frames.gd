@@ -189,6 +189,22 @@ func _process_scenes() -> void:
 			var front := Vector3(m.basis.z.x, 0, m.basis.z.z).normalized()
 			var at := m.origin + front * shot._walk_mirror
 			shot._walk = [at.x, at.z, atan2(front.x, front.z), -0.05]
+	if shot._frames == 8 and shot._walk_singer > 0.0:
+		var studio_for_singer := shot.get_tree().current_scene.get_node("Studio") as Studio
+		if studio_for_singer.singer_booth != null:
+			var b := studio_for_singer.singer_booth.global_transform
+			var front := Vector3(b.basis.z.x, 0, b.basis.z.z).normalized()
+			var at := b.origin + front * shot._walk_singer
+			shot._walk = [at.x, at.z, atan2(front.x, front.z), -0.12]
+			print("SHOT_SINGER origin=", b.origin, " walk=", shot._walk)
+	if shot._frames == 8 and shot._walk_perch > 0.0:
+		var studio_for_perch := shot.get_tree().current_scene.get_node("Studio") as Studio
+		var perch := studio_for_perch.singer_host.perch
+		if perch != null:
+			var pb := perch.global_transform
+			var pf := Vector3(pb.basis.z.x, 0, pb.basis.z.z).normalized()
+			var pat := pb.origin + pf * shot._walk_perch
+			shot._walk = [pat.x, pat.z, atan2(pf.x, pf.z), -0.3]
 	if shot._frames == 8 and shot._walk_rack_on:
 		# Along the wall's own normal: the wall leans back, so "in front of it" is not a level step away.
 		var studio_for_rack := shot.get_tree().current_scene.get_node("Studio") as Studio

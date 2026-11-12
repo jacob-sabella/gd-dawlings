@@ -7,9 +7,10 @@ import colorsys, hashlib, json, subprocess, sys
 REPO = __file__.rsplit("/tools/", 1)[0]
 BIN = sys.argv[1] if len(sys.argv) > 1 else REPO + "/build/rack/rack"
 MODS = {"daisysp": REPO + "/mods/builtin/daisysp/mod.json", "mutable": REPO + "/mods/builtin/mutable/mod.json",
-        "core": REPO + "/mods/builtin/core/mod.json", "airwindows": REPO + "/mods/builtin/airwindows/mod.json"}
+        "core": REPO + "/mods/builtin/core/mod.json", "airwindows": REPO + "/mods/builtin/airwindows/mod.json",
+        "chimera": REPO + "/mods/builtin/chimera/mod.json"}
 # Which mod a new module goes to (anything not named here goes to daisysp).
-OWNER = {"marbles": "mutable", "frames": "mutable", "spectrum": "core", "vector": "core", "meter": "core", "plasma": "core"}
+OWNER = {"voice": "chimera", "marbles": "mutable", "frames": "mutable", "spectrum": "core", "vector": "core", "meter": "core", "plasma": "core"}
 TAGLINES = {}
 PATTERNS = ["stripes", "checker", "dots", "wave", "bars", "zigzag"]
 
@@ -44,7 +45,7 @@ for m in desc["modules"]:
     docs[OWNER.get(m["type"], "daisysp")]["provides"].append(entry)
     added.append(m["type"])
 for k, p in MODS.items():
-    if k in ("daisysp", "mutable", "core"):
+    if k in ("daisysp", "mutable", "core", "chimera"):
         d = docs[k]
         head = [(key, d[key]) for key in d if key != "provides"]
         lines = ["{"] + ['  %s: %s,' % (json.dumps(key), json.dumps(v, ensure_ascii=False)) for key, v in head] + ['  "provides": [']

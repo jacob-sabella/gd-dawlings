@@ -71,6 +71,9 @@ struct Ctx {
   // The room's CV bench: five boxes of two knobs and a slider, each 0..1 (`hand K V`).
   static const int HAND_N = 15;
   float hand[HAND_N] = {};
+  // An offline render (--render): a module that plans on a thread of its own plans at once instead,
+  // so the render is the same every time.
+  bool offline = false;
 };
 
 struct Module {
@@ -87,6 +90,10 @@ struct Module {
   virtual bool scope(std::vector<float>& pts) { return false; }
   // A module that steps through something says which step it is on (-1: none yet).
   virtual int playhead() const { return -1; }
+  // `text MOD.KEY VALUE`: words for a module that takes them (lyrics, a line to say, a pattern).
+  virtual void text(const std::string& key, const std::string& value) {}
+  // A module with more to tell the room appends whole lines (ending in newline) and says so.
+  virtual bool report(const std::string& id, std::string& out) { return false; }
   // A knob's real value.
   float real(int k) const;
   int choice(int k) const { return (int)real(k); }
@@ -116,6 +123,10 @@ class Rack {
   void note_off(int pitch);
   void bend(float v);  // -1..1
   void cc(int k, int v);
+  // `text MOD.KEY VALUE`; false when there is no such module.
+  bool text(const std::string& path, const std::string& value);
+  // The audio of one module's output (`MOD.OUT`) from the last render, or null.
+  const std::vector<float>* tap(const std::string& path) const;
  private:
   struct Edge { Module* from; int out; Module* to; int in; };
   std::map<std::string, std::unique_ptr<Module>> mods_;

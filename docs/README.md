@@ -37,6 +37,7 @@ what lacks one.
 - `pad_deck.md` - the pad deck (the Tv surface and its pads).
 - `item_room.md` - the item room and item kinds.
 - `sampling_station.md` - sampling from a take or an item.
+- `singer.md` - CHIMERA's voice: the vocal booth's singer, the rack's VOICE, the bestiary.
 - `workshop.md` - the Workshop (Claude building in the room).
 - `mcp_assistant.md` - the control API (an MCP server in the game) and the room's assistant.
 - `discord.md` - the Discord bridge.

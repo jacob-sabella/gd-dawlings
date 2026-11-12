@@ -6,6 +6,7 @@
     "env": {"at": [10, 0], "knobs": {"a": 0.0, "d": 0.5, "r": 0.3, "s": 0.0}, "type": "builtin.env"},
     "hat": {"at": [10, 1], "knobs": {"accent": 0.8, "decay": 0.08, "freq": 0.2727272727272728, "kind": 0.99, "tone": 0.5}, "type": "builtin.drum"},
     "kick": {"at": [10, 2], "knobs": {"accent": 0.8, "decay": 0.4, "freq": 0.2727272727272728, "kind": 0.0, "tone": 0.5}, "type": "builtin.drum"},
+    "lamp": {"at": [32, 0], "knobs": {"flow": 0.75, "hue": 0.1}, "type": "builtin.plasma"},
     "lfo": {"at": [16, 1], "knobs": {"depth": 1.0, "rate": 0.55, "shape": 0.7}, "type": "builtin.lfo"},
     "mix": {"at": [25, 0], "knobs": {"l1": 0.7, "l2": 0.9, "l3": 0.4, "l4": 0.6, "master": 0.6666666666666666}, "type": "builtin.mix"},
     "noise": {"at": [8, 1], "knobs": {}, "type": "builtin.noise"},
@@ -16,7 +17,8 @@
     "sn": {"at": [10, 3], "knobs": {"accent": 0.8, "decay": 0.25, "freq": 0.2727272727272728, "kind": 0.5, "tone": 0.5}, "type": "builtin.drum"},
     "svf": {"at": [18, 0], "knobs": {"cutoff": 0.6, "cv": 0.7, "drive": 0.1, "res": 0.5}, "type": "builtin.svf"},
     "v": {"at": [16, 0], "knobs": {"fine": 0.5, "fm": 0.0, "pw": 0.3, "tune": 0.5, "wave": 0.99}, "type": "builtin.vco"},
-    "vca": {"at": [21, 0], "knobs": {"curve": 0.75, "level": 0.5}, "type": "builtin.vca"}
+    "vca": {"at": [21, 0], "knobs": {"curve": 0.75, "level": 0.5}, "type": "builtin.vca"},
+    "vec": {"at": [36, 0], "knobs": {"gain": 0.7, "turn": 0.75}, "type": "builtin.vector"}
   },
   "cables": [
     ["noise.white", "sh.in"],
@@ -40,6 +42,11 @@
     ["dly.l", "rev.l"],
     ["dly.r", "rev.r"],
     ["rev.l", "out.l"],
-    ["rev.r", "out.r"]
+    ["rev.r", "out.r"],
+    ["kick.out", "lamp.red"],
+    ["sn.out", "lamp.green"],
+    ["hat.out", "lamp.blue"],
+    ["rev.l", "vec.x"],
+    ["rev.r", "vec.y"]
   ]
 }

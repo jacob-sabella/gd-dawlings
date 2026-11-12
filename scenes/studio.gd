@@ -241,6 +241,11 @@ var rack_row := {"patch": RackPatch.preset(&"keys_voice"), "track": 0, "power": 
 ## again with each venue at its `lyrics_spot`; null where there is no booth and in AR. What it shows is
 ## the song's (MixState.lyrics), so nothing of it is the room's.
 var lyric_board: LyricBoard
+## The vocal booth's singer (SingerHost): the room's row `singer` (SingerRow), its station in the booth, and the
+## voice itself (the host's only).
+var singer_row := SingerRow.fresh()
+var singer_booth: SingerBooth
+var singer: Singer
 var modular_keys: KeyCatcher
 ## The DJ platter on the leaf of the tape deck's cart (Platter, docs/spatial_loop.md part two, slice
 ## 27): bare it is the playhead, scrubbed by hand; a cassette in its slot is scratched. Rides the
@@ -763,6 +768,7 @@ func _on_role_changed() -> void:
 
 ## The rack, the modular room and the annex (`RackHost`).
 var rack_host := RackHost.new(self)
+var singer_host := SingerHost.new(self)
 
 
 ## The sampler and what the player made (`SamplerHost`).

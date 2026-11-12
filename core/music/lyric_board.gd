@@ -97,10 +97,18 @@ const PAD_AT := Transform3D(Basis(Vector3.RIGHT, -0.6), Vector3(0.12, EYE - 0.36
 
 const INK := Color(0.95, 0.93, 0.86)
 const DIM := Color(0.62, 0.62, 0.6)
+## The syllable the booth's singer is on: the singer's amber (SingerHead.AMBER).
+const SUNG := Color(1.0, 0.72, 0.25)
 
 ## () -> Dictionary, GuestMidi.heard's shape: the song this player hears. Session.guest_midi's
 ## unless given (the suite, the probe).
 var heard_source: Callable = Callable()
+## The syllable the booth's singer is singing, when it is: `f() -> PackedInt32Array` [line, first character,
+## characters] (VocalPart.sung_span), empty for none. While it sings, the line it is on is the line shown now, and
+## the line is lit up to the end of that syllable (`sung_line`).
+var sung_source: Callable = Callable()
+## The line now up to the end of the syllable sung, laid over its letters in the lit colour.
+var sung_line: Label3D
 ## (text: String) -> String: how the lyrics are written, answering why not or "". DAW.set_lyrics
 ## unless given.
 var write: Callable = Callable()
@@ -227,6 +235,18 @@ func display(h: Dictionary) -> Dictionary:
 	else:
 		# Before the first line: the song's intro.
 		out["now"] = "♪"
+	var span: PackedInt32Array = sung_source.call() if sung_source.is_valid() else PackedInt32Array()
+	if span.size() == 3 and span[0] >= 0 and span[0] < lyr.lines.size() and lyr.place(span[0]) >= 0:
+		# The singer's line is the line now, whatever the clock says (its lines may be untimed).
+		if span[0] != line:
+			line = span[0]
+			k = lyr.place(line)
+			out["line"] = line
+			out["now"] = _words(lyr, line)
+			out["last"] = _words(lyr, order[k - 1]) if k > 0 else ""
+			out["through"] = lyr.through(line, seconds) if lyr.at(seconds) == line else NAN
+		out["mark"] = true
+		out["sung"] = Vector2i(span[1], span[2])
 	var after: int = order[k + 1] if k + 1 < order.size() else -1
 	if after >= 0:
 		out["tap_next"] = after == lyr.next_untimed()
@@ -358,6 +378,7 @@ func _show(d: Dictionary) -> void:
 	_set_line(last_line, str(d["last"]), CAP_SIDE)
 	_set_line(now_line, str(d["now"]), CAP_NOW)
 	_set_line(next_line, str(d["next"]), CAP_SIDE)
+	_show_sung(str(d["now"]), d.get("sung", Vector2i(-1, 0)))
 	scroller.position.y = eye + LINES_UP + _glide
 	# The next line comes in from under the board's edge as the three glide up.
 	next_line.modulate.a = 1.0 - clampf(absf(_glide) / PITCH, 0.0, 1.0)
@@ -377,6 +398,22 @@ func _show(d: Dictionary) -> void:
 	if status.text != said:
 		status.text = said
 		Lettering.fit(status, STATUS_WIDE, roundi(STATUS_CAP / status.pixel_size), 40)
+
+
+## The sung syllable lit on the line now: the same letters in amber, laid where they fall on it.
+func _show_sung(words: String, span: Vector2i) -> void:
+	if sung_line == null:
+		return
+	var ok := span.x >= 0 and span.y > 0 and span.x + span.y <= words.length()
+	sung_line.visible = ok
+	if not ok:
+		return
+	sung_line.font_size = now_line.font_size
+	sung_line.outline_size = now_line.outline_size
+	# karaoke: the words up to the end of the syllable sung, over the line from the same place in the same face,
+	# so they lie on its letters exactly whatever the lettering (a measured syllable drifted on a slanted face)
+	sung_line.text = words.left(span.x + span.y)
+	sung_line.position = now_line.position + Vector3(0.0, 0.0, 0.0008)
 
 
 func _set_line(label: Label3D, words: String, cap: float) -> void:
@@ -440,6 +477,9 @@ func _build_face() -> void:
 	last_line = _line("Last", PITCH, CAP_SIDE, DIM)
 	now_line = _line("Now", 0.0, CAP_NOW, INK)
 	next_line = _line("Next", -PITCH, CAP_SIDE, Color(0.82, 0.82, 0.8))
+	sung_line = _line("Sung", 0.0, CAP_NOW, SUNG)
+	sung_line.visible = false
+	sung_line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 	# The mark before the line sung: a small wedge pointing at it.
 	mark = MeshInstance3D.new()
@@ -623,3 +663,19 @@ class Face extends ControlAffordance:
 		# A desk's click: a poke or pinch in a headset that misses TAP does nothing (LyricBoard.arm).
 		if board != null:
 			board.arm(not board.armed)
+
+
+## The venue's lettering (SingerStyle) on the board's lines: the line now in its ink, the others dimmer, the sung
+## syllable in its accent. The board's own sizes and fitting stay as they are.
+func apply_style(s: Dictionary) -> void:
+	if now_line == null:
+		return
+	SingerStyle.dress(now_line, s, "line")
+	SingerStyle.dress(sung_line, s, "lit")
+	SingerStyle.dress(last_line, s, "dim")
+	SingerStyle.dress(next_line, s, "dim")
+	SingerStyle.dress(status, s, "status")
+	for l: Label3D in [last_line, now_line, next_line]:
+		var was: String = l.text
+		l.text = ""
+		_set_line(l, was, CAP_NOW if l == now_line else CAP_SIDE)

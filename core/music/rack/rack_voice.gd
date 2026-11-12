@@ -37,6 +37,23 @@ var own_run := false:
 var _own_beats := 0.0
 var _bpm := 0.0
 var _since_sync := 0.0
+## The song's place as last heard while playing (beats), to tell a stale one from a moving one.
+var _last_heard := -1.0
+## The voice's own place in the song (beats) since PLAY, run on by itself between the song's.
+var _clock := 0.0
+var _clock_at := 0
+## A place the song says that is not the voice's (beats from its clock), since `_seek_at` (us); NAN for none.
+var _seek_off := NAN
+var _seek_at := 0
+## The song further than SEEK_BEATS from the voice is somewhere else, taken once it has held there SEEK_HOLDS (s).
+const SEEK_BEATS := 0.25
+const SEEK_HOLDS := 0.15
+## The song's reported place unchanged this long while playing (s) is stale (Reaper starting a take); a difference
+## under LEAD_MOST (beats) found after it is kept as `_lead`, the song's place less the voice's.
+const STALE_SECONDS := 0.2
+const LEAD_MOST := 1.0
+var _stale_for := 0.0
+var _lead := 0.0
 var _take_from := -1.0
 var _take_track := 0
 var meters := {}
@@ -53,13 +70,19 @@ var _held := {}
 ## bus, fed from the engine's stream a frame at a time.
 var _player: AudioStreamPlayer
 var _playback: AudioStreamGeneratorPlayback
-## What the reader thread has taken from the engine and the main thread has not yet pushed, and the rule
-## for when it is (RackCushion: nothing plays until 60 ms are in hand).
+## The bus that player is on: the monitor (what the player at the rack hears), or the Mix for a sound the whole room
+## is meant to hear, guests among them (Creature: what a host sends its guests is taken before the monitor).
+var direct_bus: StringName = AudioPorts.MONITOR
+## What the reader thread has taken from the engine and not yet pushed to the generator, and the rule for
+## when it is (RackCushion: nothing plays until 60 ms are in hand).
 var cushion := RackCushion.new()
 var _reader: Thread
 var _reading := false
 ## The generator's room when empty (a little over buffer_length, rounded up by Godot).
 var _capacity := 0
+## Guards `_playback` and `_capacity` between the main thread (which makes and frees the player) and the
+## reader thread (which feeds it).
+var _direct_lock := Mutex.new()
 
 
 func _ready() -> void:
@@ -246,15 +269,19 @@ func _direct() -> bool:
 
 func _stop_direct() -> void:
 	_stop_reader()
+	_direct_lock.lock()
+	_playback = null
+	_direct_lock.unlock()
 	if _player != null and is_instance_valid(_player):
 		_player.queue_free()
 	_player = null
-	_playback = null
 
 
 ## Takes the engine's stream off its pipe every few milliseconds, on a thread of its own. The pipe
 ## holds 4 kB (about 10 ms) and a frame is 16 ms, so reading once a frame got under a third of the
-## sound (15k of 48k frames a second): a stutter that sounded like crushed audio.
+## sound (15k of 48k frames a second): a stutter that sounded like crushed audio. The same thread feeds the
+## direct generator (`_feed_direct`): fed once a frame from the main thread, a frame longer than what the
+## generator held (walking into a room, a panel opening) left it dry, and every one of those was a click.
 func _start_reader() -> void:
 	if _reader != null:
 		return
@@ -266,10 +293,11 @@ func _start_reader() -> void:
 func _read_loop() -> void:
 	while _reading:
 		var got := source.read()
+		if not got.is_empty():
+			cushion.put(got)
+		_feed_direct()
 		if got.is_empty():
-			OS.delay_msec(3)
-			continue
-		cushion.put(got)
+			OS.delay_msec(2)
 
 
 func _stop_reader() -> void:
@@ -298,27 +326,35 @@ func direct_stats() -> Dictionary:
 			"dropped": cushion.dropped, "queued": cushion.queued()}
 
 
-## The engine's sound to the speakers: what the cushion gives the generator, the frames it has room for.
+## The engine's sound to the speakers: on the main thread only the player is made (a node must be); the
+## reader thread feeds it (`_feed_direct`), so the sound does not wait on the frame.
 func _pump_direct() -> void:
-	_start_reader()
 	if _player == null:
 		var stream := AudioStreamGenerator.new()
 		stream.mix_rate = RackEngine.RATE
 		stream.buffer_length = 0.3
 		_player = AudioStreamPlayer.new()
 		_player.name = "RackDirect"
-		_player.bus = AudioPorts.bus(AudioPorts.MONITOR)
+		_player.bus = AudioPorts.bus(direct_bus)
 		_player.stream = stream
 		add_child(_player)
 		_player.play()
+		_direct_lock.lock()
 		_playback = _player.get_stream_playback() as AudioStreamGeneratorPlayback
 		_capacity = _playback.get_frames_available() if _playback != null else 0
-	if _playback == null:
-		return
-	var space := _playback.get_frames_available()
-	var frames := cushion.pull(_capacity - space, space)
-	if not frames.is_empty():
-		_playback.push_buffer(frames)
+		_direct_lock.unlock()
+	_start_reader()
+
+
+## What the cushion gives the generator, the frames it has room for. The reader thread's, every few ms.
+func _feed_direct() -> void:
+	_direct_lock.lock()
+	if _playback != null:
+		var space := _playback.get_frames_available()
+		var frames := cushion.pull(_capacity - space, space)
+		if not frames.is_empty():
+			_playback.push_buffer(frames)
+	_direct_lock.unlock()
 
 
 ## The engine's meters, with a lamp for each composite plate: the meter of the inner module that stands
@@ -366,16 +402,64 @@ func _process(delta: float) -> void:
 		if not is_equal_approx(_bpm, float(tp["bpm"])):
 			_bpm = float(tp["bpm"])
 			engine.say("bpm %f" % _bpm)
+		var heard := float(tp["beats"])
+		var now := Time.get_ticks_usec()
 		if playing and not _was_playing:
-			engine.say("play %f" % float(tp["beats"]))
+			engine.say("play %f" % heard)
 			_since_sync = 0.0
+			_clock = heard
+			_clock_at = now
+			_seek_off = NAN
+			_lead = 0.0
+			_stale_for = 0.0
 		elif not playing and _was_playing:
 			engine.say("stop")
-		elif playing and _since_sync > FOLLOW_SECONDS:
-			# The song's place, often: the engine takes up a small drift smoothly and jumps a seek or a loop.
-			_since_sync = 0.0
-			engine.say("sync %f" % float(tp["beats"]))
+		elif playing:
+			# The voice's own place runs on by the wall clock, not the frame's delta: a stalled frame (Reaper starting
+			# a take holds the main thread) under-counts, and the voice came out two beats behind the song.
+			_clock += (now - _clock_at) / 1000000.0 * float(tp["bpm"]) / 60.0
+			_clock_at = now
+			var off := heard - _lead - _clock
+			if is_equal_approx(heard, _last_heard):
+				# stale, not stopped: Reaper stops reporting for a second or more while it starts a take
+				_stale_for += delta
+			elif absf(off) <= SEEK_BEATS:
+				_seek_off = NAN
+				if _since_sync > FOLLOW_SECONDS:
+					# The song's place, often: the engine takes up a small drift smoothly.
+					_since_sync = 0.0
+					_clock = heard - _lead
+					engine.say("sync %f" % _clock)
+			elif is_nan(_seek_off) or absf(off - _seek_off) > SEEK_BEATS:
+				# Somewhere else: a seek or a loop, or one of the stale places Reaper sends in a burst once it reports
+				# again (a jump back to one re-planned the part and lost or doubled a note). Taken once it holds.
+				_seek_off = off
+				_seek_at = now
+			elif now - _seek_at >= int(SEEK_HOLDS * 1000000.0):
+				_seek_off = NAN
+				if _stale_for >= STALE_SECONDS and absf(off) < LEAD_MOST:
+					# Just after a stale stretch, the song a little way off is where Reaper really was all along (it
+					# rolled from a moment before or after it said): the voice's clock is the one its take is caught
+					# against, so the difference is kept rather than jumped (a jump re-planned and lost a note).
+					_lead += off
+				else:
+					_lead = 0.0
+					_clock = heard
+					_since_sync = 0.0
+					engine.say("sync %f" % _clock)
+				_stale_for = 0.0
+		_last_heard = heard if playing else -1.0
 		_was_playing = playing
+
+
+## Where the song is for the voice (s): its own clock while it follows a playing song, which is what a take of it is
+## caught against (under Reaper the reported place can be stale, or behind by the start's latency), else the song's.
+func song_seconds() -> float:
+	var st: MixState = DAW.state if DAW != null else null
+	var at := st.position_seconds if st != null else 0.0
+	if follow_daw and _was_playing and _bpm > 0.0 and not transport_override.is_valid():
+		return _clock * 60.0 / _bpm
+	return at
 
 
 ## Begin catching what the rack plays, to put on the rack's track at `song_seconds` when it ends.
