@@ -303,6 +303,66 @@ func run() -> void:
 	DirAccess.remove_absolute(args_file)
 
 
+## CANCEL stops a run at once, even one whose CLI ignores the polite signal (it is killed two seconds on), and the
+## next ask can start; NEW CHAT clears the transcript and the conversation.
+func cancel_and_clear() -> void:
+	var host := ControlHost.attach(t, null)
+	await t.get_tree().process_frame
+	var asst := host.assistant
+	OS.set_environment("FAKE_ASSIST_HANG", "1")
+	Assistant.claude_override = ProjectSettings.globalize_path(FAKE)
+	asst.claude = Assistant.claude_override
+	asst.conversation = "older-session"
+	asst.ask("think hard")
+	var waited := 0
+	while waited < 600 and (asst.runs.is_empty() or not asst.runs[0]["events"].any(func(e: Dictionary) -> bool: return str(e["kind"]) == "say")):
+		await t.get_tree().process_frame
+		waited += 1
+		if waited % 30 == 0:
+			await t.get_tree().create_timer(0.05).timeout
+	check("the run is going and has said something", not asst.runs.is_empty() and asst.runs[0]["status"] == Assistant.RUNNING)
+	var pid: int = asst._runner.pid if asst._runner != null else -1
+	asst.cancel(int(asst.runs[0]["id"]))
+	check("CANCEL stops it at once", asst.runs[0]["status"] == Assistant.CANCELLED and asst._current.is_empty() and asst._runner == null)
+	check("the board says it was cancelled", str(asst.runs[0]["events"][-1]["text"]) == "cancelled")
+	check("its token is revoked", host.server != null and host.server.tokens.is_empty())
+	await t.get_tree().create_timer(2.6).timeout
+	check("a CLI deaf to the signal is gone two seconds on", pid > 0 and not OS.is_process_running(pid))
+	check("the conversation is not lost to a cancel", asst.conversation == "older-session")
+	asst.new_conversation()
+	check("NEW CHAT clears the transcript and the conversation", asst.runs.is_empty() and asst.cards.is_empty() and asst.conversation == "")
+	OS.unset_environment("FAKE_ASSIST_HANG")
+	Assistant.claude_override = ""
+	if host.server != null:
+		host.server.stop()
+	host.queue_free()
+
+
+## requests_add writes a request to the host's file, safely, and requests_list reads them back.
+const ToolsRequests := preload("res://core/control/tools_requests.gd")
+
+
+func requests() -> void:
+	var file := "user://requests_test.md"
+	ToolsRequests.path_override = file
+	DirAccess.remove_absolute(file)
+	var api := ControlTools.make_api()
+	check("the requests tools are there, in their domain", api.has("requests_add") and api.has("requests_list") and "requests" in api.domains())
+	check("a request needs details", not api.invoke("requests_add", {"title": "x", "details": " "})["ok"])
+	var r := api.invoke("requests_add", {"title": "Undo for TIDY UP\n## not a heading", "details": "They tidied the rack and wanted it back.\nTwo lines.", "kind": "feature", "asked": "can I undo the tidy?"}, 0)
+	check("a request is noted", r["ok"] and r["data"]["who"] == "host")
+	api.invoke("requests_add", {"title": "Scope freezes", "details": "The scope stops after a minute.", "kind": "bug"})
+	var text := FileAccess.get_file_as_string(file)
+	check("the file has a heading, the entry, the details and their words", text.begins_with("# Feature requests") and text.contains("**Undo for TIDY UP ## not a heading**")
+			and text.contains("Two lines.") and text.contains("> can I undo the tidy?"))
+	check("a title cannot start a heading of its own", text.count("\n## ") == 2)
+	var listed := api.invoke("requests_list", {})
+	check("requests_list gives them newest first", listed["ok"] and listed["data"]["count"] == 2 and listed["data"]["requests"][0]["title"] == "Scope freezes"
+			and listed["data"]["requests"][1]["kind"] == "feature")
+	DirAccess.remove_absolute(file)
+	ToolsRequests.path_override = ""
+
+
 # --- the board ---------------------------------------------------------------------------------------
 
 func panel() -> void:

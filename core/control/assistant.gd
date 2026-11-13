@@ -86,8 +86,21 @@ func answer(card_id: int, yes: bool) -> void:
 	Session.act_assistant("yes" if yes else "no", card_id)
 
 
+## NEW CHAT: the next ask starts a fresh conversation, and the transcript so far is cleared from this machine's
+## view (a run still going stays, with its confirm cards; CANCEL stops it). On a guest only its own view clears:
+## the conversation is the host's.
 func new_conversation() -> void:
-	conversation = ""
+	if Session.is_authority():
+		conversation = ""
+	var kept: Array = []
+	for run: Dictionary in runs:
+		if run["status"] in [QUEUED, RUNNING]:
+			kept.append(run)
+	runs = kept
+	for id in cards.keys():
+		if cards[id]["done"] or _run_of(int(cards[id]["run"])).is_empty():
+			cards.erase(id)
+	changed.emit()
 
 
 func _on_asked(text: String, from: int) -> void:
@@ -240,9 +253,12 @@ func _on_did(kind: String, id: int, from: int) -> void:
 					if run["status"] == QUEUED:
 						run["status"] = CANCELLED
 						_emit(run, {"kind": &"end", "text": "cancelled"})
-					elif run == _current and _runner != null:
+					elif run["status"] == RUNNING and run["id"] == _current.get("id") and _runner != null:
+						# Stopped now, not when the process gets round to exiting: the board says so at once and the
+						# next ask can start.
 						run["status"] = CANCELLED
 						_runner.cancel()
+						_finish(CANCELLED, "")
 		"yes", "no":
 			var c: Dictionary = cards.get(id, {})
 			if not c.is_empty() and not c["done"] and (from == c["who"] or from == Session.local_peer_id):

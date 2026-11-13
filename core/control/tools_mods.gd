@@ -620,6 +620,7 @@ const ABOUT := {
 	"mods": "the mods installed (data only: rack modules, presets, plugin names): list, enable, disable, import, remove",
 	"look": "read-only views: screenshots, meters, scope and spectrum, where the player is",
 	"help": "the game's own docs, module help, stations and key lists",
+	"requests": "writing down a feature request, bug or idea for the developers, and listing those written",
 	"changes": "the change sets made through this API, and undoing the newest",
 	"tools": "finding tools by words",
 	"batch": "many calls in one change set",

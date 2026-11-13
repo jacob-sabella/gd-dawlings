@@ -907,6 +907,8 @@ func _ready() -> void:
 	await _t("_test_rack_preset_popup_finds_loads_saves_and_deletes")
 	await _t("_test_rack_preset_presets_key_asks_for_the_popup")
 	await _t("_test_rack_preset_popups_stay_on_screen")
+	await _t("_test_control_api_cancel_and_clear")
+	await _t("_test_control_api_requests")
 	await _t("_test_milk_file_eel_parses_and_evaluates")
 	await _t("_test_milk_file_per_pixel_compiles_to_a_shader")
 	await _t("_test_milk_file_milk_files_parse")
@@ -1146,6 +1148,14 @@ func _test_control_api_panel() -> void:
 
 func _test_control_api_run() -> void:
 	await ControlApiTests.new(self).run()
+
+
+func _test_control_api_cancel_and_clear() -> void:
+	await ControlApiTests.new(self).cancel_and_clear()
+
+
+func _test_control_api_requests() -> void:
+	ControlApiTests.new(self).requests()
 
 
 # --- the control API (docs/mcp_assistant.md): each domain's checks are in tests/control_<domain>_tests.gd ---

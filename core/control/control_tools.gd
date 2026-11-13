@@ -13,6 +13,7 @@ const DOMAINS := [
 	preload("res://core/control/tools_rack.gd"),
 	preload("res://core/control/tools_room.gd"),
 	preload("res://core/control/tools_mods.gd"),
+	preload("res://core/control/tools_requests.gd"),
 ]
 
 
@@ -34,7 +35,7 @@ static func _meta(api: ControlApi) -> void:
 	api.add(T.make("batch", "Run several tool calls in order as ONE change set (one undo). Use it for anything of more than a few calls: a whole patch, a set of fader moves. Stops at the first failure unless keep_going.",
 			{"calls": T.arr_p("each {tool: string, args: object}", {"type": "object"}), "keep_going": T.bool_p("carry on after a failed call")},
 			["calls"], T.EDIT, func(_a: Dictionary) -> Dictionary: return T.fail("batch is run by the server, not as a plain call")))
-	api.add(T.make("tools_search", "Find tools by words in their name or summary, optionally in one domain. Domains: project, transport, track, mix, fx, item, note, automation, rack, room, mods, look, help, changes.",
+	api.add(T.make("tools_search", "Find tools by words in their name or summary, optionally in one domain. Domains: project, transport, track, mix, fx, item, note, automation, rack, room, mods, look, help, requests, changes.",
 			{"query": T.str_p("words, all of which must match"), "domain": T.str_p("only this domain")}, [], T.READ,
 			func(a: Dictionary) -> Dictionary: return T.ok(api.search(str(a.get("query", "")), str(a.get("domain", ""))))))
 	api.add(T.make("changes_list", "The change sets made so far (each tool call that changes something, or each batch): id, who, calls, whether undone.",
