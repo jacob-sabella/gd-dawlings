@@ -111,12 +111,10 @@ func screen_builds_and_idles_off() -> void:
 	t.add_child(screen)
 	check("HIGH: two buffers", screen.buffers().size() == 2)
 	check("HIGH: 512 wide, the screen's shape", screen.buffers()[0].size == Vector2i(512, roundi(512 * 1.5 / 2.8)))
+	var subs_before := screen.get_children().filter(func(c: Node) -> bool: return c is SubViewport).size()
 	screen.build()
-	var count := 0
-	for c in screen.get_children():
-		if c is SubViewport:
-			count += 1
-	check("building again builds nothing more", count == 2)
+	var count := screen.get_children().filter(func(c: Node) -> bool: return c is SubViewport).size()
+	check("building again builds nothing more", count == subs_before and screen.buffers().size() == 2)
 	await t.get_tree().process_frame
 	await t.get_tree().process_frame
 	check("off screen (no eye here) it is not granted", not screen.is_running())
@@ -152,6 +150,10 @@ func screen_builds_and_idles_off() -> void:
 
 
 func preset_crossfade_and_advance() -> void:
+	# Only the built-ins: not whatever this machine has in user://milk.
+	var root_was := MilkLibrary.root
+	MilkLibrary.root = "user://milk_tests_empty"
+	MilkLibrary.reset()
 	VisualBudget.reset()
 	VisualBudget.set_tier(VisualBudget.Tier.HIGH, false)
 	var screen := MilkScreen.new()
@@ -172,7 +174,7 @@ func preset_crossfade_and_advance() -> void:
 	screen.step_frame(1.1)
 	check("after the fade's two seconds it is done", not screen.fading())
 	screen.use_preset(-1)
-	check("use_preset wraps", screen.preset_index == MilkPresets.count() - 1)
+	check("use_preset wraps", screen.preset_index == MilkLibrary.count() - 1)
 	screen.next_preset()
 	check("next_preset wraps to the first", screen.preset_index == 0)
 	screen.step_frame(2.5)
@@ -214,3 +216,5 @@ func preset_crossfade_and_advance() -> void:
 	a.free()
 	VisualBudget.reset()
 	VisualBudget.set_tier(VisualBudget.Tier.OFF, false)
+	MilkLibrary.root = root_was
+	MilkLibrary.reset()

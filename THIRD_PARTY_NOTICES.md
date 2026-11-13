@@ -50,6 +50,13 @@ its own BSD-style licence, Copyright (C) 1993-2015 Carnegie Mellon University; t
 `serde_derive`, `proc-macro2`, `quote`, `syn` and `unicode-ident` run only at build time (MIT OR Apache-2.0;
 `unicode-ident` also Unicode-3.0) and are not linked.
 
+## Downloaded on request, not shipped
+
+The finder's MORE PICTURES can download projectM's "Cream of the Crop" MilkDrop preset pack
+(https://github.com/projectM-visualizer/presets-cream-of-the-crop) to the player's own computer
+(`user://milk/cream-of-the-crop/`), only when the player asks. The presets are their many authors' work and carry
+no licence. None of them is in this tree, the game or its releases.
+
 ## Ideas re-implemented, no code taken
 
 The audio-reactive visuals (`docs/visuals.md`) were written for this project from the published descriptions of
@@ -64,3 +71,4 @@ as credit.
 | Stable fluids with vorticity confinement driven by splats (`FluidTank`) | PavelDoGreat's WebGL Fluid Simulation, https://github.com/PavelDoGreat/WebGL-Fluid-Simulation | MIT |
 | Species attracting and repelling by a matrix (`ParticleLifePane`) | Particle Life, https://github.com/hunar4321/particle-life | MIT |
 | Slime-mould agents that sense, turn, move and deposit on a decaying trail (`PhysarumSheet`) | Jeff Jones's physarum model; e.g. https://github.com/nicoptere/physarum | Unlicense |
+| Reading MilkDrop's `.milk` preset format, its equation language (EEL) and its warp maths, and MilkDrop 2's shader conventions (`MilkFile`, `MilkEel`, `MilkPlayer`, `MilkHlsl`) | MilkDrop by Ryan Geiss, from its preset authoring guide | BSD-3 |

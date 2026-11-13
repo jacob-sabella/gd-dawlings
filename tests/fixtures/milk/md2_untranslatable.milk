@@ -1,0 +1,16 @@
+[preset00]
+MILKDROP_PRESET_VERSION=201
+PSVERSION=2
+fDecay=1.0
+warp_1=`// written for the tests: a sampler handed to a function, which the translation does not do
+warp_2=`float3 look(sampler s, float2 p) { return tex2D(s, p).xyz; }
+warp_3=`shader_body
+warp_4=`{
+warp_5=`    ret = look(sampler_main, uv) * 0.9;
+warp_6=`}
+comp_1=`shader_body
+comp_2=`{
+comp_3=`#if 1
+comp_4=`    ret = GetPixel(uv);
+comp_5=`#endif
+comp_6=`}

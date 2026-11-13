@@ -899,9 +899,17 @@ func _ready() -> void:
 	await _t("_test_visuals_scope_beam_quads_carry_the_segment")
 	await _t("_test_visuals_budget_grants_the_nearest_on_screen")
 	await _t("_test_visuals_milk_tv_click_and_find")
+	await _t("_test_visuals_milk_name_fades_away")
 	await _t("_test_milk_presets_all_evaluate")
 	await _t("_test_milk_screen_builds_and_idles_off")
 	await _t("_test_milk_preset_crossfade_and_advance")
+	await _t("_test_milk_file_eel_parses_and_evaluates")
+	await _t("_test_milk_file_per_pixel_compiles_to_a_shader")
+	await _t("_test_milk_file_milk_files_parse")
+	await _t("_test_milk_file_md2_shaders_translate")
+	await _t("_test_milk_file_library_indexes_own_folder")
+	await _t("_test_milk_file_pack_unpacks_and_removes")
+	await _t("_test_milk_file_file_preset_plays_on_screen")
 	await _t("_test_sim_sims_build_still_without_compute")
 	await _t("_test_sim_sim_sizes_follow_the_tier")
 	await _t("_test_sim_sims_step_only_when_granted")
@@ -915,6 +923,7 @@ func _ready() -> void:
 
 const VisualsTests := preload("res://tests/visuals_tests.gd")
 const MilkTests := preload("res://tests/milk_tests.gd")
+const MilkFileTests := preload("res://tests/milk_file_tests.gd")
 const SimTests := preload("res://tests/visual_sim_tests.gd")
 
 
@@ -954,6 +963,34 @@ func _test_milk_preset_crossfade_and_advance() -> void:
 	await MilkTests.new(self).preset_crossfade_and_advance()
 
 
+func _test_milk_file_eel_parses_and_evaluates() -> void:
+	await MilkFileTests.new(self).eel_parses_and_evaluates()
+
+
+func _test_milk_file_per_pixel_compiles_to_a_shader() -> void:
+	await MilkFileTests.new(self).per_pixel_compiles_to_a_shader()
+
+
+func _test_milk_file_milk_files_parse() -> void:
+	await MilkFileTests.new(self).milk_files_parse()
+
+
+func _test_milk_file_md2_shaders_translate() -> void:
+	await MilkFileTests.new(self).md2_shaders_translate()
+
+
+func _test_milk_file_library_indexes_own_folder() -> void:
+	await MilkFileTests.new(self).library_indexes_own_folder()
+
+
+func _test_milk_file_pack_unpacks_and_removes() -> void:
+	await MilkFileTests.new(self).pack_unpacks_and_removes()
+
+
+func _test_milk_file_file_preset_plays_on_screen() -> void:
+	await MilkFileTests.new(self).file_preset_plays_on_screen()
+
+
 func _test_visuals_cava_bars_rise_fast_and_fall_under_gravity() -> void:
 	VisualsTests.new(self).cava_bars_rise_fast_and_fall_under_gravity()
 
@@ -972,6 +1009,10 @@ func _test_visuals_budget_grants_the_nearest_on_screen() -> void:
 
 func _test_visuals_milk_tv_click_and_find() -> void:
 	VisualsTests.new(self).milk_tv_click_and_find()
+
+
+func _test_visuals_milk_name_fades_away() -> void:
+	VisualsTests.new(self).milk_name_fades_away()
 
 
 # --- seeing the signal (docs/spatial_loop.md part three): its checks are in tests/signal_tests.gd --

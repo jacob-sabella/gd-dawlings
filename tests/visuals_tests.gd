@@ -195,6 +195,10 @@ func budget_grants_the_nearest_on_screen() -> void:
 ## The visualizer TV: a click on its glass moves on to the next picture, its FIND key asks for the finder, and
 ## the finder finds pictures by name or word, puts the one chosen on the TV and can hold it there.
 func milk_tv_click_and_find() -> void:
+	# Only the built-ins: not whatever this machine has in user://milk.
+	var root_was := MilkLibrary.root
+	MilkLibrary.root = "user://milk_tests_empty"
+	MilkLibrary.reset()
 	var was := VisualBudget.tier()
 	VisualBudget.set_tier(VisualBudget.Tier.HIGH, false)
 	VisualBudget.reset()
@@ -203,14 +207,14 @@ func milk_tv_click_and_find() -> void:
 	check("the TV has a clickable glass and a FIND key", tv.glass_key != null and tv.find_key != null)
 	var before := tv.preset_index
 	tv.glass_key._on_grab_begin(Vector3.ZERO)
-	check("a click on the glass moves on to the next picture", tv.preset_index == posmod(before + 1, MilkPresets.count()))
+	check("a click on the glass moves on to the next picture", tv.preset_index == posmod(before + 1, MilkLibrary.count()))
 	var asked := [false]
 	tv.find_asked.connect(func() -> void: asked[0] = true)
 	tv.find_key._on_grab_begin(Vector3.ZERO)
 	check("FIND asks for the finder", asked[0])
 	check("the finder finds by name", MilkFinderScreen.search("vortex").size() == 1)
 	check("and by a word of what it does", MilkFinderScreen.search("calm").size() >= 1)
-	check("and everything for nothing typed", MilkFinderScreen.search("").size() == MilkPresets.count())
+	check("and everything for nothing typed", MilkFinderScreen.search("").size() == MilkLibrary.count())
 	check("every picture says what it does", range(MilkPresets.count()).all(
 			func(i: int) -> bool: return MilkFinderScreen.ABOUT.has(MilkPresets.preset_name(i))))
 	var finder := MilkFinderScreen.new()
@@ -226,6 +230,28 @@ func milk_tv_click_and_find() -> void:
 	finder.close_finder()
 	check("and it closes", not finder.is_open())
 	finder.queue_free()
+	tv.queue_free()
+	VisualBudget.set_tier(was, false)
+	VisualBudget.reset()
+	MilkLibrary.root = root_was
+	MilkLibrary.reset()
+
+
+## The picture's name is lettered on a change and then fades away whole: its letters and its outline both.
+func milk_name_fades_away() -> void:
+	var was := VisualBudget.tier()
+	VisualBudget.set_tier(VisualBudget.Tier.HIGH, false)
+	VisualBudget.reset()
+	var tv := MilkScreen.new()
+	t.add_child(tv)
+	var name := tv.get_node("PictureName") as Label3D
+	check("the name is hidden before any change", name.modulate.a == 0.0 and name.outline_modulate.a == 0.0)
+	tv.next_preset()
+	tv._process(0.1)
+	check("a change letters it, outline and all", name.modulate.a > 0.9 and name.outline_modulate.a > 0.9)
+	for i in 60:
+		tv._process(0.1)
+	check("and in a few seconds it has faded away whole", name.modulate.a == 0.0 and name.outline_modulate.a == 0.0)
 	tv.queue_free()
 	VisualBudget.set_tier(was, false)
 	VisualBudget.reset()

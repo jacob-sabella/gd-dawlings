@@ -65,6 +65,20 @@ var _notifier := VisibleOnScreenNotifier3D.new()
 var _vp: Array[SubViewport] = []
 var _warp: Array[ShaderMaterial] = []
 var _ink: Array[Ink] = []
+var _glow_ink: Array[Ink] = []
+var _rect: Array[ColorRect] = []
+## A file preset's warp materials, one per buffer, made for its shader.
+var _file_mat: Array[ShaderMaterial] = []
+var _file_shader: Shader = null
+## A tiny buffer a newly chosen preset's warp shader is drawn into once, so it is compiled during the
+## crossfade and not when it takes over.
+var _warm: SubViewport = null
+var _warm_rect: ColorRect = null
+## The players of the preset showing and the one faded from (null for a built-in look).
+var _player: MilkPlayer = null
+## A file preset's own (MilkDrop 2) composite, on the glass instead of `_comp` while it plays.
+var _md2_comp: ShaderMaterial = null
+var _from_player: MilkPlayer = null
 ## Which buffer the next step draws into.
 var _write := 0
 var _buffer := Vector2i.ZERO
@@ -87,15 +101,48 @@ var glass_key: MilkKey
 var find_key: MilkKey
 
 
-## The 2D ink of one buffer: the wave and a shape, drawn after the warp each step.
+## The 2D ink of one buffer: the waves, shapes and borders, drawn after the warp each step. Each buffer has
+## two, one blended and one adding light (a MilkDrop preset's additive waves and shapes).
 class Ink extends Node2D:
-	## Each [points, colour, width, kind]: kind 0 a polyline, 1 dots, 2 separate segments.
+	## Each [points, colour, width, kind]: kind 0 a polyline, 1 dots, 2 separate segments, 3 a polyline and
+	## 4 dots with a colour per point (colour is then a PackedColorArray).
 	var strokes: Array = []
+	## Filled triangles, three points (and colours) each: shapes and borders, one draw for all.
+	var tri_points := PackedVector2Array()
+	var tri_colors := PackedColorArray()
+	## Triangles showing a texture (a textured shape: the last frame), each [texture, points, colours, uvs].
+	var tex_tris: Array = []
+
+	func clear() -> void:
+		strokes.clear()
+		tri_points.clear()
+		tri_colors.clear()
+		tex_tris.clear()
+
+	func add_tri(a: Vector2, b: Vector2, c: Vector2, ca: Color, cb: Color, cc: Color) -> void:
+		tri_points.append_array([a, b, c])
+		tri_colors.append_array([ca, cb, cc])
+
+	func add_tex_tri(a: Vector2, b: Vector2, c: Vector2, ca: Color, cb: Color, cc: Color,
+			ua: Vector2, ub: Vector2, uc: Vector2, tex: Texture2D) -> void:
+		if tex_tris.is_empty() or tex_tris[-1][0] != tex:
+			tex_tris.append([tex, PackedVector2Array(), PackedColorArray(), PackedVector2Array()])
+		var t: Array = tex_tris[-1]
+		t[1].append_array([a, b, c])
+		t[2].append_array([ca, cb, cc])
+		t[3].append_array([ua, ub, uc])
 
 	func _draw() -> void:
+		var ci := get_canvas_item()
+		if not tri_points.is_empty():
+			RenderingServer.canvas_item_add_triangle_array(ci, _seq(tri_points.size()), tri_points, tri_colors)
+		for t in tex_tris:
+			var pts: PackedVector2Array = t[1]
+			RenderingServer.canvas_item_add_triangle_array(ci, _seq(pts.size()), pts, t[2], t[3], [], [],
+					(t[0] as Texture2D).get_rid())
 		for s in strokes:
 			var pts: PackedVector2Array = s[0]
-			var c: Color = s[1]
+			var c: Variant = s[1]
 			var w: float = s[2]
 			match int(s[3]):
 				0:
@@ -106,7 +153,22 @@ class Ink extends Node2D:
 						draw_rect(Rect2(v - Vector2(w, w) * 0.5, Vector2(w, w)), c)
 				2:
 					if pts.size() > 1:
-						draw_multiline(pts, c, w)
+						draw_multiline(pts, s[1], w)
+				3:
+					if pts.size() > 1:
+						draw_polyline_colors(pts, s[1], w, true)
+				4:
+					var cols: PackedColorArray = s[1]
+					for k in pts.size():
+						if cols[k].a > 0.004:
+							draw_rect(Rect2(pts[k] - Vector2(w, w) * 0.5, Vector2(w, w)), cols[k])
+
+	static func _seq(n: int) -> PackedInt32Array:
+		var out := PackedInt32Array()
+		out.resize(n)
+		for i in n:
+			out[i] = i
+		return out
 
 
 func _ready() -> void:
@@ -167,7 +229,7 @@ func _build_keys() -> void:
 	glass_key.depth = 0.02
 	glass_key.title_text = "VISUALIZER"
 	glass_key.tip = "Click for the next picture. FIND, under the corner, chooses one by name."
-	glass_key.says = func() -> String: return MilkPresets.preset_name(preset_index)
+	glass_key.says = func() -> String: return MilkLibrary.preset_name(preset_index)
 	glass_key.position = Vector3(0, 0, 0.012)
 	glass_key.pressed.connect(next_preset)
 	add_child(glass_key)
@@ -188,7 +250,9 @@ func _build_keys() -> void:
 	_name.position = Vector3(0, -size.y * 0.5 + size.y * 0.07, 0.004)
 	_name.shaded = false
 	_name.outline_size = 10
+	# The outline has a colour of its own, which `modulate` does not fade: both go together (`_show_name`).
 	_name.modulate = Color(1, 1, 1, 0)
+	_name.outline_modulate = Color(0, 0, 0, 0)
 	add_child(_name)
 
 
@@ -206,7 +270,14 @@ func _teardown() -> void:
 	_vp.clear()
 	_warp.clear()
 	_ink.clear()
+	_glow_ink.clear()
+	_rect.clear()
+	_file_mat.clear()
+	_file_shader = null
+	_warm = null
+	_warm_rect = null
 	_comp = null
+	_md2_comp = null
 	_running = false
 
 
@@ -234,9 +305,25 @@ func _build_buffers() -> void:
 		vp.add_child(rect)
 		var ink := Ink.new()
 		vp.add_child(ink)
+		var glow := Ink.new()
+		var add := CanvasItemMaterial.new()
+		add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		glow.material = add
+		vp.add_child(glow)
 		_vp.append(vp)
 		_warp.append(m)
 		_ink.append(ink)
+		_glow_ink.append(glow)
+		_rect.append(rect)
+	_warm = SubViewport.new()
+	_warm.size = Vector2i(8, 8)
+	_warm.disable_3d = true
+	_warm.use_hdr_2d = true
+	_warm.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	add_child(_warm)
+	_warm_rect = ColorRect.new()
+	_warm_rect.size = Vector2(8, 8)
+	_warm.add_child(_warm_rect)
 	# Each buffer warps the other's last picture.
 	_warp[0].set_shader_parameter(&"prev", _vp[1].get_texture())
 	_warp[1].set_shader_parameter(&"prev", _vp[0].get_texture())
@@ -289,23 +376,29 @@ func next_preset() -> void:
 
 ## Fades to preset `i` (wrapped into range) over FADE_SECONDS.
 func use_preset(i: int) -> void:
-	var n := MilkPresets.count()
+	var n := MilkLibrary.count()
 	i = posmod(i, n)
 	_from = preset_index
 	_from_mem = _mem
+	_from_player = _player
 	_mem = {}
 	preset_index = i
+	_player = MilkLibrary.player(i)
 	_fade = 0.0 if _from != i else 1.0
 	_since_switch = 0.0
+	if _player != null:
+		_warm_up(_player.shader)
 	if _name != null:
-		_name.text = MilkPresets.preset_name(i).to_upper()
+		_name.text = MilkLibrary.preset_name(i).to_upper()
 		_name_left = NAME_SECONDS
 
 
 func _process(delta: float) -> void:
 	if _name != null and _name_left > 0.0:
 		_name_left = maxf(_name_left - delta, 0.0)
-		_name.modulate.a = clampf(_name_left / 0.6, 0.0, 1.0)
+		var a := clampf(_name_left / 0.6, 0.0, 1.0)
+		_name.modulate.a = a
+		_name.outline_modulate.a = a
 	if VisualBudget.tier() != _built_tier:
 		build()
 	if _vp.is_empty():
@@ -354,13 +447,33 @@ func step_frame(delta: float) -> void:
 	}
 	if auto_advance and (_since_switch >= HOLD_SECONDS or (_since_switch >= HIT_SECONDS and a.hit >= BIG_HIT)):
 		_advance_random()
-	var p := MilkPresets.evaluate(preset_index, f, _mem)
+	f["progress"] = clampf(_since_switch / HOLD_SECONDS, 0.0, 1.0)
 	var old_mode := -1
 	var k := 1.0
 	if _fade < 1.0:
 		_fade = minf(_fade + delta / FADE_SECONDS, 1.0)
 		k = smoothstep(0.0, 1.0, _fade)
-		var q := MilkPresets.evaluate(_from, f, _from_mem)
+	# A file preset's warp is a shader of its own, so between it and anything else there is nothing to mix:
+	# the old one plays the first half of the fade (while the new one's shader compiles), the new one the
+	# second, taking over the old one's picture as it stands.
+	if _player != null or (_fade < 1.0 and _from_player != null):
+		var use_new := _fade >= 0.5 or _from < 0
+		var pl := _player if use_new else _from_player
+		if pl == null:
+			var p0 := MilkPresets.evaluate(_builtin_of(preset_index if use_new else _from), f, _mem if use_new else _from_mem)
+			_params = p0
+			if not _vp.is_empty():
+				_power = minf(_power + delta * 1.5, 1.0)
+				_draw_step(p0, delta, a, -1, 1.0)
+			return
+		_params = pl.step(f, delta, float(maxi(_buffer.x, 1)) / maxi(_buffer.y, 1), _buffer)
+		if not _vp.is_empty():
+			_power = minf(_power + delta * 1.5, 1.0)
+			_draw_file_step(pl, a)
+		return
+	var p := MilkPresets.evaluate(_builtin_of(preset_index), f, _mem)
+	if _fade < 1.0:
+		var q := MilkPresets.evaluate(_builtin_of(_from), f, _from_mem)
 		if int(q["wave_mode"]) != int(p["wave_mode"]):
 			old_mode = int(q["wave_mode"])
 		p = MilkPresets.blend(q, p, k)
@@ -371,15 +484,94 @@ func step_frame(delta: float) -> void:
 	_draw_step(p, delta, a, old_mode, k)
 
 
+## The built-in look to play for picture `i`: its own, or the first for a file that could not be read.
+func _builtin_of(i: int) -> int:
+	if i < 0:
+		return 0
+	return maxi(int(MilkLibrary.entry(i).builtin), 0)
+
+
 func _advance_random() -> void:
-	var n := MilkPresets.count()
-	use_preset((preset_index + 1 + randi() % maxi(n - 1, 1)) % n)
+	use_preset(MilkLibrary.pick_random(preset_index))
+
+
+## Draws `shader` once into the tiny buffer, so its pipeline is compiled now rather than on the frame it
+## takes over.
+func _warm_up(shader: Shader) -> void:
+	if _warm == null or shader == null or shader == _file_shader:
+		return
+	var m := ShaderMaterial.new()
+	m.shader = shader
+	m.set_shader_parameter(&"prev", _vp[0].get_texture())
+	_warm_rect.material = m
+	_warm.render_target_update_mode = SubViewport.UPDATE_ONCE
+
+
+## One step of a file preset: its warp shader, its ink, MilkDrop's composite.
+func _draw_file_step(pl: MilkPlayer, a: AudioFeatures) -> void:
+	if _file_shader != pl.shader or _file_mat.size() != 2:
+		_file_shader = pl.shader
+		_file_mat.clear()
+		for i in 2:
+			var fm := ShaderMaterial.new()
+			fm.shader = pl.shader
+			fm.set_shader_parameter(&"prev", _vp[1 - i].get_texture())
+			fm.set_shader_parameter(&"main_w", _vp[1 - i].get_texture())
+			fm.set_shader_parameter(&"main_c", _vp[1 - i].get_texture())
+			_file_mat.append(fm)
+	var m := _file_mat[_write]
+	_rect[_write].material = m
+	pl.apply_warp(m, _buffer)
+	var ink := _ink[_write]
+	var glow := _glow_ink[_write]
+	ink.clear()
+	glow.clear()
+	pl.draw(ink, glow, _buffer, _wave(a), a.bars, _vp[1 - _write].get_texture())
+	ink.queue_redraw()
+	glow.queue_redraw()
+	_vp[_write].render_target_update_mode = SubViewport.UPDATE_ONCE
+	var c := pl.comp()
+	_comp.set_shader_parameter(&"buf", _vp[_write].get_texture())
+	_comp.set_shader_parameter(&"md", 1.0)
+	_comp.set_shader_parameter(&"bright", float(c.gamma))
+	_comp.set_shader_parameter(&"gamma", 1.0)
+	_comp.set_shader_parameter(&"hue", 0.0)
+	_comp.set_shader_parameter(&"saturate", 1.0)
+	_comp.set_shader_parameter(&"echo", float(c.echo))
+	_comp.set_shader_parameter(&"echo_zoom", float(c.echo_zoom))
+	_comp.set_shader_parameter(&"echo_orient", int(c.echo_orient))
+	_comp.set_shader_parameter(&"invert", float(c.invert))
+	_comp.set_shader_parameter(&"solar", float(c.solar))
+	_comp.set_shader_parameter(&"brighten", float(c.brighten))
+	_comp.set_shader_parameter(&"darken", float(c.darken))
+	_comp.set_shader_parameter(&"vignette", 0.0)
+	_comp.set_shader_parameter(&"power", _power)
+	if pl.comp_shader != null:
+		if _md2_comp == null or _md2_comp.shader != pl.comp_shader:
+			_md2_comp = ShaderMaterial.new()
+			_md2_comp.shader = pl.comp_shader
+		var t := _vp[_write].get_texture()
+		_md2_comp.set_shader_parameter(&"main_w", t)
+		_md2_comp.set_shader_parameter(&"main_c", t)
+		_md2_comp.set_shader_parameter(&"power", _power)
+		_md2_comp.set_shader_parameter(&"wash", _comp.get_shader_parameter(&"wash"))
+		pl.apply_shared(_md2_comp, _buffer)
+		_glass.material_override = _md2_comp
+	elif _glass.material_override != _comp:
+		_glass.material_override = _comp
+	var wc := Color(float(pl.vars.get("wave_r", 1.0)), float(pl.vars.get("wave_g", 1.0)), float(pl.vars.get("wave_b", 1.0)))
+	_glow.light_color = tint.lerp(wc, 0.6)
+	_glow.light_energy = (0.25 + 0.6 * a.level + 0.4 * a.hit) * _power
+	_write = 1 - _write
 
 
 func _draw_step(p: Dictionary, delta: float, a: AudioFeatures, old_mode: int, k: float) -> void:
 	# The parameters are for a 60 Hz step; a slower one takes the same motion in fewer, bigger steps.
 	var s := clampf(delta * 60.0, 0.25, 4.0)
 	var m := _warp[_write]
+	_rect[_write].material = m
+	_glow_ink[_write].clear()
+	_glow_ink[_write].queue_redraw()
 	m.set_shader_parameter(&"time", _clock)
 	m.set_shader_parameter(&"zoom", pow(maxf(float(p["zoom"]), 0.01), s))
 	m.set_shader_parameter(&"zoom_curve", float(p["zoom_curve"]))
@@ -400,7 +592,7 @@ func _draw_step(p: Dictionary, delta: float, a: AudioFeatures, old_mode: int, k:
 	m.set_shader_parameter(&"decay", pow(clampf(float(p["decay"]), 0.0, 1.0), s))
 
 	var ink := _ink[_write]
-	ink.strokes.clear()
+	ink.clear()
 	var wave := _wave(a)
 	if old_mode >= 0:
 		_ink_wave(ink, p, wave, a, old_mode, 1.0 - k)
@@ -412,6 +604,11 @@ func _draw_step(p: Dictionary, delta: float, a: AudioFeatures, old_mode: int, k:
 
 	_vp[_write].render_target_update_mode = SubViewport.UPDATE_ONCE
 	_comp.set_shader_parameter(&"buf", _vp[_write].get_texture())
+	if _glass.material_override != _comp:
+		_glass.material_override = _comp
+	_comp.set_shader_parameter(&"md", 0.0)
+	_comp.set_shader_parameter(&"brighten", 0.0)
+	_comp.set_shader_parameter(&"darken", 0.0)
 	_comp.set_shader_parameter(&"gamma", float(p["gamma"]))
 	_comp.set_shader_parameter(&"bright", float(p["bright"]))
 	_comp.set_shader_parameter(&"hue", float(p["hue"]))
