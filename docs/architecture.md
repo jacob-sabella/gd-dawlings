@@ -2225,8 +2225,12 @@ The modular room (replaces the slice 51-53 wall). `RackWall` (`hardware/rack/rac
 Surface, station `modular` (LIVE, mounted in the `synth` zone), hung at `Venue.modular_spot` over
 the keyboard stand as before, but now a case of `RackLayout.ROWS` (2) rows by `COLS` (16) columns that
 holds any of the engine's 25 modules, with a palette under it: a key for each group (Source, Voice,
-Shape, Mod, Time, Utility, Mix and PRESETS) and a key for each module of the group or each preset, PLAY
-(the computer keys), TRK (the track it sounds through) and REC. Third-party DSP is pinned, never copied
+Shape, Mod, Time, Utility, Mix and PRESETS) and a key for each module of the group, PLAY
+(the computer keys), TRK (the track it sounds through) and REC. PRESETS opens a pop-up instead
+(`RackPresetScreen`): the mods' ready-made patches and the player's own, searched by name or by a module
+they hold, LOAD to replace the rack, and SAVE to keep the rack as it is now under a name
+(`RackUserPresets`, `user://patches/presets/`). A preset of the player's own is loaded by the `load` ask,
+which carries the patch itself, so a guest can load one the host has never seen. Third-party DSP is pinned, never copied
 (`THIRD_PARTY_NOTICES.md`): Mutable Instruments' STM32 projects (Plaits, Rings, the Clouds reverb, MIT)
 and DaisySP (MIT) are submodules under `vendor/`, compiled into the helper.
 

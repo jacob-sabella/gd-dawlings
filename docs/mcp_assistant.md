@@ -35,11 +35,22 @@ tokens, so a first question costs about $0.20 and the next ones in the same conv
 | | |
 |---|---|
 | `core/control/control_tool.gd`, `control_api.gd`, `control_refs.gd`, `control_tools.gd` | a tool (name, summary, JSON-schema arguments, tier, handler) and its checks; the registry with `invoke`, `batch`, change sets and snapshotters (the rack registers one); addressing tracks by name, `#n` or number; the list of domains |
-| `core/control/tools_{project,track,fx,item,rack,room,mods}.gd` | the 223 tools: project and transport, tracks and mix, FX and automation and looking, items and notes, rack and module help, room (every `ROOM_VERBS` entry exposed or listed in the test as not), mods and help |
+| `core/control/tools_{project,track,fx,item,rack,room,mods,requests}.gd` | the 223 tools: project and transport, tracks and mix, FX and automation and looking, items and notes, rack and module help, room (every `ROOM_VERBS` entry exposed or listed in the test as not), mods and help |
 | `core/control/control_server.gd` | the HTTP/JSON-RPC server: bearer token or a per-run token, local `Host` and `Origin` only |
 | `core/control/assistant_runner.gd`, `assistant_stream.gd`, `assistant.gd`, `control_host.gd` | the locked-down `claude` command and its stream; the coordinator (queue, runs, confirm cards, relay to guests); what the bootstrap attaches |
 | `hardware/assistant/assistant_panel.gd`, `assistant_screen.gd` | the wall board and the F10 overlay |
 | `tools/probe/assistant_live.tscn` | the assistant for real: the game headless, a question asked, the real `claude` working the game over the server |
+
+**Feature requests.** When a player asks for something the game cannot do, reports something broken, or asks it to note
+a request, the assistant writes it down with `requests_add` (`core/control/tools_requests.gd`): an entry appended to
+`user://feature_requests.md` on the host's machine (on Linux `~/.local/share/godot/app_userdata/dawlings/feature_requests.md`)
+with the time, who asked, the kind (feature, bug, idea), a title, what they want and why, and their own words.
+`requests_list` reads the titles back so one is not written twice. It is the only file a tool writes, and only there.
+
+**CANCEL and NEW CHAT.** CANCEL ends the run at once: the board says cancelled, the run's token is revoked, the next ask
+can start, and the CLI's process group is sent SIGTERM and, two seconds on, SIGKILL. NEW CHAT clears the transcript and
+the confirm cards from this machine's view and forgets the conversation (on the host), so the next ask starts fresh; a run
+still going stays.
 
 **What the assistant's `claude` may do.** `--restricted --strict-mcp-config --mcp-config <its own file> --tools ""
 --allowedTools mcp__dawlings --permission-mode dontAsk`, in a scratch folder, its token revoked when it ends: it has the

@@ -6,6 +6,7 @@
 #   FAKE_ASSIST_TOOL   the tool to call (default changes_list)
 #   FAKE_ASSIST_ARGS   its arguments as JSON (default {})
 #   FAKE_CLAUDE_ARGS   where to write its own arguments, one a line, then the prompt on stdin
+#   FAKE_ASSIST_HANG   set: say one line, then hang, ignoring SIGTERM (the CANCEL test)
 cfg=""
 prev=""
 for a in "$@"; do
@@ -19,6 +20,14 @@ if [ -n "${FAKE_CLAUDE_ARGS:-}" ]; then
   cat >> "$FAKE_CLAUDE_ARGS"
 else
   cat > /dev/null
+fi
+# FAKE_ASSIST_HANG: says a line and then works forever, deaf to a polite stop (as a CLI tidying up might be).
+if [ -n "${FAKE_ASSIST_HANG:-}" ]; then
+  trap '' TERM
+  printf '%s\n' '{"type":"system","subtype":"init","session_id":"fake-hang","model":"fake"}'
+  printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"Thinking for a long time."}]}}'
+  sleep 30
+  exit 0
 fi
 url=$(python3 -I -c 'import json,sys;print(json.load(open(sys.argv[1]))["mcpServers"]["dawlings"]["url"])' "$cfg")
 token=$(python3 -I -c 'import json,sys;print(json.load(open(sys.argv[1]))["mcpServers"]["dawlings"]["headers"]["Authorization"])' "$cfg")

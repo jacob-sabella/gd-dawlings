@@ -23,6 +23,8 @@ signal edit_asked(op: String, args: Array)
 signal help_asked(id: String)
 ## The module finder is asked for, with this palette group chosen ("" for all).
 signal find_asked(group: String)
+## The PRESETS key: the presets pop-up is asked for (RackPresetScreen).
+signal presets_asked()
 ## A knob is being turned: module id, knob and value 0..1, on every change.
 signal knob_turning(id: String, knob: String, v: float)
 ## A knob being turned, at a limited rate, to be sent on as a live ask.

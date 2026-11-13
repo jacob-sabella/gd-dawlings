@@ -258,7 +258,7 @@ class PanelKey extends ControlAffordance:
 			"CANCEL":
 				return "stop the assistant's run (yours, or any if you are the host)"
 			"NEW CHAT":
-				return "forget the conversation so far: the next question starts fresh"
+				return "clear the board and forget the conversation so far: the next question starts fresh (a run still going stays; CANCEL stops it)"
 			"OPEN":
 				return "the full panel: the whole conversation, with ALLOW and DENY for anything it asks first"
 		return ""

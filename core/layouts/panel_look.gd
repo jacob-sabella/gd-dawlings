@@ -30,6 +30,18 @@ static func button(b: Button) -> void:
 	b.add_theme_color_override("font_hover_pressed_color", Color.WHITE)
 
 
+## Sizes a pop-up `panel` to at most `most`, never more than the screen less `edge` all round, and centres it.
+## A panel whose content still asks for more than that grows past it; it is then kept on screen from the top
+## left, so its title and CLOSE can always be reached. Call again when the screen or the content changes.
+static func fit_modal(panel: Control, most: Vector2, edge := 20.0) -> void:
+	var vp := panel.get_viewport_rect().size
+	var want := Vector2(minf(most.x, vp.x - edge * 2.0), minf(most.y, vp.y - edge * 2.0))
+	panel.custom_minimum_size = want
+	panel.size = want
+	var got := panel.size
+	panel.position = Vector2(maxf(edge * 0.5, (vp.x - got.x) * 0.5), maxf(edge * 0.5, (vp.y - got.y) * 0.5))
+
+
 static func _box(fill: Color, edge: Color, width: int, radius: int) -> StyleBoxFlat:
 	var box := StyleBoxFlat.new()
 	box.bg_color = fill

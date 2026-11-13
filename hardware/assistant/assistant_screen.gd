@@ -55,6 +55,7 @@ func _ready() -> void:
 	var fresh := Button.new()
 	fresh.text = "NEW CHAT"
 	PanelLook.button(fresh)
+	fresh.tooltip_text = "Clear the conversation and start a fresh one (a run still going stays: CANCEL stops it)."
 	fresh.pressed.connect(func() -> void: assistant.new_conversation(); _redraw())
 	head.add_child(fresh)
 	var close := Button.new()

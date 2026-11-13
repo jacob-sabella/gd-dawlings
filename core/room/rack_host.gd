@@ -122,6 +122,12 @@ func _build_rack() -> void:
 	studio.rack_wall.find_asked.connect(func(g: String) -> void: studio.rack_finder.open_finder(g))
 	studio.rack_finder.add_asked.connect(_finder_add)
 	studio.rack_finder.on_rack = func() -> Dictionary: return studio.rack_row.get("patch", {})
+	studio.rack_presets = RackPresetScreen.new()
+	studio.rack_presets.name = "RackPresets"
+	studio.add_child(studio.rack_presets)
+	studio.rack_wall.presets_asked.connect(func() -> void: studio.rack_presets.open_presets())
+	studio.rack_presets.load_asked.connect(_preset_load)
+	studio.rack_presets.on_rack = func() -> Dictionary: return studio.rack_row.get("patch", {})
 	studio.rack_wall.help_asked.connect(func(id: String) -> void: studio.rack_help.open_for(studio.rack_wall.patch, id))
 	studio.rack_help.knob_asked.connect(func(id: String, k: String, pos: float) -> void: ask_rack("knob", [id, k, pos]))
 	studio.rack_wall.knob_streamed.connect(func(id: String, k: String, v: float) -> void: ask_rack("knob", [id, k, v]))
@@ -284,6 +290,15 @@ func _finder_add(type: String) -> void:
 	var refusal := _rack_apply(studio.rack_row.duplicate(true), "add", [type, -1, 0])
 	ask_rack("add", [type, -1, 0])
 	studio.rack_finder.tell_added(type, refusal)
+
+
+## A preset asked for in the presets pop-up: asked like any edit, and the pop-up told if it was refused (tried
+## on a copy first, as the host will).
+func _preset_load(op: String, args: Array) -> void:
+	var refusal := _rack_apply(studio.rack_row.duplicate(true), op, args)
+	ask_rack(op, args)
+	if refusal != "":
+		studio.rack_presets.tell_refused(refusal)
 
 
 ## An edit of the room's layout, `op` and `args` as `LayoutEdit` takes them: done on the host, refused in

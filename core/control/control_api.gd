@@ -18,6 +18,9 @@ const HISTORY_MAX := 60
 const BATCH_MAX := 400
 
 var tools: Dictionary = {}
+## Who the tool running now runs for (a peer id, 0 for this machine): for a handler that records who asked
+## (requests_add). Set around each call by `invoke`.
+static var caller := 0
 ## The studio the tools reach the room and the rack through; null in a suite that needs none.
 var studio: Node
 ## (tool_name, args, who) -> bool or a coroutine giving one: whether the person agrees to a tier 2 call. Unset
@@ -112,11 +115,14 @@ func invoke(tool_name: String, args: Dictionary = {}, who := 0, confirmed := fal
 	if own:
 		_begin(who)
 	var box: Array = [{}]
+	var was := caller
+	caller = who
 	var run := func() -> void: box[0] = t.handler.call(args)
 	if Engine.get_main_loop() != null and who != 0 and t.tier != ControlTool.READ:
 		DAW.on_behalf_of(who, run)
 	else:
 		run.call()
+	caller = was
 	var result: Variant = box[0]
 	if typeof(result) != TYPE_DICTIONARY or not result.has("ok"):
 		result = ControlTool.fail("%s returned no result" % tool_name)

@@ -259,9 +259,4 @@ func _unhandled_input(event: InputEvent) -> void:
 func _fit() -> void:
 	if _panel == null:
 		return
-	var vp := get_viewport().get_visible_rect().size
-	var w := minf(1000.0, vp.x - 40.0)
-	var h := minf(vp.y - 80.0, 760.0)
-	_panel.custom_minimum_size = Vector2(w, h)
-	_panel.size = Vector2(w, h)
-	_panel.position = Vector2((vp.x - w) * 0.5, (vp.y - h) * 0.5)
+	PanelLook.fit_modal(_panel, Vector2(1000.0, 760.0))
