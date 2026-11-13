@@ -903,6 +903,10 @@ func _ready() -> void:
 	await _t("_test_milk_presets_all_evaluate")
 	await _t("_test_milk_screen_builds_and_idles_off")
 	await _t("_test_milk_preset_crossfade_and_advance")
+	await _t("_test_rack_preset_own_presets_save_and_load")
+	await _t("_test_rack_preset_popup_finds_loads_saves_and_deletes")
+	await _t("_test_rack_preset_presets_key_asks_for_the_popup")
+	await _t("_test_rack_preset_popups_stay_on_screen")
 	await _t("_test_milk_file_eel_parses_and_evaluates")
 	await _t("_test_milk_file_per_pixel_compiles_to_a_shader")
 	await _t("_test_milk_file_milk_files_parse")
@@ -923,6 +927,7 @@ func _ready() -> void:
 
 const VisualsTests := preload("res://tests/visuals_tests.gd")
 const MilkTests := preload("res://tests/milk_tests.gd")
+const RackPresetTests := preload("res://tests/rack_preset_tests.gd")
 const MilkFileTests := preload("res://tests/milk_file_tests.gd")
 const SimTests := preload("res://tests/visual_sim_tests.gd")
 
@@ -961,6 +966,22 @@ func _test_milk_screen_builds_and_idles_off() -> void:
 
 func _test_milk_preset_crossfade_and_advance() -> void:
 	await MilkTests.new(self).preset_crossfade_and_advance()
+
+
+func _test_rack_preset_own_presets_save_and_load() -> void:
+	RackPresetTests.new(self).own_presets_save_and_load()
+
+
+func _test_rack_preset_popup_finds_loads_saves_and_deletes() -> void:
+	RackPresetTests.new(self).popup_finds_loads_saves_and_deletes()
+
+
+func _test_rack_preset_presets_key_asks_for_the_popup() -> void:
+	RackPresetTests.new(self).presets_key_asks_for_the_popup()
+
+
+func _test_rack_preset_popups_stay_on_screen() -> void:
+	await RackPresetTests.new(self).popups_stay_on_screen()
 
 
 func _test_milk_file_eel_parses_and_evaluates() -> void:

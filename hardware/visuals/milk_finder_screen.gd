@@ -113,12 +113,17 @@ func _ready() -> void:
 	_preview = TextureRect.new()
 	_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_preview.custom_minimum_size = Vector2(0, 240)
+	_preview.custom_minimum_size = Vector2(0, 120)
 	_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_preview.size_flags_stretch_ratio = 2.0
 	right.add_child(_preview)
 	_detail = RichTextLabel.new()
 	_detail.bbcode_enabled = true
-	_detail.fit_content = true
+	# It scrolls rather than grows: a long blurb must not push the pop-up off the screen.
+	_detail.fit_content = false
+	_detail.scroll_active = true
+	_detail.custom_minimum_size = Vector2(0, 70)
+	_detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_detail.add_theme_font_size_override("normal_font_size", 15)
 	_detail.add_theme_font_size_override("bold_font_size", 15)
 	right.add_child(_detail)
@@ -136,6 +141,7 @@ func _ready() -> void:
 	column.add_child(HSeparator.new())
 	_build_more(column)
 	get_viewport().size_changed.connect(_fit)
+	_panel.minimum_size_changed.connect(_fit, CONNECT_DEFERRED)
 
 
 ## MORE PICTURES: the pack's download (asked for, confirmed, never automatic) and the player's own folder.
@@ -184,6 +190,8 @@ func _build_more(column: VBoxContainer) -> void:
 	row.add_child(_remove)
 	_pack_status = Label.new()
 	_pack_status.add_theme_color_override("font_color", _DIM)
+	_pack_status.clip_text = true
+	_pack_status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_pack_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(_pack_status)
 	var own := HBoxContainer.new()
@@ -381,9 +389,4 @@ func _unhandled_input(event: InputEvent) -> void:
 func _fit() -> void:
 	if _panel == null:
 		return
-	var vp := get_viewport().get_visible_rect().size
-	var w := minf(1040.0, vp.x - 40.0)
-	var h := minf(vp.y - 60.0, 820.0)
-	_panel.custom_minimum_size = Vector2(w, h)
-	_panel.size = Vector2(w, h)
-	_panel.position = Vector2((vp.x - w) * 0.5, (vp.y - h) * 0.5)
+	PanelLook.fit_modal(_panel, Vector2(1040.0, 820.0))

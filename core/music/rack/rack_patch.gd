@@ -451,7 +451,7 @@ static func knob_line(id: String, knob: String, v01: float) -> String:
 
 
 ## The room's asks of the patch, one verb: `op` is add [type, col, row], remove [id], move [id, col, row],
-## cable [from, to], pull [to], pull_one [from, to], knob [id, knob, v] or preset [name]. Done to `p`;
+## cable [from, to], pull [to], pull_one [from, to], knob [id, knob, v], preset [name] or load [patch dict]. Done to `p`;
 ## the refusal in words if it cannot be, "" when done.
 static func answer(p: Dictionary, op: String, args: Array) -> String:
 	match op:
@@ -502,5 +502,18 @@ static func answer(p: Dictionary, op: String, args: Array) -> String:
 			var fresh := preset(StringName(args[0]))
 			p["modules"] = fresh["modules"]
 			p["cables"] = fresh["cables"]
+			return ""
+		"load":
+			# A whole patch carried in the ask (a player's own preset, RackUserPresets): checked like a file.
+			var raw: Variant = args[0] if args.size() > 0 else null
+			var why := problem(raw)
+			if why != "":
+				return "that preset cannot be used: %s" % why
+			var loaded := sanitize(raw)
+			p["modules"] = loaded["modules"]
+			p["cables"] = loaded["cables"]
+			p.erase("uses")
+			if loaded.has("uses"):
+				p["uses"] = loaded["uses"]
 			return ""
 	return "the rack does not know %s" % op

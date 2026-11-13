@@ -91,8 +91,9 @@ func _build_palette() -> void:
 	for i in groups.size():
 		var g: String = groups[i]
 		var k := _key(g.to_upper(), key_size,
-				Vector3(wall._x_of(i + 0.5), RackWall.PALETTE_TALL - 0.04, 0.0), "show the %s modules" % g.to_lower(),
-				(func() -> void: wall.find_asked.emit(g)) if g in FINDER_GROUPS else (func() -> void: wall.shown.show_group(g)),
+				Vector3(wall._x_of(i + 0.5), RackWall.PALETTE_TALL - 0.04, 0.0), ("load a preset, or save the rack as one of your own" if g == RackWall.GROUP_PRESETS else "show the %s modules" % g.to_lower()),
+				(func() -> void: wall.presets_asked.emit()) if g == RackWall.GROUP_PRESETS
+				else (func() -> void: wall.find_asked.emit(g)) if g in FINDER_GROUPS else (func() -> void: wall.shown.show_group(g)),
 				g == wall.group)
 		wall._palette_nodes.append(k)
 		wall.panel.add_child(k)
@@ -140,16 +141,13 @@ func _build_palette() -> void:
 		wall._palette_nodes.append(tag)
 		wall.panel.add_child(tag)
 	var items: Array = []
-	if wall.group == RackWall.GROUP_PRESETS:
-		for p in RackPatch.presets():
-			items.append([String(p), RackPatch.preset_title(p), "preset", [String(p)]])
-	else:
+	# The presets are a pop-up of their own (RackPresetScreen), never a row of keys.
+	if wall.group != RackWall.GROUP_PRESETS:
 		for t in RackCatalogue.in_group(wall.group):
 			items.append([t, String(RackCatalogue.spec(t)["title"]), "add", [t, -1, 0]])
 	for i in mini(items.size(), RackWall.COLS):
 		var it: Array = items[i]
-		var says := ("put a %s in the next free place in the case" % it[1]) if it[2] == "add" \
-				else "replace the case with the preset %s" % it[1]
+		var says := "put a %s in the next free place in the case" % it[1]
 		var op: String = it[2]
 		var args: Array = it[3]
 		var k := _key(String(it[1]).substr(0, 8), key_size, Vector3(wall._x_of(i + 0.5), 0.045, 0.0), says,
