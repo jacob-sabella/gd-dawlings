@@ -19,7 +19,7 @@ if [ "${RACK_TARGET:-}" = windows ]; then
   CXX=${CXX:-x86_64-w64-mingw32-g++}
   export VOICE_TARGET=x86_64-pc-windows-gnu VOICE_BUILD_DIR=${VOICE_BUILD_DIR:-build/voice-windows}
   # What Rust's standard library asks of Windows, and the C++ runtime in the binary itself.
-  LINK=(-static -static-libgcc -static-libstdc++ -lws2_32 -luserenv -lbcrypt -lntdll -ladvapi32 -lkernel32)
+  LINK=(-static -static-libgcc -static-libstdc++ -lws2_32 -luserenv -lbcrypt -lntdll -ladvapi32 -lsynchronization -lkernel32)
 else
   OUT=${RACK_BUILD_DIR:-build/rack}
   BIN=${RACK_BIN:-rack}   # a private name lets two builds share the object cache and link side by side
