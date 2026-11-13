@@ -22,6 +22,8 @@ const SNAP_HITS_TIP := ("Hand percussion's hits (the cowbell's, the claves'...) 
 ## COMFORT's hover cards (docs/spatial_loop.md part two, slice 21).
 const MOTION_TIP := ("How much the room moves for you. Full glides the gear to you and runs the signal beads along the cables; Gentle does both at under half the pace; Still cuts every move and holds the beads still, their brightness alone saying how loud each cable is. "
 		+ "--no-motion at launch starts Still whatever was kept.")
+const VISUALS_TIP := ("The screens and simulations that move with the music: the visualizer TV, the fluid tank, the slime-mould ceiling, the particle pane. "
+		+ "High runs up to three at once at full size; Low one at a time, smaller; Off none. Lower takes effect at once, higher when the venue is next built. --visuals=off|low|high at launch.")
 const ROOM_REACTS_TIP := ("The venue's lights breathe with the master, its sparks rise with the beat, and a clip lifts the lamps. "
 		+ "Off, the room holds its own look however loud the mix is.")
 const LIFT_TIP := ("A track or the master over 0 dBFS lifts the room's lamps by a third for a moment, at most once every two seconds, and lights the OVER readout on its strip. "
@@ -167,6 +169,8 @@ var comfort_path := Ergonomics.HEIGHT_PATH
 var _motion: OptionButton
 var _room_reacts: CheckButton
 var _lift_on_clip: CheckButton
+## Visuals: the heavy visuals' quality (VisualBudget), off, low or high.
+var _visuals: OptionButton
 
 var _listener: PacketPeerUDP = null
 var _found: Dictionary = {}
@@ -268,6 +272,17 @@ func _build_comfort(column: VBoxContainer) -> void:
 	_lift_on_clip.tooltip_text = LIFT_TIP
 	_lift_on_clip.toggled.connect(set_lift_on_clip)
 	box.add_child(_lift_on_clip)
+	var vrow := HBoxContainer.new()
+	vrow.add_theme_constant_override("separation", 10)
+	box.add_child(vrow)
+	vrow.add_child(_label("Visuals", 14, INK))
+	_visuals = _choice()
+	_visuals.name = "Visuals"
+	for word in ["Off", "Low", "High"]:
+		_visuals.add_item(word)
+	_visuals.tooltip_text = VISUALS_TIP
+	_visuals.item_selected.connect(set_visuals)
+	vrow.add_child(_visuals)
 	refresh_comfort()
 
 
@@ -292,6 +307,13 @@ func set_lift_on_clip(on: bool) -> void:
 	refresh_comfort()
 
 
+## Visuals to VisualBudget.Tier `t` (0 off, 1 low, 2 high), kept for next time; the music's ears follow.
+func set_visuals(t: int) -> void:
+	VisualBudget.set_tier(t)
+	AudioFeatures.now().listen(t != VisualBudget.Tier.OFF)
+	refresh_comfort()
+
+
 ## The box as Ergonomics.current has it. Lift on clip is greyed while the room does not react,
 ## since then nothing lifts.
 func refresh_comfort() -> void:
@@ -302,6 +324,8 @@ func refresh_comfort() -> void:
 	_room_reacts.set_pressed_no_signal(e.room_reacts)
 	_lift_on_clip.set_pressed_no_signal(e.lift_on_clip)
 	_lift_on_clip.disabled = not e.room_reacts
+	if _visuals != null:
+		_visuals.select(VisualBudget.tier())
 
 
 ## Hide the panel and let go of keyboard focus it holds.

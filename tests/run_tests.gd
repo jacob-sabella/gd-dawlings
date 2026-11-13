@@ -893,7 +893,126 @@ func _ready() -> void:
 	await _t("_test_singer_the_voice_sings_live")
 	await _t("_test_singer_a_take_of_the_singer_is_in_sync")
 	await _t("_test_singer_every_venue_letters_the_words_readably")
+	await _t("_test_the_rack_runs_round_the_corner_onto_the_side_wall")
+	await _t("_test_visuals_cava_bars_rise_fast_and_fall_under_gravity")
+	await _t("_test_visuals_features_hear_a_kick")
+	await _t("_test_visuals_scope_beam_quads_carry_the_segment")
+	await _t("_test_visuals_budget_grants_the_nearest_on_screen")
+	await _t("_test_visuals_milk_tv_click_and_find")
+	await _t("_test_visuals_milk_name_fades_away")
+	await _t("_test_milk_presets_all_evaluate")
+	await _t("_test_milk_screen_builds_and_idles_off")
+	await _t("_test_milk_preset_crossfade_and_advance")
+	await _t("_test_milk_file_eel_parses_and_evaluates")
+	await _t("_test_milk_file_per_pixel_compiles_to_a_shader")
+	await _t("_test_milk_file_milk_files_parse")
+	await _t("_test_milk_file_md2_shaders_translate")
+	await _t("_test_milk_file_library_indexes_own_folder")
+	await _t("_test_milk_file_pack_unpacks_and_removes")
+	await _t("_test_milk_file_file_preset_plays_on_screen")
+	await _t("_test_sim_sims_build_still_without_compute")
+	await _t("_test_sim_sim_sizes_follow_the_tier")
+	await _t("_test_sim_sims_step_only_when_granted")
+	await _t("_test_sim_particle_life_matrix_blends")
+	await _t("_test_sim_particle_life_species_hear_their_band")
+	await _t("_test_sim_fluid_splats_follow_the_music")
 	_report()
+
+
+# --- the audio-reactive visuals (docs/visuals.md): their checks are in tests/visuals_tests.gd ------------
+
+const VisualsTests := preload("res://tests/visuals_tests.gd")
+const MilkTests := preload("res://tests/milk_tests.gd")
+const MilkFileTests := preload("res://tests/milk_file_tests.gd")
+const SimTests := preload("res://tests/visual_sim_tests.gd")
+
+
+func _test_sim_sims_build_still_without_compute() -> void:
+	SimTests.new(self).sims_build_still_without_compute()
+
+
+func _test_sim_sim_sizes_follow_the_tier() -> void:
+	SimTests.new(self).sim_sizes_follow_the_tier()
+
+
+func _test_sim_sims_step_only_when_granted() -> void:
+	SimTests.new(self).sims_step_only_when_granted()
+
+
+func _test_sim_particle_life_matrix_blends() -> void:
+	SimTests.new(self).particle_life_matrix_blends()
+
+
+func _test_sim_particle_life_species_hear_their_band() -> void:
+	SimTests.new(self).particle_life_species_hear_their_band()
+
+
+func _test_sim_fluid_splats_follow_the_music() -> void:
+	SimTests.new(self).fluid_splats_follow_the_music()
+
+
+func _test_milk_presets_all_evaluate() -> void:
+	await MilkTests.new(self).presets_all_evaluate()
+
+
+func _test_milk_screen_builds_and_idles_off() -> void:
+	await MilkTests.new(self).screen_builds_and_idles_off()
+
+
+func _test_milk_preset_crossfade_and_advance() -> void:
+	await MilkTests.new(self).preset_crossfade_and_advance()
+
+
+func _test_milk_file_eel_parses_and_evaluates() -> void:
+	await MilkFileTests.new(self).eel_parses_and_evaluates()
+
+
+func _test_milk_file_per_pixel_compiles_to_a_shader() -> void:
+	await MilkFileTests.new(self).per_pixel_compiles_to_a_shader()
+
+
+func _test_milk_file_milk_files_parse() -> void:
+	await MilkFileTests.new(self).milk_files_parse()
+
+
+func _test_milk_file_md2_shaders_translate() -> void:
+	await MilkFileTests.new(self).md2_shaders_translate()
+
+
+func _test_milk_file_library_indexes_own_folder() -> void:
+	await MilkFileTests.new(self).library_indexes_own_folder()
+
+
+func _test_milk_file_pack_unpacks_and_removes() -> void:
+	await MilkFileTests.new(self).pack_unpacks_and_removes()
+
+
+func _test_milk_file_file_preset_plays_on_screen() -> void:
+	await MilkFileTests.new(self).file_preset_plays_on_screen()
+
+
+func _test_visuals_cava_bars_rise_fast_and_fall_under_gravity() -> void:
+	VisualsTests.new(self).cava_bars_rise_fast_and_fall_under_gravity()
+
+
+func _test_visuals_features_hear_a_kick() -> void:
+	VisualsTests.new(self).features_hear_a_kick()
+
+
+func _test_visuals_scope_beam_quads_carry_the_segment() -> void:
+	VisualsTests.new(self).scope_beam_quads_carry_the_segment()
+
+
+func _test_visuals_budget_grants_the_nearest_on_screen() -> void:
+	VisualsTests.new(self).budget_grants_the_nearest_on_screen()
+
+
+func _test_visuals_milk_tv_click_and_find() -> void:
+	VisualsTests.new(self).milk_tv_click_and_find()
+
+
+func _test_visuals_milk_name_fades_away() -> void:
+	VisualsTests.new(self).milk_name_fades_away()
 
 
 # --- seeing the signal (docs/spatial_loop.md part three): its checks are in tests/signal_tests.gd --
@@ -45139,7 +45258,7 @@ func _test_a_rack_patch_checks_every_verb() -> void:
 			"cables": [["vco.out", "nowhere.in"], ["vco.out", "vco.fm"], 5]}
 	var clean := RackPatch.sanitize(dirty)
 	check("a patch from anywhere keeps what is real, and a module nobody provides as a plate", clean["modules"].keys() == ["x", "vco"] and RackPatch.is_missing(clean, "x") and clean["cables"].is_empty())
-	check("and clamps what it keeps", clean["modules"]["vco"]["at"] == [RackLayout.COLS - RackLayout.width_of("builtin.vco"), 0] and clean["modules"]["vco"]["knobs"]["tune"] == 1.0)
+	check("and clamps what it keeps", clean["modules"]["vco"]["at"] == [RackLayout.ALL_COLS - RackLayout.width_of("builtin.vco"), 0] and clean["modules"]["vco"]["knobs"]["tune"] == 1.0)
 	check("garbage is an empty patch", RackPatch.sanitize("nope")["modules"].is_empty())
 	for name in RackPatch.presets():
 		var pre := RackPatch.preset(name)
@@ -45937,6 +46056,79 @@ func _test_a_rack_module_is_carried_to_a_free_place_by_its_grip() -> void:
 	if moved.size() == 1:
 		check("to the place it was carried to", moved[0][1][1] == int(here[0]) + 3 and moved[0][1][2] == int(here[1]) + 1)
 	check("the outline is gone", wall.panel.get_node_or_null("MoveGhost") == null or wall.panel.get_node("MoveGhost").is_queued_for_deletion())
+	studio.queue_free()
+
+
+func _test_the_rack_runs_round_the_corner_onto_the_side_wall() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	studio.rack_host.ask_rack("preset", ["keys_voice"])
+	await get_tree().process_frame
+	var wall: RackWall = studio.rack_wall
+	var annex: ModularAnnex = studio.modular_annex
+	check("the room keeps no catwalk, no tray and no cables hung from the ceiling", annex.get_node_or_null("GantryDeck") == null
+			and annex.get_node_or_null("Stair0") == null and annex.get_node_or_null("Swags") == null and annex.get_node_or_null("AnnexTray") == null
+			and annex.get_node_or_null("AnnexDrop0") == null and annex.get_node_or_null("AnnexCase0") == null)
+	var room := ModularAnnex.inside(annex.half)
+	var wing: Node3D = wall.panel.get_node_or_null("Wing")
+	check("the rack has a wing", wing != null)
+	if wing == null:
+		studio.queue_free()
+		return
+	var mid := annex.to_local(wing.global_position)
+	check("the wing stands along the side wall where the catwalk was (%.2f)" % mid.z, mid.z > ModularAnnex.Z_FROM + 0.05 and mid.z < ModularAnnex.Z_FROM + 0.3)
+	var inside := true
+	for col in [RackLayout.COLS, RackLayout.ALL_COLS]:
+		var end := annex.to_local(wall.panel.to_global(wall._cell_frame(col, 0.0).origin))
+		inside = inside and end.x > room.position.x + 0.3 and end.x < room.end.x - 0.1
+	check("all of it inside the room", inside)
+	var faces := (annex.global_transform.basis.inverse() * wing.global_transform.basis.z).normalized()
+	check("facing into the room", faces.z > 0.99)
+	var box := wall.content_aabb()
+	check("the case's measured face leaves the wing out (%s)" % str(box), box.position.x > -RackWall.WIDE * 0.5 - 0.1
+			and box.end.x < RackWall.WIDE * 0.5 + 0.1 and box.end.z < 2.0)
+	var tab := wall.get_node_or_null("SurfaceHandle") as Node3D
+	if tab == null:
+		for n in wall.find_children("*", "SurfaceHandle", true, false):
+			tab = n
+	if tab != null:
+		var at := annex.to_local(tab.global_position)
+		check("its move tab is beside the case on the far wall, not in mid-air (%s)" % str(at), at.x > room.end.x - 1.0)
+	check("standing before its far end is standing at the rack",
+			RackWall.before_wing(wall.to_local(wall.panel.to_global(wall._cell_frame(RackLayout.COLS + 2.0, 0.5, 0.8).origin))))
+	var full := {"modules": {}, "cables": []}
+	for row in RackLayout.ROWS:
+		full["modules"]["m%d" % row] = {"type": "x.y", "at": [0, row], "w": RackLayout.COLS, "missing": true}
+	check("a full case puts the next module on the wing", RackLayout.free_slot(full, "builtin.vco") == Vector2i(RackLayout.COLS, 0))
+	var empty := {"modules": {}, "cables": []}
+	check("no module straddles the corner", not RackLayout.fits(empty, "x.y", Vector2i(RackLayout.COLS - 1, 0), "", 2)
+			and RackLayout.fits(empty, "x.y", Vector2i(RackLayout.COLS, 0), "", 2) and not RackLayout.fits(empty, "x.y", Vector2i(RackLayout.ALL_COLS - 1, 0), "", 2))
+	check("a saved place on the wing is kept", RackPatch.sanitize({"modules": {"v": {"type": "builtin.vco", "at": [RackLayout.COLS + 7, 2]}}})["modules"]["v"]["at"] == [RackLayout.COLS + 7, 2])
+	# Carried by its grip off the case's left edge it turns the corner, and along the wing it goes where it is put.
+	var asked := []
+	wall.edit_asked.connect(func(op: String, args: Array) -> void: asked.append([op, args]))
+	var holder: Node3D = wall.module_nodes["reverb"]
+	var grip: RackHandle = holder.get_node("Grip")
+	var here: Array = wall.patch["modules"]["reverb"]["at"]
+	var w := RackLayout.width_of("builtin.reverb")
+	var hold := RackWall.ROW_TALL - 0.026
+	wall._on_grip_began(grip, holder.global_position + Vector3(0, hold, 0))
+	var foot := wall._row_foot(int(here[1]))
+	wall._on_grip_moved(grip, wall.panel.to_global(Vector3(wall._x_of(-3.0), foot + hold, 0.05)))
+	check("carried past the case's edge it turns onto the wing", holder.transform.basis.is_equal_approx(RackWall.WING_BASIS))
+	var target := RackLayout.COLS + 10
+	var on := wall._cell_frame(target + w * 0.5, foot + hold).origin
+	wall._on_grip_moved(grip, wall.panel.to_global(on + Vector3(0.05, 0, 0)))
+	wall._on_grip_finished(grip, Vector3.ZERO)
+	var moved := asked.filter(func(a: Array) -> bool: return a[0] == "move")
+	check("and is let go on the wing where it was carried to", moved.size() == 1 and moved[0][1][1] == target and moved[0][1][2] == int(here[1]))
+	studio.rack_host.ask_rack("move", ["reverb", target, int(here[1])])
+	await get_tree().process_frame
+	holder = wall.module_nodes["reverb"]
+	check("where it stands on the wing, turned to the room", holder.transform.is_equal_approx(wall._cell_frame(target + w * 0.5, foot)))
 	studio.queue_free()
 
 

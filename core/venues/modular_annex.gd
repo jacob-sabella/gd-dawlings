@@ -3,7 +3,8 @@ extends Node3D
 
 ## The modular room: a room of its own, built onto the right-hand side of the live room in every
 ## venue, with an open doorway cut through the live room's wall to walk in by. Inside, the rack hangs
-## on the far wall with its keys below it, the room is dressed in lights that follow what the rack
+## on the far wall with its keys below it and its wing (RackWall.WING_X) runs on along the side wall at
+## Z_FROM, kept clear for it; the room is dressed in lights that follow what the rack
 ## plays (a ceiling of tiles, columns up the side walls, an inlaid floor, a light over the doorway)
 ## in the venue's mood (RackMood), and the doorway shows its glow into the live room.
 ##
@@ -31,8 +32,6 @@ const RACK_Z := 9.2
 const RACK_SCALE := 1.2
 const RACK_Y := 1.0
 const COLUMNS := 14
-const GANTRY_Y := 1.85
-const GANTRY_DEEP := 1.3
 const TRUSS_Y := 4.0
 const TILES := Vector2i(5, 3)
 
@@ -40,8 +39,17 @@ var half := 8.8
 var mood := RackMood.FALLBACK
 var _tile_material := StandardMaterial3D.new()
 var _line_material := StandardMaterial3D.new()
-## The TV on the side wall: the wave at the first SCOPE patched in.
+## The TV on the side wall: the wave at the first SCOPE patched in. With the visuals on (VisualBudget) it is a
+## MilkDrop-style visualizer instead (`milk`), drawing that wave into its feedback, and `tv` is null.
 var tv: ScopeScreen
+var milk: MilkScreen
+## The visualizer's picture finder, opened by its FIND key.
+var milk_finder: MilkFinderScreen
+## The simulations (docs/visuals.md): a fluid tank on the bench under the TV, and a slime-mould ceiling over the
+## room in place of its tiles where compute shaders run.
+var tank: FluidTank
+var ceiling: PhysarumSheet
+var _tiles: Array[MeshInstance3D] = []
 ## The CV bench's fifteen controls (two knobs and a slider in each of five boxes), in the order of the
 ## rack's HAND module outputs, and what a hand does to one: (index, 0..1).
 var bench: Array[Knob] = []
@@ -53,6 +61,10 @@ var _columns: Array[MeshInstance3D] = []
 var _hangs: Array[MeshInstance3D] = []
 var _hang_level: Array[float] = []
 var _column_level: Array[float] = []
+## The columns' and the hung bars' motion: up at once, down under gravity (CavaBars), not eased both ways.
+var _column_fall := CavaBars.new(COLUMNS)
+var _hang_fall := CavaBars.new(12)
+var _levels_at := -1
 var _lights: Array[OmniLight3D] = []
 var _was_under := false
 var _shone_level := 0.0
@@ -164,6 +176,7 @@ func _ready() -> void:
 			var tile := ZoneKit.block(self, Vector3(DEEP / TILES.x - 0.3, 0.03, (Z_TO - Z_FROM) / TILES.y - 0.3),
 					Vector3(tile_x, HEIGHT - 0.02, tile_z), null, "Tile_%d_%d" % [ix, iz])
 			tile.material_override = _tile_material
+			_tiles.append(tile)
 	for n in 5:
 		var line_x := x0 + (float(n) + 0.5) * DEEP / 5.0
 		ZoneKit.block(self, Vector3(0.025, 0.006, Z_TO - Z_FROM - 0.2), Vector3(line_x, FLOOR_TOP + 0.003, zc), null,
@@ -201,27 +214,14 @@ func _ready() -> void:
 		lamp.add_to_group(&"presentation_chrome")
 		add_child(lamp)
 		_lights.append(lamp)
-	# Dressing: a bench along one wall, road cases stacked along the other, a cable tray over the room
-	# with the rack's leads dropping from it. Kept to the walls and the ceiling, out of the walk.
+	# Dressing: a bench along the Z_TO wall (the Z_FROM wall is the rack's wing). Out of the walk.
 	var case_paint := _paint(Color(0.07, 0.07, 0.08), 0.6, 0.15)
 	var wood := _paint(Color(0.2, 0.14, 0.09), 0.75, 0.0)
 	ZoneKit.block(self, Vector3(1.83, 0.06, 0.41), Vector3(x1 - 3.7, 0.47, Z_TO - 0.46), wood, "AnnexBenchTop")
 	for dx in [-0.78, 0.78]:
 		ZoneKit.block(self, Vector3(0.07, 0.44, 0.33), Vector3(x1 - 3.7 + dx, 0.24, Z_TO - 0.46), metal, "AnnexBenchLeg%d" % int(dx * 10.0))
-	var stack := [[Vector3(0.93, 0.57, 0.57), 0.0, 0.0], [Vector3(0.93, 0.53, 0.55), 1.05, 0.0], [Vector3(0.71, 0.47, 0.52), 0.1, 0.59]]
-	for n in stack.size():
-		var size: Vector3 = stack[n][0]
-		var cx := x0 + 4.4 + float(stack[n][1])
-		var cy := size.y * 0.5 + 0.02 + float(stack[n][2])
-		ZoneKit.block(self, size, Vector3(cx, cy, Z_FROM + 0.47), case_paint, "AnnexCase%d" % n)
-		for dz in [-1.0, 1.0]:
-			ZoneKit.block(self, Vector3(size.x + 0.03, 0.035, 0.03), Vector3(cx, cy + size.y * 0.5 - 0.1, Z_FROM + 0.47 + dz * (size.z * 0.5 + 0.004)), metal, "AnnexCaseEdge%d_%d" % [n, int(dz)])
-	ZoneKit.block(self, Vector3(DEEP - 0.9, 0.05, 0.27), Vector3((x0 + x1) * 0.5 - 0.05, HEIGHT - 0.23, DOOR_Z), metal, "AnnexTray")
-	for k in 3:
-		var lead_z := DOOR_Z - 0.09 + float(k) * 0.09
-		ZoneKit.block(self, Vector3(DEEP - 0.95, 0.025, 0.02), Vector3((x0 + x1) * 0.5 - 0.06, HEIGHT - 0.19, lead_z), case_paint, "AnnexLead%d" % k)
-		ZoneKit.block(self, Vector3(0.022, 1.12 + float(k) * 0.07, 0.024), Vector3(x1 - 0.3 - float(k) * 0.045, HEIGHT - 0.2 - (1.12 + float(k) * 0.07) * 0.5, lead_z), case_paint, "AnnexDrop%d" % k)
 	_furnish(room, metal, case_paint, wood)
+	_build_sims(x0, x1)
 	_shine()
 
 
@@ -238,14 +238,26 @@ func glow_with(level: float, hit: float) -> void:
 
 ## How loud each module is now, in the order they are across the case (RackWall's pillars): a skyline.
 func show_levels(levels: Array) -> void:
+	var now := Time.get_ticks_msec()
+	var delta := clampf(float(now - _levels_at) / 1000.0, 0.001, 0.1) if _levels_at >= 0 else 1.0 / 60.0
+	_levels_at = now
+	var cols := PackedFloat32Array()
+	cols.resize(_columns.size())
 	for n in _columns.size():
-		var want := clampf(float(levels[n % levels.size()]) if not levels.is_empty() else 0.0, 0.0, 1.0)
-		var now := _column_level[n]
-		_grow_column(n, lerpf(now, want, 0.5 if want > now else 0.15))
+		cols[n] = clampf(float(levels[n % levels.size()]) if not levels.is_empty() else 0.0, 0.0, 1.0)
+	var hangs := PackedFloat32Array()
+	hangs.resize(_hangs.size())
 	for n in _hangs.size():
-		var want := clampf(float(levels[(n * 3 + 1) % levels.size()]) if not levels.is_empty() else 0.0, 0.0, 1.0)
-		var now := _hang_level[n]
-		_drop_bar(n, lerpf(now, want, 0.5 if want > now else 0.15))
+		hangs[n] = clampf(float(levels[(n * 3 + 1) % levels.size()]) if not levels.is_empty() else 0.0, 0.0, 1.0)
+	for f in [_column_fall, _hang_fall]:
+		(f as CavaBars).auto_sens = false
+		(f as CavaBars).smoothing = 0.25
+	var fell := _column_fall.step(cols, delta)
+	for n in _columns.size():
+		_grow_column(n, fell[n])
+	fell = _hang_fall.step(hangs, delta)
+	for n in _hangs.size():
+		_drop_bar(n, fell[n])
 
 
 ## Under this roof there is no weather: the venue's particles (rain, snow, drifting dust) are put out
@@ -291,7 +303,7 @@ func set_mood(m: Dictionary) -> void:
 
 ## The TV shows the wave of the SCOPE module that is showing the most (ties by id), or a flat line.
 func show_scope(waves: Dictionary) -> void:
-	if tv == null:
+	if tv == null and milk == null:
 		return
 	var ids := waves.keys()
 	ids.sort()
@@ -304,17 +316,56 @@ func show_scope(waves: Dictionary) -> void:
 		if peak > best_peak + 0.02:
 			best = waves[id]
 			best_peak = peak
+	if milk != null:
+		# Only a wave worth seeing replaces the mix's own in the visualizer.
+		if best_peak > 0.02:
+			milk.set_wave(best)
+		return
 	tv.set_wave(best)
 
 
+func _build_sims(x0: float, x1: float) -> void:
+	if VisualBudget.tier() == VisualBudget.Tier.OFF:
+		return
+	tank = FluidTank.new()
+	tank.name = "FluidTank"
+	tank.tint = mood["base"]
+	# On the bench along the Z_TO wall, its glass turned to the room.
+	tank.transform = Transform3D(Basis(Vector3.UP, PI), Vector3(x1 - 3.7, 0.5, Z_TO - 0.46))
+	add_child(tank)
+	ceiling = PhysarumSheet.new()
+	ceiling.name = "PhysarumCeiling"
+	ceiling.size = Vector2(DEEP - 0.3, Z_TO - Z_FROM - 0.3)
+	ceiling.tint = mood["base"]
+	ceiling.position = Vector3((x0 + x1) * 0.5, HEIGHT - 0.045, (Z_FROM + Z_TO) * 0.5)
+	add_child(ceiling)
+	# Where it really runs the ceiling is the sheet; the tiles stay only where it cannot (a still stand-in).
+	if ceiling.compute:
+		for tile in _tiles:
+			tile.visible = false
+
+
 func _build_tv(x0: float, metal: Material) -> void:
-	tv = ScopeScreen.new()
-	tv.size = Vector2(2.8, 1.5)
-	tv.name = "ScopeTV"
-	tv.position = Vector3(x0 + DEEP * 0.5, 2.55, Z_TO - 0.1)
-	tv.basis = Basis(Vector3.UP, PI)
-	tv.tint = (mood["base"] as Color).lerp(Color(0.3, 1.0, 0.65), 0.7)
-	add_child(tv)
+	var screen: Node3D
+	if VisualBudget.tier() != VisualBudget.Tier.OFF:
+		milk = MilkScreen.new()
+		milk.size = Vector2(2.8, 1.5)
+		milk.name = "MilkTV"
+		milk.tint = mood["base"]
+		screen = milk
+		milk_finder = MilkFinderScreen.new()
+		milk_finder.name = "MilkFinder"
+		add_child(milk_finder)
+		milk.find_asked.connect(func() -> void: milk_finder.open_finder(milk))
+	else:
+		tv = ScopeScreen.new()
+		tv.size = Vector2(2.8, 1.5)
+		tv.name = "ScopeTV"
+		tv.tint = (mood["base"] as Color).lerp(Color(0.3, 1.0, 0.65), 0.7)
+		screen = tv
+	screen.position = Vector3(x0 + DEEP * 0.5, 2.55, Z_TO - 0.1)
+	screen.basis = Basis(Vector3.UP, PI)
+	add_child(screen)
 	ZoneKit.block(self, Vector3(3.1, 1.75, 0.1), Vector3(x0 + DEEP * 0.5, 2.55, Z_TO - 0.04), metal, "TvBack")
 	ZoneKit.block(self, Vector3(0.1, 0.1, 0.1), Vector3(x0 + DEEP * 0.5, 3.45, Z_TO - 0.05), metal, "TvMount")
 	ZoneKit.block(self, Vector3(1.2, 0.04, 0.3), Vector3(x0 + DEEP * 0.5, 1.65, Z_TO - 0.2), metal, "TvShelf")
@@ -323,6 +374,11 @@ func _build_tv(x0: float, metal: Material) -> void:
 func _apply_mood() -> void:
 	if tv != null:
 		tv.tint = (mood["base"] as Color).lerp(Color(0.3, 1.0, 0.65), 0.7)
+	if milk != null:
+		milk.tint = mood["base"]
+	for sim: GpuSim in [tank, ceiling]:
+		if sim != null:
+			sim.tint = mood["base"]
 	_sign_material.albedo_color = mood["base"]
 	_line_material.albedo_color = (mood["base"] as Color) * 0.8
 	for col in _columns + _hangs:
@@ -357,44 +413,13 @@ func _drop_bar(n: int, level: float) -> void:
 	_hangs[n].position.y = TRUSS_Y - 0.06 - h * 0.5
 
 
-## The room's volume, not only its walls: a gantry along one side (stairs up to it, a rail, a library
-## of cases on it), a truss across the ceiling hung with bars that fall as the rack gets loud, free
-## standing towers of gear, monitors on stands at ear height by the playing spot, a rug, and cables
-## swagged from the truss to the towers and the rack.
-func _furnish(room: Rect2, metal: Material, case_paint: Material, wood: Material) -> void:
+## The room's volume, not only its walls: a truss across the ceiling hung with bars that fall as the rack
+## gets loud, free standing towers of gear, monitors on stands at ear height by the playing spot and a rug.
+## The side wall at Z_FROM is left to the rack's wing.
+func _furnish(room: Rect2, metal: Material, case_paint: Material, _wood: Material) -> void:
 	var x0 := room.position.x
 	var x1 := room.end.x
 	var zc := (Z_FROM + Z_TO) * 0.5
-	var deck := _paint(Color(0.14, 0.14, 0.16), 0.5, 0.5)
-	# The gantry: deck, joists, posts at the open edge, a rail with a lit line, stairs up at the near end.
-	var gx0 := x0 + 2.7
-	var gx1 := x1 - 1.4
-	var gz := Z_FROM + GANTRY_DEEP * 0.5
-	ZoneKit.block(self, Vector3(gx1 - gx0, 0.09, GANTRY_DEEP), Vector3((gx0 + gx1) * 0.5, GANTRY_Y, gz), deck, "GantryDeck")
-	ZoneKit.block(self, Vector3(gx1 - gx0 - 0.06, 0.2, 0.06), Vector3((gx0 + gx1) * 0.5, GANTRY_Y - 0.14, Z_FROM + GANTRY_DEEP - 0.06), metal, "GantryBeam")
-	var rail_z := Z_FROM + GANTRY_DEEP - 0.04
-	ZoneKit.block(self, Vector3(gx1 - gx0, 0.04, 0.04), Vector3((gx0 + gx1) * 0.5, GANTRY_Y + 1.0, rail_z), metal, "GantryRail")
-	ZoneKit.block(self, Vector3(gx1 - gx0, 0.02, 0.02), Vector3((gx0 + gx1) * 0.5, GANTRY_Y + 0.55, rail_z), null, "GantryLine").material_override = _line_material
-	var posts := 7
-	for n in posts:
-		var px := gx0 + 0.05 + float(n) * (gx1 - gx0 - 0.1) / float(posts - 1)
-		ZoneKit.block(self, Vector3(0.05, GANTRY_Y + 1.0, 0.05), Vector3(px, (GANTRY_Y + 1.0) * 0.5, rail_z), metal, "GantryPost%d" % n)
-	var steps := 9
-	var rise := GANTRY_Y / float(steps)
-	var run := (gx0 - (x0 + 0.5)) / float(steps)
-	for n in steps:
-		var top := rise * float(n + 1)
-		ZoneKit.block(self, Vector3(run + 0.02, 0.05, GANTRY_DEEP - 0.25), Vector3(x0 + 0.5 + run * (float(n) + 0.5), top - 0.025, Z_FROM + (GANTRY_DEEP - 0.25) * 0.5 + 0.05), deck, "Stair%d" % n)
-	for edge in [Z_FROM + 0.03, Z_FROM + GANTRY_DEEP - 0.22]:
-		var slope := Vector3(gx0 - (x0 + 0.5), GANTRY_Y, 0.0)
-		var bar := ZoneKit.block(self, Vector3(slope.length(), 0.04, 0.04), Vector3((gx0 + x0 + 0.5) * 0.5, GANTRY_Y * 0.5 + 0.9, edge), metal, "StairRail%d" % int(edge * 10.0))
-		bar.rotation.z = atan2(slope.y, slope.x)
-	# A library of cases on the gantry, with rows of lights.
-	for n in 4:
-		var cx := gx0 + 0.7 + float(n) * 1.05
-		ZoneKit.block(self, Vector3(0.85, 0.34, 0.5), Vector3(cx, GANTRY_Y + 0.215, Z_FROM + 0.4), case_paint, "GantryCase%d" % n)
-		for row in 3:
-			ZoneKit.block(self, Vector3(0.7, 0.012, 0.012), Vector3(cx, GANTRY_Y + 0.12 + float(row) * 0.09, Z_FROM + 0.649), null, "GantryCaseLed%d_%d" % [n, row]).material_override = _sign_material
 	# The truss: two bars along the room and cross-members, with bars hung that fall with the rack's loudness.
 	for dz in [-2.0, 2.0]:
 		ZoneKit.block(self, Vector3(DEEP - 0.8, 0.07, 0.07), Vector3((x0 + x1) * 0.5, TRUSS_Y, zc + dz), metal, "TrussBar%d" % int(dz * 10.0))
@@ -425,7 +450,7 @@ func _furnish(room: Rect2, metal: Material, case_paint: Material, wood: Material
 			ZoneKit.block(self, Vector3(0.36, 0.01, 0.012), Vector3(tx - 0.05, ry + 0.03, tz - 0.262), null, "TowerLed%d_%d" % [t, row]).material_override = _sign_material
 	# Monitors on stands at ear height, either side of the playing spot, and a rug between them.
 	var spot_x := x1 - 1.5
-	for dz in [-2.9, 2.9]:
+	for dz in [-2.4, 2.4]:
 		var sz: float = zc + dz
 		ZoneKit.block(self, Vector3(0.04, 1.15, 0.04), Vector3(spot_x, FLOOR_TOP + 0.575, sz), metal, "MonitorStand%d" % int(dz * 10.0))
 		ZoneKit.block(self, Vector3(0.3, 0.025, 0.3), Vector3(spot_x, FLOOR_TOP + 0.015, sz), metal, "MonitorFoot%d" % int(dz * 10.0))
@@ -446,44 +471,6 @@ func _furnish(room: Rect2, metal: Material, case_paint: Material, wood: Material
 		ZoneKit.block(self, Vector3(1.76, 0.014, 0.03), Vector3(spot_x - 0.2, FLOOR_TOP + 0.0095, zc + dz * 0.96), null, "RugEdge%d" % int(dz * 10.0)).material_override = _line_material
 	# The module library and the CV bench are not built for now (_shelves): not wanted in the room.
 	_build_tv(x0, metal)
-	# Cables swagged overhead: from the truss down to the towers and the monitors, and along it to the rack.
-	var swags := [
-		[Vector3(x0 + 1.0, TRUSS_Y, zc + 2.0), Vector3(x0 + 0.9, 2.0, Z_TO - 0.5), 0.5],
-		[Vector3(x0 + 1.9, TRUSS_Y, zc + 2.0), Vector3(x0 + 1.75, 2.0, Z_TO - 0.5), 0.45],
-		[Vector3(x0 + 3.2, TRUSS_Y, zc - 2.0), Vector3(spot_x, 1.6, zc - 2.9), 0.6],
-		[Vector3(x0 + 4.4, TRUSS_Y, zc + 2.0), Vector3(spot_x, 1.6, zc + 2.9), 0.6],
-		[Vector3(x1 - 2.4, TRUSS_Y, zc - 2.0), Vector3(x1 - 0.12, 3.5, zc - 3.0), 0.35],
-		[Vector3(x1 - 2.4, TRUSS_Y, zc + 2.0), Vector3(x1 - 0.12, 3.5, zc + 3.0), 0.35],
-		[Vector3(x0 + 2.2, TRUSS_Y, zc - 2.0), Vector3(gx0 + 1.0, GANTRY_Y + 0.6, Z_FROM + GANTRY_DEEP - 0.04), 0.5],
-	]
-	var cable := MultiMeshInstance3D.new()
-	cable.name = "Swags"
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	var seg := BoxMesh.new()
-	seg.size = Vector3(0.02, 0.02, 1.0)
-	mm.mesh = seg
-	var per := 10
-	mm.instance_count = swags.size() * per
-	var idx := 0
-	for sw in swags:
-		var a: Vector3 = sw[0]
-		var b: Vector3 = sw[1]
-		var sag: float = sw[2]
-		var prev := a
-		for i in per:
-			var u := float(i + 1) / float(per)
-			var pt := a.lerp(b, u) - Vector3(0, sag * 4.0 * u * (1.0 - u), 0)
-			var mid := (prev + pt) * 0.5
-			var dir := pt - prev
-			var basis := Basis.looking_at(dir.normalized(), Vector3.UP) if dir.length() > 0.001 else Basis.IDENTITY
-			basis = basis.scaled_local(Vector3(1, 1, dir.length() * 1.05))
-			mm.set_instance_transform(idx, Transform3D(basis, mid))
-			idx += 1
-			prev = pt
-	cable.multimesh = mm
-	cable.material_override = case_paint
-	add_child(cable)
 
 
 ## Shelves on the door wall's two halves: spare modules in little cases on the far side (a library of

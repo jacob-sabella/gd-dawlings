@@ -49,3 +49,26 @@ its own BSD-style licence, Copyright (C) 1993-2015 Carnegie Mellon University; t
 
 `serde_derive`, `proc-macro2`, `quote`, `syn` and `unicode-ident` run only at build time (MIT OR Apache-2.0;
 `unicode-ident` also Unicode-3.0) and are not linked.
+
+## Downloaded on request, not shipped
+
+The finder's MORE PICTURES can download projectM's "Cream of the Crop" MilkDrop preset pack
+(https://github.com/projectM-visualizer/presets-cream-of-the-crop) to the player's own computer
+(`user://milk/cream-of-the-crop/`), only when the player asks. The presets are their many authors' work and carry
+no licence. None of them is in this tree, the game or its releases.
+
+## Ideas re-implemented, no code taken
+
+The audio-reactive visuals (`docs/visuals.md`) were written for this project from the published descriptions of
+these projects' techniques. None of their code, shaders or presets is in this tree or the game; they are named here
+as credit.
+
+| Idea | From | Their licence |
+| --- | --- | --- |
+| Bars that rise at once and fall under gravity, integral smoothing, neighbour lift, auto-sensitivity (`CavaBars`) | cava, https://github.com/karlstav/cava | MIT |
+| A scope beam lit by a Gaussian spot swept along each segment (`scope_beam.gdshader`) | woscope, https://github.com/m1el/woscope | MIT |
+| A feedback-warp visualizer with per-frame equations and a drawn wave (`MilkScreen`) | MilkDrop and Butterchurn, https://github.com/jberg/butterchurn | BSD-3 / MIT |
+| Stable fluids with vorticity confinement driven by splats (`FluidTank`) | PavelDoGreat's WebGL Fluid Simulation, https://github.com/PavelDoGreat/WebGL-Fluid-Simulation | MIT |
+| Species attracting and repelling by a matrix (`ParticleLifePane`) | Particle Life, https://github.com/hunar4321/particle-life | MIT |
+| Slime-mould agents that sense, turn, move and deposit on a decaying trail (`PhysarumSheet`) | Jeff Jones's physarum model; e.g. https://github.com/nicoptere/physarum | Unlicense |
+| Reading MilkDrop's `.milk` preset format, its equation language (EEL) and its warp maths, and MilkDrop 2's shader conventions (`MilkFile`, `MilkEel`, `MilkPlayer`, `MilkHlsl`) | MilkDrop by Ryan Geiss, from its preset authoring guide | BSD-3 |

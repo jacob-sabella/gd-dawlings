@@ -321,14 +321,14 @@ static func sanitize(raw: Variant) -> Dictionary:
 		var row := _int(at[1]) if at is Array and at.size() >= 2 else 0
 		var knobs: Variant = m.get("knobs", {})
 		if RackCatalogue.has(type):
-			_put(p, sid, type, clampi(col, 0, RackLayout.COLS - RackLayout.width_of(type)), clampi(row, 0, RackLayout.ROWS - 1))
+			_put(p, sid, type, RackLayout.clamp_col(col, RackLayout.width_of(type)), clampi(row, 0, RackLayout.ROWS - 1))
 			if knobs is Dictionary:
 				for k in knobs:
 					if knobs[k] is float or knobs[k] is int:
 						set_knob(p, sid, String(k), float(knobs[k]))
 		else:
 			var w := clampi(_int(m.get("w", 1), 1), 1, RackLayout.COLS)
-			p["modules"][sid] = {"type": type, "at": [clampi(col, 0, RackLayout.COLS - w), clampi(row, 0, RackLayout.ROWS - 1)],
+			p["modules"][sid] = {"type": type, "at": [RackLayout.clamp_col(col, w), clampi(row, 0, RackLayout.ROWS - 1)],
 					"w": w, "knobs": _raw_knobs(knobs), "missing": true}
 			_keep_use(p, type, raw_uses)
 	var cables: Variant = raw.get("cables", [])

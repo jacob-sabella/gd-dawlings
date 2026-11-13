@@ -52,9 +52,11 @@ const ZONE_IDS: Array[StringName] = [&"bricks", &"matrix", &"drums", &"vocals", 
 ## tail along the back wall, 3 to 12 cm apart, and the modular and the
 ## lyric board could not be reached down a 0.9 m walkway.
 const ZONES := {
-	# A booth 3.4 x 3.1 m: a singer, a stand, the lyric board, room for a talk box, and a door
-	# wide enough to walk through without turning sideways.
-	&"vocals": AABB(Vector3(-8.7, 0.0, 9.2), Vector3(3.4, 2.6, 3.1)),
+	# A booth 4.4 x 4.1 m: a singer at the stand, the lyric board, the singer's station (its head,
+	# desk and prompter) and the creature's perch with room to walk between them, and a door wide
+	# enough to walk through without turning sideways. (3.4 x 3.1 until 2026-11-12: "the music
+	# box is a bit cramped".)
+	&"vocals": AABB(Vector3(-8.7, 0.0, 8.2), Vector3(4.4, 2.6, 4.1)),
 	# A riser for a full kit and the drummer's stool, 2.6 m square, at the front of the middle.
 	&"drums": AABB(Vector3(-3.4, 0.0, 4.8), Vector3(2.6, 2.8, 2.6)),
 	# The lattice, 3.4 m on every side: a 3 m cube of cells and room to reach in from any face.

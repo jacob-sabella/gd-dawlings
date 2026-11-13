@@ -1,0 +1,32 @@
+[preset00]
+MILKDROP_PRESET_VERSION=201
+PSVERSION=2
+fDecay=1.0
+per_frame_1=q1 = time * 0.3; q2 = 0.5 + 0.5*sin(time);
+warp_1=`// written for the tests: a turn, a sharpen, some noise and a fade
+warp_2=`static const float3 tint = float3(1, 0.8, 0.6);
+warp_3=`float3 glow;
+warp_4=`float2 turn(float2 p, float a)
+warp_5=`{
+warp_6=`    float2x2 m = float2x2(cos(a), -sin(a), sin(a), cos(a));
+warp_7=`    return mul(p, m);
+warp_8=`}
+warp_9=`shader_body
+warp_10=`{
+warp_11=`    float2 d = turn(uv - 0.5, q1 * 0.01) + 0.5;
+warp_12=`    ret = tex2D(sampler_main, d);
+warp_13=`    glow = GetBlur1(uv);
+warp_14=`    ret += (ret - glow) * 0.2;
+warp_15=`    ret += (tex2D(sampler_noise_lq, uv_orig * texsize.xy * texsize_noise_lq.zw).xyz - 0.5) * 0.02;
+warp_16=`    ret = lerp(ret, ret * tint, saturate(q2 * 0.1));
+warp_17=`    ret -= 0.004;
+warp_18=`}
+comp_1=`float4 texsize_mine;
+comp_2=`shader_body
+comp_3=`{
+comp_4=`    float3 c = GetPixel(uv) + GetBlur2(uv) * 0.3;
+comp_5=`    int steps = int(2.6);
+comp_6=`    for (int i = 0; i < steps; i++) c = max(c, GetBlur3(uv) * 0.5);
+comp_7=`    ret = pow(c, 0.9) * frac(1.25) * 4;
+comp_8=`    ret.x = lerp(ret.x, lum(ret), 0.1);
+comp_9=`}

@@ -1,0 +1,6 @@
+[preset00]
+fDecay=0.97
+per_frame_1=zoom = 1 + megabuf(3);
+per_pixel_1=zoom = 1 + (q1 = rad) * 0.1;
+wavecode_0_enabled=1
+wave_0_per_point1=x = sample; y = 0.5 + value1 *;

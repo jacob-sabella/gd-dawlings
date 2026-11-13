@@ -226,7 +226,7 @@ static func _list(api: ControlApi, a: Dictionary) -> Dictionary:
 		rows.append(_module_row(p, ids[i], false))
 	return ControlTool.ok({"modules": rows, "total": ids.size(), "cables": (p["cables"] as Array).size(),
 			"cost": RackPatch.cost(p), "max_modules": RackPatch.MAX_MODULES, "max_cables": RackPatch.MAX_CABLES,
-			"track": _track_of(api), "grid": {"cols": RackLayout.COLS, "rows": RackLayout.ROWS}})
+			"track": _track_of(api), "grid": {"cols": RackLayout.ALL_COLS, "rows": RackLayout.ROWS, "wing_from": RackLayout.COLS}})
 
 
 static func _module_get(api: ControlApi, a: Dictionary) -> Dictionary:

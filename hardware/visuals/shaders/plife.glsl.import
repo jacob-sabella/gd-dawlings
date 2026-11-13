@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dsta6jd3obcvb"
+path="res://.godot/imported/plife.glsl-f71a7c9404dd26445f531b8591d74e3d.res"
+
+[deps]
+
+source_file="res://hardware/visuals/shaders/plife.glsl"
+dest_files=["res://.godot/imported/plife.glsl-f71a7c9404dd26445f531b8591d74e3d.res"]
+
+[params]
+

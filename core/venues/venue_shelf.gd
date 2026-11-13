@@ -108,6 +108,57 @@ func toy_spot() -> Transform3D:
 ## Where the radio plane (RcPlaneItem) waits: on the floor further out from the hoop than the toy,
 ## its nose (-Z) pointed back along the open floor away from the control room, so a take-off runs
 ## down the open floor between the shelf's wall and the hoop's side, not into either.
+##
+## A take-off needs RUNWAY metres clear ahead (it leaves the floor after about one and climbs at a shallow
+## angle): where the vocal booth stands closer than that across its path, it waits a step to the side of it.
 func rcplane_spot() -> Transform3D:
 	var at := venue.hoop_spot() * Vector3(0.55, 0, 1.25)
-	return Transform3D(Basis(Vector3.UP, PI if at.z >= Studio.MIX_POSITION_Z else 0.0), at)
+	var turned := Basis(Vector3.UP, PI if at.z >= Studio.MIX_POSITION_Z else 0.0)
+	var nose := turned * Vector3.FORWARD
+	var zones: Dictionary = venue.zones()
+	if zones.has(&"vocals"):
+		var booth := (zones[&"vocals"] as AABB).grow(0.2)
+		var clear := clear_ahead(Vector2(at.x, at.z), Vector2(nose.x, nose.z), Rect2(booth.position.x, booth.position.z, booth.size.x, booth.size.z))
+		if clear < RUNWAY:
+			var side := sidestep(Vector2(at.x, at.z), Vector2(nose.x, nose.z), Rect2(booth.position.x, booth.position.z, booth.size.x, booth.size.z))
+			at += Vector3(side.x, 0.0, side.y)
+	return Transform3D(turned, at)
+
+
+## How far a take-off wants before anything stands across it (m).
+const RUNWAY := 3.4
+
+
+## The shortest step square to `dir` that takes a run from `from` along it clear past `box`, on the side
+## nearer, with 0.15 m to spare.
+static func sidestep(from: Vector2, dir: Vector2, box: Rect2) -> Vector2:
+	var across := Vector2(-dir.y, dir.x)
+	var lo := INF
+	var hi := -INF
+	for c in [box.position, Vector2(box.end.x, box.position.y), box.end, Vector2(box.position.x, box.end.y)]:
+		lo = minf(lo, (c as Vector2).dot(across))
+		hi = maxf(hi, (c as Vector2).dot(across))
+	var o := from.dot(across)
+	var up := hi + 0.15 - o
+	var down := lo - 0.15 - o
+	return across * (up if absf(up) < absf(down) else down)
+
+
+## How far from `from` along `dir` (unit, on the floor) before entering `box`; INF if never.
+static func clear_ahead(from: Vector2, dir: Vector2, box: Rect2) -> float:
+	var near := 0.0
+	var far := INF
+	for k in 2:
+		var o := from[k]
+		var d := dir[k]
+		var lo := box.position[k]
+		var hi := box.end[k]
+		if absf(d) < 1e-6:
+			if o < lo or o > hi:
+				return INF
+			continue
+		var t0 := (lo - o) / d
+		var t1 := (hi - o) / d
+		near = maxf(near, minf(t0, t1))
+		far = minf(far, maxf(t0, t1))
+	return near if near <= far else INF

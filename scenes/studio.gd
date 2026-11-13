@@ -392,6 +392,10 @@ func _ready() -> void:
 	# A rack unit's words (✕ REMOVE's) are the room's notices.
 	RackUnit.say = func(words: String) -> void: Session.notice.emit(words)
 	add_child(room_deltas)
+	# What the music is doing, for every visual that moves with it (docs/visuals.md).
+	var features := AudioFeatures.new()
+	features.name = "AudioFeatures"
+	add_child(features)
 	venue_look._build_environment()
 	# In AR the room is already there -- it is the one the participant is standing in. Drawing a
 	# virtual floor over a real one is not a smaller version of the VR experience, it is a worse

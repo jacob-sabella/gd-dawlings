@@ -46,6 +46,13 @@ signal run_asked()
 
 const COLS := RackLayout.COLS
 const ROWS := RackLayout.ROWS
+## The wing: RackLayout.WING_COLS more columns round the case's left corner, along the modular room's side wall
+## (where its gantry was), in the same rows and at the same height, turned to face into the room. Its face
+## stands WING_X across from the case's middle (the side wall, ModularAnnex.Z_FROM, at the room's RACK_SCALE),
+## and its corner end WING_END out from the case's face, clear of the case's border and posts.
+const WING_X := -2.55
+const WING_END := 0.12
+const WING_BASIS := Basis(Vector3(0, 0, -1), Vector3(0, 1, 0), Vector3(1, 0, 0))
 const MODULE_WIDE := 0.11
 const WIDE := MODULE_WIDE * COLS
 const ROW_TALL := 0.55
@@ -217,6 +224,30 @@ func framing_root() -> Node3D:
 	return panel if panel != null else self
 
 
+## The case's own face, as the surface's frame and its grab tab are measured from: without the wing. The wing runs
+## round the corner along the side wall, square to the case, and counted in it made a box the size of the room's
+## corner, whose corner (where the tab goes) stood in mid-air in front of the annex's TV.
+func content_aabb() -> AABB:
+	var out := AABB()
+	var first := true
+	var root := framing_root()
+	for node in root.find_children("*", "VisualInstance3D", true, false):
+		var vi := node as VisualInstance3D
+		if vi.is_in_group(&"presentation_chrome") or not _shown_within(vi):
+			continue
+		var here := (global_transform.affine_inverse() * vi.global_transform) * vi.get_aabb()
+		if on_the_wing(root.global_transform.affine_inverse() * vi.global_transform * vi.get_aabb().get_center()):
+			continue
+		out = here if first else out.merge(here)
+		first = false
+	return out
+
+
+## Whether a point in the panel's frame is on the wing: past the case's left end, out from the wall.
+static func on_the_wing(local: Vector3) -> bool:
+	return local.x < -WIDE * 0.5 - BORDER - 0.05 and local.z > WING_END
+
+
 var _shone_key := Vector3(-1, -1, -1)
 
 
@@ -250,6 +281,37 @@ func _put(node: Node) -> void:
 
 func _x_of(col: float) -> float:
 	return -WIDE * 0.5 + MODULE_WIDE * col
+
+
+## Where in the panel a module whose middle is column `mid` (on the case, or `RackLayout.on_wing`) stands with
+## its foot at height `y`, `lift` out from its face: on the case facing out, or on the wing facing into the room.
+func _cell_frame(mid: float, y: float, lift := 0.0) -> Transform3D:
+	if RackLayout.on_wing(mid):
+		return Transform3D(WING_BASIS, Vector3(WING_X + lift, y, WING_END + BORDER + MODULE_WIDE * (RackLayout.ALL_COLS - mid)))
+	return Transform3D(Basis.IDENTITY, Vector3(_x_of(mid), y, lift))
+
+
+## Columns unfolded into one strip, left to right as a player walks it: the wing from its far end to the corner
+## (0 to WING_COLS), then the case (WING_COLS on). `_unfold` takes a column there, `_fold` gives it back.
+static func _unfold(col: float) -> float:
+	return col - COLS if RackLayout.on_wing(col) else col + RackLayout.WING_COLS
+
+
+static func _fold(t: float) -> float:
+	return t + COLS if t < RackLayout.WING_COLS else t - RackLayout.WING_COLS
+
+
+## Where along the unfolded strip a point of the panel is: read on the wing's face if `wing`, else the case's.
+func _strip_at(local: Vector3, wing: bool) -> float:
+	if wing:
+		return RackLayout.WING_COLS - (local.z - WING_END - BORDER) / MODULE_WIDE
+	return RackLayout.WING_COLS + (local.x + WIDE * 0.5) / MODULE_WIDE
+
+
+## Whether a point in the wall's own frame stands before the wing, near enough to reach it.
+static func before_wing(local: Vector3) -> bool:
+	return local.x > WING_X and local.x < WING_X + 2.0 and local.z > WING_END \
+			and local.z < WING_END + BORDER * 2.0 + MODULE_WIDE * RackLayout.WING_COLS + 0.3
 
 
 ## The foot of module row `row`, up the case: row 0 is the top one, over the palette.

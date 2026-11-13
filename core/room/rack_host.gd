@@ -497,6 +497,9 @@ func at_modular() -> bool:
 		return true
 	var me := studio.venue_switch._standing_at()
 	var local := studio.rack_wall.global_transform.affine_inverse() * me
+	# Before the wing round the corner, along the room's side wall, the rack is within reach all the way down it.
+	if RackWall.before_wing(local):
+		return true
 	if local.z <= MODULAR_NEAR or local.z >= MODULAR_FAR or absf(local.x) >= MODULAR_SIDE:
 		return false
 	var seats := _station_seats()
@@ -582,6 +585,7 @@ func _follow_modular() -> void:
 		studio.rack_wall.show_scopes(studio.rack_voice.scopes)
 		studio.rack_wall.show_steps(studio.rack_voice.steps)
 		studio.rack_wall.glow_with(studio.rack_voice.level, studio.rack_voice.hit)
+		AudioFeatures.now().lend(studio.rack_voice.level, studio.rack_voice.hit)
 		if studio.modular_annex != null and is_instance_valid(studio.modular_annex):
 			studio.modular_annex.glow_with(studio.rack_voice.level, studio.rack_voice.hit)
 			studio.modular_annex.show_levels(studio.rack_wall.module_levels(studio.rack_voice.meters))
@@ -629,6 +633,7 @@ func _show_live_rack() -> void:
 	studio.rack_wall.show_scopes(live.get("scopes", {}))
 	studio.rack_wall.show_steps(live.get("steps", {}))
 	studio.rack_wall.glow_with(float(live.get("level", 0.0)), float(live.get("hit", 0.0)))
+	AudioFeatures.now().lend(float(live.get("level", 0.0)), float(live.get("hit", 0.0)))
 	if studio.modular_annex != null and is_instance_valid(studio.modular_annex):
 		studio.modular_annex.glow_with(float(live.get("level", 0.0)), float(live.get("hit", 0.0)))
 		studio.modular_annex.show_levels(studio.rack_wall.module_levels(live.get("meters", {})))

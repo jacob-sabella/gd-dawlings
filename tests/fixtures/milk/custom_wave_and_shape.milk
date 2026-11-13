@@ -1,0 +1,38 @@
+[preset00]
+MILKDROP_PRESET_VERSION=201
+  fDecay = 0.94  
+zoom=0.99
+nWaveMode=6
+fWaveParam=0.3
+SomeUnknownKey=hello
+// a comment line
+this line has no equals sign
+wavecode_0_enabled=1
+wavecode_0_samples=200
+wavecode_0_bSpectrum=0
+wavecode_0_bAdditive=1
+wavecode_0_scaling=1.5
+wavecode_0_r=1
+wavecode_0_g=0.4
+wavecode_0_b=0.2
+wavecode_0_a=0.8
+wave_0_init1=t1 = 0;
+wave_0_per_frame1=t1 = t1 + 0.05; t2 = sin(time);
+wave_0_per_point1=ang = sample*6.2832 + t1;
+wave_0_per_point2=x = 0.5 + 0.3*cos(ang)*(1 + value1*0.4);
+wave_0_per_point3=y = 0.5 + 0.3*sin(ang)*(1 + value2*0.4);
+wave_0_per_point4=r = 0.5 + 0.5*sin(ang + t2); b = sample;
+shapecode_0_enabled=1
+shapecode_0_sides=6
+shapecode_0_textured=1
+shapecode_0_num_inst=3
+shapecode_0_rad=0.2
+shapecode_0_a=0.6
+shapecode_0_a2=0.1
+shapecode_0_border_a=0.7
+shape_0_per_frame1=x = 0.25 + 0.25*instance; ang = time*0.3 + instance;
+shape_0_per_frame2=rad = rad + 0.05*bass;
+shapecode_1_enabled=0
+shape_1_per_frame1=x = 99;
+per_frame_1=Zoom = ZOOM - 0.01*Bass; /* mixed case */
+per_frame_2=decay = decay

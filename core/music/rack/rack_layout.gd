@@ -2,11 +2,15 @@ class_name RackLayout
 extends RefCounted
 
 ## Where modules sit in the case: a grid of COLS columns and ROWS rows (skiffs stacked), each module
-## one or more columns wide by what it has to hold. Pure arithmetic, shared by the wall that draws it
-## and the room that answers an ask to put a module somewhere.
+## one or more columns wide by what it has to hold, and round the corner a wing of WING_COLS more columns
+## (columns COLS to ALL_COLS - 1) in the same rows on the room's side wall. A module sits wholly on one or the
+## other. Pure arithmetic, shared by the wall that draws it and the room that answers an ask to put a module
+## somewhere.
 
 const COLS := 40
 const ROWS := 4
+const WING_COLS := 50
+const ALL_COLS := COLS + WING_COLS
 ## A column holds this many knobs, or this many jacks, before the module needs another.
 const KNOBS_PER_COLUMN := 8
 const JACKS_PER_COLUMN := 6
@@ -43,7 +47,7 @@ static func _spot(p: Dictionary, id: String) -> Vector2i:
 ## counts when it is one of `p`'s.
 static func fits(p: Dictionary, type: String, at: Vector2i, ignore := "", wide := -1) -> bool:
 	var w := wide if wide > 0 else (width_in(p, ignore) if (p["modules"] as Dictionary).has(ignore) else width_of(type))
-	if at.x < 0 or at.y < 0 or at.y >= ROWS or at.x + w > COLS:
+	if at.x < 0 or at.y < 0 or at.y >= ROWS or at.x + w > ALL_COLS or (at.x < COLS and at.x + w > COLS):
 		return false
 	for id in p["modules"]:
 		if id == ignore:
@@ -55,13 +59,26 @@ static func fits(p: Dictionary, type: String, at: Vector2i, ignore := "", wide :
 	return true
 
 
-## The first place a `type` fits, scanning along each row; (-1, -1) when the case is full.
+## The first place a `type` fits, scanning along each row of the case and then of the wing; (-1, -1) when
+## both are full.
 static func free_slot(p: Dictionary, type: String, wide := -1) -> Vector2i:
-	for row in ROWS:
-		for col in COLS:
-			if fits(p, type, Vector2i(col, row), "", wide):
-				return Vector2i(col, row)
+	for span in [[0, COLS], [COLS, ALL_COLS]]:
+		for row in ROWS:
+			for col in range(span[0], span[1]):
+				if fits(p, type, Vector2i(col, row), "", wide):
+					return Vector2i(col, row)
 	return Vector2i(-1, -1)
+
+
+## Column `col` moved into the case or the wing, whichever it is on, so a module `w` wide starting there fits
+## wholly on it.
+static func clamp_col(col: int, w: int) -> int:
+	return clampi(col, COLS, ALL_COLS - w) if col >= COLS else clampi(col, 0, COLS - w)
+
+
+## Whether column `col` is on the wing round the corner rather than the case.
+static func on_wing(col: float) -> bool:
+	return col >= COLS
 
 
 ## A patch where nothing overlaps or hangs off the case: the modules that do not fit are put in the
