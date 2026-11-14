@@ -545,6 +545,14 @@ func _default_readout() -> String:
 	return "%d%%" % roundi(value * 100.0)
 
 
+## How far in front of its own origin, along its own z and in its own units, the face a hand presses is. A held
+## control is dragged on the plane through that face (Interactor._plane_point), so the drag starts where the press
+## landed: a control whose press box stands proud of its origin, seen at a slant, would otherwise jump as it is
+## taken. 0 for most, whose origin is their face.
+func grab_face() -> float:
+	return 0.0
+
+
 func _on_grab_begin(_at: Vector3) -> void: pass
 func _on_grab_move(_at: Vector3) -> void: pass
 func _on_grab_end() -> void: pass
