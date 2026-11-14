@@ -15,7 +15,32 @@ var plugin: Object
 var _opening := false
 
 
+## On Hyprland, dawkit keeps a plugin's window on a special workspace nobody looks at (`special:dawkit`).
+## Two things it needs there that dawkit's own hook does not give it, said to Hyprland as a rule on its
+## window class before the window maps:
+##   no_initial_focus  -- focused as it opened, the window pulled the player's screen over to it: the
+##                        game's workspace, or `special:dawkit` itself opened like a scratchpad ("it puts
+##                        it in my scratch window too ... and it activates it", 2026-11-13).
+##   render_unfocused  -- a window on a workspace that is not shown gets no frames, and a plugin drawn with
+##                        OpenGL (FretScope's egui) then draws only now and again: a click landed, but the
+##                        dropdown it opened was never seen in the room ("i couldnt interact with most of
+##                        the dropdowns"). At Hyprland's misc:render_unfocused_fps (15 by default).
+## Installed again on every window, since Hyprland forgets a rule made this way when its config reloads.
+## Lua's single quotes: a double quote does not reach hyprctl intact from OS.execute (it answers 2).
+const HYPRLAND_RULE := "hl.window_rule({ name = 'dawkit-plugin-window', match = { class = '^(dawkit-plugin-window)$' }, workspace = 'special:dawkit silent', float = true, no_initial_focus = true, render_unfocused = true })"
+
+
+static func _rule_on_hyprland() -> void:
+	if OS.get_environment("HYPRLAND_INSTANCE_SIGNATURE") == "" or OS.get_environment("DAWKIT_NO_HYPRLAND_RULE") != "":
+		return
+	var said := []
+	if OS.execute("hyprctl", ["eval", HYPRLAND_RULE], said, true) != 0:
+		push_warning("HostedPluginWindow: Hyprland did not take the plugin window rule: %s" % "".join(said).strip_edges())
+
+
 static func opening(p: Object) -> HostedPluginWindow:
+	if p != null and p.editor_supported():
+		_rule_on_hyprland()
 	if p == null or not p.editor_supported() or not p.editor_open():
 		return null
 	var w := HostedPluginWindow.new()
