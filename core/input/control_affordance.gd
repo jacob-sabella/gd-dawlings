@@ -74,6 +74,28 @@ func _enter_tree() -> void:
 	add_to_group(GROUP)
 
 
+## A hidden control is not there to be found: off the control layer while it is out of sight, as a
+## trolley is (Trolley._ready). Hidden is not gone -- its shape stayed where it was, and a tablet
+## showing a plugin's own window hides its footer under the window's lower part: a click meant for
+## the plugin turned MIX or pressed CHAIN instead ("the controls from the game get in the way of
+## actual controls in the ui", 2026-11-14). The layer it had comes back with it, unless something
+## gave it another while it was hidden.
+var _layer_while_shown := -1
+
+
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_VISIBILITY_CHANGED and what != NOTIFICATION_ENTER_TREE:
+		return
+	var shown := is_visible_in_tree()
+	if not shown and _layer_while_shown < 0:
+		_layer_while_shown = collision_layer
+		collision_layer = 0
+	elif shown and _layer_while_shown >= 0:
+		if collision_layer == 0:
+			collision_layer = _layer_while_shown
+		_layer_while_shown = -1
+
+
 ## Held by a hand, or written by a write bead over it (WriteBead): either way its value is not
 ## the mix's to move until it is let go, and nothing may rebuild or re-point it meanwhile.
 func is_held() -> bool:

@@ -4425,6 +4425,13 @@ func _test_a_tablet_turns_over_to_the_plugins_own_window() -> void:
 			and is_instance_valid(tablet._move_to))
 	check("the preset and page rows give it room", not tablet._preset_label.visible \
 			and not tablet._preset_word.visible and not tablet._page_label.visible)
+	# Hidden under the window's lower part, the footer must not take its clicks.
+	var hidden_but_pickable := []
+	for c in tablet.find_children("*", "ControlAffordance", true, false):
+		if not (c as Node3D).is_visible_in_tree() and (c as CollisionObject3D).collision_layer != 0:
+			hidden_but_pickable.append(c.name)
+	check("nothing hidden under the window can be pointed at (%s)" % [hidden_but_pickable],
+			hidden_but_pickable.is_empty() and tablet._screen.collision_layer != 0 and not tablet._mix.is_visible_in_tree())
 
 	var screen := tablet._screen
 	screen._process(0.0)
@@ -4453,6 +4460,8 @@ func _test_a_tablet_turns_over_to_the_plugins_own_window() -> void:
 	tablet._process(0.0)
 	check("pressed again, the knobs are back and the window put away", not tablet.showing_window \
 			and not tablet._knobs.is_empty() and not window.is_open() and tablet._preset_word.visible)
+	check("and the footer can be pointed at again", tablet._mix.is_visible_in_tree() and tablet._mix.collision_layer != 0 \
+			and tablet._key.collision_layer != 0)
 
 	# BIG: the window stood up over the stand, for the room.
 	var said: Array = []
