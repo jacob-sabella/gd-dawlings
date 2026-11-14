@@ -114,6 +114,10 @@ func _ready() -> void:
 	else:
 		Session.start_solo()
 		_start_daw(args)
+		# "Open my realm when the game starts" (RealmLobby, docs/realms.md): online by a code, its card in the lobby.
+		# Never for a capture, which keeps to itself.
+		if Session.lobby.open_on_start and not args["fresh_layout"]:
+			Session.host_online(args["session_port"])
 
 	studio = Studio.new()
 	studio.name = "Studio"

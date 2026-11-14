@@ -34,6 +34,15 @@ func ready() -> void:
 	session.mod_share = ModSend.new()
 	session.mod_share.name = "ModSend"
 	session.add_child(session.mod_share)
+	session.home = RealmHome.new()
+	session.home.name = "RealmHome"
+	session.add_child(session.home)
+	session.lobby = RealmLobby.new()
+	session.lobby.name = "RealmLobby"
+	session.add_child(session.lobby)
+	session.realm_copy = RealmCopy.new()
+	session.realm_copy.name = "RealmCopy"
+	session.add_child(session.realm_copy)
 	session.discord = DiscordFeed.new()
 	session.discord.name = "DiscordFeed"
 	session.add_child(session.discord)

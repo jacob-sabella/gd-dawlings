@@ -129,6 +129,12 @@ var host_audio: GuestAudio = null
 var files: FileSend = null
 ## The host's user mods offered to guests, and a guest's inbox of offers (`ModSend`).
 var mod_share: ModSend = null
+## This player's own realm while they visit another (`RealmHome`, docs/realms.md).
+var home: RealmHome = null
+## Realms open now, and this player's realm's card in the lobby (`RealmLobby`, docs/realms.md).
+var lobby: RealmLobby = null
+## A rack, a room or a song copied between realms (`RealmCopy`, docs/realms.md).
+var realm_copy: RealmCopy = null
 ## This player's own sound into their Discord voice channel. See core/audio/discord_feed.gd.
 var discord: DiscordFeed = null
 var rooms_published := 0

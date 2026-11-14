@@ -61,6 +61,8 @@ var _status: Label
 var _name_edit: LineEdit
 var _swatch: Panel
 var _roster: VBoxContainer
+## REALMS: your realm, friends, the lobby, going home and copying (RealmBox).
+var realms: RealmBox
 ## A guest's accept / decline cards for the mods the host offers.
 var _mod_offers: ModOfferPrompt
 var _solo_box: VBoxContainer
@@ -466,6 +468,10 @@ func _build_panel() -> void:
 	_roster.add_theme_constant_override("separation", 4)
 	column.add_child(_roster)
 
+	# Realms (docs/realms.md): yours, your friends, the lobby, and while visiting, home and what to take.
+	realms = RealmBox.new(self)
+	column.add_child(realms)
+
 	# Solo: start one, or find one.
 	_solo_box = VBoxContainer.new()
 	_solo_box.add_theme_constant_override("separation", 8)
@@ -484,11 +490,7 @@ func _build_panel() -> void:
 	_ask_code.add_theme_font_size_override("font_size", 13)
 	_ask_code.add_theme_color_override("font_color", DIM)
 	host_row.add_child(_ask_code)
-	# Online by a code: no address to read out and no router to ask (docs/multiplayer.md).
-	var online_host := _button("Host online", false)
-	online_host.tooltip_text = "Host, and get a short join code from the noray server: anyone, anywhere, joins by it. No port forwarding."
-	online_host.pressed.connect(_host_online)
-	_solo_box.add_child(online_host)
+	# Online by a code is "Open my realm", in the realms part below (RealmBox, docs/realms.md).
 	_solo_box.add_child(_caption("JOIN BY CODE  ·  FROM ANYWHERE"))
 	var code_row := HBoxContainer.new()
 	code_row.add_theme_constant_override("separation", 8)
@@ -1400,7 +1402,10 @@ func _join_by_code(typed: String) -> void:
 		return
 	_rename(_name_edit.text)
 	_keep_server(_server_edit.text)
-	Session.join_by_code(typed, _code_edit.text)
+	var door := _code_edit.text
+	# Leaving home: unsaved changes are asked about first (RealmLeavePrompt, docs/realms.md).
+	RealmLeavePrompt.leave_home(self, "the session %s" % NorayLink.spoken(NorayLink.clean_code(typed)),
+			func() -> void: Session.join_by_code(typed, door))
 
 
 func _keep_server(text: String) -> void:
@@ -1466,8 +1471,10 @@ func _join(address: String, port: int) -> void:
 		_address_edit.grab_focus()
 		return
 	_rename(_name_edit.text)
-	if Session.join(address, port, _code_edit.text):
-		toast("Joining %s…" % address)
+	var door := _code_edit.text
+	RealmLeavePrompt.leave_home(self, "the session at %s" % address, func() -> void:
+		if Session.join(address, port, door):
+			toast("Joining %s…" % address))
 
 
 ## Whether the session can be reached from the internet, and at what: the router's public address

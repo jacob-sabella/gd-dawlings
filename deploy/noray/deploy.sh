@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Put dawlings' noray server on the VPS, or check it, or take its Caddy block back out.
+# Put dawlings' noray server and its realm listing (deploy/realms, docs/realms.md) on the VPS, or check them,
+# or take the Caddy block back out.
 # Run by a person, from this repo, on their own machine. Idempotent: run it again to update.
 #
 #   deploy/noray/deploy.sh --dry-run        say every step, change nothing anywhere
@@ -67,6 +68,8 @@ verify() {
   local code
   code="$(curl -s -o /dev/null -w '%{http_code}' --resolve "$NAME:443:$ip" "https://$NAME/health" || true)"
   echo "  HTTPS /health: ${code:-none} (200 once the Caddy block is in)"
+  code="$(curl -s -m 4 "http://$ip:8892/realms/health" || true)"
+  if [ "$code" = "ok" ]; then echo "  TCP 8892: the realm listing answers"; else echo "  TCP 8892: NO ANSWER (service down, or the port is filtered)"; fi
 }
 
 if [ "$ONLY_VERIFY" -eq 1 ]; then verify; exit 0; fi
@@ -87,6 +90,7 @@ if [ "$STOP" -eq 1 ]; then
   say "stopping the service"
   remote <<EOF
 systemctl --user disable --now dawlings-noray.service || true
+systemctl --user disable --now dawlings-realms.service || true
 echo "stopped; files kept in ~/$DIR"
 EOF
   exit 0
@@ -111,6 +115,9 @@ else
 fi
 run cp deploy/noray/noray.env deploy/noray/dawlings-noray.service deploy/noray/noray-watchdog.sh \
   deploy/noray/dawlings-noray-watchdog.service deploy/noray/dawlings-noray-watchdog.timer "$STAGE/"
+run mkdir -p "$STAGE/realms"
+run cp deploy/realms/realms.mjs "$STAGE/realms/"
+run cp deploy/realms/dawlings-realms.service "$STAGE/"
 
 say "copying to $HOST:~/$DIR"
 run "${SSH[@]}" "$HOST" "mkdir -p ~/$DIR ~/.config/systemd/user"
@@ -120,6 +127,8 @@ run rsync -a "$STAGE/noray.env" "$HOST:$DIR/noray.env"
 run rsync -a "$STAGE/dawlings-noray.service" "$HOST:.config/systemd/user/dawlings-noray.service"
 run rsync -a "$STAGE/noray-watchdog.sh" "$HOST:$DIR/noray-watchdog.sh"
 run rsync -a "$STAGE/dawlings-noray-watchdog.service" "$STAGE/dawlings-noray-watchdog.timer" "$HOST:.config/systemd/user/"
+run rsync -a --delete "$STAGE/realms/" "$HOST:$DIR/realms/"
+run rsync -a "$STAGE/dawlings-realms.service" "$HOST:.config/systemd/user/dawlings-realms.service"
 
 say "installing and (re)starting the service"
 remote <<'EOF'
@@ -128,20 +137,22 @@ systemctl --user daemon-reload
 systemctl --user enable dawlings-noray.service >/dev/null
 systemctl --user restart dawlings-noray.service
 systemctl --user enable --now dawlings-noray-watchdog.timer >/dev/null
+systemctl --user enable dawlings-realms.service >/dev/null
+systemctl --user restart dawlings-realms.service
 sleep 2
 systemctl --user --no-pager --lines=0 status dawlings-noray.service | head -5
 if [ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null)" != "yes" ]; then
   echo "OWNER: lingering is off, so the service stops when the last ssh session ends."
   echo "       Run once, with sudo: sudo loginctl enable-linger $USER"
 fi
-for p in 8890/tcp 8809/udp; do
+for p in 8890/tcp 8809/udp 8892/tcp; do
   ss -lntu | grep -q ":${p%/*} " && echo "listening on $p" || echo "NOT listening on $p"
 done
 echo "memory: $(systemctl --user show dawlings-noray.service -p MemoryCurrent --value) bytes"
 if command -v ufw >/dev/null && sudo -n true 2>/dev/null; then
-  sudo -n ufw status | grep -E '8890|8809|49152' || echo "OWNER: ufw is on and has no rule for noray: see docs/multiplayer.md, Firewall."
+  sudo -n ufw status | grep -E '8890|8809|8892|49152' || echo "OWNER: ufw is on and has no rule for noray: see docs/multiplayer.md, Firewall."
 else
-  echo "(firewall not checked: no passwordless sudo. Needed open: 8890/tcp, 8809/udp, 49152-49215/udp.)"
+  echo "(firewall not checked: no passwordless sudo. Needed open: 8890/tcp, 8809/udp, 8892/tcp, 49152-49215/udp.)"
 fi
 EOF
 

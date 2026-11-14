@@ -50,7 +50,7 @@ const START := [
 	["Instruments", "I walks to each instrument in turn, Shift-I back; the PLAY pages and the board left of the desk name them all. Esc, or BACK on a plaque, comes back to the desk."],
 ]
 const TOGETHER := [
-	["Host", "M, then \"Host a session\": others on this network see it. \"Host online\" gives a join code anyone, anywhere can use; read it out or Copy it."],
+	["Host", "M, then \"Host a session\": others on this network see it. \"Open my realm\" gives a join code anyone, anywhere can use; read it out or Copy it."],
 	["Join", "M, then a session ON THIS NETWORK, the host's join code under JOIN BY CODE, or an address. The panel says direct or relayed."],
 	["Hear the mix", "As a guest, \"Hear the mix\" in the session panel plays the host's mix to you."],
 	["Into their takes", "\"Record when the host records\" puts your keys and your mic on the host's tracks."],

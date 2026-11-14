@@ -7,14 +7,14 @@ host authority, the same door code and the same mix:
 |---|---|---|
 | **On this network** (the panel's list) | the same room, or the same LAN | nothing: the host's beacon on UDP 7333 |
 | **Join by address** (+ *Open to internet*) | someone outside, when the host's router does UPnP or the host forwards UDP 7332 and 7334 by hand | the host's public address |
-| **Join by code** (*Host online*) | anyone, anywhere, behind any router | a noray server, which dawlings runs at `dawlings.jacobsabella.com` |
+| **Join by code** (*Open my realm*) | anyone, anywhere, behind any router | a noray server, which dawlings runs at `dawlings.jacobsabella.com` |
 
 This page is about the third. The first two are unchanged (docs/architecture.md, *Finding a
 session*).
 
 ## Using it
 
-**Host.** Press **M**, then **Host online** (or **Go online** if you are already hosting). The
+**Host.** Press **M**, then **Open my realm** under REALMS (or **Go online** if you are already hosting). The
 panel shows a six-character join code, such as `N6U U9K`. Read it out a letter at a time, or press
 **Copy** and paste it into a message. The code is also on the strip at the top right of the screen
 while the panel is closed. `--online` at launch does the same.
@@ -191,6 +191,7 @@ sockbowl and aa stacks. Everything for it is in `deploy/noray/`:
 | `noray-watchdog.sh`, `dawlings-noray-watchdog.{service,timer}` | every two minutes, asks noray for a join code as a host would, and restarts it if it gives none twice (2026-10-30: its TCP side went quiet for hours while the service looked healthy) |
 | `dawlings.caddy` | the Caddy site block: a landing page and `/health` |
 | `deploy.sh` | the deploy, run by a person from this repo; `--dry-run` says everything first |
+| `../realms/realms.mjs`, `../realms/dawlings-realms.service` | the realm listing (the lobby's open realms, `docs/realms.md`), run by the same bun on TCP 8892; deployed and checked by the same `deploy.sh` |
 
 **Why not in Docker there.** The VPS's Docker is rootless, with rootlesskit's builtin port
 driver. That driver rewrites every connection's source address to the bridge gateway
@@ -218,9 +219,9 @@ Caddy serves only the landing page.
 2. **Lingering** for the user, so the service runs without an ssh session open. Run this once:
    `sudo loginctl enable-linger ubuntu`. Rootless Docker already needs lingering, so it is probably
    on already. deploy.sh checks and says.
-3. **Firewall.** Open 8890/tcp, 8809/udp and 49152-49215/udp. Do it in the provider's network
+3. **Firewall.** Open 8890/tcp, 8809/udp, 8892/tcp (the realm listing) and 49152-49215/udp. Do it in the provider's network
    firewall if it has one, and in ufw if ufw is active:
-   `sudo ufw allow 8890/tcp && sudo ufw allow 8809/udp && sudo ufw allow 49152:49215/udp`.
+   `sudo ufw allow 8890/tcp && sudo ufw allow 8809/udp && sudo ufw allow 8892/tcp && sudo ufw allow 49152:49215/udp`.
    deploy.sh does not use sudo, so it only reports what it can see.
 4. **Look first:** `deploy/noray/deploy.sh --dry-run --caddy`. This prints every command, both
    local and remote, and changes nothing.
@@ -253,11 +254,12 @@ dig +short dawlings.jacobsabella.com                          # 15.204.11.205
 printf 'register-host\n' | nc -w 2 dawlings.jacobsabella.com 8890   # set-oid ..., set-pid ...
 printf 'nobody' | nc -u -w 2 dawlings.jacobsabella.com 8809         # Unknown host pid: "nobody"
 curl -s https://dawlings.jacobsabella.com/health                     # ok
+curl -s http://dawlings.jacobsabella.com:8892/realms/health          # ok (the realm listing)
 curl -sI https://dawlings.jacobsabella.com/ | head -1                # HTTP/2 200
 ```
 
 Then the real test: two machines on two different networks (a phone hotspot for one of them).
-**Host online** on one, **Join by code** on the other, and the panel says *direct* or *relayed*.
+**Open my realm** on one, **Join by code** on the other, and the panel says *direct* or *relayed*.
 `--relay` on the guest exercises the relay on purpose. On the VPS,
 `journalctl --user -u dawlings-noray -f` shows each registration and connect.
 

@@ -909,6 +909,12 @@ func _ready() -> void:
 	await _t("_test_rack_preset_popups_stay_on_screen")
 	await _t("_test_control_api_cancel_and_clear")
 	await _t("_test_control_api_requests")
+	await _t("_test_realm_home_set_aside_and_come_back")
+	await _t("_test_realm_leave_prompt_saves_or_discards")
+	await _t("_test_realm_lobby_settings_friends_and_card")
+	await _t("_test_realm_lobby_against_the_listing")
+	await _t("_test_realm_copy_rack_room_and_rules")
+	await _t("_test_realm_copy_song_in_slices")
 	await _t("_test_milk_file_eel_parses_and_evaluates")
 	await _t("_test_milk_file_per_pixel_compiles_to_a_shader")
 	await _t("_test_milk_file_milk_files_parse")
@@ -1156,6 +1162,30 @@ func _test_control_api_cancel_and_clear() -> void:
 
 func _test_control_api_requests() -> void:
 	ControlApiTests.new(self).requests()
+
+
+func _test_realm_home_set_aside_and_come_back() -> void:
+	await RealmTests.new(self).home_set_aside_and_come_back()
+
+
+func _test_realm_leave_prompt_saves_or_discards() -> void:
+	await RealmTests.new(self).leave_prompt_saves_or_discards()
+
+
+func _test_realm_lobby_settings_friends_and_card() -> void:
+	await RealmTests.new(self).lobby_settings_friends_and_card()
+
+
+func _test_realm_lobby_against_the_listing() -> void:
+	await RealmTests.new(self).lobby_against_the_listing()
+
+
+func _test_realm_copy_rack_room_and_rules() -> void:
+	await RealmTests.new(self).copy_rack_room_and_rules()
+
+
+func _test_realm_copy_song_in_slices() -> void:
+	await RealmTests.new(self).copy_song_in_slices()
 
 
 # --- the control API (docs/mcp_assistant.md): each domain's checks are in tests/control_<domain>_tests.gd ---
@@ -47071,6 +47101,7 @@ func _test_the_floor_import_forgets_old_defaults_once() -> void:
 
 
 const RoomZoneTests := preload("res://tests/room_zone_tests.gd")
+const RealmTests := preload("res://tests/realm_tests.gd")
 
 
 ## Section 8: a zone of a made room moves on the grid, and a move that does not fit is refused.

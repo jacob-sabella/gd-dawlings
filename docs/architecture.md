@@ -732,7 +732,7 @@ The beacon says `locked`, and the nearby list shows "code needed".
 ### Joining by a code, from anywhere
 
 A session across town used to need an address and a router that agreed to forward ports
-(`InternetDoor`, UPnP). **Host online** asks a noray server instead
+(`InternetDoor`, UPnP). **Open my realm** (once **Host online**) asks a noray server instead
 ([foxssake/noray](https://github.com/foxssake/noray); dawlings runs one at
 `dawlings.jacobsabella.com`) for a six-character join code. A guest types the code under
 **JOIN BY CODE**. Neither of them needs an address or a router setting. The full account is in
