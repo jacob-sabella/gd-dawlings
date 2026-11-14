@@ -89,6 +89,55 @@ func open_tablet(track: int, fx: int, plugin_name: String, where: Vector2) -> St
 	return id
 
 
+## BIG, out of the way: the stand wheeled to a side wall, facing the chair, with the big screen's
+## width in its footprint so it stands clear of the wall and of what is on the floor; and when BIG
+## comes down, back where it was. Only here: a spot by the wall is no place to leave the tablet
+## after a restart, when it comes back small.
+const BIG_WALL_GAP := 0.3
+
+## Where each stand stood before BIG took it to the wall: stand -> [at, heading].
+var _before_big := {}
+
+
+func _stand_aside(stand: Trolley, on: bool) -> void:
+	if on:
+		_before_big[stand] = [Vector2(stand.position.x, stand.position.z), stand.rotation.y]
+		stand.footprint_half = Vector2(PluginTablet.BIG_WIDTH * 0.5, TABLET_FOOT)
+		var spot := big_spot(stand)
+		if not spot.is_empty():
+			stand.place(spot["at"], spot["heading"])
+		return
+	stand.footprint_half = Vector2(TABLET_FOOT, TABLET_FOOT)
+	if _before_big.has(stand):
+		var was: Array = _before_big[stand]
+		_before_big.erase(stand)
+		stand.place(was[0], was[1])
+
+
+## A clear spot by a side wall for `stand` with the big screen up, facing the mix position, as near
+## level with the chair (a little ahead of it, where it is seen with a turn of the head) as there is
+## one; {at, heading}, or empty where no spot along either side wall is clear.
+func big_spot(stand: Trolley) -> Dictionary:
+	if studio.floor_plan == null:
+		return {}
+	var room: Rect2 = studio.floor_plan.bounds
+	var best := {}
+	var best_cost := INF
+	var want_z := Studio.MIX_POSITION_Z - 0.8
+	for x in [room.position.x + BIG_WALL_GAP + TABLET_FOOT, room.end.x - BIG_WALL_GAP - TABLET_FOOT]:
+		var z := room.position.y + 0.4
+		while z < room.end.y - 0.4:
+			var at := Vector2(x, z)
+			var heading := _facing_mix(at)
+			if studio.floor_plan.is_clear(stand, at, heading):
+				var cost := absf(z - want_z)
+				if cost < best_cost:
+					best_cost = cost
+					best = {"at": at, "heading": heading}
+			z += 0.2
+	return best
+
+
 func _facing_mix(from: Vector2) -> float:
 	var to := Vector2(0, Studio.MIX_POSITION_Z) - from
 	return atan2(to.x, to.y)
@@ -141,6 +190,20 @@ func _build_tablet(id: StringName, track: int, fx: int, plugin_name: String) -> 
 	stand.add_child(tablet)
 	tablet.dock_requested.connect(_dock_tablet.bind(id))
 	tablet.grows_with_window = true
+	# BIG stands the tablet up over the stand: a mast behind it holds it there, out only then.
+	var mast := MeshInstance3D.new()
+	mast.name = "Mast"
+	var post := BoxMesh.new()
+	var mast_top := PluginTablet.big_pose().origin.y
+	post.size = Vector3(0.05, mast_top, 0.04)
+	mast.mesh = post
+	mast.position = Vector3(0, mast_top * 0.5, PluginTablet.BIG_BACK - 0.055)
+	mast.material_override = Materials.brushed_metal()
+	mast.visible = false
+	stand.add_part(mast, false)
+	tablet.big_shown.connect(func(on: bool) -> void:
+		mast.visible = on
+		_stand_aside(stand, on))
 	# Gear like the rest: F walks to it, and it comes up close to be worked.
 	if studio.focus != null:
 		studio.focus.surfaces.append(tablet)

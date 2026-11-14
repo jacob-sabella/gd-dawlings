@@ -87,6 +87,13 @@ func _ready() -> void:
 			await get_tree().process_frame
 			waited += get_process_delta_time()
 		check("and shows a picture (%s)" % [w.pixel_size()], w.texture() != null and w.pixel_size().x > 50)
+		# The first picture can be from before the plugin has drawn (a GL editor's first frame is
+		# black): a moment more, and the picture saved is the one it drew.
+		waited = 0.0
+		while waited < 1.5:
+			w.poll()
+			await get_tree().process_frame
+			waited += get_process_delta_time()
 		if w.texture() != null:
 			var file := out.path_join("hosted_%s.png" % name.validate_filename().replace(" ", "_"))
 			w.texture().get_image().save_png(file)

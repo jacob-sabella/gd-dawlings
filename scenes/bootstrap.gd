@@ -419,13 +419,16 @@ func _apply_cli_tablet(wanted: Vector3i) -> void:
 		var tablet: PluginTablet = studio.tablets[id][1]
 		if tablet.track_index != wanted.x or tablet.fx_index != wanted.y:
 			continue
-		if wanted.z == BootstrapArgs.TABLET_WINDOW:
+		if wanted.z in [BootstrapArgs.TABLET_WINDOW, BootstrapArgs.TABLET_BIG]:
 			PluginTablet.window_face = true
 			var asked := 0.0
-			while asked < 10.0 and not DAW.shows_plugin_windows():
+			while asked < 10.0 and not (DAW.shows_plugin_windows() and DAW.has_plugin_window(wanted.x, wanted.y)):
 				await get_tree().create_timer(0.25).timeout
 				asked += 0.25
-			tablet.show_window(true)
+			if wanted.z == BootstrapArgs.TABLET_BIG:
+				tablet.show_big(true)
+			else:
+				tablet.show_window(true)
 			if not tablet.showing_window:
 				push_warning("bootstrap: --tablet %d:%d:ui -- this DAW cannot show the plugin's window here" \
 						% [wanted.x, wanted.y])

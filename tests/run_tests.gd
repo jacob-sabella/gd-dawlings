@@ -4454,6 +4454,33 @@ func _test_a_tablet_turns_over_to_the_plugins_own_window() -> void:
 	check("pressed again, the knobs are back and the window put away", not tablet.showing_window \
 			and not tablet._knobs.is_empty() and not window.is_open() and tablet._preset_word.visible)
 
+	# BIG: the window stood up over the stand, for the room.
+	var said: Array = []
+	tablet.big_shown.connect(func(on: bool) -> void: said.append(on))
+	tablet.refresh()
+	check("a BIG button beside UI", tablet._big_button.visible and not tablet._big_button.lit)
+	tablet._big_button.pressed.emit()
+	tablet._process(0.0)
+	check("pressed, it turns the tablet over to the window and stands it up big", tablet.big \
+			and tablet.showing_window and tablet._big_button.lit and said == [true])
+	for i in 60:
+		tablet._process(0.05)
+	check("BIG_WIDTH wide, upright (%s)" % tablet.transform, tablet.transform.basis.get_scale().is_equal_approx(
+			Vector3.ONE * PluginTablet.BIG_SCALE) and tablet.transform.basis.y.normalized().is_equal_approx(Vector3.UP))
+	check("its bottom edge at BIG_BOTTOM", is_equal_approx(
+			tablet.position.y - PluginTablet.HEIGHT * PluginTablet.BIG_SCALE * 0.5, PluginTablet.BIG_BOTTOM))
+	tablet._big_button.pressed.emit()
+	for i in 60:
+		tablet._process(0.05)
+	check("pressed again, back to the window at tablet size", not tablet.big and tablet.showing_window \
+			and said == [true, false] and is_equal_approx(tablet.transform.basis.get_scale().x, PluginTablet.WINDOW_SCALE))
+	tablet.show_big(true)
+	tablet.show_window(false)
+	check("the knobs back takes BIG down too", not tablet.big and said[-1] == false)
+	for i in 60:
+		tablet._process(0.05)
+	check("and the tablet is where it rested", tablet.transform.is_equal_approx(Transform3D.IDENTITY))
+
 	tablet.show_window(true)
 	window = backend.windows_opened[-1]
 	remove_child(tablet)

@@ -30,7 +30,7 @@ All in `core/room/` unless noted. Field name on `Studio` in brackets.
 | `FurnitureHost` (`furniture_host`) | the control room's trolleys (stage, EQ wall, deck, rack, patch stand), the levels niche, the TV mount, the live pieces, hood signs |
 | `RoomRows` (`room_rows`) | the room on the wire: `room_state` (what the host publishes), `apply_room` (what a guest adopts), `_on_room_asked` (every verb a player asks of the room) and the prediction that goes with it |
 | `StationHost` (`station_host`) | sitting, walking to a seat or station, the station board, the desk wing, point-and-mark |
-| `TabletHost` (`tablet_host`) | plugin tablets and track racks: tear off the wall, stand in the room, put back, remember |
+| `TabletHost` (`tablet_host`) | plugin tablets and track racks: tear off the wall, stand in the room, put back, remember; a tablet's BIG button stands the plugin's own window up 1.6 m wide on a mast over its stand (a fretboard or tuner to read across the room; `--tablet T:F:big`) |
 | `SignalViews` (`signal_views`) | the signal view, look-solo, tracing a signal to its source |
 | `RackHost` (`rack_host`) | the rack and the modular room: building, the annex, world sockets, `ask_rack`, recording the rack, its keys |
 | `SamplerHost` (`sampler_host`) | arming the sampler, sampling a take from an item, platter and scratch, other players' hits |
