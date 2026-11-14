@@ -20,6 +20,9 @@ uniform float vignette = 0.35;
 uniform vec3 wash = vec3(0.01, 0.012, 0.02);
 // How far the screen is lit at all: 0 dark glass, 1 the picture (a fade in when it first runs).
 uniform float power = 1.0;
+// The brightest the glass is ever drawn (MilkScreen.PEAK): a white flash at 1 on a wall-sized screen in a dark
+// room, and the room's glow blooming it, was blinding ("visualizers are allowed to get WAAAAAY too bright").
+uniform float peak = 0.5;
 // A MilkDrop preset file's composite (MilkPlayer) instead of the built-in looks': worked in gamma space as
 // MilkDrop's 8-bit one, the echo mixed in, `bright` its gamma (a multiplier), and its four flags.
 uniform float md = 0.0;
@@ -71,7 +74,7 @@ void fragment() {
 		vec3 m = milkdrop(uv);
 		float l = dot(m, vec3(0.2126, 0.7152, 0.0722));
 		m += wash * (1.0 - clamp(l * 3.0, 0.0, 1.0));
-		ALBEDO = m * power + wash * (1.0 - power);
+		ALBEDO = (min(m, vec3(1.0)) * power + wash * (1.0 - power)) * peak;
 	} else {
 		vec3 c = texture(buf, uv).rgb;
 		if (echo > 0.001) {
@@ -90,6 +93,6 @@ void fragment() {
 		vec2 v = uv - 0.5;
 		c *= 1.0 - vignette * dot(v, v) * 2.2;
 		c += wash * (1.0 - clamp(luma * 3.0, 0.0, 1.0));
-		ALBEDO = c * bright * power + wash * (1.0 - power);
+		ALBEDO = (min(c * bright, vec3(1.0)) * power + wash * (1.0 - power)) * peak;
 	}
 }
