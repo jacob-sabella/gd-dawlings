@@ -28,6 +28,7 @@ what lacks one.
 - `studio.md` - `Studio` and its helpers; how a launch builds the room.
 - `session.md` - the session autoload and its helpers; how a change to the room flows; adding a verb.
 - `multiplayer.md` - the ways in (LAN, address, join code) and what is shared.
+- `realms.md` - every game a realm: the lobby, visiting and going home, copying a rack, room or song between realms.
 - `transport.md` - the DAW/Reaper wire.
 - `colocation.md` - the physical-room frame for AR.
 - `rack.md` - the modular room, rack wall, engine.

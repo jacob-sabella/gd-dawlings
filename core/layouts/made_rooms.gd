@@ -131,6 +131,33 @@ static func remove(id: StringName) -> bool:
 	return true
 
 
+## Keeps a made room someone else sent (a host's row, `row_of`) as a room of the player's own, under `title` and an
+## id of its own, so it is there after the visit (docs/realms.md, step 4: TAKE THIS ROOM). Checked as a file of one
+## would be (`MadeRoom.validate`). `{ok, id, errors}`, as `make`.
+static func keep_copy(row: Variant, title: String) -> Dictionary:
+	var out := {"ok": false, "id": "", "errors": []}
+	if not row is Dictionary or str((row as Dictionary).get("shell", {}).get("builder", "")) != "BoxVenue":
+		out["errors"].append("That is not a made room.")
+		return out
+	var name := title.strip_edges().left(MadeRoom.MAX_TITLE).strip_edges()
+	if name.is_empty():
+		out["errors"].append("A room needs a name.")
+		return out
+	if own_ids().size() >= MAX_ROOMS:
+		out["errors"].append("You keep at most %d rooms of your own." % MAX_ROOMS)
+		return out
+	var dict: Dictionary = (row as Dictionary).duplicate(true)
+	var id := unique_slug(name)
+	dict["id"] = id
+	dict["title"] = name
+	var wrong := MadeRoom.validate(dict)
+	if not wrong.is_empty():
+		out["errors"].append(str(wrong[0]).get_slice(" [", 0))
+		return out
+	out["id"] = id
+	return _rewrite(StringName(id), dict, out)
+
+
 ## Renames the made room `id` to `title`: the title in its file is the only thing that changes, so the id (and with
 ## it the room's delta and every guest that holds the room) stays. `{ok, errors}`; not ok for a room that is not
 ## the player's, a name that is empty or over `MadeRoom.MAX_TITLE`, or a file that cannot be written.

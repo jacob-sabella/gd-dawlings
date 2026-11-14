@@ -38,6 +38,8 @@ extends Surface
 signal dock_requested()
 ## The UI face was turned on or off: a viewer on a monitor is brought up to it.
 signal window_shown(on: bool)
+## BIG was turned on or off: the stand puts up its mast for the big screen, or takes it down.
+signal big_shown(on: bool)
 
 const WIDTH := 0.32
 const HEIGHT := 0.30
@@ -69,6 +71,13 @@ static var window_face := true
 ## How much bigger the tablet grows while it shows a plugin's own window: the knobs are
 ## readable at 0.32 m, a plugin's drawing of its own is not.
 const WINDOW_SCALE := 2.4
+## BIG: the plugin's window as a screen for the room, read from across it -- a fretboard to play
+## along to, a tuner, a spectrum. The tablet stands upright on its stand's mast, this wide, its
+## bottom edge at BIG_BOTTOM, just behind the stand's pole.
+const BIG_WIDTH := 1.6
+const BIG_SCALE := BIG_WIDTH / WIDTH
+const BIG_BOTTOM := 0.95
+const BIG_BACK := -0.06
 
 var track_index := 1
 var fx_index := 0
@@ -83,6 +92,10 @@ var showing_window := false
 var _grown := 0.0
 ## Off where the viewer walks up to the tablet instead (a monitor); see studio._build_tablet.
 var grows_with_window := true
+## Showing the plugin's own window big, upright over the stand (BIG_WIDTH wide). Only with the window.
+var big := false
+## 0 at rest, 1 stood up big.
+var _bigness := 0.0
 var _resting := Transform3D.IDENTITY
 
 var _knobs: Array[Knob] = []
@@ -111,6 +124,8 @@ var _loading_label: Label3D
 var _preset_word: Label3D
 var _window_button: PanelButton
 var _window_word: Label3D
+var _big_button: PanelButton
+var _big_word: Label3D
 var _screen: PluginScreen
 var _window: PluginWindow
 ## The plugin the window was opened for, [track, fx]: a plugin that moves is a different window.
@@ -337,6 +352,14 @@ func _build_header() -> void:
 	_window_word = _label("UI", 30, Vector3(WIDTH * 0.5 - 0.088, top - 0.037, 0.001),
 			Color(0.55, 0.58, 0.62))
 
+	_big_button = _button(Vector3(WIDTH * 0.5 - 0.120, top - 0.024, 0.004), Color(0.95, 0.75, 0.35),
+			"THE PLUGIN'S WINDOW, BIG", func(): _act(func(): show_big(not big)))
+	_big_button.name = "Big"
+	_big_button.describe_value = func(_v: float) -> String:
+		return "big over the stand  ·  click to bring it back down" if big else "click to stand it up big, for the room"
+	_big_word = _label("BIG", 30, Vector3(WIDTH * 0.5 - 0.120, top - 0.037, 0.001),
+			Color(0.55, 0.58, 0.62))
+
 	# Presets on the left of the second line, pages on the right.
 	var y := top - 0.064
 	_preset_word = _label("PRESET", 30, Vector3(-WIDTH * 0.5 + 0.03, y + 0.001, 0.001),
@@ -490,7 +513,25 @@ func show_window(on: bool) -> void:
 		_close_window()
 	showing_window = on
 	window_shown.emit(on)
+	if not on and big:
+		big = false
+		big_shown.emit(false)
 	mark_dirty()
+
+
+## Stand the plugin's own window up big over the stand (true), turning the tablet over to it
+## first, or bring it back down to tablet size, still showing the window. Nothing where the window
+## cannot be shown.
+func show_big(on: bool) -> void:
+	if on == big:
+		return
+	if on:
+		show_window(true)
+		if not showing_window:
+			return
+	big = on
+	big_shown.emit(on)
+	refresh()
 
 
 func _windows_here() -> bool:
@@ -522,19 +563,29 @@ func _close_window() -> void:
 	_window_for = []
 
 
-## Grow the tablet while it shows a window, and shrink it back when it shows the knobs.
+## Grow the tablet while it shows a window, and shrink it back when it shows the knobs; stand it up
+## big over the stand while BIG is on.
 func _grow(delta: float) -> void:
-	var target := 1.0 if showing_window and grows_with_window else 0.0
-	if is_equal_approx(_grown, target):
+	var target := 1.0 if showing_window and grows_with_window and not big else 0.0
+	var big_target := 1.0 if big else 0.0
+	if is_equal_approx(_grown, target) and is_equal_approx(_bigness, big_target):
 		return
-	if _grown == 0.0:
+	if _grown == 0.0 and _bigness == 0.0:
 		_resting = transform
 	_grown = move_toward(_grown, target, delta * 4.0)
-	if _grown == 0.0:
+	_bigness = move_toward(_bigness, big_target, delta * 3.0)
+	if _grown == 0.0 and _bigness == 0.0:
 		transform = _resting
 		return
 	var s := lerpf(1.0, WINDOW_SCALE, _grown)
-	transform = _resting * Transform3D(Basis.from_scale(Vector3(s, s, s)), Vector3(0, HEIGHT * 0.5 * (s - 1.0), 0))
+	var pose := _resting * Transform3D(Basis.from_scale(Vector3(s, s, s)), Vector3(0, HEIGHT * 0.5 * (s - 1.0), 0))
+	transform = pose.interpolate_with(big_pose(), _bigness) if _bigness > 0.0 else pose
+
+
+## Where BIG stands the tablet, in its stand's frame: upright, BIG_WIDTH wide, its bottom edge at BIG_BOTTOM.
+static func big_pose() -> Transform3D:
+	return Transform3D(Basis.from_scale(Vector3.ONE * BIG_SCALE),
+			Vector3(0, BIG_BOTTOM + HEIGHT * BIG_SCALE * 0.5, BIG_BACK))
 
 
 ## The window follows its plugin like the knobs do: moved along the chain or to another track,
@@ -560,9 +611,9 @@ func refresh() -> void:
 	var track := DAW.state.track(track_index) if DAW.state.tracks.has(track_index) else null
 	_title.text = fx_name
 	var windows := _windows_here()
-	Lettering.fit(_title, WIDTH - (0.15 if windows else 0.12), 72)
+	Lettering.fit(_title, WIDTH - (0.18 if windows else 0.12), 72)
 	_subtitle.text = "%s   ·   %s" % [track.display_name().to_upper() if track else "?", _chain_words()]
-	Lettering.fit(_subtitle, WIDTH - 0.12, 40)
+	Lettering.fit(_subtitle, WIDTH - (0.18 if windows else 0.12), 40)
 	_chip_material.albedo_color = Materials.chip_colour(track.shown_colour() if track else Color.GRAY)
 	_lost_label.visible = lost
 	if _loading_label != null and is_instance_valid(_loading_label):
@@ -570,6 +621,9 @@ func refresh() -> void:
 	_window_button.visible = windows and here
 	_window_word.visible = _window_button.visible
 	_window_button.lit = showing_window
+	_big_button.visible = _window_button.visible
+	_big_word.visible = _big_button.visible
+	_big_button.lit = big
 	_give_the_window_the_footer()
 	if not here:
 		return

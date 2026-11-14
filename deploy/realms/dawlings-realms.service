@@ -1,0 +1,29 @@
+# dawlings' realm listing (docs/realms.md, step 1), as a systemd USER service of the VPS's `ubuntu` account,
+# beside noray and run by the same bun. Installed by deploy/noray/deploy.sh.
+#
+# It speaks plain HTTP on TCP 8892 straight to the internet, as noray speaks TCP 8890: Caddy runs in rootless
+# docker there, and from inside it the host's loopback cannot be reached, so it cannot be put behind Caddy.
+
+[Unit]
+Description=dawlings realm listing (the lobby's open realms)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/dawlings-noray/realms
+Environment=REALMS_HOST=0.0.0.0
+Environment=REALMS_PORT=8892
+ExecStart=%h/dawlings-noray/bin/bun realms.mjs
+Restart=on-failure
+RestartSec=5
+# Cards live in memory only: at most 5000 of a few hundred bytes. The box has about half a GiB free.
+MemoryHigh=64M
+MemoryMax=96M
+MemorySwapMax=0
+CPUQuota=25%
+TasksMax=32
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

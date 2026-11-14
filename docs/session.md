@@ -30,7 +30,7 @@ string or another file reaches):
 what they hold), `MixFeed`/`MixSource`/`JitterBuffer`/`HeardClock`/`SongClock` (the host's programme audio to guests
 on its own UDP socket, and which moment of the song a guest hears), `GuestMidi`/`GuestPlay`/`GuestAudio`/`GuestLive`/
 `MonitorSynth`/`TheirKeys` (a guest's keys and microphone), `FileSend` (sound files from a guest into the host's
-project), `ModSend` (the host's user mods to a guest, accept/decline, `docs/mods.md` section 13), `NorayLink`/`InternetDoor` (join by code, UPnP), `Glove`/`GhostLook`/`PoseTrail` (how others look),
+project), `ModSend` (the host's user mods to a guest, accept/decline, `docs/mods.md` section 13), `RealmHome`/`RealmLobby`/`RealmCopy` (home kept while visiting, the lobby's listing, copying a rack, room or song between realms, `docs/realms.md`), `NorayLink`/`InternetDoor` (join by code, UPnP), `Glove`/`GhostLook`/`PoseTrail` (how others look),
 `PatchHost` (jacks, `core/session/patch_host.gd`, a Studio helper).
 
 Channels (constants in `SessionBase`): game traffic on ENet's default; `AUDIO_TAKE_CHANNEL` 3, `MOTION_CHANNEL` 4,

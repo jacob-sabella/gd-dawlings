@@ -9,6 +9,8 @@ const DEFAULT_SEND_PORT := 8000
 const DEFAULT_LISTEN_PORT := 9000
 ## `--tablet T:F:ui`, as the page it asks for.
 const TABLET_WINDOW := -1
+## `--tablet T:F:big`: the plugin's own window, stood up big over the stand (PluginTablet.show_big).
+const TABLET_BIG := -2
 
 
 ## `argv` (the arguments after `--`) as a dictionary of every switch, with its default for the ones
@@ -66,14 +68,15 @@ static func parse(argv: PackedStringArray) -> Dictionary:
 				# if it had been pulled. For photographing the tablet without a hand to pull it.
 				# `--tablet 2:1:5` opens it on its fifth page, and `--tablet 2:1:ui` on the
 				# plugin's own window, where the DAW can show it -- the one way to turn that
-				# face on where it would otherwise be off (PluginTablet.window_face).
+				# face on where it would otherwise be off (PluginTablet.window_face). `--tablet 2:1:big`
+				# stands that window up big over the stand.
 				i += 1
 				if i < argv.size():
 					var parts := argv[i].split(":")
 					if parts.size() in [2, 3]:
 						var page := 1
 						if parts.size() == 3:
-							page = TABLET_WINDOW if parts[2] == "ui" else int(parts[2])
+							page = TABLET_WINDOW if parts[2] == "ui" else TABLET_BIG if parts[2] == "big" else int(parts[2])
 						out["tablets"].append(Vector3i(int(parts[0]), int(parts[1]), page))
 			"--eyes":
 				# `--eyes 2.0` -- this reader needs twice the angular cap height. The one
