@@ -133,6 +133,14 @@ func _on_nudge(notches: int, _fine: bool) -> bool:
 	return true
 
 
+## The front of the press box. A plugin's window takes a click as a click only if the press and the release are
+## a few pixels apart at most (egui, 6), and dragged on a plane through the screen's origin, the release came
+## 7 pixels from the press on a tablet seen at a slant: FretScope's dropdowns never opened ("still cant drop down
+## any menus in fretscope in game", 2026-11-13).
+func grab_face() -> float:
+	return _shape.position.z + _box.size.z * 0.5
+
+
 func personal() -> bool:
 	return true
 

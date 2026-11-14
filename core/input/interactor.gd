@@ -900,6 +900,6 @@ func own_jack() -> JackSocket:
 ## surface to hit, and a fader has none once the cap has moved out from under the cursor.
 func _plane_point(origin: Vector3, direction: Vector3, control: ControlAffordance) -> Vector3:
 	var basis := control.global_transform.basis
-	var plane := Plane(basis.z.normalized(), control.global_position)
+	var plane := Plane(basis.z.normalized(), control.to_global(Vector3(0, 0, control.grab_face())))
 	var hit = plane.intersects_ray(origin, direction)
 	return hit if hit != null else control.global_position

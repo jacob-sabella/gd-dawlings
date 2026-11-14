@@ -36,6 +36,8 @@ const WAVE_POINTS := 96
 signal find_asked
 ## How long a picture's name stays lettered in the corner after it changes (s).
 const NAME_SECONDS := 2.5
+## The brightest the glass is drawn, and the light it throws scaled with it (the composite shaders' `peak`).
+const PEAK := 0.5
 
 const WARP_SHADER := preload("res://hardware/visuals/milk_warp.gdshader")
 const COMP_SHADER := preload("res://hardware/visuals/milk_comp.gdshader")
@@ -561,7 +563,7 @@ func _draw_file_step(pl: MilkPlayer, a: AudioFeatures) -> void:
 		_glass.material_override = _comp
 	var wc := Color(float(pl.vars.get("wave_r", 1.0)), float(pl.vars.get("wave_g", 1.0)), float(pl.vars.get("wave_b", 1.0)))
 	_glow.light_color = tint.lerp(wc, 0.6)
-	_glow.light_energy = (0.25 + 0.6 * a.level + 0.4 * a.hit) * _power
+	_glow.light_energy = (0.25 + 0.6 * a.level + 0.4 * a.hit) * _power * PEAK
 	_write = 1 - _write
 
 
@@ -622,7 +624,7 @@ func _draw_step(p: Dictionary, delta: float, a: AudioFeatures, old_mode: int, k:
 	_comp.set_shader_parameter(&"power", _power)
 	var wc: Color = p["wave_color"]
 	_glow.light_color = tint.lerp(wc, 0.6)
-	_glow.light_energy = (0.25 + 0.6 * a.level + 0.4 * a.hit) * _power
+	_glow.light_energy = (0.25 + 0.6 * a.level + 0.4 * a.hit) * _power * PEAK
 	_write = 1 - _write
 
 

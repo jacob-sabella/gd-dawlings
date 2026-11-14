@@ -736,6 +736,7 @@ shader_type spatial;
 render_mode unshaded, cull_back, shadows_disabled, fog_disabled;
 
 uniform float power = 1.0;
+uniform float peak = 0.5;
 uniform vec3 wash = vec3(0.01, 0.012, 0.02);
 uniform float u_decay = 0.98;
 uniform float u_q[32];
@@ -752,6 +753,6 @@ void fragment() {
 {locals}
 {body}
 	vec3 m = pow(clamp(ret, vec3(0.0), vec3(1.0)), vec3(2.2));
-	ALBEDO = m * power + wash * (1.0 - power);
+	ALBEDO = (m * power + wash * (1.0 - power)) * peak;
 }
 """
