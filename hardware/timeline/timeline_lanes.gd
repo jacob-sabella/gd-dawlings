@@ -241,13 +241,17 @@ func _on_grab_move(at: Vector3) -> void:
 		return
 	if not _dragged and absf(to_local(at).x - _grab_x) < CLICK_SLOP and absf(to_local(at).y - _grab_y) < CLICK_SLOP:
 		return
+	# First, so what is pulled or moved below is the clip that was grabbed.
+	var held := _follow_held()
+	if held == null:
+		_lose_held()
+		return
 	# Drawn out of the face, or off the edge: a cassette of it, and the drag is over.
 	if _fade == 0 and _edge == 0 and pulled_out(at):
 		_pull()
 		return
 	# A locked item stays where it is: the press is a click on it, however far the hand goes.
-	var held: MixState.ItemState = DAW.state.item(_hit[0], _hit[1])
-	if held != null and held.locked:
+	if held.locked:
 		return
 	_dragged = true
 	var moved: float = surface.seconds_at_point(at) - _grab_seconds
@@ -310,9 +314,10 @@ func _finish_grab() -> void:
 			DAW.clear_item_selection()
 			DAW.seek(magnet(_grab_seconds, _fine()))
 		return
-	var item: MixState.ItemState = DAW.state.item(_hit[0], _hit[1])
+	var item := _follow_held()
 	surface.preview_item(-1, -1, 0.0)
 	if item == null:
+		_lose_held()
 		return
 	if not _dragged:
 		var fine := _fine()
@@ -335,21 +340,57 @@ func _finish_grab() -> void:
 	if _fade != 0:
 		surface.preview_fades(-1, -1)
 		if not is_equal_approx(_fade_in, item.fade_in) or not is_equal_approx(_fade_out, item.fade_out):
-			DAW.set_item_fades(_hit[0], _hit[1], _fade_in, _fade_out)
+			DAW.edit_held(&"set_item_fades", _hit[0], _hit[1], _item_start, _item_end, [_fade_in, _fade_out])
 		return
 	if _edge != 0:
 		if not is_equal_approx(_target_start, item.start) or not is_equal_approx(_target_end, item.end()):
 			if surface.ripple_edit:
-				DAW.ripple_trim_item(_hit[0], _hit[1], _target_start, _target_end)
+				DAW.edit_held(&"ripple_trim_item", _hit[0], _hit[1], _item_start, _item_end, [_target_start, _target_end])
 			else:
-				DAW.trim_item(_hit[0], _hit[1], _target_start, _target_end)
+				DAW.edit_held(&"trim_item", _hit[0], _hit[1], _item_start, _item_end, [_target_start, _target_end])
 		return
 	var onto := _target_track if _target_track > 0 and _target_track != _hit[0] else 0
 	# Ripple carries along its own track only: an item taken to another track goes alone.
 	if surface.ripple_edit and onto == 0 and not is_equal_approx(_target_start, item.start):
-		DAW.ripple_move_item(_hit[0], _hit[1], _target_start)
+		DAW.edit_held(&"ripple_move_item", _hit[0], _hit[1], _item_start, _item_end, [_target_start])
 	elif not is_equal_approx(_target_start, item.start) or onto > 0:
-		DAW.move_item(_hit[0], _hit[1], _target_start, onto)
+		DAW.edit_held(&"move_item", _hit[0], _hit[1], _item_start, _item_end, [_target_start, onto])
+
+
+## The clip in the hand, wherever its index is now, or null if it has gone or changed. Indices shift
+## when someone else deletes or adds a clip on the track, and writing by the old one would move
+## their neighbour. Found again by where it was at the press; two clips that match are not a guess.
+func _follow_held() -> MixState.ItemState:
+	if not DAW.state.tracks.has(_hit[0]):
+		return null
+	var items: Array = DAW.state.track(_hit[0]).items
+	var same := func(it: MixState.ItemState) -> bool:
+		return absf(it.start - _item_start) <= DAWBackend.TARGET_EPSILON \
+				and absf(it.end() - _item_end) <= DAWBackend.TARGET_EPSILON
+	if _hit[1] < items.size() and same.call(items[_hit[1]]):
+		return items[_hit[1]]
+	var found := -1
+	for i in items.size():
+		if same.call(items[i]):
+			if found >= 0:
+				return null
+			found = i
+	if found < 0:
+		return null
+	surface.preview_item(-1, -1, 0.0)
+	_hit[1] = found
+	return items[found]
+
+
+## The clip went from under the hand: the drag is over, and its release does nothing.
+func _lose_held() -> void:
+	var was_dragging := _dragged
+	surface.preview_item(-1, -1, 0.0)
+	surface.preview_fades(-1, -1)
+	_hit = []
+	_dragged = true
+	if was_dragging:
+		Session.notice.emit("That clip changed while you held it, so the drag was dropped.")
 
 
 ## How far in front of the lanes' face the hand holding them is (m), or NAN for a mouse, whose

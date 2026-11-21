@@ -120,11 +120,13 @@ func on_pad_stuck(_by: Node, control: ControlAffordance, point: Vector3) -> void
 	drop_note(seconds)
 
 
-## Z held points, Enter with it listens from there, O drops a note. Not with Ctrl or Meta, which
-## make Z undo; a focused catcher (a piano) takes its own keys before these are heard.
+## Z held points, Enter with it listens from there, O drops a note. Not pressed with Ctrl, Alt or
+## Meta, which make Z undo, though Z let go under one still stops pointing; a focused catcher (a
+## piano) takes its own keys before these are heard, and a text field or an open screen keeps them.
 func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
-	if key == null or key.echo or mouse == null or key.ctrl_pressed or key.meta_pressed:
+	if key == null or key.echo or mouse == null or (key.pressed and (KeyChord.commanded(key)
+			or KeyChord.room_keys_blocked(get_viewport()))):
 		return
 	match key.keycode:
 		KEY_Z:

@@ -28,6 +28,7 @@ var _rows: VBoxContainer
 
 
 func _ready() -> void:
+	add_to_group(KeyChord.PANEL)
 	layer = 10
 	_panel = PanelContainer.new()
 	_panel.position = Vector2(16, 44)
@@ -54,6 +55,11 @@ func _ready() -> void:
 	column.add_child(_rows)
 
 
+## Whether the panel is showing. The layer itself stays visible all its life.
+func is_open() -> bool:
+	return _panel != null and _panel.visible
+
+
 ## Show the stage manager panel and rebuild it.
 func open() -> void:
 	_panel.visible = true
@@ -61,7 +67,8 @@ func open() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == TOGGLE_KEY:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == TOGGLE_KEY \
+			and not KeyChord.commanded(event) and not KeyChord.room_keys_blocked(get_viewport()):
 		_panel.visible = not _panel.visible
 		if _panel.visible:
 			rebuild()

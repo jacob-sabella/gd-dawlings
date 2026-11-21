@@ -28,6 +28,7 @@ var _stick := true
 
 
 func _ready() -> void:
+	add_to_group(KeyChord.MODAL)
 	layer = 11
 	_panel = PanelContainer.new()
 	_panel.visible = false

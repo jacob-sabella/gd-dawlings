@@ -928,6 +928,75 @@ func _ready() -> void:
 	await _t("_test_sim_particle_life_matrix_blends")
 	await _t("_test_sim_particle_life_species_hear_their_band")
 	await _t("_test_sim_fluid_splats_follow_the_music")
+	await _t("_test_keys_chords_are_exact")
+	await _t("_test_keys_text_focus_follows_editing")
+	await _t("_test_keys_modal_registry_reads_open_state")
+	await _t("_test_keys_walk_latch_holds_until_release")
+	await _t("_test_keys_ctrl_chords_do_not_walk")
+	await _t("_test_keys_ctrl_released_first_does_not_walk")
+	await _t("_test_keys_shift_space_sinks_on_the_move")
+	await _t("_test_keys_ctrl_keeps_you_walking")
+	await _t("_test_keys_a_chord_latches_from_its_event")
+	await _t("_test_keys_a_drag_follows_its_clip_past_a_delete")
+	await _t("_test_keys_a_modal_stops_the_feet")
+	await _t("_test_keys_a_new_project_clears_the_clipboard")
+	await _t("_test_keys_a_panel_button_saves_the_field_first")
+	await _t("_test_keys_focus_loss_ends_held_notes_and_pads")
+	await _t("_test_keys_over_the_limit_is_said")
+	await _t("_test_keys_plain_keys_wait_for_a_modal_or_a_field")
+	await _t("_test_keys_standing_near_the_pads_keeps_walking")
+	await _t("_test_keys_every_modal_registers")
+	await _t("_test_keys_a_closed_stage_manager_is_not_open")
+	await _t("_test_keys_panel_toggles_ignore_modifiers")
+	await _t("_test_keys_modifiers_do_not_fire_room_keys")
+	await _t("_test_keys_a_release_survives_a_modifier")
+	await _t("_test_keys_focus_out_clears_held_keys")
+	await _t("_test_keys_f2_clears_held_keys")
+	await _t("_test_keys_a_pad_held_through_f2_ends")
+	await _t("_test_keys_enter_then_plain_keys_stay_off")
+	await _t("_test_keys_fingertips_hold_back_r")
+	await _t("_test_keys_pads_hold_the_player_still")
+	await _t("_test_keys_copy_paste_keeps_time_and_tracks")
+	await _t("_test_keys_cut_is_one_undo")
+	await _t("_test_keys_paste_is_one_undo")
+	await _t("_test_keys_paste_selects_the_copies")
+	await _t("_test_keys_paste_past_the_last_track_refuses")
+	await _t("_test_keys_frozen_track_refuses")
+	await _t("_test_keys_exact_targets_refuse_a_moved_clip")
+	await _t("_test_keys_guest_clipboard_stays_on_host")
+	await _t("_test_keys_guest_drag_lands_on_its_clip")
+	await _t("_test_keys_guest_paste_keeps_host_drag")
+	await _t("_test_keys_edit_refused_with_open_edit")
+	await _t("_test_keys_host_refusal_is_heard")
+	await _t("_test_keys_cut_refuses_what_cannot_paste")
+	await _t("_test_keys_locked_stay_out_of_cut")
+	await _t("_test_keys_duplicate_keeps_a_phrase_whole")
+	await _t("_test_keys_bridge_clipboard_round_trip")
+	await _t("_test_keys_bridge_targets_ignore_reaper_selection")
+	await _t("_test_keys_bridge_cut_waits_for_copy")
+	await _t("_test_keys_editor_follows_its_clip")
+	await _t("_test_keys_editor_closes_rather_than_switch")
+	await _t("_test_keys_editor_survives_its_own_trim")
+	await _t("_test_keys_delete_needs_the_timeline")
+	await _t("_test_keys_bare_lane_and_automation_do_nothing")
+	await _t("_test_keys_hidden_selection_refuses")
+	await _t("_test_keys_overlap_refuses")
+	await _t("_test_keys_delete_takes_the_item_under_the_pointer")
+	await _t("_test_keys_nothing_to_act_on_says_so")
+	await _t("_test_keys_undo_names_the_step")
+	await _t("_test_keys_undo_is_never_suppressed_by_depth")
+	await _t("_test_keys_refused_during_a_lane_drag")
+	await _t("_test_keys_refused_during_any_grab")
+	await _t("_test_keys_refused_during_look_solo")
+	await _t("_test_keys_refused_in_a_modal_or_text")
+	await _t("_test_keys_piano_passes_only_ctrl_chords")
+	await _t("_test_keys_ctrl_v_cassette_before_clipboard")
+	await _t("_test_keys_plugin_window_blocks_edits")
+	await _t("_test_keys_no_hand_in_xr_is_safe")
+	await _t("_test_keys_flat_clipboard_reaches_the_daw")
+	await _t("_test_keys_flat_select_all_is_one_intent")
+	await _t("_test_keys_flat_gesture_is_one_undo")
+	await _t("_test_keys_help_lists_the_edit_keys")
 	_report()
 
 
@@ -11463,7 +11532,7 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 
-	# Sunk from a height: the floor holds you there. Ghosts do not fall, so it takes the sink key (Ctrl).
+	# Sunk from a height: the floor holds you there. Ghosts do not fall, so it takes the sink key (Shift+Space).
 	walker.global_position = Vector3(1.5, 0.6, 1.6)
 	for i in 90:
 		walker.step(1.0 / 60.0, Vector3.ZERO, -1.0)
@@ -23137,6 +23206,8 @@ func _test_ripple_editing_carries_what_follows() -> void:
 	# A drag along the lane, as the hand lets go of it.
 	var lanes: TimelineLanes = timeline._lanes
 	lanes._hit = [lane, 1]
+	lanes._item_start = s.track(lane).items[1].start
+	lanes._item_end = s.track(lane).items[1].end()
 	lanes._dragged = true
 	lanes._target_start = float(starts[1]) + 2.0
 	lanes._target_track = -1
@@ -23145,6 +23216,8 @@ func _test_ripple_editing_carries_what_follows() -> void:
 	DAW.undo()
 	key.pressed.emit()
 	lanes._hit = [lane, 1]
+	lanes._item_start = s.track(lane).items[1].start
+	lanes._item_end = s.track(lane).items[1].end()
 	lanes._dragged = true
 	lanes._target_start = float(starts[1]) + 2.0
 	lanes._target_track = -1
@@ -47288,3 +47361,288 @@ func _test_singer_the_room_lights_follow_the_voice() -> void:
 	if studio.singer != null and is_instance_valid(studio.singer):
 		studio.singer.shutdown()
 	_drop_floor_studio(rig)
+
+
+# --- the keyboard and mouse pass: its checks are in tests/keyboard_*_tests.gd -------------------------
+
+const KeyboardChordTests := preload("res://tests/keyboard_chord_tests.gd")
+const KeyboardGuardTests := preload("res://tests/keyboard_guard_tests.gd")
+const KeyboardClipboardTests := preload("res://tests/keyboard_clipboard_tests.gd")
+const KeyboardRoomTests := preload("res://tests/keyboard_room_tests.gd")
+const KeyboardFlatTests := preload("res://tests/keyboard_flat_tests.gd")
+
+
+func _test_keys_chords_are_exact() -> void:
+	await KeyboardChordTests.new(self).chords_are_exact()
+
+
+func _test_keys_text_focus_follows_editing() -> void:
+	await KeyboardChordTests.new(self).text_focus_follows_editing()
+
+
+func _test_keys_modal_registry_reads_open_state() -> void:
+	await KeyboardChordTests.new(self).modal_registry_reads_open_state()
+
+
+func _test_keys_walk_latch_holds_until_release() -> void:
+	await KeyboardChordTests.new(self).walk_latch_holds_until_release()
+
+
+func _test_keys_ctrl_chords_do_not_walk() -> void:
+	await KeyboardGuardTests.new(self).ctrl_chords_do_not_walk()
+
+
+func _test_keys_ctrl_released_first_does_not_walk() -> void:
+	await KeyboardGuardTests.new(self).ctrl_released_first_does_not_walk()
+
+
+func _test_keys_shift_space_sinks_on_the_move() -> void:
+	await KeyboardGuardTests.new(self).shift_space_sinks_on_the_move()
+
+
+func _test_keys_ctrl_keeps_you_walking() -> void:
+	await KeyboardGuardTests.new(self).ctrl_keeps_you_walking()
+
+
+func _test_keys_every_modal_registers() -> void:
+	await KeyboardGuardTests.new(self).every_modal_registers()
+
+
+func _test_keys_a_closed_stage_manager_is_not_open() -> void:
+	await KeyboardGuardTests.new(self).a_closed_stage_manager_is_not_open()
+
+
+func _test_keys_panel_toggles_ignore_modifiers() -> void:
+	await KeyboardGuardTests.new(self).panel_toggles_ignore_modifiers()
+
+
+func _test_keys_modifiers_do_not_fire_room_keys() -> void:
+	await KeyboardGuardTests.new(self).modifiers_do_not_fire_room_keys()
+
+
+func _test_keys_a_release_survives_a_modifier() -> void:
+	await KeyboardGuardTests.new(self).a_release_survives_a_modifier()
+
+
+func _test_keys_focus_out_clears_held_keys() -> void:
+	await KeyboardGuardTests.new(self).focus_out_clears_held_keys()
+
+
+func _test_keys_f2_clears_held_keys() -> void:
+	await KeyboardGuardTests.new(self).f2_clears_held_keys()
+
+
+func _test_keys_a_pad_held_through_f2_ends() -> void:
+	await KeyboardGuardTests.new(self).a_pad_held_through_f2_ends()
+
+
+func _test_keys_enter_then_plain_keys_stay_off() -> void:
+	await KeyboardGuardTests.new(self).enter_then_plain_keys_stay_off()
+
+
+func _test_keys_fingertips_hold_back_r() -> void:
+	await KeyboardGuardTests.new(self).fingertips_hold_back_r()
+
+
+func _test_keys_pads_hold_the_player_still() -> void:
+	await KeyboardGuardTests.new(self).pads_hold_the_player_still()
+
+
+func _test_keys_copy_paste_keeps_time_and_tracks() -> void:
+	await KeyboardClipboardTests.new(self).copy_paste_keeps_time_and_tracks()
+
+
+func _test_keys_cut_is_one_undo() -> void:
+	await KeyboardClipboardTests.new(self).cut_is_one_undo()
+
+
+func _test_keys_paste_is_one_undo() -> void:
+	await KeyboardClipboardTests.new(self).paste_is_one_undo()
+
+
+func _test_keys_paste_selects_the_copies() -> void:
+	await KeyboardClipboardTests.new(self).paste_selects_the_copies()
+
+
+func _test_keys_paste_past_the_last_track_refuses() -> void:
+	await KeyboardClipboardTests.new(self).paste_past_the_last_track_refuses()
+
+
+func _test_keys_frozen_track_refuses() -> void:
+	await KeyboardClipboardTests.new(self).frozen_track_refuses()
+
+
+func _test_keys_exact_targets_refuse_a_moved_clip() -> void:
+	await KeyboardClipboardTests.new(self).exact_targets_refuse_a_moved_clip()
+
+
+func _test_keys_guest_clipboard_stays_on_host() -> void:
+	await KeyboardClipboardTests.new(self).guest_clipboard_stays_on_host()
+
+
+func _test_keys_guest_drag_lands_on_its_clip() -> void:
+	await KeyboardClipboardTests.new(self).guest_drag_lands_on_its_clip()
+
+
+func _test_keys_guest_paste_keeps_host_drag() -> void:
+	await KeyboardClipboardTests.new(self).guest_paste_keeps_host_drag()
+
+
+func _test_keys_edit_refused_with_open_edit() -> void:
+	await KeyboardClipboardTests.new(self).edit_refused_with_open_edit()
+
+
+func _test_keys_host_refusal_is_heard() -> void:
+	await KeyboardClipboardTests.new(self).host_refusal_is_heard()
+
+
+func _test_keys_cut_refuses_what_cannot_paste() -> void:
+	await KeyboardClipboardTests.new(self).cut_refuses_what_cannot_paste()
+
+
+func _test_keys_locked_stay_out_of_cut() -> void:
+	await KeyboardClipboardTests.new(self).locked_stay_out_of_cut()
+
+
+func _test_keys_duplicate_keeps_a_phrase_whole() -> void:
+	await KeyboardClipboardTests.new(self).duplicate_keeps_a_phrase_whole()
+
+
+func _test_keys_bridge_clipboard_round_trip() -> void:
+	await KeyboardClipboardTests.new(self).bridge_clipboard_round_trip()
+
+
+func _test_keys_bridge_targets_ignore_reaper_selection() -> void:
+	await KeyboardClipboardTests.new(self).bridge_targets_ignore_reaper_selection()
+
+
+func _test_keys_bridge_cut_waits_for_copy() -> void:
+	await KeyboardClipboardTests.new(self).bridge_cut_waits_for_copy()
+
+
+func _test_keys_editor_follows_its_clip() -> void:
+	await KeyboardClipboardTests.new(self).editor_follows_its_clip()
+
+
+func _test_keys_editor_closes_rather_than_switch() -> void:
+	await KeyboardClipboardTests.new(self).editor_closes_rather_than_switch()
+
+
+func _test_keys_editor_survives_its_own_trim() -> void:
+	await KeyboardClipboardTests.new(self).editor_survives_its_own_trim()
+
+
+func _test_keys_delete_needs_the_timeline() -> void:
+	await KeyboardRoomTests.new(self).delete_needs_the_timeline()
+
+
+func _test_keys_bare_lane_and_automation_do_nothing() -> void:
+	await KeyboardRoomTests.new(self).bare_lane_and_automation_do_nothing()
+
+
+func _test_keys_hidden_selection_refuses() -> void:
+	await KeyboardRoomTests.new(self).hidden_selection_refuses()
+
+
+func _test_keys_overlap_refuses() -> void:
+	await KeyboardRoomTests.new(self).overlap_refuses()
+
+
+func _test_keys_delete_takes_the_item_under_the_pointer() -> void:
+	await KeyboardRoomTests.new(self).delete_takes_the_item_under_the_pointer()
+
+
+func _test_keys_nothing_to_act_on_says_so() -> void:
+	await KeyboardRoomTests.new(self).nothing_to_act_on_says_so()
+
+
+func _test_keys_undo_names_the_step() -> void:
+	await KeyboardRoomTests.new(self).undo_names_the_step()
+
+
+func _test_keys_undo_is_never_suppressed_by_depth() -> void:
+	await KeyboardRoomTests.new(self).undo_is_never_suppressed_by_depth()
+
+
+func _test_keys_refused_during_a_lane_drag() -> void:
+	await KeyboardRoomTests.new(self).refused_during_a_lane_drag()
+
+
+func _test_keys_refused_during_any_grab() -> void:
+	await KeyboardRoomTests.new(self).refused_during_any_grab()
+
+
+func _test_keys_refused_during_look_solo() -> void:
+	await KeyboardRoomTests.new(self).refused_during_look_solo()
+
+
+func _test_keys_refused_in_a_modal_or_text() -> void:
+	await KeyboardRoomTests.new(self).refused_in_a_modal_or_text()
+
+
+func _test_keys_piano_passes_only_ctrl_chords() -> void:
+	await KeyboardRoomTests.new(self).piano_passes_only_ctrl_chords()
+
+
+func _test_keys_ctrl_v_cassette_before_clipboard() -> void:
+	await KeyboardRoomTests.new(self).ctrl_v_cassette_before_clipboard()
+
+
+func _test_keys_plugin_window_blocks_edits() -> void:
+	await KeyboardRoomTests.new(self).plugin_window_blocks_edits()
+
+
+func _test_keys_no_hand_in_xr_is_safe() -> void:
+	await KeyboardRoomTests.new(self).no_hand_in_xr_is_safe()
+
+
+func _test_keys_flat_clipboard_reaches_the_daw() -> void:
+	await KeyboardFlatTests.new(self).flat_clipboard_reaches_the_daw()
+
+
+func _test_keys_flat_select_all_is_one_intent() -> void:
+	await KeyboardFlatTests.new(self).flat_select_all_is_one_intent()
+
+
+func _test_keys_flat_gesture_is_one_undo() -> void:
+	await KeyboardFlatTests.new(self).flat_gesture_is_one_undo()
+
+
+func _test_keys_help_lists_the_edit_keys() -> void:
+	await KeyboardFlatTests.new(self).help_lists_the_edit_keys()
+
+
+func _test_keys_standing_near_the_pads_keeps_walking() -> void:
+	await KeyboardGuardTests.new(self).standing_near_the_pads_keeps_walking()
+
+
+func _test_keys_plain_keys_wait_for_a_modal_or_a_field() -> void:
+	await KeyboardGuardTests.new(self).plain_keys_wait_for_a_modal_or_a_field()
+
+
+func _test_keys_a_modal_stops_the_feet() -> void:
+	await KeyboardGuardTests.new(self).a_modal_stops_the_feet()
+
+
+func _test_keys_a_chord_latches_from_its_event() -> void:
+	await KeyboardGuardTests.new(self).a_chord_latches_from_its_event()
+
+
+func _test_keys_focus_loss_ends_held_notes_and_pads() -> void:
+	await KeyboardGuardTests.new(self).focus_loss_ends_held_notes_and_pads()
+
+
+func _test_keys_a_panel_button_saves_the_field_first() -> void:
+	await KeyboardGuardTests.new(self).a_panel_button_saves_the_field_first()
+
+
+func _test_keys_a_drag_follows_its_clip_past_a_delete() -> void:
+	await KeyboardRoomTests.new(self).a_drag_follows_its_clip_past_a_delete()
+
+
+func _test_keys_over_the_limit_is_said() -> void:
+	await KeyboardClipboardTests.new(self).over_the_limit_is_said()
+
+
+func _test_keys_a_new_project_clears_the_clipboard() -> void:
+	await KeyboardClipboardTests.new(self).a_new_project_clears_the_clipboard()

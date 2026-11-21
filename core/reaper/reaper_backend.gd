@@ -919,9 +919,15 @@ func copy_selected_to(seconds: float) -> void:
 		_edit("CopySelectedTo", [seconds])
 
 
+## By exact targets from the cache, so Reaper's own selection (which can reach past the bank) is
+## not what gets copied, and Reaper's copies land where the cache's do.
 func duplicate_selected() -> void:
+	var targets := _selected_targets()
+	if targets.is_empty():
+		return
+	var request := _duplicate_request(targets)
 	_locally_duplicate_selected()
-	_edit("DuplicateSelected", [])
+	_edit("DuplicateItems", request)
 
 
 func trim_item(track_index: int, item_index: int, start: float, end: float) -> void:
@@ -1057,6 +1063,10 @@ func set_track_colour(index: int, colour: Color) -> void:
 	if state.tracks.has(index):
 		state.set_track_field(index, &"colour", colour)
 	_edit("SetTrackColour", [index, colour.r, colour.g, colour.b])
+
+
+func whole_project_shown() -> bool:
+	return _whole_project_in_bank()
 
 
 func _whole_project_in_bank() -> bool:
@@ -1520,6 +1530,100 @@ func _edit(fn: String, args: Array, alone := false) -> void:
 		_bridge.call_reaper(fn, args, done)
 	else:
 		_bridge_write(fn, args, done)
+
+
+## As `_edit`, for a verb whose answer decides what happens next: `done` gets the bridge's answer,
+## or {"ok": false} when there was none. Sent at once and never held in an edit.
+func _edit_answered(fn: String, args: Array, done: Callable) -> void:
+	if _bridge == null or not _bridge.is_open():
+		done.call({"ok": false, "error": "no bridge"})
+		return
+	_timeline_epoch += 1
+	_edits_in_flight += 1
+	var sent := _bridge.call_reaper(fn, args, func(result) -> void:
+		_edits_in_flight -= 1
+		_timeline_due = 0.0
+		done.call(result if typeof(result) == TYPE_DICTIONARY else {"ok": false, "error": "no answer"}))
+	if not sent:
+		_edits_in_flight -= 1
+		done.call({"ok": false, "error": "not sent"})
+
+
+# --- exact targets and clipboards ---------------------------------------------------------
+#
+# A clipboard here is a slot in the bridge holding item chunks, so Reaper's own audio survives it.
+# Each verb names its items [track, index, start, length] and the bridge checks them all before it
+# changes anything. The cache moves only on the bridge's ok.
+
+func clipboard_in_bridge() -> bool:
+	return true
+
+
+func _selected_targets() -> Array:
+	var out: Array = []
+	for index in state.track_indices():
+		var items: Array = state.track(index).items
+		for i in items.size():
+			if items[i].selected:
+				out.append([index, i, items[i].start, items[i].length])
+	return out
+
+
+## Flat, as every request is: the count, then four numbers per target.
+static func targets_request(targets: Array) -> Array:
+	var out: Array = [targets.size()]
+	for t: Array in targets:
+		out.append_array([int(t[0]), int(t[1]), float(t[2]), float(t[3])])
+	return out
+
+
+## The count, then five per target: its four and whether the cache has it looped. Reaper's
+## B_LOOPSRC is on for most items, looped or not, so the cache's word is what decides.
+func _duplicate_request(targets: Array) -> Array:
+	var out: Array = [targets.size()]
+	for t: Array in targets:
+		var it := target_in(state.track(int(t[0])).items, t)
+		out.append_array([int(t[0]), int(t[1]), float(t[2]), float(t[3]),
+				1 if it != null and it.is_looped() else 0])
+	return out
+
+
+func copy_to_slot(slot: int, targets: Array, done: Callable) -> void:
+	_edit_answered("CopyToClipboard", [slot] + targets_request(targets), done)
+
+
+func forget_slot(slot: int) -> void:
+	if _bridge != null and _bridge.is_open():
+		_bridge.call_reaper("ForgetClipboard", [slot])
+
+
+func delete_targets(targets: Array, done := Callable()) -> void:
+	_edit_answered("DeleteItems", targets_request(targets), func(answer: Dictionary) -> void:
+		if answer.get("ok", false):
+			_locally_remove_targets(targets)
+		if done.is_valid():
+			done.call(answer))
+
+
+func duplicate_targets(targets: Array, done := Callable()) -> void:
+	_edit_answered("DuplicateItems", _duplicate_request(targets), func(answer: Dictionary) -> void:
+		if answer.get("ok", false):
+			_locally_select_targets(targets)
+			_locally_duplicate_selected()
+		if done.is_valid():
+			done.call(answer))
+
+
+## Where each clip lands is the host's plan, sent whole, so the bridge needs no track arithmetic.
+func paste_set(entries: Array, done := Callable(), slot := 0) -> void:
+	var request: Array = [slot, entries.size()]
+	for entry: Array in entries:
+		request.append_array([int(entry[0]), float(entry[1])])
+	_edit_answered("PasteClipboard", request, func(answer: Dictionary) -> void:
+		if answer.get("ok", false):
+			_locally_paste_set(entries)
+		if done.is_valid():
+			done.call(answer))
 
 
 # --- edit groups --------------------------------------------------------------------------

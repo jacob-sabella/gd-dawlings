@@ -22,6 +22,7 @@ var _rows: VBoxContainer
 
 
 func _ready() -> void:
+	add_to_group(KeyChord.PANEL)
 	layer = 10
 	_panel = PanelContainer.new()
 	_panel.position = Vector2(16, 44)

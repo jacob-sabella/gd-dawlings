@@ -41,6 +41,7 @@ var _delete_armed := ""
 
 
 func _ready() -> void:
+	add_to_group(KeyChord.MODAL)
 	layer = 10
 	_panel = PanelContainer.new()
 	_panel.visible = false

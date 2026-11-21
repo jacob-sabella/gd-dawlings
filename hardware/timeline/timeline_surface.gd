@@ -930,6 +930,43 @@ func item_at_point(global_point: Vector3) -> Array:
 	return []
 
 
+## Every [track, item] in the lane band under a point whose span holds it: more than one where takes
+## overlap, which item_at_point cannot say.
+func items_at_point(global_point: Vector3) -> Array:
+	var local := to_local(global_point)
+	var indices := _shown()
+	var pitch := lane_height + LANE_GAP
+	var out: Array = []
+	for i in mini(indices.size(), _lane_y.size()):
+		if absf(local.y - _lane_y[i]) > pitch * 0.5:
+			continue
+		var at := seconds_at_point(global_point)
+		var items: Array = DAW.state.track(indices[i]).items
+		for n in items.size():
+			if at >= items[n].start and at <= items[n].end():
+				out.append([indices[i], n])
+		return out
+	return out
+
+
+## The selection as exact targets, and how many of them this panel is not showing: on a track
+## outside the lanes, or wholly outside the time in view.
+func selection_in_view() -> Dictionary:
+	var shown := _shown()
+	var targets: Array = []
+	var hidden := 0
+	for index in DAW.state.track_indices():
+		var items: Array = DAW.state.track(index).items
+		for n in items.size():
+			var item: MixState.ItemState = items[n]
+			if not item.selected:
+				continue
+			targets.append([index, n, item.start, item.length])
+			if not index in shown or item.end() < view_start or item.start > view_start + view_span:
+				hidden += 1
+	return {"targets": targets, "hidden": hidden}
+
+
 ## Which fade's handle a point is on: -1 the fade in's, 1 the fade out's, 0 neither. A handle is
 ## where its line ends at the block's top -- the block's top corner for a fade of nothing -- a
 ## few millimetres either side, as an edge's grip is.

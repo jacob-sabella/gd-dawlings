@@ -33,7 +33,9 @@ extends Surface
 ## until the edit lands.
 ##
 ## One editor, opened on a clip by a double click on the timeline or the item page's EDIT CLIP
-## key (TimelineSurface.edit_asked), retargeted by opening another, closed by its CLOSE key.
+## key (TimelineSurface.edit_asked), retargeted by opening another, closed by its CLOSE key. A lane
+## renumbers on every sort, so the index it holds is only where its clip was: it follows the clip
+## when the index moves, and closes when the clip is gone rather than show whatever took its place.
 ## Closed, it is not there at all: nothing drawn, nothing to hit (process_mode DISABLED takes
 ## its controls out of the physics world). A MIDI clip has no sound to draw: its notes are drawn
 ## and its edges trim them; fades and gain are an audio clip's.
@@ -109,6 +111,8 @@ const TAIL_SECONDS := 1.0
 const ZERO_REACH := 0.005
 ## A click this close to the playhead line in time (m of panel) still counts as on it.
 const CLICK_SLOP := 0.0025
+## How near two times are to be the same edge of a clip (s): a Reaper poll rounds what was written.
+const SAME_EDGE := 0.0005
 
 const PIXEL := 0.0001
 const BOARD := Color(0.055, 0.06, 0.072)
@@ -127,6 +131,11 @@ const PLAYHEAD_INK := Color(1.0, 0.92, 0.62)
 
 ## [track, item] open, or [] while closed.
 var target: Array = []
+## What the open clip looked like when last seen: {start, length, source, lane, notes}, notes -1
+## while an edit of ours that may drop some is on its way.
+var _print: Dictionary = {}
+## Every other clip on its lane then, as (start, length): what is already there is not this clip.
+var _others: Array[Vector2] = []
 ## The window onto the song, in seconds.
 var view_start := 0.0
 var view_span := 1.0
@@ -204,6 +213,7 @@ func open(track: int, index: int) -> void:
 		return
 	var again := is_open()
 	target = [track, index]
+	_remember_clip()
 	preview = {}
 	pulled_onto = ""
 	_attacks = PackedFloat32Array()
@@ -259,10 +269,64 @@ func is_midi() -> bool:
 func _on_timeline_changed() -> void:
 	if not is_open():
 		return
-	if item() == null:
+	if not _follow_clip():
 		close()
 		return
 	_stale = true
+
+
+func _remember_clip() -> void:
+	var it := item()
+	_print = {"start": it.start, "length": it.length, "source": it.source, "lane": it.lane,
+			"notes": it.notes.size()}
+	_others.clear()
+	for other in DAW.state.track(target[0]).items:
+		if other != it:
+			_others.append(Vector2(other.start, other.length))
+
+
+func _is_the_clip(it: MixState.ItemState) -> bool:
+	return absf(it.start - float(_print["start"])) < SAME_EDGE and absf(it.length - float(_print["length"])) < SAME_EDGE \
+			and it.source == _print["source"] and it.lane == _print["lane"] \
+			and (int(_print["notes"]) < 0 or it.notes.size() == int(_print["notes"]))
+
+
+## Whether `it`, at the open index, is this clip after a trim or an edit: the same sound on the same
+## lane, over some of the same time, and not a clip that was already beside it.
+func _is_the_clip_edited(it: MixState.ItemState) -> bool:
+	if it.source != _print["source"] or it.lane != _print["lane"]:
+		return false
+	var from := float(_print["start"])
+	if it.start >= from + float(_print["length"]) - SAME_EDGE or it.end() <= from + SAME_EDGE:
+		return false
+	for other in _others:
+		if absf(it.start - other.x) < SAME_EDGE and absf(it.length - other.y) < SAME_EDGE:
+			return false
+	return true
+
+
+## The open clip found again after the lanes changed, `target` put on it. False when it is gone.
+func _follow_clip() -> bool:
+	var here := item()
+	if here != null and _is_the_clip(here):
+		_remember_clip()
+		return true
+	var found := -1
+	var matches := 0
+	if DAW.state.tracks.has(target[0]):
+		var items: Array = DAW.state.track(target[0]).items
+		for i in items.size():
+			if _is_the_clip(items[i]):
+				found = i
+				matches += 1
+	if matches == 1:
+		target = [target[0], found]
+		_remember_clip()
+		return true
+	if here != null and _is_the_clip_edited(here):
+		_remember_clip()
+		return true
+	return false
 
 
 func _on_tracks_renumbered(map: Dictionary) -> void:
@@ -481,6 +545,10 @@ func commit(fields: Dictionary) -> void:
 		var s := float(fields.get("start", it.start))
 		var e := float(fields.get("end", it.end()))
 		if not is_equal_approx(s, it.start) or not is_equal_approx(e, it.end()):
+			# Told before the write, which re-sorts the lane and may move the clip's index.
+			_print["start"] = s
+			_print["length"] = e - s
+			_print["notes"] = -1
 			DAW.trim_item(t, i, s, e)
 	elif fields.has("fade_in") or fields.has("fade_out"):
 		var fi := float(fields.get("fade_in", it.fade_in))

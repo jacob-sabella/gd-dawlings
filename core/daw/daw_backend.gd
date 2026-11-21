@@ -404,6 +404,8 @@ var acting_peer := 0
 ## player leaving the session (DAW.close_edits_of), so a lost let-go cannot hold history open.
 func open_edit(_edit_name: String) -> void: pass
 func close_edit() -> void: pass
+## Whether `peer` (0 for this machine) has an edit open.
+func edit_open(_peer := 0) -> bool: return false
 ## An open edit nothing has been written into for this long is closed.
 const EDIT_IDLE_MSEC := 10000
 
@@ -660,6 +662,97 @@ func insert_audio_take(_track_index: int, _start: float, _source: String, _lengt
 ## and not frozen, a file this machine has. A backend that cannot answers false to
 ## Capability.PASTE_ITEMS.
 func paste_item(_track_index: int, _start: float, _packed: Dictionary) -> void: pass
+
+## How far an item may sit from where a target names it and still be that item, in seconds.
+const TARGET_EPSILON := 0.0005
+## Whether a clipboard lives in the DAW (the bridge's slots) and not as packed clips here.
+func clipboard_in_bridge() -> bool: return false
+## Whether every track of the project is in the cache: a whole-project verb reaches further when not.
+func whole_project_shown() -> bool: return true
+## `targets` ([track, index, start, length], checked by DAW.edit_refusal) held for `slot`, and `done`
+## told {"ok", "error"}. Nothing to hold here: DAW keeps the packed clips.
+func copy_to_slot(_slot: int, _targets: Array, done: Callable) -> void: done.call({"ok": true})
+## Slot `slot` let go of: its player left.
+func forget_slot(_slot: int) -> void: pass
+## Exactly `targets` deleted, one undo step; a locked one stays. `done` as copy_to_slot's.
+func delete_targets(_targets: Array, done := Callable()) -> void:
+	if done.is_valid():
+		done.call({"ok": false, "error": "not supported"})
+## Exactly `targets` copied as a block after their span, the copies the selection. One undo step.
+func duplicate_targets(_targets: Array, done := Callable()) -> void:
+	if done.is_valid():
+		done.call({"ok": false, "error": "not supported"})
+## A clipboard laid down: `entries` as ItemClipboard.plan's, the selection cleared and each landed
+## clip selected, one undo step that opens no edit. `slot` is the bridge's, where it has one.
+func paste_set(_entries: Array, done := Callable(), _slot := 0) -> void:
+	if done.is_valid():
+		done.call({"ok": false, "error": "not supported"})
+
+
+## The item in `lane` that `target` names: at its index when that still matches, else the first that
+## does, so an answer arriving after a renumbering still finds it. Null when none does.
+static func target_in(lane: Array, target: Array) -> MixState.ItemState:
+	var matches := func(it) -> bool:
+		return absf(it.start - float(target[2])) <= TARGET_EPSILON \
+				and absf(it.end() - (float(target[2]) + float(target[3]))) <= TARGET_EPSILON
+	var at := int(target[1])
+	if at >= 0 and at < lane.size() and matches.call(lane[at]):
+		return lane[at]
+	for it in lane:
+		if matches.call(it):
+			return it
+	return null
+
+
+## `targets` taken off their lanes, a locked one left. Returns how many went.
+func _locally_remove_targets(targets: Array) -> int:
+	var gone := 0
+	for index in state.track_indices():
+		var mine := targets.filter(func(t): return int(t[0]) == index)
+		if mine.is_empty():
+			continue
+		var lane := _lane_copy(index)
+		var out: Array = []
+		for target: Array in mine:
+			var it := target_in(lane, target)
+			if it != null and not it.locked and not out.has(it):
+				out.append(it)
+		if out.is_empty():
+			continue
+		gone += out.size()
+		_write_lane(index, lane.filter(func(it): return not out.has(it)))
+	return gone
+
+
+## The selection made exactly `targets`. Returns how many were found.
+func _locally_select_targets(targets: Array) -> int:
+	var found := 0
+	for index in state.track_indices():
+		var mine := targets.filter(func(t): return int(t[0]) == index)
+		if mine.is_empty() and not state.track(index).items.any(func(it): return it.selected):
+			continue
+		var lane := _lane_copy(index)
+		var picks: Array = []
+		for target: Array in mine:
+			var it := target_in(lane, target)
+			if it != null and not picks.has(it):
+				picks.append(it)
+		found += picks.size()
+		for it in lane:
+			it.selected = picks.has(it)
+		_write_lane(index, lane)
+	return found
+
+
+## `entries` as ItemClipboard.plan's landed, and only they selected.
+func _locally_paste_set(entries: Array) -> void:
+	_locally_clear_selection()
+	for entry: Array in entries:
+		var item := MixWire.unpack_item(entry[2])
+		if item == null or not state.tracks.has(int(entry[0])):
+			continue
+		item.selected = true
+		_locally_paste(int(entry[0]), float(entry[1]), item)
 
 ## The song's sections laid end to end in a new order (docs/spatial_loop.md part two, slice 29):
 ## `order` is MixState.regions (in song order) by their indices there, in the order they are to
@@ -1177,8 +1270,19 @@ func _locally_nudge(amount: float, unit: int) -> Array:
 	return moved
 
 
-## Returns how many were copied.
+## Returns how many were copied. The selection moves as a block: every copy goes on by the span from
+## its earliest start to its latest end, so a phrase of clips repeats whole, in order.
 func _locally_duplicate_selected() -> int:
+	var first := INF
+	var last := -INF
+	for index in state.track_indices():
+		for it in state.track(index).items:
+			if it.selected:
+				first = minf(first, it.start)
+				last = maxf(last, it.end())
+	if first == INF:
+		return 0
+	var span := last - first
 	var made := 0
 	for index in state.track_indices():
 		if not state.track(index).items.any(func(it): return it.selected):
@@ -1189,11 +1293,11 @@ func _locally_duplicate_selected() -> int:
 			if not item.selected:
 				continue
 			var copy: MixState.ItemState = MixWire._unpack_items(MixWire._pack_items([item]))[0]
-			copy.start = item.end()
+			copy.start = item.start + span
 			# A looped part goes on round; a file goes on from where the copy's start is in it
 			# only when it loops, so a plain take repeats rather than running on past its end.
 			if item.is_looped():
-				copy.source_offset = item.source_offset + item.length
+				copy.source_offset = item.source_offset + span
 			item.selected = false
 			copies.append(copy)
 		lane.append_array(copies)

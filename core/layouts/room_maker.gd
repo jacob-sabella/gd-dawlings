@@ -28,6 +28,7 @@ var _titles: Dictionary = {}
 
 
 func _ready() -> void:
+	add_to_group(KeyChord.PANEL)
 	layer = 10
 	_panel = PanelContainer.new()
 	_panel.position = Vector2(16, 44)
@@ -73,7 +74,7 @@ func toggle() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == TOGGLE_KEY \
-			and not (get_viewport().gui_get_focus_owner() is LineEdit):
+			and not KeyChord.commanded(event) and not (get_viewport().gui_get_focus_owner() is LineEdit):
 		toggle()
 		get_viewport().set_input_as_handled()
 

@@ -44,7 +44,8 @@ const START := [
 	["Change things", "Click, drag or scroll any control. Hover over it first to see what it does."],
 	["Automation", "While the song plays, a bead rises over the control you point at: drag it up and down to write its automation, one undo a loop. In a headset, pinch it."],
 	["The 2D view", "F2 opens the whole mix as a flat DAW: the precise way into everything the room does, and back."],
-	["Undo", "Ctrl-Z undoes and Ctrl-Shift-Z redoes, from anywhere in the room: a whole drag at a time, however much it moved. Or turn the crank on the tape deck's left reel, a notch a step: stopped, it plays you two bars as it was."],
+	["Undo", "Ctrl-Z undoes and Ctrl-Shift-Z or Ctrl-Y redoes, from anywhere in the room, and held they repeat: a whole drag at a time, however much it moved. Or turn the crank on the tape deck's left reel, a notch a step: stopped, it plays you two bars as it was."],
+	["Editing", "Delete acts on the clip under the pointer, or on the selection if that clip is in it; Ctrl-X cuts and Ctrl-D duplicates the same way. Ctrl-C copies the selection, Ctrl-V pastes at the pointer, Ctrl-A selects everything, Ctrl-Shift-A nothing."],
 	["Record", "Press a channel's red key to arm it, then REC on the tape deck. B splits the selected items at the playhead."],
 	["Your keys and mic", "M opens the session panel: \"Play with the computer keys\", \"Open MIDI\", your microphone."],
 	["Instruments", "I walks to each instrument in turn, Shift-I back; the PLAY pages and the board left of the desk name them all. Esc, or BACK on a plaque, comes back to the desk."],
@@ -55,7 +56,7 @@ const TOGETHER := [
 	["Hear the mix", "As a guest, \"Hear the mix\" in the session panel plays the host's mix to you."],
 	["Into their takes", "\"Record when the host records\" puts your keys and your mic on the host's tracks."],
 	["Hand it over", "Carrying a cassette (a clip dragged off the timeline's edge), click a bandmate to give it to them. In a headset, hold it by their glove."],
-	["Paste it", "Carrying a cassette, click a timeline lane to paste its clip there, on the beat (Shift: anywhere), or a channel strip or stage voice for that track at the playhead. It stays in your hand to paste again; Ctrl-Z takes it back."],
+	["Paste it", "Carrying a cassette, click a timeline lane to paste its clip there, on the beat (Shift: anywhere), or a channel strip or stage voice for that track at the playhead; or point at any of them and press Ctrl-V. It stays in your hand to paste again; Ctrl-Z takes it back."],
 	["Listen to it", "Carrying a cassette, hold L to hear its clip in your ears alone, the room 10 dB down. In a headset, hold it to your ear."],
 	["Sample it", "At the SAMPLER by the cassette rack, click REC, then squeeze, click or shake what you carry, do a yo-yo or card trick, or bounce the ball: that one sound is a WAV and a cassette on the rack, whoever's REC it was."],
 	["Scratch it", "Click a cassette into the slot of the PLATTER on the tape deck's cart, then drag round the record: its clip scratched, in your ears alone. REC first and the scratch is a sample."],
@@ -66,7 +67,7 @@ const TOGETHER := [
 	["Listen from there", "Z and Enter over the ruler, or a note's LISTEN: the song plays from there for everyone. In a headset, pinch thumb and middle as you point."],
 ]
 const ROOM := [
-	["Walking", "WASD or the arrows walk, Shift runs, right-drag looks. You are a ghost: Space rises, Ctrl sinks, and you hover where you let go. N takes the orbit camera instead."],
+	["Walking", "WASD or the arrows walk, Shift runs, right-drag looks. You are a ghost: Space rises, Shift+Space sinks, and you hover where you let go. N takes the orbit camera instead."],
 	["The gear", "F walks you to the gear you look at, Shift-F the other way, Esc lets go. G brings it to you instead."],
 	["The desk", "E spreads the console out to every track at once, and back to its pages."],
 	["Carrying", "Q puts down what you carry. Hold R and let go to throw it. 1 to 3 pocket it, and the wheel picks a pocket."],
@@ -111,6 +112,7 @@ static func first_time() -> bool:
 
 func _ready() -> void:
 	layer = 90
+	add_to_group(KeyChord.MODAL)
 	_centre = CenterContainer.new()
 	_centre.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -125,11 +127,18 @@ func _ready() -> void:
 
 ## Shown, the pages made again (the venue may have changed), at the page it was last on.
 func open() -> void:
+	if studio != null:
+		studio.input_host.release_held_keys()
 	visible = true
 	_pages = pages()
 	show_page(clampi(page, 0, _pages.size() - 1))
 	if _keys.is_inside_tree():
 		_keys.grab_focus()
+
+
+## Whether it is up, for KeyChord's registry of screens that hold the keyboard.
+func is_open() -> bool:
+	return visible
 
 
 ## Hide the card and, the first time, write the file that records it has been seen.

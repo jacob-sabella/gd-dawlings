@@ -52,6 +52,7 @@ var _remove: Button
 
 
 func _ready() -> void:
+	add_to_group(KeyChord.MODAL)
 	layer = 10
 	download = MilkDownload.new()
 	download.name = "Download"

@@ -29,7 +29,7 @@ const SPRINT_SPEED := 3.2
 ## Metres per second per second. Enough that a tap moves you, little enough that you feel it.
 const ACCELERATION := 9.0
 const FRICTION := 16.0
-## We are ghosts: no gravity, no jump. Space rises, Ctrl sinks, and you hang where you let go.
+## We are ghosts: no gravity, no jump. Space rises, Shift+Space sinks, and you hang where you let go.
 const FLY_SPEED := 1.8
 ## How far the head is above the feet: the highest the feet go is the ceiling less this.
 const HEAD := 1.8
@@ -71,6 +71,9 @@ var pitch := -0.18
 ## Off while god mode has the camera. The body stays where it was left, so switching back puts
 ## you where you stood, not wherever the god happened to be hovering.
 var active := true
+## Whether something else has W, A, S and D just now (engaged pads): a Callable answering true, or
+## invalid for nobody. The arrows are not its to take.
+var keys_claimed := Callable()
 
 var _solids: Array[CollisionShape3D] = []
 var _solid_body: StaticBody3D
@@ -448,32 +451,73 @@ func travelling() -> bool:
 
 func _physics_process(delta: float) -> void:
 	sync_solids()
+	# Before anything can return: a key pressed or let go while a field has focus, or in god mode,
+	# still has to be seen, or the latch is working from a stale idea of the keyboard.
+	var focus_owner := get_viewport().gui_get_focus_owner() if get_viewport() != null else null
+	var wish := keyboard_wish(focus_owner)
 	if not active or travelling():
 		return
-	var wish := Vector3.ZERO
-	# Keyboard only when nothing else has it: a text field taking a track name must not walk
-	# you into the wall one letter at a time.
-	var focus_owner := get_viewport().gui_get_focus_owner() if get_viewport() != null else null
-	if focus_owner == null:
-		if Input.is_key_pressed(KEY_W): wish.z -= 1.0
-		if Input.is_key_pressed(KEY_S): wish.z += 1.0
-		if Input.is_key_pressed(KEY_A): wish.x -= 1.0
-		if Input.is_key_pressed(KEY_D): wish.x += 1.0
-	# The arrows too, and they go on walking while a piano has the letters (KeyCatcher): a piano
-	# is played on the move.
-	if focus_owner == null or focus_owner.is_in_group(&"walks_on_arrows"):
-		if Input.is_physical_key_pressed(KEY_UP): wish.z -= 1.0
-		if Input.is_physical_key_pressed(KEY_DOWN): wish.z += 1.0
-		if Input.is_physical_key_pressed(KEY_LEFT): wish.x -= 1.0
-		if Input.is_physical_key_pressed(KEY_RIGHT): wish.x += 1.0
 	wish = (Basis(Vector3.UP, yaw) * wish).normalized() if wish != Vector3.ZERO else Vector3.ZERO
 	var sprint := Input.is_key_pressed(KEY_SHIFT) and focus_owner == null
 	var speed := SPRINT_SPEED if sprint else WALK_SPEED
 	var rise := 0.0
-	if focus_owner == null:
-		if Input.is_key_pressed(KEY_SPACE): rise += 1.0
-		if Input.is_key_pressed(KEY_CTRL): rise -= 1.0
-	step(delta, wish * speed, rise * (2.0 if sprint else 1.0))
+	if focus_owner == null and not KeyChord.modal_open(get_tree()):
+		rise = rise_wanted()
+	step(delta, wish * speed, rise)
+
+
+## W, A, S and D as a direction, with chords taken out. Every caller reads all four every time, so
+## the latch hears each release. The Walker and the ViewHost both call this.
+static func walk_letters() -> Vector3:
+	var command := KeyChord.command_held()
+	var letters := Vector3.ZERO
+	if KeyChord.walk_key(KEY_W, Input.is_key_pressed(KEY_W), command): letters.z -= 1.0
+	if KeyChord.walk_key(KEY_S, Input.is_key_pressed(KEY_S), command): letters.z += 1.0
+	if KeyChord.walk_key(KEY_A, Input.is_key_pressed(KEY_A), command): letters.x -= 1.0
+	if KeyChord.walk_key(KEY_D, Input.is_key_pressed(KEY_D), command): letters.x += 1.0
+	return letters
+
+
+## The arrows as a direction, with the same latch: one pressed under Ctrl or Meta is not a step.
+static func walk_arrows() -> Vector3:
+	var command := KeyChord.arrow_commanded()
+	var arrows := Vector3.ZERO
+	if KeyChord.walk_key(KEY_UP, Input.is_physical_key_pressed(KEY_UP), command): arrows.z -= 1.0
+	if KeyChord.walk_key(KEY_DOWN, Input.is_physical_key_pressed(KEY_DOWN), command): arrows.z += 1.0
+	if KeyChord.walk_key(KEY_LEFT, Input.is_physical_key_pressed(KEY_LEFT), command): arrows.x -= 1.0
+	if KeyChord.walk_key(KEY_RIGHT, Input.is_physical_key_pressed(KEY_RIGHT), command): arrows.x += 1.0
+	return arrows
+
+
+## Whether something else has the letters just now.
+func letters_claimed() -> bool:
+	return keys_claimed.is_valid() and bool(keys_claimed.call())
+
+
+## Which way the keys say to go, before the body's facing, with `focus_owner` holding the keyboard.
+func keyboard_wish(focus_owner: Control) -> Vector3:
+	var letters := walk_letters()
+	var arrows := walk_arrows()
+	var wish := Vector3.ZERO
+	# Read above all the same: the latch has to hear a key come up behind an open screen.
+	if KeyChord.modal_open(get_tree()):
+		return wish
+	# Keyboard only when nothing else has it: a text field taking a track name must not walk
+	# you into the wall one letter at a time.
+	if focus_owner == null and not letters_claimed():
+		wish += letters
+	# The arrows too, and they go on walking while a piano has the letters (KeyCatcher): a piano
+	# is played on the move. Alt does not stop them, because Alt bends a note on the way.
+	if focus_owner == null or focus_owner.is_in_group(&"walks_on_arrows"):
+		wish += arrows
+	return wish
+
+
+## Up (1), down (-1) or neither: Space rises and Shift+Space sinks, with the walking keys free.
+static func rise_wanted() -> float:
+	if not Input.is_key_pressed(KEY_SPACE):
+		return 0.0
+	return -1.0 if Input.is_key_pressed(KEY_SHIFT) else 1.0
 
 
 ## One tick of the body, with the input already decided. Split out so a test can drive it.

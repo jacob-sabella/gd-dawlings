@@ -159,6 +159,13 @@ func _build_anchors() -> void:
 		if studio.medium == Presentation.Medium.VR:
 			studio.rig.settle(Transform3D(Basis.IDENTITY, Vector3(0, 0, Studio.MIX_POSITION_Z)))
 
+	# The edit keys, in both media: with no mouse hand, only undo and redo act.
+	var shortcuts := RoomShortcuts.new()
+	shortcuts.name = "RoomShortcuts"
+	shortcuts.studio = studio
+	shortcuts.hand = studio.get_node_or_null("MouseHand") as Interactor
+	studio.add_child(shortcuts)
+
 	studio.screen_stage = Node3D.new()
 	studio.screen_stage.name = "ScreenStage"
 	studio.screen_stage.position = Vector3(0, 0, -0.75)
