@@ -99,6 +99,12 @@ func _init(f: MilkFile) -> void:
 		var t := MilkHlsl.translate(f.warp_shader)
 		if t.ok:
 			shader = shader_for(f.per_pixel, t)
+			if shader == null and f.per_pixel.strip_edges() != "":
+				# Per-pixel code that cannot run (it reads gmegabuf) need not cost the preset its shader.
+				shader = shader_for("", t)
+				if shader != null:
+					pixel_ok = false
+					notes.append("per-pixel code dropped")
 		if shader != null:
 			warp_md2 = true
 			swapped = t.swapped
@@ -579,7 +585,7 @@ static func _frame_uniforms() -> String:
 static func comp_code(md2: Dictionary) -> String:
 	return COMP_TEMPLATE.format({
 		"frame_uniforms": _frame_uniforms(),
-		"prelude": MilkHlsl.prelude(md2),
+		"prelude": MilkHlsl.PRELUDE,
 		"header": md2.header,
 		"locals": MilkHlsl.BODY_LOCALS,
 		"body": md2.body,
@@ -618,7 +624,7 @@ static func shader_code(per_pixel: String, md2 := {}) -> String:
 		finish = MD2_FINISH.format({"locals": MilkHlsl.BODY_LOCALS, "body": md2.body})
 	return WARP_TEMPLATE.format({
 		"helpers": MilkEel.GLSL_HELPERS,
-		"prelude": MilkHlsl.prelude(md2) if not md2.is_empty() else "",
+		"prelude": MilkHlsl.PRELUDE if not md2.is_empty() else "",
 		"header": md2.get("header", ""),
 		"finish": finish,
 		"frame_uniforms": _frame_uniforms(),

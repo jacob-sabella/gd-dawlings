@@ -10,7 +10,6 @@ warp_5=`    ret = look(sampler_main, uv) * 0.9;
 warp_6=`}
 comp_1=`shader_body
 comp_2=`{
-comp_3=`#if 1
+comp_3=`#include "not_here.fxh"
 comp_4=`    ret = GetPixel(uv);
-comp_5=`#endif
-comp_6=`}
+comp_5=`}

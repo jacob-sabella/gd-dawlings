@@ -61,10 +61,13 @@ shown.
   per-frame, wave and shape code. The per-pixel code becomes Godot shader code inside a warp shader made for that
   preset (MilkPlayer, cached by its text). That shader also does MilkDrop's warp: zoom with zoomexp, stretch,
   wobble, turn and drift, with the fade in gamma space.
-- `MilkHlsl` translates a MilkDrop 2 warp or composite shader into Godot's shader language. It handles the types,
-  `lerp`/`frac`/`saturate`/`mul`, HLSL's implicit float-to-vector spreads in `pow`/`min`/`max`/`lerp`/`clamp`,
-  `tex2D` on the main, blur and noise samplers, GetPixel/GetBlur, and q1..q32. If the translation or the compile
-  fails, the preset uses the plain warp (with the fade held below 1) or the plain glass.
+- `MilkHlsl` and `MilkHlslParse` translate a MilkDrop 2 warp or composite shader into Godot's shader language. The
+  parser knows every expression's type, so it writes out what HLSL converts by itself: a float spread over a vector,
+  a longer vector cut to the shorter, comparisons used as numbers, `%`, and 2x3 or 4x3 matrices (held in a square
+  one). It resolves `#define` and `#if`. Globals become locals of the body, and a function that uses one (or `uv`,
+  `ret`...) is handed it as an `inout` parameter. MilkDrop's `rot_*` matrices are this project's own slow turns. If
+  the translation or the compile fails, the preset uses the plain warp (with the fade held below 1) or the plain
+  glass.
 - `MilkPlayer` runs one preset each step. It draws the main wave (modes 0 to 7), up to 4 custom waves of 256
   points, 8 shape instances, the borders and the motion vectors into the buffer. Additive strokes go through a
   second, add-blended ink.
@@ -78,16 +81,16 @@ their authors' work and carry no licence, so they are never shipped or kept in t
 auto-advance and the click pick from the pack.
 
 Of the pack's 9,795 presets, every file reads. Per-frame code compiles for 9,386. Per-pixel code compiles for
-5,965 of the 6,049 that have it. MilkDrop 2 warp shaders translate for 4,508 of 7,924, and composites for 5,571 of
-7,971. 4,837 play with nothing dropped. On an RTX 5080 at HIGH, a step costs 0.2 to 2.2 ms of CPU, and the
+5,965 of the 6,049 that have it. MilkDrop 2 warp shaders translate for all 7,924, and composites for 7,970 of 7,971 (the
+other has a typo in its source). 8,765 play with nothing dropped. On an RTX 5080 at HIGH, a step costs 0.2 to 2.2 ms of CPU, and the
 buffer's GPU time is under 0.1 ms.
 
 ## Not done
 
-- The MilkDrop 2 shader translation covers a safe subset. A preset that hands a sampler to a function, uses
-  `#if`, `tex2Dlod`, structs, arrays, the comma operator, or adds float3 to float4 without a swizzle falls back to
-  the plain warp or glass, and the finder marks it "approx". GetBlur1..3 are a ring of taps, not MilkDrop's three
-  blurred copies. A texture a preset names (MilkDrop's own pictures, not in the pack) is drawn as noise.
+- A MilkDrop 2 shader that hands a sampler to a function or uses a `#define` with arguments falls back to the plain
+  warp or glass (none in the pack does), and the finder marks it "approx". GetBlur1..3 are a ring of taps, not
+  MilkDrop's three blurred copies. A texture a preset names (MilkDrop's own pictures, not in the pack) is drawn as
+  noise.
 - EEL's `loop`, `while`, `megabuf` and `gmegabuf` are not run, so per-frame code that uses them is dropped (about
   400 of the pack's presets). The per-pixel code runs per pixel, not on MilkDrop's 48 by 36 grid.
 - A preset's code is compiled, and its shaders built, on the frame it is chosen: about 16 ms on average and up to

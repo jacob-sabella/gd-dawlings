@@ -161,12 +161,29 @@ func milk_files_parse() -> void:
 func md2_shaders_translate() -> void:
 	var t := MilkHlsl.translate("float3 tint = float3(1, 0.5, 0);\nshader_body\n{\n  float3 c = tex2D(sampler_main, uv).xyz;\n  ret = lerp(c, tint, frac(time));\n  int n = 2;\n}")
 	check("hlsl: a shader translates", t.ok)
-	check("hlsl: a global is a constant, its type Godot's", t.header.contains("const vec3 h_tint"))
+	check("hlsl: a global is a variable of the body, its type Godot's", t.body.contains("vec3 g_tint = vec3("))
 	check("hlsl: the preset's own names are prefixed, MilkDrop's kept",
 			t.body.contains("vec3 h_c") and t.body.contains("_main_w(uv)") and t.body.contains("time"))
 	check("hlsl: lerp, frac and int become Godot's (or a helper)",
-			t.body.contains("_hmix(") and t.body.contains("fract(") and t.body.contains("float h_n = _v1(2.0)"))
-	check("hlsl: an assignment is fitted to its target", t.body.contains("ret = _v3("))
+			t.body.contains("mix(") and t.body.contains("fract(") and t.body.contains("float h_n = 2.0"))
+	check("hlsl: an assignment is fitted to its target",
+			MilkHlsl.translate("shader_body { float2 a = 1; ret = a.xyxy; }").body.contains("ret = (h_a.xyxy).xyz"))
+	for src: String in [
+			"shader_body { float2 a = uv; float3 b = ret; ret = (a + b).xyy; }",
+			"shader_body { float a = 7 % 3; ret = (uv.x > 0.5) * a; }",
+			"shader_body { ret = (ret > 0.5) ? ret : 1 - ret; }",
+			"float3 tint; float3 f() { tint = ret; return tint * uv.x; } shader_body { ret = f(); }",
+			"#define AMT 2\n#if AMT > 1\nfloat k = AMT;\n#else\nnope\n#endif\nshader_body { ret = k; }",
+			"shader_body { float2x3 m = float2x3(1,0,0, 0,1,0); ret = mul(m, ret).xyy; }",
+			"shader_body { float a[3] = {1, 2, 3}; float2x2 m = {1, 0, 0, 1}; ret = a[1] * mul(uv, m).x; }",
+			"shader_body { rand_preset = 0.5; ret = rand_preset.xyz + mul(ret, rot_f1); }",
+			"shader_body { float i; for (i = 0; i < 3; i++) ret += tex2d(sampler_fc_main, uv).xyz; }",
+	]:
+		var typed := MilkHlsl.translate(src)
+		check("hlsl: compiles, its conversions written out: " + src.left(44), typed.ok and MilkPlayer.comp_for(typed) != null)
+	check("hlsl: % is HLSL's (the sign of the left side), not Godot's mod",
+			MilkHlsl.translate("shader_body { ret = uv.x % 3; }").body.contains("_hfmod(")
+			and MilkHlsl.PRELUDE.contains("a - b * trunc(a / b)"))
 	check("hlsl: no shader_body, no translation", not MilkHlsl.translate("ret = 1;").ok)
 	check("hlsl: a sampler handed around is refused", not MilkHlsl.translate("shader_body { ret = f(sampler_main); }").ok)
 	check("hlsl: a named texture is drawn as noise",
