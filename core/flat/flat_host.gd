@@ -496,6 +496,37 @@ func duplicate_selection() -> void:
 	DAW.duplicate_selected()
 
 
+## One ask, however many clips: a guest's select all is one intent, not one a clip.
+func select_all_clips() -> void:
+	DAW.select_all_items()
+
+
+## The clipboard is this player's, the one the room's Ctrl-C and Ctrl-V use.
+func copy_clips() -> void:
+	DAW.copy_items()
+
+
+func cut_clips() -> void:
+	DAW.cut_items()
+
+
+## An empty `track_id` is no lane under the pointer and nothing selected. It is said here and not
+## sent, since `ProjectBridge.index_of` would read it as the master.
+func paste_clips(track_id: String, seconds: float) -> void:
+	if track_id.is_empty():
+		Session.notice.emit("Point at a lane or select a clip to paste there.")
+		return
+	DAW.paste_items(ProjectBridge.index_of(track_id), seconds)
+
+
+func begin_gesture(gesture_name: String) -> void:
+	DAW.open_edit(gesture_name)
+
+
+func end_gesture() -> void:
+	DAW.close_edit()
+
+
 func trim_clip(id: String, clip_index: int, start: float, end: float) -> void:
 	DAW.trim_item(ProjectBridge.index_of(id), clip_index, start, end)
 

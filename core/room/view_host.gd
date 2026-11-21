@@ -51,16 +51,15 @@ func _process(delta: float) -> void:
 		studio.venue.lift_on_clip = studio.ergonomics.lift_on_clip
 		studio.venue.pulse(studio.fed_level if studio.fed_level >= 0.0 else maxf(maxf(DAW.state.master.vu_l, DAW.state.master.vu_r), maxf(studio.rack_host.rack_level(), studio.singer_host.level())))
 		studio.venue_look.follow_clip(delta)
+	# Read before any return, so a chord pressed with a field focused, or on foot, is still a chord.
+	var move := Walker.walk_letters()
 	if studio.camera == null or not studio.god_mode:
 		return
 	# Not while typing a name into the session panel, or every "s" in it flies backwards.
-	if studio.get_viewport().gui_get_focus_owner() != null:
+	if studio.get_viewport().gui_get_focus_owner() != null or KeyChord.modal_open(studio.get_tree()):
 		return
-	var move := Vector3.ZERO
-	if Input.is_key_pressed(KEY_W): move.z -= 1.0
-	if Input.is_key_pressed(KEY_S): move.z += 1.0
-	if Input.is_key_pressed(KEY_A): move.x -= 1.0
-	if Input.is_key_pressed(KEY_D): move.x += 1.0
+	if studio.walker != null and studio.walker.letters_claimed():
+		return
 	if move != Vector3.ZERO:
 		var yaw := Basis(Vector3.UP, studio._orbit_yaw)
 		studio._orbit_target += yaw * move.normalized() * delta * 1.4

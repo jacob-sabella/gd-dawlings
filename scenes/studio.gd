@@ -413,6 +413,7 @@ func _ready() -> void:
 	station_host._build_point_and_mark()
 	if camera != null:
 		player_host._build_walker()
+		walker.keys_claimed = _pads_have_the_keys
 		view_host._update_camera()
 	if medium != Presentation.Medium.AR:
 		item_host._build_items()
@@ -622,11 +623,17 @@ var _look_by := &""
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
-		# Never a stuck solo: a key let go while another window had focus never comes here.
-		signal_views.look_solo_release()
+		# Never a stuck key: one let go while another window had focus never comes here.
+		input_host.release_held_keys()
+		input_host.release_played_keys()
 		_unfocused_pacing(true)
 	elif what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_WM_WINDOW_FOCUS_IN:
 		_unfocused_pacing(false)
+
+
+## Whether the TV's pads have W, A, S and D, so they are pads and not feet (PadDeck.has_the_letters).
+func _pads_have_the_keys() -> bool:
+	return tv != null and is_instance_valid(tv) and tv.deck != null and tv.deck.has_the_letters()
 
 
 ## A window the compositor is not showing (another workspace, tabbed out) gets no frame callbacks, so a vsynced present

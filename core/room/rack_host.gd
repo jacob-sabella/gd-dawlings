@@ -569,6 +569,9 @@ func _follow_pads() -> void:
 		if studio.tv.deck.engaged and not here:
 			studio.tv.deck.stop_all()
 		studio.tv.deck.engaged = here
+		studio.tv.deck.focused = here and studio.focus != null and studio.focus.focused_id == studio.tv.surface_id
+		if not here:
+			studio.tv.deck.keys_asked = false
 	if Session.guest_midi != null:
 		var sink := Callable(studio.tv.deck, "midi") if here else Callable()
 		if Session.guest_midi.pad_sink != sink:

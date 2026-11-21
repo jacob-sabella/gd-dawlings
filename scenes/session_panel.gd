@@ -179,6 +179,7 @@ var _found: Dictionary = {}
 
 
 func _ready() -> void:
+	add_to_group(KeyChord.PANEL)
 	layer = 20
 	_build_panel()
 	_build_toasts()
@@ -356,7 +357,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key.keycode == KEY_S and key.ctrl_pressed and not key.shift_pressed and not key.alt_pressed:
 		DAW.save_project()
 		get_viewport().set_input_as_handled()
-	elif key.keycode == KEY_M and not key.ctrl_pressed:
+	elif key.keycode == KEY_M and not KeyChord.commanded(key) and not KeyChord.room_keys_blocked(get_viewport()):
 		toggle()
 		get_viewport().set_input_as_handled()
 	elif key.keycode == KEY_ESCAPE and is_open():
@@ -2263,9 +2264,20 @@ func _edit(placeholder: String) -> LineEdit:
 	return e
 
 
+## The field being typed in, finished as a click elsewhere would finish it.
+func _let_go_of_field() -> void:
+	if TextFocus.held(get_viewport()):
+		get_viewport().gui_release_focus()
+
+
 func _button(text: String, primary: bool) -> Button:
 	var b := Button.new()
 	b.text = text
+	# Clicked, it must not keep the keyboard: Space and Tab belong to the room.
+	b.focus_mode = Control.FOCUS_NONE
+	# Nor leave a field half typed: taking no focus, it would not end the edit that saves the field,
+	# and would act on the old value. On the way down, so the field is saved before `pressed`.
+	b.button_down.connect(_let_go_of_field)
 	b.custom_minimum_size = Vector2(0, 34)
 	b.add_theme_font_size_override("font_size", 14)
 	var base := Color(0.92, 0.6, 0.25) if primary else Color(0.15, 0.16, 0.19)

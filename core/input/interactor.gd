@@ -638,6 +638,14 @@ func _paste_press(point: Vector3) -> bool:
 	return true
 
 
+## What this hand carries pasted onto the control under it, for a key rather than a press: false
+## with no control there, or where the control takes no paste.
+func paste_carried() -> bool:
+	if not is_instance_valid(hovered):
+		return false
+	return _paste_press(hover_point)
+
+
 ## One frame of a push: the carried item's middle, from where it was to where it is, crossing a
 ## control's face inward (into it, along against the face's outward normal) is a press there. From
 ## inside the face out is no crossing, so it pastes once a push, and again only when pushed in anew.

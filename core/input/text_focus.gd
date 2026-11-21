@@ -18,3 +18,15 @@ static func held(viewport: Viewport) -> bool:
 	if owner is TextEdit:
 		return (owner as TextEdit).editable
 	return false
+
+
+## Whether a field keeps Ctrl chords for itself. Narrower than `held`, which still blocks plain
+## keys: a LineEdit after Enter keeps focus but is done editing, so Ctrl+Z is the room's again.
+## Any focused TextEdit owns them, read-only too, or the Workshop's preview loses Ctrl+C.
+static func owns_keys(viewport: Viewport) -> bool:
+	if viewport == null:
+		return false
+	var owner := viewport.gui_get_focus_owner()
+	if owner is LineEdit:
+		return (owner as LineEdit).editable and (owner as LineEdit).is_editing()
+	return owner is TextEdit

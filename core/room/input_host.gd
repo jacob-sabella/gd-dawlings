@@ -7,6 +7,12 @@ extends RefCounted
 ## The keys that take you somewhere else: F to the gear (and the seat), I to the next instrument,
 ## V to the next venue, N up out of your body.
 const MOVES_YOU := [KEY_F, KEY_I, KEY_V, KEY_N]
+## The keys a piano holds back without a word, because a hand on the home row hits them by accident:
+## R would wind up a throw, and the rest edit, drop or strike something. C is not one of them: it
+## is how the chord layer ends, and the layer puts a piano in charge of the keyboard. The digits a
+## chord layer uses never get here, since the piano takes them first.
+const HELD_BY_A_PIANO := [KEY_B, KEY_Q, KEY_R, KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7,
+		KEY_8, KEY_9, KEY_BACKSPACE, KEY_BRACKETLEFT, KEY_BRACKETRIGHT]
 
 var studio: Studio
 
@@ -27,14 +33,48 @@ func _held_while_playing(keycode: int) -> bool:
 	return true
 
 
+## Everything a held key is doing, let go, for when the room stops hearing the keyboard and so
+## would never hear the key come up: the window lost focus, or the 2D view took over. The clap
+## puts the mute back rather than latching it, and a wound-up throw is dropped, not thrown.
+func release_held_keys() -> void:
+	if studio.key_clap.pressed:
+		studio.key_clap.release(INF)
+	studio.signal_views.look_solo_release()
+	studio._lean_key = false
+	if studio.stage != null:
+		studio.mix_follow._follow_lean()
+	var hand := studio.get_node_or_null("MouseHand") as MouseInteractor
+	if hand != null:
+		hand.ear_held = false
+		hand.cancel_throw()
+	if studio.point_and_mark != null:
+		studio.point_and_mark.set_pointing(false)
+	KeyChord.clear_walk_latch()
+
+
+## What is sounding from a key, let go, for a window that lost focus: its key-up goes to the other
+## window. Not for F2, where the room still hears a pad's key come up. The piano keeps the keyboard.
+func release_played_keys() -> void:
+	var catcher := studio.get_viewport().gui_get_focus_owner() as KeyCatcher if studio.get_viewport() != null else null
+	if catcher != null:
+		catcher.release_all()
+	if studio.tv != null and is_instance_valid(studio.tv) and studio.tv.deck != null:
+		studio.tv.deck.release_held()
+
+
 ## Orbit on right-drag, zoom on wheel, WASD to walk. Not a replacement for standing in the room;
 ## it is how the screen half of a hybrid session gets around, and how every screenshot of this
 ## project is framed.
 func _unhandled_input(event: InputEvent) -> void:
 	if studio.camera == null:
 		return
-	# A text field has the keyboard: none of the room's key shortcuts are for it.
-	if event is InputEventKey and TextFocus.held(studio.get_viewport()):
+	# A text field or an open screen has the keyboard, and Ctrl, Alt or Meta makes a press a command:
+	# none of these are the room's key shortcuts. Only presses: a key let go always lets go.
+	if event is InputEventKey and event.pressed and (TextFocus.held(studio.get_viewport())
+			or KeyChord.modal_open(studio.get_tree()) or KeyChord.commanded(event)):
+		return
+	if event is InputEventKey and event.pressed and event.keycode in HELD_BY_A_PIANO \
+			and studio.get_viewport().gui_get_focus_owner() is KeyCatcher:
 		return
 	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) \
 			and not studio.god_mode and studio.walker != null:
@@ -52,20 +92,20 @@ func _unhandled_input(event: InputEvent) -> void:
 				hand.begin_throw()
 			else:
 				hand.release_throw()
-	elif event is InputEventKey and event.keycode == KEY_K and not event.echo and not event.ctrl_pressed:
+	elif event is InputEventKey and event.keycode == KEY_K and not event.echo:
 		# The desktop's clap: K held over a track mutes it while held, a tap latches it.
 		# Held for as long as the frames say (_follow_clap), the clock a clap is timed by.
 		if event.pressed and not studio.key_clap.pressed:
 			studio.key_clap.press(studio.mix_follow._mouse_track(), true)
 		elif not event.pressed and studio.key_clap.pressed:
 			studio.key_clap.release(studio.key_clap.held_for())
-	elif event is InputEventKey and event.keycode == KEY_U and not event.echo and not event.ctrl_pressed:
+	elif event is InputEventKey and event.keycode == KEY_U and not event.echo:
 		# Look to solo: U held, with the signal view on, solos the track under the cursor alone.
 		if event.pressed:
 			studio.signal_views.look_solo_press(&"key")
 		else:
 			studio.signal_views.look_solo_release(&"key")
-	elif event is InputEventKey and event.keycode == KEY_L and not event.echo and not event.ctrl_pressed:
+	elif event is InputEventKey and event.keycode == KEY_L and not event.echo:
 		# Lean in to the stage voice under the cursor while L is held.
 		studio._lean_key = event.pressed
 		studio.mix_follow._follow_lean()
@@ -90,11 +130,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Somewhere else to stand. The setup comes along; only the world changes.
 			KEY_V:
 				studio.venue_switch.cycle_venue()
-			# The history, from anywhere in the room. The deck has keys for it too.
-			KEY_Z when event.ctrl_pressed:
-				DAW.redo() if event.shift_pressed else DAW.undo()
-			KEY_Y when event.ctrl_pressed:
-				DAW.redo()
 			# Split the selected items at the playhead. B for blade: S is walking backwards.
 			KEY_B:
 				DAW.split_selected(DAW.state.position_seconds)
@@ -107,10 +142,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				studio.player_host._toggle_headphones()
 			# See the signal (docs/spatial_loop.md part three): X, an x-ray of the mix, with or
 			# without the glasses. G was taken by the gear's summoning.
-			KEY_X when not event.ctrl_pressed and not event.meta_pressed:
+			KEY_X:
 				studio.signal_views.toggle_signal_view()
 			# Why can't I hear this? Y over it, with the signal showing; Shift-Y does the fix.
-			KEY_Y when not event.ctrl_pressed and not event.meta_pressed:
+			KEY_Y:
 				if event.shift_pressed:
 					studio.signal_views.fix_traced()
 				else:
@@ -130,10 +165,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_T:
 				studio.surface_host.toggle_fingertips()
 			# The computer keyboard as a piano, to play whatever instrument is on the track: P.
-			KEY_P when not event.ctrl_pressed and not event.meta_pressed:
+			KEY_P:
 				studio.computer_keys_toggled.emit()
 			# The chord layer: C for chords. 1 to 7 then pick them in the keys that play.
-			KEY_C when not event.ctrl_pressed and not event.meta_pressed:
+			KEY_C:
 				studio.surface_host.toggle_chords()
 			# Go to the instruments one at a time, as F goes to the gear: I for instrument.
 			# Shift goes the other way. The help card's PLAY pages go to one by name.

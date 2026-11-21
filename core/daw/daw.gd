@@ -75,6 +75,7 @@ const COMMANDS := [
 	&"insert_midi_take",
 	&"open_edit", &"close_edit", &"hold_lane", &"scrub", &"arrange_sections", &"set_lyrics",
 	&"reset_loudness",
+	&"edit_targets", &"clipboard_copy", &"clipboard_cut", &"clipboard_paste", &"held_item_edit",
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
@@ -108,6 +109,8 @@ func use(new_backend: DAWBackend, start: bool = true, options: Dictionary = {}) 
 		backend.close()
 		backend.queue_free()
 	backend = new_backend
+	# A clipboard is this backend's: a Reaper slot, or clips whose files are this project's.
+	_clipboards.clear()
 	add_child(backend)
 	_relay(backend.state, true)
 	backend.connection_changed.connect(func(): connection_changed.emit())
@@ -517,13 +520,13 @@ func save_project_as(path: String) -> PackedStringArray:
 func open_project(path: String) -> PackedStringArray:
 	if not Session.is_authority():
 		return PackedStringArray(["only the host opens a project"])
-	return backend.open_project(path)
+	return _replaced_project(backend.open_project(path))
 
 
 func new_project(tracks := 4) -> PackedStringArray:
 	if not Session.is_authority():
 		return PackedStringArray(["only the host starts a project"])
-	return backend.new_project(tracks)
+	return _replaced_project(backend.new_project(tracks))
 
 
 ## Host only: keeps the project's layout, without its content, as a template (ProjectFiles).
@@ -537,7 +540,15 @@ func save_template(template_name: String) -> PackedStringArray:
 func new_project_from_template(template_name: String) -> PackedStringArray:
 	if not Session.is_authority():
 		return PackedStringArray(["only the host starts a project"])
-	return backend.new_project_from_template(template_name)
+	return _replaced_project(backend.new_project_from_template(template_name))
+
+
+## A clipboard holds clips by file name, and a name means another file in another project. Kept
+## when the project did not change (`problems` says why).
+func _replaced_project(problems: PackedStringArray) -> PackedStringArray:
+	if problems.is_empty():
+		_clipboards.clear()
+	return problems
 
 
 ## Host only: whether the open project has changes no save has kept.
@@ -602,6 +613,10 @@ func close_edits_of(peer: int) -> void:
 	backend.acting_peer = 0
 	# And any lane their write bead held: a bead let go of by somebody who is not here any more.
 	backend.release_lanes_of(peer)
+	# And what they had copied, here and in the bridge's slot.
+	var who := Session.local_peer_id if peer == 0 else peer
+	_clipboards.erase(who)
+	backend.forget_slot(who)
 func undo() -> void: _do(&"undo", [])
 func redo() -> void: _do(&"redo", [])
 ## Back or forward through history to `depth` steps done: the history list's jump.
@@ -1392,6 +1407,12 @@ func apply_intent(verb: StringName, args: Array, from := 0) -> void:
 			push_warning("DAW: refused a malformed undo_to intent %s." % [args])
 			return
 		args = [maxi(int(args[0]), 0)]
+	if verb == &"held_item_edit":
+		_held_item_intent(args, from)
+		return
+	if verb in CLIPBOARD_VERBS:
+		_clipboard_intent(verb, args, from)
+		return
 	if locked_against(verb, args):
 		return
 	_call(verb, args, from)
@@ -1647,6 +1668,347 @@ func paste_refusal(track_index: int, packed: Dictionary) -> String:
 		return "%s takes no MIDI: its input is %s. Paste MIDI where the keys go." % [t.display_name(),
 				state.input_name(state.input_of(track_index))]
 	return ""
+
+
+# --- exact targets and each player's clipboard ---------------------------------------------------
+#
+# The keys' edits name what they act on, [track, index, start, length], so a clip that moved between
+# the press and the host refuses the whole edit instead of hitting its neighbour. Nothing here reads
+# Reaper's selection, and nothing opens an edit, so a guest's paste cannot close the host's drag.
+
+## The most clips one edit may name: a peer's list is peer input.
+const EDIT_TARGETS_MAX := 512
+const EDIT_TARGET_OPS := ["delete", "cut", "duplicate"]
+## Answered here on the host rather than called on the backend by name.
+const CLIPBOARD_VERBS := [&"edit_targets", &"clipboard_copy", &"clipboard_cut", &"clipboard_paste"]
+
+## Each player's clipboard, by peer id, the host's own under Session.local_peer_id: ItemClipboard
+## entries. On Reaper the clips themselves are in the bridge's slot of the same number.
+var _clipboards := {}
+
+
+## What a drag lets go with, and how many values each takes after the track and the item.
+const HELD_EDITS := {&"move_item": 2, &"trim_item": 2, &"ripple_move_item": 1, &"ripple_trim_item": 2, &"set_item_fades": 2}
+
+
+## A drag's release on the clip that spanned `was_start` to `was_end` when it was picked up. A guest's
+## index can be stale by the time it lands, so the host finds the clip by that span, or refuses.
+func edit_held(verb: StringName, track: int, index: int, was_start: float, was_end: float, rest: Array) -> void:
+	if Session.is_authority():
+		callv(verb, [track, index] + rest)
+		return
+	Session.send_intent(&"held_item_edit", [verb, track, index, was_start, was_end, rest])
+
+
+func _held_item_intent(args: Array, from: int) -> void:
+	if not Session.is_authority():
+		return
+	var numbers := func(list: Array) -> bool:
+		return list.all(func(v): return typeof(v) in [TYPE_INT, TYPE_FLOAT] and is_finite(float(v)))
+	if args.size() != 6 or typeof(args[0]) not in [TYPE_STRING, TYPE_STRING_NAME] \
+			or not HELD_EDITS.has(StringName(args[0])) or not numbers.call(args.slice(1, 5)) \
+			or not args[5] is Array or (args[5] as Array).size() != HELD_EDITS[StringName(args[0])] \
+			or not numbers.call(args[5]):
+		push_warning("DAW: refused a malformed held_item_edit intent.")
+		return
+	var found := _held_index(int(args[1]), int(args[2]), float(args[3]), float(args[4]))
+	if found < 0:
+		Session.tell(Session.local_peer_id if from == 0 else from,
+				"That clip changed while you held it, so the drag was dropped.")
+		return
+	apply_intent(StringName(args[0]), [int(args[1]), found] + (args[5] as Array), from)
+
+
+## The clip with this span: at `index` if it is still there, else the only one. -1 if gone or ambiguous.
+func _held_index(track: int, index: int, start: float, end: float) -> int:
+	if not state.tracks.has(track):
+		return -1
+	var items: Array = state.track(track).items
+	var same := func(it: MixState.ItemState) -> bool:
+		return absf(it.start - start) <= DAWBackend.TARGET_EPSILON \
+				and absf(it.end() - end) <= DAWBackend.TARGET_EPSILON
+	if index >= 0 and index < items.size() and same.call(items[index]):
+		return index
+	var found := -1
+	for i in items.size():
+		if same.call(items[i]):
+			if found >= 0:
+				return -1
+			found = i
+	return found
+
+
+## `op` ("delete", "cut" or "duplicate") on exactly `targets`. One undo step, or nothing and a notice.
+func edit_targets(op: String, targets: Array) -> void:
+	if _too_many(targets.size(), op) != "":
+		Session.notice.emit(_too_many(targets.size(), op))
+		return
+	Session.send_intent(&"edit_targets", [op, targets])
+
+
+## The selection as targets, as this machine sees it.
+func selected_targets() -> Array:
+	var out: Array = []
+	for index in state.track_indices():
+		var items: Array = state.track(index).items
+		for i in items.size():
+			if items[i].selected:
+				out.append([index, i, items[i].start, items[i].length])
+	return out
+
+
+## `targets`, or the selection, onto this player's clipboard.
+func copy_items(targets: Array = []) -> void:
+	var picked := targets if not targets.is_empty() else selected_targets()
+	if picked.is_empty():
+		Session.notice.emit("Nothing is selected to copy.")
+		return
+	if _too_many(picked.size(), "copy") != "":
+		Session.notice.emit(_too_many(picked.size(), "copy"))
+		return
+	Session.send_intent(&"clipboard_copy", [picked])
+
+
+## `targets`, or the selection, onto this player's clipboard and off the song. Locked clips stay.
+func cut_items(targets: Array = []) -> void:
+	var picked := targets if not targets.is_empty() else selected_targets()
+	if picked.is_empty():
+		Session.notice.emit("Nothing is selected to cut.")
+		return
+	if _too_many(picked.size(), "cut") != "":
+		Session.notice.emit(_too_many(picked.size(), "cut"))
+		return
+	Session.send_intent(&"clipboard_cut", [picked])
+
+
+## This player's clipboard onto the song, its top track at `track` and its earliest clip at
+## `seconds`. One undo step, and what landed is the selection.
+func paste_items(track: int, seconds: float) -> void:
+	Session.send_intent(&"clipboard_paste", [track, seconds])
+
+
+## Why `count` clips are too many for one `op`, in words, or "".
+static func _too_many(count: int, op: String) -> String:
+	if count <= EDIT_TARGETS_MAX:
+		return ""
+	var done: String = {"delete": "deleted", "duplicate": "duplicated", "copy": "copied"}.get(op, op)
+	return "%d clips is more than one edit can take (%d): nothing was %s. Select fewer." % [count,
+			EDIT_TARGETS_MAX, done]
+
+
+## `raw` as clean targets, or [] when any of it is malformed, repeated or over the limit.
+static func clean_targets(raw: Variant) -> Array:
+	if not raw is Array or (raw as Array).is_empty() or (raw as Array).size() > EDIT_TARGETS_MAX:
+		return []
+	var out: Array = []
+	var seen := {}
+	for target: Variant in raw:
+		if not target is Array or (target as Array).size() != 4 or (target as Array).any(
+				func(v): return typeof(v) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(v))):
+			return []
+		var key := Vector2i(int(target[0]), int(target[1]))
+		if key.x < 1 or key.y < 0 or float(target[2]) < 0.0 or float(target[3]) <= 0.0 or seen.has(key):
+			return []
+		seen[key] = true
+		out.append([key.x, key.y, float(target[2]), float(target[3])])
+	return out
+
+
+## Why `targets` are not what they were when they were named, in words, or "".
+func stale_refusal(targets: Array) -> String:
+	for target: Array in targets:
+		var item: MixState.ItemState = null
+		if state.tracks.has(target[0]):
+			item = state.item(target[0], target[1])
+		if item == null or absf(item.start - target[2]) > DAWBackend.TARGET_EPSILON \
+				or absf(item.end() - (target[2] + target[3])) > DAWBackend.TARGET_EPSILON:
+			return "Those clips changed before the edit arrived, so nothing was changed."
+	return ""
+
+
+## Why `peer` (0 for this machine) cannot change `targets` now, in words, or "".
+func edit_refusal(targets: Array, peer := 0) -> String:
+	if backend.edit_open(peer):
+		return "Let go of the drag first."
+	var why := stale_refusal(targets)
+	if not why.is_empty():
+		return why
+	for target: Array in targets:
+		if state.track(target[0]).is_frozen():
+			return "%s is frozen: thaw it to edit its clips." % state.track(target[0]).display_name()
+	return ""
+
+
+## A clipboard or target verb from anyone, this machine included: checked as peer input, and done
+## as theirs.
+func _clipboard_intent(verb: StringName, args: Array, from: int) -> void:
+	if not Session.is_authority():
+		return
+	var who: int = Session.local_peer_id if from == 0 else from
+	var actor: int = 0 if from == Session.local_peer_id else from
+	var targets: Array = []
+	var raw: Variant = null
+	match verb:
+		&"edit_targets":
+			if args.size() != 2 or not args[0] is String or args[0] not in EDIT_TARGET_OPS:
+				push_warning("DAW: refused a malformed edit_targets intent.")
+				return
+			raw = args[1]
+		&"clipboard_copy", &"clipboard_cut":
+			if args.size() != 1:
+				push_warning("DAW: refused a malformed %s intent." % verb)
+				return
+			raw = args[0]
+		&"clipboard_paste":
+			if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] \
+					or typeof(args[1]) not in [TYPE_INT, TYPE_FLOAT] \
+					or not is_finite(float(args[0])) or not is_finite(float(args[1])):
+				push_warning("DAW: refused a malformed clipboard_paste intent.")
+				return
+			on_behalf_of(actor, _paste_clipboard.bind(int(args[0]), float(args[1]), who, actor))
+			return
+	var op: String = "copy" if verb == &"clipboard_copy" else "cut" if verb == &"clipboard_cut" else args[0]
+	# Too many is a player's selection, and they hear it. Anything else wrong is a bad peer.
+	if raw is Array and _too_many((raw as Array).size(), op) != "":
+		Session.tell(who, _too_many((raw as Array).size(), op))
+		return
+	targets = clean_targets(raw)
+	if targets.is_empty():
+		push_warning("DAW: refused a malformed %s intent." % verb)
+		return
+	on_behalf_of(actor, _act_on_targets.bind(op, targets, who, actor))
+
+
+func _act_on_targets(op: String, targets: Array, who: int, actor: int) -> void:
+	if op == "copy":
+		_copy_clipboard(targets, who)
+		return
+	var why := edit_refusal(targets, actor)
+	if not why.is_empty():
+		Session.tell(who, why)
+		return
+	var free := targets.filter(func(t): return not state.item(t[0], t[1]).locked)
+	var stayed := targets.size() - free.size()
+	if free.is_empty() and op != "duplicate":
+		Session.tell(who, "%s locked: unlock to change." % _clips(stayed))
+		return
+	match op:
+		"delete":
+			backend.acting = "delete items"
+			backend.delete_targets(targets, func(answer: Dictionary) -> void:
+				if not answer.get("ok", false):
+					Session.tell(who, "Those clips changed in the DAW, so nothing was deleted.")
+				else:
+					Session.tell(who, "Deleted %s%s. Ctrl+Z restores %s." % [_clips(free.size()), _stayed(stayed),
+							"it" if free.size() == 1 else "them"]))
+			backend.acting = ""
+		"duplicate":
+			backend.acting = "duplicate items"
+			backend.duplicate_targets(targets, func(answer: Dictionary) -> void:
+				if not answer.get("ok", false):
+					Session.tell(who, "Those clips changed in the DAW, so nothing was duplicated.")
+				else:
+					Session.tell(who, "Duplicated %s." % _clips(targets.size())))
+			backend.acting = ""
+		"cut":
+			_cut_clipboard(free, stayed, who)
+
+
+## What a clip stops being able to do once it leaves: refused before anything is deleted.
+func _unpastable(targets: Array) -> String:
+	if not backend.can(DAWBackend.Capability.PASTE_ITEMS):
+		return "This DAW cannot paste clips yet: in Reaper, load the dawlings bridge script."
+	if backend.clipboard_in_bridge():
+		return ""
+	for target: Array in targets:
+		var why := paste_refusal(target[0], MixWire.pack_item(state.item(target[0], target[1]),
+				state.track(target[0]).part))
+		if not why.is_empty():
+			return why
+	return ""
+
+
+func _copy_clipboard(targets: Array, who: int) -> void:
+	var why := stale_refusal(targets)
+	if why.is_empty() and not backend.can(DAWBackend.Capability.PASTE_ITEMS):
+		why = "This DAW cannot copy clips yet: in Reaper, load the dawlings bridge script."
+	if not why.is_empty():
+		Session.tell(who, why)
+		return
+	var entries := ItemClipboard.capture(state, targets)
+	backend.copy_to_slot(who, targets, func(answer: Dictionary) -> void:
+		if answer.get("ok", false):
+			_clipboards[who] = entries
+		else:
+			Session.tell(who, "Those clips could not be copied, so the clipboard is as it was."))
+
+
+## The copy first, and the delete only once it is safely held: a copy that failed deletes nothing.
+func _cut_clipboard(targets: Array, stayed: int, who: int) -> void:
+	var why := _unpastable(targets)
+	if not why.is_empty():
+		Session.tell(who, "Nothing was cut. %s" % why)
+		return
+	var entries := ItemClipboard.capture(state, targets)
+	var step: String = "cut items"
+	backend.acting = step
+	backend.copy_to_slot(who, targets, func(answer: Dictionary) -> void:
+		if not answer.get("ok", false):
+			Session.tell(who, "Those clips could not be copied, so nothing was cut.")
+			return
+		_clipboards[who] = entries
+		backend.acting = step
+		backend.delete_targets(targets, func(gone: Dictionary) -> void:
+			if not gone.get("ok", false):
+				Session.tell(who, "Copied, but those clips changed in the DAW, so nothing was cut.")
+			else:
+				Session.tell(who, "Cut %s%s." % [_clips(targets.size()), _stayed(stayed)]))
+		backend.acting = "")
+	backend.acting = ""
+
+
+func _paste_clipboard(track: int, seconds: float, who: int, actor: int) -> void:
+	if not _clipboards.has(who):
+		Session.tell(who, "Nothing is copied yet.")
+		return
+	if not backend.can(DAWBackend.Capability.PASTE_ITEMS):
+		Session.tell(who, "This DAW cannot paste clips yet: in Reaper, load the dawlings bridge script.")
+		return
+	if backend.edit_open(actor):
+		Session.tell(who, "Let go of the drag first.")
+		return
+	var landing := ItemClipboard.plan(_clipboards[who], state, track, seconds)
+	if landing.is_empty():
+		Session.tell(who, "That paste would run past the last track, so nothing was pasted.")
+		return
+	var in_bridge := backend.clipboard_in_bridge()
+	for spot: Array in landing:
+		if state.track(spot[0]).is_frozen():
+			Session.tell(who, "%s is frozen: thaw it to paste onto it." % state.track(spot[0]).display_name())
+			return
+		if not in_bridge:
+			var why := paste_refusal(spot[0], spot[2])
+			if not why.is_empty():
+				Session.tell(who, why)
+				return
+	backend.acting = "paste items"
+	backend.paste_set(landing, func(answer: Dictionary) -> void:
+		if answer.get("ok", false):
+			return
+		if str(answer.get("error", "")) == "no clipboard":
+			_clipboards.erase(who)
+			Session.tell(who, "The DAW lost that clipboard: copy it again.")
+		else:
+			Session.tell(who, "The DAW could not paste that, so nothing changed."), who)
+	backend.acting = ""
+
+
+static func _clips(count: int) -> String:
+	return "%d clip%s" % [count, "" if count == 1 else "s"]
+
+
+static func _stayed(count: int) -> String:
+	return "" if count == 0 else " (%d locked stayed)" % count
 
 
 ## Why a recorded take cannot be placed, in words for the person who played it, or "".

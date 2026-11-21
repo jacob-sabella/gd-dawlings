@@ -354,6 +354,11 @@ func release_throw() -> void:
 	throw_with(wound)
 
 
+## The wind-up dropped with nothing thrown: the keyboard went away with R still down.
+func cancel_throw() -> void:
+	_charge_from = -1
+
+
 ## A throw wound up to `wound` (0..1), along the cursor's ray.
 func throw_with(wound: float) -> void:
 	var a := aim()
@@ -420,14 +425,16 @@ func fine() -> bool:
 ## inputs, and Shift+P back.
 func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
-	if key != null and not key.echo and key.keycode == KEY_L and not key.ctrl_pressed \
-			and (ear_held or (key.pressed and _ear_cassette() != null)):
+	if key != null and not key.echo and key.keycode == KEY_L and (ear_held if not key.pressed
+			else not KeyChord.commanded(key) and not KeyChord.room_keys_blocked(get_viewport())
+			and (ear_held or _ear_cassette() != null)):
 		# L with a cassette in the hand holds it to the ear while it is down; the studio's lean
 		# never hears it.
 		ear_held = key.pressed
 		get_viewport().set_input_as_handled()
 		return
-	if key != null and key.pressed and not key.echo and key.keycode == KEY_P:
+	if key != null and key.pressed and not key.echo and key.keycode == KEY_P and not KeyChord.commanded(key) \
+			and not KeyChord.room_keys_blocked(get_viewport()):
 		if hovered is WorldSocket and is_instance_valid(hovered) \
 				and (hovered as WorldSocket).step(-1 if key.shift_pressed else 1):
 			get_viewport().set_input_as_handled()

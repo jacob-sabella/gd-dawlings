@@ -52,6 +52,7 @@ static func leave_home(parent: Node, where: String, go: Callable) -> void:
 
 
 func _ready() -> void:
+	add_to_group(KeyChord.MODAL)
 	layer = 30
 	_panel = PanelContainer.new()
 	_panel.visible = false

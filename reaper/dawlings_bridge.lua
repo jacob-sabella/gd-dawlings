@@ -2130,6 +2130,156 @@ function handlers.DuplicateSelected()
   return {ok = true}
 end
 
+-- --- exact targets and clipboards ---------------------------------------------------------
+--
+-- A target is (track, index, start, length) as the desk's cache had it. Every handler here checks
+-- all of its targets before it changes anything, and none reads Reaper's selection, which can reach
+-- past the tracks the desk can see. Half a millisecond is the same tolerance the host checks with.
+
+local TARGET_EPSILON = 0.0005
+local clipboards = {}
+
+-- The items `count` targets of `width` numbers each name, from args[first]; nil and why on any that
+-- is not there, is not where it was, or is named twice.
+local function resolve_targets(args, first, count, width)
+  local out, seen = {}, {}
+  for n = 0, count - 1 do
+    local at = first + n * width
+    local it = item_at({args[at], args[at + 1]})
+    if not it or seen[it] then return nil, 'no such item' end
+    local pos = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+    local finish = pos + reaper.GetMediaItemInfo_Value(it, 'D_LENGTH')
+    if math.abs(pos - (args[at + 2] or -1)) > TARGET_EPSILON
+      or math.abs(finish - ((args[at + 2] or 0) + (args[at + 3] or 0))) > TARGET_EPSILON then
+      return nil, 'item moved'
+    end
+    seen[it] = true
+    out[#out + 1] = it
+  end
+  return out
+end
+
+local function item_locked(it)
+  return (math.floor(reaper.GetMediaItemInfo_Value(it, 'C_LOCK')) & 1) ~= 0
+end
+
+-- An item's state with its GUIDs taken out, so Reaper numbers a copy made from it itself.
+local function item_chunk(it)
+  local ok, chunk = reaper.GetItemStateChunk(it, '', false)
+  if not ok then return nil end
+  return (chunk:gsub('\n%s*I?GUID %b{}', ''):gsub('\n%s*GUID %b{}', ''))
+end
+
+-- args: slot, count, then track, index, start, length per item. The slot is replaced only when
+-- every item was read. Not an undo point: nothing in the project changes.
+function handlers.CopyToClipboard(args)
+  local slot, count = math.floor(args[1] or 0), math.floor(args[2] or 0)
+  if count < 1 then return {ok = false, error = 'nothing to copy'} end
+  local items, why = resolve_targets(args, 3, count, 4)
+  if not items then return {ok = false, error = why} end
+  local held = {}
+  for n, it in ipairs(items) do
+    local chunk = item_chunk(it)
+    if not chunk then return {ok = false, error = 'could not read an item'} end
+    held[n] = chunk
+  end
+  clipboards[slot] = held
+  return {ok = true, copied = #held}
+end
+
+-- args: slot, count, then track and start per clip, in the order they were copied. One undo
+-- block; everything else unselected and what landed selected.
+function handlers.PasteClipboard(args)
+  local held = clipboards[math.floor(args[1] or 0)]
+  if not held then return {ok = false, error = 'no clipboard'} end
+  local count = math.floor(args[2] or 0)
+  if count ~= #held then return {ok = false, error = 'clipboard changed'} end
+  local spots = {}
+  for n = 1, count do
+    local tr = track_from_osc(args[1 + n * 2])
+    if not tr then return {ok = false, error = 'no such track'} end
+    spots[n] = {tr, math.max(0, args[2 + n * 2] or 0)}
+  end
+  reaper.Undo_BeginBlock()
+  unselect_all()
+  for n, chunk in ipairs(held) do
+    local copy = reaper.AddMediaItemToTrack(spots[n][1])
+    reaper.SetItemStateChunk(copy, chunk, false)
+    reaper.SetMediaItemInfo_Value(copy, 'D_POSITION', spots[n][2])
+    reaper.SetMediaItemSelected(copy, true)
+  end
+  local result = edited('Paste items')
+  result.pasted = count
+  return result
+end
+
+-- args: slot. Its player left the session.
+function handlers.ForgetClipboard(args)
+  clipboards[math.floor(args[1] or 0)] = nil
+  return {ok = true}
+end
+
+-- args: count, then track, index, start, length per item. A locked one stays and is counted.
+function handlers.DeleteItems(args)
+  local count = math.floor(args[1] or 0)
+  local items, why = resolve_targets(args, 2, count, 4)
+  if not items then return {ok = false, error = why} end
+  reaper.Undo_BeginBlock()
+  local deleted, locked = 0, 0
+  for _, it in ipairs(items) do
+    if item_locked(it) then
+      locked = locked + 1
+    else
+      reaper.DeleteTrackMediaItem(reaper.GetMediaItem_Track(it), it)
+      deleted = deleted + 1
+    end
+  end
+  local result = edited('Remove items')
+  result.deleted, result.locked = deleted, locked
+  return result
+end
+
+-- args: count, then track, index, start, length, looped per item. Clones as a block after the
+-- items' whole span, the copies the selection. `looped` is the desk's word for it: Reaper's
+-- B_LOOPSRC is on for most items, and moving those into their file would change their sound.
+function handlers.DuplicateItems(args)
+  local count = math.floor(args[1] or 0)
+  local items, why = resolve_targets(args, 2, count, 5)
+  if not items then return {ok = false, error = why} end
+  if #items == 0 then return {ok = true, duplicated = 0} end
+  local first, last = math.huge, -math.huge
+  local chunks = {}
+  for n, it in ipairs(items) do
+    local pos = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+    first = math.min(first, pos)
+    last = math.max(last, pos + reaper.GetMediaItemInfo_Value(it, 'D_LENGTH'))
+    chunks[n] = item_chunk(it)
+    if not chunks[n] then return {ok = false, error = 'could not read an item'} end
+  end
+  local span = last - first
+  reaper.Undo_BeginBlock()
+  unselect_all()
+  for n, it in ipairs(items) do
+    local copy = reaper.AddMediaItemToTrack(reaper.GetMediaItem_Track(it))
+    reaper.SetItemStateChunk(copy, chunks[n], false)
+    reaper.SetMediaItemInfo_Value(copy, 'D_POSITION', reaper.GetMediaItemInfo_Value(it, 'D_POSITION') + span)
+    if (args[6 + (n - 1) * 5] or 0) > 0 then
+      local take = reaper.GetActiveTake(copy)
+      if take then
+        local rate = reaper.GetMediaItemTakeInfo_Value(take, 'D_PLAYRATE')
+        reaper.SetMediaItemTakeInfo_Value(take, 'D_STARTOFFS',
+          reaper.GetMediaItemTakeInfo_Value(take, 'D_STARTOFFS') + span * rate)
+      end
+    end
+    reaper.SetMediaItemSelected(copy, true)
+  end
+  local result = edited('Duplicate items')
+  result.duplicated = #items
+  return result
+end
+
+-- --- end of exact targets ---
+
 -- args: seconds. Copies of the selected items, the earliest one's start put there, each on its own
 -- track. Cloned through the item's state chunk with the GUIDs taken out, so Reaper numbers the
 -- copies itself rather than holding two items that claim to be the same one.

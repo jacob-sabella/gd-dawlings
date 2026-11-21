@@ -51,6 +51,10 @@ const VOICES := 16
 ## top row is 1 2 3 4.
 const PAD_KEYS := [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_A, KEY_S, KEY_D, KEY_F,
 		KEY_Q, KEY_W, KEY_E, KEY_R, KEY_1, KEY_2, KEY_3, KEY_4]
+## The pad keys that are also how a player gets about. Standing near the deck is not asking for its
+## keys, and walking into the zone must not strand anyone in it: these stay the room's until the
+## deck is focused (F, which is why F is one) or KEYS is turned on here (`has_the_letters`).
+const ROOM_FIRST_KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_F]
 const KEY_GAP_Y := 0.008
 ## The FX send bus and the effects on it, stepped by FX.
 const FX_BUS := &"PadFx"
@@ -79,6 +83,9 @@ var selected := 0
 ## and a MIDI keyboard's notes (`midi`), which no instrument of theirs hears meanwhile.
 var engaged := false
 var keys_on := true
+## Whether the player has come to the deck on purpose: focused it, or turned KEYS on while here.
+var focused := false
+var keys_asked := false
 ## Where SAMPLE takes from (PadCapture.SOURCES), the catcher for the sources that are not the TV.
 var source := 0
 ## SAMPLE from a live source drops the quiet at the start and end of what it caught.
@@ -390,32 +397,48 @@ func _ensure_fx_bus() -> void:
 ## Toggle playing the pads from the computer keys.
 func toggle_keys() -> void:
 	keys_on = not keys_on
+	keys_asked = keys_on and engaged
+	if keys_asked:
+		Session.notice.emit("The pads have W, A, S and D: KEYS gives them back, and the arrows still walk.")
 	refresh()
+
+
+## Whether W, A, S and D are the pads' and not the player's feet.
+func has_the_letters() -> bool:
+	return engaged and keys_on and (focused or keys_asked)
+
+
+## Every pad held from the keys, let go: the room has stopped hearing them come up.
+func release_held() -> void:
+	for pad: int in _held.keys():
+		release(pad)
+	_held.clear()
 
 
 ## The computer keys, while this player stands here: pad down and up.
 func _input(event: InputEvent) -> void:
-	if not engaged or not keys_on:
-		return
 	var k := event as InputEventKey
-	# A text field has the keys (a YouTube search on the TV): they are its letters, not pads.
-	if k != null and TextFocus.held(get_viewport()):
-		for pad in _held.keys():
-			if not k.pressed and pad == PAD_KEYS.find(k.physical_keycode):
-				_held.erase(pad)
-				release(pad)
-		return
-	if k == null or k.echo or k.ctrl_pressed or k.alt_pressed or k.meta_pressed:
+	if k == null or k.echo:
 		return
 	var pad := PAD_KEYS.find(k.physical_keycode)
-	if pad < 0:
+	# A pad held down ends when its key comes up, whatever has happened since: a modifier, a text
+	# field, the 2D view, or walking away from the station.
+	if not k.pressed:
+		if pad >= 0 and _held.erase(pad):
+			release(pad)
+			get_viewport().set_input_as_handled()
+		return
+	if not engaged or not keys_on or pad < 0 or KeyChord.commanded(k):
+		return
+	if k.physical_keycode in ROOM_FIRST_KEYS and not has_the_letters():
+		return
+	# A text field has the keys (a YouTube search on the TV): they are its letters, not pads. An
+	# open screen has them too.
+	if TextFocus.held(get_viewport()) or KeyChord.modal_open(get_tree()):
 		return
 	get_viewport().set_input_as_handled()
-	if k.pressed:
-		_held[pad] = true
-		strike(pad, 100)
-	elif _held.erase(pad):
-		release(pad)
+	_held[pad] = true
+	strike(pad, 100)
 
 
 ## A MIDI note meant for the pads: whether the pads took it (a note out of their range is left for the player's instrument). Velocity 0 is a note off. Pads 36-51, or in scale mode every note (`PadDeckVoices.midi`).

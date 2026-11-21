@@ -1758,6 +1758,34 @@ func paste_item(track_index: int, start: float, packed: Dictionary) -> void:
 	_remember_edit(before)
 
 
+## Exactly these clips gone, one step; a locked one stays.
+func delete_targets(targets: Array, done := Callable()) -> void:
+	var before := _lanes_snapshot()
+	if _locally_remove_targets(targets) > 0:
+		_remember_edit(before)
+	if done.is_valid():
+		done.call({"ok": true})
+
+
+## Exactly these clips repeated after their span, the copies the selection: one step.
+func duplicate_targets(targets: Array, done := Callable()) -> void:
+	var before := _lanes_snapshot()
+	_locally_select_targets(targets)
+	if _locally_duplicate_selected() > 0:
+		_remember_edit(before)
+	if done.is_valid():
+		done.call({"ok": true})
+
+
+## A clipboard laid down in one step. Never opens an edit, so it cannot close anybody's.
+func paste_set(entries: Array, done := Callable(), _slot := 0) -> void:
+	var before := _lanes_snapshot()
+	_locally_paste_set(entries)
+	_remember_edit(before)
+	if done.is_valid():
+		done.call({"ok": true})
+
+
 ## The sections in a new order (DAWBackend.arrange_sections): one step, whatever it moved -- every
 ## lane, the markers, the regions, the automation and the tempo -- so one Ctrl-Z puts it all back.
 func arrange_sections(order: Array) -> void:

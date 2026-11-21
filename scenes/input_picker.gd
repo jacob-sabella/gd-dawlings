@@ -195,6 +195,15 @@ static func _frame(b: Button) -> void:
 	b.add_theme_color_override("font_hover_pressed_color", Color.WHITE)
 
 
+func _ready() -> void:
+	add_to_group(KeyChord.MODAL)
+
+
+## It exists only while it is asking.
+func is_open() -> bool:
+	return not is_queued_for_deletion()
+
+
 func close() -> void:
 	closed.emit()
 	queue_free()

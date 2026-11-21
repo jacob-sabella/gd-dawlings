@@ -34,6 +34,7 @@ var _built_for := []
 
 
 func _ready() -> void:
+	add_to_group(KeyChord.MODAL)
 	layer = 20
 	host = FlatHost.new()
 	visible = false
@@ -89,6 +90,12 @@ func is_open() -> bool:
 	return visible
 
 
+## On the desktop it takes the keyboard from the room. In a headset the room keeps it, because the
+## hand that uses the panel is a hand in the room.
+func holds_keyboard() -> bool:
+	return visible and panel == null
+
+
 func toggle() -> void:
 	set_open(not visible)
 
@@ -104,11 +111,16 @@ func set_open(on: bool) -> void:
 	visible = on
 	view.visible = on
 	if studio != null:
+		# Keys down now would never be heard coming up, so they let go first.
+		if on:
+			studio.input_host.release_held_keys()
 		# The room is still there behind it, and still playing, but not reached into.
 		studio.set_process_unhandled_input(not on)
 		var hand := studio.get_node_or_null("MouseHand")
 		if hand != null:
 			hand.set_process_unhandled_input(not on)
+			# Its _input is the Alt-drag that bends the wheel, and 2D has its own uses for Alt.
+			hand.set_process_input(not on)
 	if on:
 		_window_title = get_window().title if get_window() != null else ""
 		_show_title(view.title_text())
